@@ -15,6 +15,9 @@ export type ChildRecord = {
   primaryGuardian: string;
   secondaryGuardian?: string;
   phone: string;
+  familyId?: number;
+  familyName?: string;
+  guardianEmail?: string;
   subsidy: string;
   weeklySchedule: string;
   transportation: string;
@@ -37,6 +40,8 @@ export type ChildFormState = {
   primaryGuardian: string;
   secondaryGuardian: string;
   phone: string;
+  familyName: string;
+  guardianEmail: string;
   subsidy: string;
   weeklySchedule: string;
   transportation: string;
@@ -326,6 +331,8 @@ export const emptyForm: ChildFormState = {
   primaryGuardian: "",
   secondaryGuardian: "",
   phone: "",
+  familyName: "",
+  guardianEmail: "",
   subsidy: "Private Pay",
   weeklySchedule: "",
   transportation: "No transportation",

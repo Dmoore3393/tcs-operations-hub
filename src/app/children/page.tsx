@@ -47,6 +47,7 @@ import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
 import { starterKidKareEnrollments, type KidKareEnrollment } from "@/lib/compliance-ops";
 import { childAttendsLocation, createBlankChildSchedule, locationForChildRecord, starterChildSchedules, type ChildScheduleRecord } from "@/lib/child-schedules";
 import { normalizeLocation } from "@/lib/location-config";
+import { starterFamilies, type FamilyRecord } from "@/lib/hub-data";
 
 const fieldClass =
   "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100";
@@ -66,12 +67,31 @@ function parseMissingDocuments(value: string) {
     .filter(Boolean);
 }
 
+function shortLocationName(location: string) {
+  if (/halcom/i.test(location)) return "Halcom";
+  if (/21st/i.test(location)) return "21st Street";
+  if (/division|school age center/i.test(location)) return "Division";
+  if (/33rd|cornejo/i.test(location)) return "33rd Street";
+  if (/42nd|lara/i.test(location)) return "42nd Street";
+  if (/tehachapi/i.test(location)) return "Tehachapi";
+  return location;
+}
+
+function familyMatchesChild(family: FamilyRecord, child: ChildRecord) {
+  if (child.familyId && family.id === child.familyId) return true;
+  const guardian = child.primaryGuardian.trim().toLowerCase();
+  const phone = child.phone.replace(/\D/g, "");
+  return Boolean(guardian && family.primaryGuardian.trim().toLowerCase() === guardian) ||
+    Boolean(phone && family.phone.replace(/\D/g, "") === phone);
+}
+
 export default function ChildrenPage() {
   const { profile, isEmployee } = useAuth();
   const canManageChildFiles = !isEmployee;
   const canUseKidKare = canAccessRoute(profile, "/kidkare");
   const canUseSchedules = canAccessRoute(profile, "/child-schedules");
   const [children, setChildren, childrenReady] = usePersistentState<ChildRecord[]>("tcs-children-v1", initialChildren);
+  const [families, setFamilies] = usePersistentState<FamilyRecord[]>("tcs-families", starterFamilies);
   const [, setKidKareRecords] = usePersistentState<KidKareEnrollment[]>("tcs-kidkare-enrollments-v1", starterKidKareEnrollments);
   const [childSchedules, setChildSchedules] = usePersistentState<ChildScheduleRecord[]>("tcs-child-schedules-v2", starterChildSchedules);
   const [search, setSearch] = useState("");
@@ -83,6 +103,9 @@ export default function ChildrenPage() {
   const [editingChildId, setEditingChildId] = useState<number | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<number | null>(null);
   const [form, setForm] = useState<ChildFormState>(emptyForm);
+  const [familyMode, setFamilyMode] = useState<"existing" | "new">("existing");
+  const [selectedFamilyId, setSelectedFamilyId] = useState<number | "">("");
+  const [familySearch, setFamilySearch] = useState("");
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const isLoading = !childrenReady;
@@ -91,6 +114,13 @@ export default function ChildrenPage() {
     () => children.find((child) => child.id === selectedChildId) ?? null,
     [children, selectedChildId],
   );
+
+  const filteredFamilies = useMemo(() => {
+    const query = familySearch.trim().toLowerCase();
+    return [...families]
+      .filter((family) => !query || [family.familyName, family.primaryGuardian, family.secondaryGuardian, family.phone, family.email, family.children.join(" ")].join(" ").toLowerCase().includes(query))
+      .sort((a, b) => a.primaryGuardian.localeCompare(b.primaryGuardian));
+  }, [families, familySearch]);
 
   useEffect(() => {
     const modalIsOpen = showFormModal || selectedChildId !== null;
@@ -173,6 +203,9 @@ export default function ChildrenPage() {
   function resetForm() {
     setEditingChildId(null);
     setForm(emptyForm);
+    setFamilyMode("existing");
+    setSelectedFamilyId("");
+    setFamilySearch("");
     setFormError("");
   }
 
@@ -194,6 +227,8 @@ export default function ChildrenPage() {
       primaryGuardian: child.primaryGuardian,
       secondaryGuardian: child.secondaryGuardian ?? "",
       phone: child.phone,
+      familyName: child.familyName ?? "",
+      guardianEmail: child.guardianEmail ?? "",
       subsidy: child.subsidy,
       weeklySchedule: child.weeklySchedule,
       transportation: child.transportation,
@@ -204,9 +239,43 @@ export default function ChildrenPage() {
       enrollmentStatus: child.enrollmentStatus,
       attendanceToday: child.attendanceToday,
     });
+    const linkedFamily = families.find((family) => familyMatchesChild(family, child));
+    if (linkedFamily) {
+      setFamilyMode("existing");
+      setSelectedFamilyId(linkedFamily.id);
+      setFamilySearch(linkedFamily.primaryGuardian);
+      setForm((current) => ({
+        ...current,
+        familyName: linkedFamily.familyName,
+        guardianEmail: linkedFamily.email,
+      }));
+    } else {
+      setFamilyMode("new");
+      setSelectedFamilyId("");
+    }
     setFormError("");
     setSelectedChildId(null);
     setShowFormModal(true);
+  }
+
+  function selectExistingFamily(value: string) {
+    if (!value) {
+      setSelectedFamilyId("");
+      return;
+    }
+    const family = families.find((item) => item.id === Number(value));
+    if (!family) return;
+    setSelectedFamilyId(family.id);
+    setFamilySearch(family.primaryGuardian);
+    setForm((current) => ({
+      ...current,
+      familyName: family.familyName,
+      primaryGuardian: family.primaryGuardian,
+      secondaryGuardian: family.secondaryGuardian,
+      phone: family.phone,
+      guardianEmail: family.email,
+      subsidy: family.subsidy,
+    }));
   }
 
   function updateForm<K extends keyof ChildFormState>(key: K, value: ChildFormState[K]) {
@@ -259,6 +328,11 @@ export default function ChildrenPage() {
       return;
     }
 
+    if (familyMode === "existing" && selectedFamilyId === "") {
+      setFormError("Choose an existing parent/family, or switch to Create New Family.");
+      return;
+    }
+
     if (!form.primaryGuardian.trim()) {
       setFormError("Please enter at least one parent or guardian.");
       return;
@@ -273,6 +347,36 @@ export default function ChildrenPage() {
       return;
     }
 
+    let familyId = selectedFamilyId === "" ? undefined : selectedFamilyId;
+    let familyName = form.familyName.trim();
+    let familyEmail = form.guardianEmail.trim();
+
+    if (familyMode === "new") {
+      const guardian = form.primaryGuardian.trim().toLowerCase();
+      const phone = form.phone.replace(/\D/g, "");
+      const email = familyEmail.toLowerCase();
+      const possibleExisting = families.find((family) =>
+        (guardian && family.primaryGuardian.trim().toLowerCase() === guardian) ||
+        (phone && family.phone.replace(/\D/g, "") === phone) ||
+        (email && family.email.trim().toLowerCase() === email),
+      );
+      if (possibleExisting) {
+        setFamilyMode("existing");
+        setSelectedFamilyId(possibleExisting.id);
+        setFamilySearch(possibleExisting.primaryGuardian);
+        setFormError(`Possible existing family found: ${possibleExisting.familyName}. Select that family from the dropdown to avoid a duplicate.`);
+        return;
+      }
+      familyId = Date.now() + 1;
+      familyName = familyName || `${form.lastName.trim()} Family`;
+    }
+
+    const linkedFamily = familyId ? families.find((family) => family.id === familyId) : undefined;
+    if (linkedFamily) {
+      familyName = linkedFamily.familyName;
+      familyEmail = linkedFamily.email;
+    }
+
     const childRecord: ChildRecord = {
       id: editingChildId ?? Date.now(),
       firstName: form.firstName.trim(),
@@ -285,6 +389,9 @@ export default function ChildrenPage() {
       primaryGuardian: form.primaryGuardian.trim(),
       secondaryGuardian: form.secondaryGuardian.trim() || undefined,
       phone: form.phone.trim() || "No phone entered",
+      familyId,
+      familyName,
+      guardianEmail: familyEmail || undefined,
       subsidy: form.subsidy,
       weeklySchedule: form.weeklySchedule.trim() || "Schedule not entered",
       transportation: form.transportation.trim() || "No transportation",
@@ -296,8 +403,52 @@ export default function ChildrenPage() {
       attendanceToday: form.attendanceToday,
     };
 
+    const priorChild = editingChildId !== null ? children.find((child) => child.id === editingChildId) : undefined;
+    const childName = fullName(childRecord);
+
     setIsSaving(true);
     setFormError("");
+
+    setFamilies((current) => {
+      const next = current.map((family) => {
+        const belongedBefore = priorChild ? familyMatchesChild(family, priorChild) : false;
+        if (!belongedBefore || family.id === familyId) return family;
+        return { ...family, children: family.children.filter((name) => name !== fullName(priorChild!) && name !== priorChild!.firstName) };
+      });
+
+      if (familyMode === "new" && familyId) {
+        const newFamily: FamilyRecord = {
+          id: familyId,
+          familyName,
+          primaryGuardian: form.primaryGuardian.trim(),
+          secondaryGuardian: form.secondaryGuardian.trim(),
+          phone: form.phone.trim(),
+          email: familyEmail,
+          children: [childName],
+          location: shortLocationName(form.location),
+          subsidy: (['CCRC', 'DCFS', 'Private Pay', 'CCCC'].includes(form.subsidy) ? form.subsidy : 'Private Pay') as FamilyRecord["subsidy"],
+          balance: 0,
+          status: form.enrollmentStatus === "Archived" ? "Inactive" : form.enrollmentStatus === "Pending" ? "Enrollment Pending" : "Active",
+          transportation: /no transportation|none/i.test(form.transportation) ? "None" : form.transportation,
+        };
+        return [newFamily, ...next];
+      }
+
+      return next.map((family) => {
+        if (family.id !== familyId) return family;
+        const names = family.children.filter((name) => priorChild ? name !== fullName(priorChild) && name !== priorChild.firstName : true);
+        const locationName = shortLocationName(form.location);
+        const locationParts = family.location.split("+").map((part) => part.trim()).filter(Boolean);
+        if (!locationParts.includes(locationName)) locationParts.push(locationName);
+        return {
+          ...family,
+          children: [...new Set([...names, childName])],
+          location: locationParts.join(" + "),
+          transportation: family.transportation === "None" && !/no transportation|none/i.test(form.transportation) ? form.transportation : family.transportation,
+        };
+      });
+    });
+
     setChildren((current) => editingChildId !== null
       ? current.map((child) => (child.id === editingChildId ? childRecord : child))
       : [childRecord, ...current]);
@@ -660,14 +811,40 @@ export default function ChildrenPage() {
                 <FormSection
                   icon={<UsersRound className="h-4 w-4" />}
                   title="Family and funding"
-                  description="Guardian contacts and payment source."
+                  description="Link this child to an existing household or create the family automatically."
                 >
+                  <div className="sm:col-span-2">
+                    <div className="grid gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:grid-cols-2">
+                      <button type="button" onClick={() => setFamilyMode("existing")} className={`rounded-xl border px-4 py-3 text-left text-sm font-black transition ${familyMode === "existing" ? "border-emerald-600 bg-white text-emerald-800 shadow-sm" : "border-transparent bg-emerald-100/60 text-emerald-700"}`}>Use Existing Parent / Family<span className="mt-1 block text-xs font-medium text-slate-500">Pick a parent already in the Families section.</span></button>
+                      <button type="button" onClick={() => { setFamilyMode("new"); setSelectedFamilyId(""); }} className={`rounded-xl border px-4 py-3 text-left text-sm font-black transition ${familyMode === "new" ? "border-emerald-600 bg-white text-emerald-800 shadow-sm" : "border-transparent bg-emerald-100/60 text-emerald-700"}`}>Create New Family<span className="mt-1 block text-xs font-medium text-slate-500">Saving the child will create and link the family profile.</span></button>
+                    </div>
+                  </div>
+
+                  {familyMode === "existing" && <>
+                    <FormField label="Search existing parent / family" wide>
+                      <input value={familySearch} onChange={(event) => setFamilySearch(event.target.value)} className={fieldClass} placeholder="Search parent, family, child, phone, or email" />
+                    </FormField>
+                    <FormField label="Existing parent / family" wide required>
+                      <select value={selectedFamilyId} onChange={(event) => selectExistingFamily(event.target.value)} className={fieldClass}>
+                        <option value="">Select an existing parent or family…</option>
+                        {filteredFamilies.map((family) => <option key={family.id} value={family.id}>{family.primaryGuardian} — {family.familyName}{family.children.length ? ` (${family.children.join(", ")})` : ""}</option>)}
+                      </select>
+                      {selectedFamilyId !== "" && <p className="mt-2 text-xs font-semibold text-emerald-800">Guardian contact and funding information were filled from the family profile. You can still update child-specific care details below.</p>}
+                    </FormField>
+                  </>}
+
+                  {familyMode === "new" && <FormField label="Family / household name" wide>
+                    <input value={form.familyName} onChange={(event) => updateForm("familyName", event.target.value)} className={fieldClass} placeholder={form.lastName ? `${form.lastName} Family` : "Example: Smith Family"} />
+                    <p className="mt-2 text-xs text-slate-500">If left blank, the Hub will use the child’s last name + “Family.”</p>
+                  </FormField>}
+
                   <FormField label="Primary parent or guardian" required>
                     <input
                       value={form.primaryGuardian}
                       onChange={(event) => updateForm("primaryGuardian", event.target.value)}
                       className={fieldClass}
                       placeholder="Full name"
+                      readOnly={familyMode === "existing" && selectedFamilyId !== ""}
                     />
                   </FormField>
                   <FormField label="Second parent or guardian">
@@ -676,6 +853,7 @@ export default function ChildrenPage() {
                       onChange={(event) => updateForm("secondaryGuardian", event.target.value)}
                       className={fieldClass}
                       placeholder="Full name"
+                      readOnly={familyMode === "existing" && selectedFamilyId !== ""}
                     />
                   </FormField>
                   <FormField label="Phone number">
@@ -685,6 +863,17 @@ export default function ChildrenPage() {
                       onChange={(event) => updateForm("phone", event.target.value)}
                       className={fieldClass}
                       placeholder="(661) 555-0000"
+                      readOnly={familyMode === "existing" && selectedFamilyId !== ""}
+                    />
+                  </FormField>
+                  <FormField label="Parent email">
+                    <input
+                      type="email"
+                      value={form.guardianEmail}
+                      onChange={(event) => updateForm("guardianEmail", event.target.value)}
+                      className={fieldClass}
+                      placeholder="parent@example.com"
+                      readOnly={familyMode === "existing" && selectedFamilyId !== ""}
                     />
                   </FormField>
                   <FormField label="Funding source">
@@ -692,6 +881,7 @@ export default function ChildrenPage() {
                       value={form.subsidy}
                       onChange={(event) => updateForm("subsidy", event.target.value)}
                       className={fieldClass}
+                      disabled={familyMode === "existing" && selectedFamilyId !== ""}
                     >
                       <option>Private Pay</option>
                       <option>CCRC</option>
