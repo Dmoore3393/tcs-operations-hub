@@ -1,0 +1,13 @@
+TCS Operations Hub AI Command Center validation
+
+Passed:
+- TypeScript/TSX syntax parse across 71 source files
+- Production security verifier
+- 14 location-owned relational tables detected
+- 12 relational client mappings detected
+- Employee AI chat permission guard added
+- Dashboard links and quick actions filtered by role permissions
+
+Environment limitation:
+- Full npm install, TypeScript type-check, ESLint, and Next.js build could not run in this workspace because its internal package registry did not contain @supabase/supabase-js.
+- Run npm install, npm run validate, and npm run build on the Mac before entering real information.

@@ -1,0 +1,16 @@
+TCS Operations Hub — Relational Production Build
+Validation date: 2026-08-03
+
+PASS: TypeScript (tsc --noEmit)
+PASS: ESLint (eslint .)
+PASS: Production security verifier
+PASS: 14 location-owned tables checked for required location_id
+PASS: 12 browser-state collections mapped to relational tables
+PASS: Row Level Security helpers and policies present
+PASS: Standard Employee KidKare and Timesheet access denied
+PASS: Immutable audit-log mutation trigger present
+PASS: AES-256-GCM document encryption implementation present
+PASS: Retention-date and legal-hold deletion controls present
+
+Production build note:
+The Next.js production build could not complete inside this workspace because the workspace package mirror did not provide Next.js's required Linux SWC binary. TypeScript, ESLint, and the project security verifier pass. Run `npm run build` on the Mac and again during hosted deployment before entering real information.

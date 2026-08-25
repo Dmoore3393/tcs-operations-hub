@@ -1,0 +1,214 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+/* Location-aware theme overrides. The selected location controls these variables in MainLayout. */
+.tcs-theme .bg-emerald-50 { background-color: color-mix(in srgb, var(--theme-50) 72%, white) !important; }
+.tcs-theme .bg-emerald-50\/50 { background-color: color-mix(in srgb, var(--theme-50) 50%, transparent) !important; }
+.tcs-theme .bg-emerald-100 { background-color: var(--theme-100) !important; }
+.tcs-theme .bg-emerald-500 { background-color: var(--theme-500) !important; }
+.tcs-theme .bg-emerald-600 { background-color: var(--theme-600) !important; color: var(--theme-on-primary) !important; }
+.tcs-theme .bg-emerald-700 { background-color: var(--theme-700) !important; color: var(--theme-on-primary) !important; }
+.tcs-theme .text-emerald-700,
+.tcs-theme .text-emerald-800 { color: var(--theme-700) !important; }
+.tcs-theme .text-emerald-900,
+.tcs-theme .text-emerald-950 { color: var(--theme-950) !important; }
+.tcs-theme .border-emerald-100,
+.tcs-theme .border-emerald-200,
+.tcs-theme .border-emerald-300 { border-color: color-mix(in srgb, var(--theme-300) 65%, white) !important; }
+.tcs-theme .border-emerald-500,
+.tcs-theme .border-emerald-600 { border-color: var(--theme-600) !important; }
+.tcs-theme .ring-emerald-100,
+.tcs-theme .ring-emerald-200 { --tw-ring-color: color-mix(in srgb, var(--theme-100) 80%, transparent) !important; }
+.tcs-theme .shadow-emerald-200 { --tw-shadow-color: color-mix(in srgb, var(--theme-300) 55%, transparent) !important; }
+.tcs-theme .from-emerald-50 { --tw-gradient-from: var(--theme-50) var(--tw-gradient-from-position) !important; }
+.tcs-theme .to-emerald-50 { --tw-gradient-to: var(--theme-50) var(--tw-gradient-to-position) !important; }
+.tcs-theme .hover\:bg-emerald-700:hover { background-color: var(--theme-700) !important; }
+.tcs-theme .hover\:border-emerald-300:hover { border-color: var(--theme-300) !important; }
+.tcs-theme .focus\:border-emerald-500:focus { border-color: var(--theme-500) !important; }
+.tcs-theme .focus\:ring-emerald-100:focus,
+.tcs-theme .focus\:ring-emerald-200:focus { --tw-ring-color: color-mix(in srgb, var(--theme-100) 85%, transparent) !important; }
+
+.tcs-primary-button {
+  background: var(--theme-600);
+  color: var(--theme-on-primary);
+}
+.tcs-primary-button:hover { background: var(--theme-700); }
+.tcs-themed-surface { background: color-mix(in srgb, var(--theme-50) 78%, white); }
+.tcs-themed-text { color: var(--theme-700); }
+.tcs-themed-border { border-color: color-mix(in srgb, var(--theme-300) 70%, white); }
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white !important; }
+}
+
+/* Polished Hub motion and graphic details. */
+@keyframes tcs-shimmer {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(240%); }
+}
+@keyframes tcs-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes tcs-pop {
+  0% { transform: scale(.92); opacity: 0; }
+  70% { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes tcs-gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.tcs-hover-lift { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+.tcs-hover-lift:hover { transform: translateY(-3px); box-shadow: 0 18px 40px -24px rgb(15 23 42 / .45); }
+.tcs-glow-line { position: relative; overflow: hidden; }
+.tcs-glow-line::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -40%;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / .7), transparent);
+  animation: tcs-shimmer 3.4s linear infinite;
+}
+.tcs-animated-gradient {
+  background-size: 180% 180%;
+  animation: tcs-gradient-shift 8s ease infinite;
+}
+.tcs-float { animation: tcs-float 3.8s ease-in-out infinite; }
+.tcs-pop { animation: tcs-pop .35s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

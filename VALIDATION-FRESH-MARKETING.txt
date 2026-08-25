@@ -1,0 +1,9 @@
+
+> tcs-operations-hub-production@2.0.0 validate
+> tsc --noEmit && eslint . && npm run security:check
+
+
+> tcs-operations-hub-production@2.0.0 security:check
+> node scripts/verify-production-security.mjs
+
+Production security verification passed (14 location-owned tables, 12 relational client mappings).
