@@ -3,12 +3,13 @@
   "version": "5.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "node scripts/apply-preview-patch.mjs && next dev",
+    "build": "node scripts/apply-preview-patch.mjs && next build",
     "start": "next start",
     "lint": "eslint",
     "validate": "tsc --noEmit && eslint . && npm run security:check",
-    "security:check": "node scripts/verify-production-security.mjs"
+    "security:check": "node scripts/verify-production-security.mjs",
+    "preview:check": "node scripts/apply-preview-patch.mjs && node scripts/verify-live-preview.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.111.0",
