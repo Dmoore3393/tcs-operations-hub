@@ -15,6 +15,7 @@ export type AuthorizedStaff = {
     email: string;
     full_name: string;
     role: string;
+    locations: string[];
     is_active: boolean;
     permissions: string[];
   };
@@ -31,13 +32,13 @@ export async function requireStaff(request: Request): Promise<AuthorizedStaff> {
   const { data: userData, error: userError } = await admin.auth.getUser(token);
   if (userError || !userData.user) throw new Response("The staff session is invalid or expired.", { status: 401 });
 
-  const { data: profile, error: profileError } = await admin
+  const { data, error: profileError } = await admin
     .from("staff_access")
-    .select("user_id,organization_id,email,full_name,role,is_active,permissions")
+    .select("user_id,organization_id,email,full_name,role,locations,is_active,permissions")
     .eq("user_id", userData.user.id)
     .maybeSingle();
 
-  if (profileError || !profile || !profile.is_active) {
+  if (profileError || !data || !data.is_active) {
     throw new Response("Active TCS staff access is required.", { status: 403 });
   }
 
@@ -49,6 +50,12 @@ export async function requireStaff(request: Request): Promise<AuthorizedStaff> {
     global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
+
+  const profile = {
+    ...data,
+    locations: Array.isArray(data.locations) ? data.locations : [],
+    permissions: Array.isArray(data.permissions) ? data.permissions : [],
+  };
 
   return {
     admin,
