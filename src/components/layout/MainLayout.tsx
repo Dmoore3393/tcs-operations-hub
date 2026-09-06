@@ -27,6 +27,7 @@ import {
   LogOut,
   Megaphone,
   Menu,
+  Pin,
   Printer,
   Settings,
   ScrollText,
@@ -45,6 +46,7 @@ import MobileQuickActions from "@/components/layout/MobileQuickActions";
 const navItems = [
   { label: "Dashboard", href: "/", icon: Home },
   { label: "Employee Lounge", href: "/employee-lounge", icon: Coffee },
+  { label: "Employee Bulletin Board", href: "/employee-bulletin", icon: Pin },
   { label: "Families", href: "/families", icon: Users },
   { label: "Children", href: "/children", icon: UserRound },
   { label: "Child Schedules", href: "/child-schedules", icon: CalendarClock },
@@ -77,6 +79,7 @@ const navItems = [
 const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Operations Dashboard", subtitle: "Today across Thomason Childcare Solutions" },
   "/employee-lounge": { title: "Employee Lounge", subtitle: "Connect, celebrate, recharge, and find your team tools" },
+  "/employee-bulletin": { title: "Employee Bulletin Board", subtitle: "Announcements, reminders, policy updates, training, recognition, and pinned notes" },
   "/families": { title: "Family Accounts", subtitle: "Guardians, billing, subsidies, and communication" },
   "/children": { title: "Children", subtitle: "Enrollment, health alerts, and child files" },
   "/child-schedules": { title: "Child Schedules", subtitle: "Exact daily care times that drive ratios" },
