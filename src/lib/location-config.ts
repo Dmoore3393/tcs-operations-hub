@@ -40,7 +40,7 @@ export const locationThemes: Record<LocationKey, {
   "21st Street": { label: "21st Street", fullName: "Cathers Family Childcare • 21st Street", primary: "#111827", primaryDark: "#030712", primaryLight: "#6b7280", primarySoft: "#e5e7eb", ink: "#030712", textOnPrimary: "#ffffff", accent: "#d1d5db", capacity: 14, programType: "Family Childcare" },
   Division: { label: "School Age Center", fullName: "The School Age Center • Division", primary: "#1769d2", primaryDark: "#0a53a7", primaryLight: "#55c9d2", primarySoft: "#eef6ff", ink: "#102a56", textOnPrimary: "#ffffff", accent: "#ffc21b", capacity: 17, programType: "School Age Center" },
   "33rd Street": { label: "33rd Street", fullName: "Cornejo Family Childcare • 33rd Street", primary: "#ca8a04", primaryDark: "#713f12", primaryLight: "#fde047", primarySoft: "#fef9c3", ink: "#422006", textOnPrimary: "#111827", accent: "#111827", capacity: 14, programType: "Family Childcare" },
-  Tehachapi: { label: "Tehachapi", fullName: "Tehachapi Transportation Hub", primary: "#1e3a8a", primaryDark: "#172554", primaryLight: "#60a5fa", primarySoft: "#dbeafe", ink: "#172554", textOnPrimary: "#ffffff", accent: "#fbbf24", capacity: 14, programType: "Transportation / Care Hub" },
+  Tehachapi: { label: "Thomason Family Childcare", fullName: "Thomason Family Childcare • Tehachapi", primary: "#155b3b", primaryDark: "#0d442e", primaryLight: "#9fbd8b", primarySoft: "#f4f3e7", ink: "#133c2b", textOnPrimary: "#ffffff", accent: "#d6a23d", capacity: 14, programType: "Family Childcare" },
   "42nd Street": { label: "Lara Family Childcare", fullName: "Lara Family Childcare • 42nd Street", primary: "#0b3153", primaryDark: "#06233c", primaryLight: "#6b8f71", primarySoft: "#f7f0e3", ink: "#0b3153", textOnPrimary: "#ffffff", accent: "#d89a23", capacity: 14, programType: "Family Childcare" },
 };
 
@@ -69,7 +69,7 @@ export function normalizeLocation(value: string): LocationKey {
   if (lower.includes("21st") || lower.includes("cathers")) return "21st Street";
   if (lower.includes("division") || lower.includes("school age center") || lower.includes("astor")) return "Division";
   if (lower.includes("cornejo") || lower.includes("33rd")) return "33rd Street";
-  if (lower.includes("tehachapi")) return "Tehachapi";
+  if (lower.includes("tehachapi") || lower.includes("thomason family childcare")) return "Tehachapi";
   if (lower.includes("lara") || lower.includes("42nd")) return "42nd Street";
   return "All Locations";
 }
