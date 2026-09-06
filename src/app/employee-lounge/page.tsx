@@ -1,174 +1,277 @@
 "use client";
 
+import Link from "next/link";
+import {
+  BookOpen,
+  CakeSlice,
+  CalendarDays,
+  Coffee,
+  Heart,
+  HeartHandshake,
+  Leaf,
+  Lightbulb,
+  Megaphone,
+  PartyPopper,
+  RefreshCw,
+  Send,
+  Sparkles,
+  Trophy,
+  Users,
+} from "lucide-react";
+import { FormEvent, useMemo, useState } from "react";
+
 import MainLayout from "@/components/layout/MainLayout";
 import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
-import {
-  ArrowRight,
-  Bell,
-  BookOpen,
-  Bot,
-  Bus,
-  CalendarDays,
-  CheckCircle2,
-  Circle,
-  ClipboardCheck,
-  Coffee,
-  HeartPulse,
-  Home,
-  Printer,
-  ShieldCheck,
-  Star,
-  Users,
-  Utensils,
-} from "lucide-react";
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
 
-const NAVY = "#071b2e";
-const GREEN = "#0f6b4f";
-const GOLD = "#d6aa46";
-const CREAM = "#fbf6e8";
+type ShoutOut = {
+  id: number;
+  from: string;
+  message: string;
+};
 
-const quickTools = [
-  { href: "/daily-care", label: "Daily Care", helper: "Bottles, diapers, potty, rest & notes", icon: ClipboardCheck },
-  { href: "/meals", label: "Meals & Menus", helper: "See the menu and record meal service", icon: Utensils },
-  { href: "/work-plans", label: "My Work Plan", helper: "Review tasks and mark work complete", icon: CheckCircle2 },
-  { href: "/shift-reports", label: "Opening / Closing", helper: "Complete private shift handoffs", icon: Home },
-  { href: "/transportation", label: "Transportation", helper: "Routes, schools and vehicle readiness", icon: Bus },
-  { href: "/health-safety", label: "Health & Safety", helper: "Incidents, illness, medication & follow-up", icon: HeartPulse },
-  { href: "/ratios", label: "Ratios", helper: "Check today’s coverage plan", icon: ShieldCheck },
-  { href: "/ai-director", label: "TCS AI", helper: "Draft, organize and plan your next steps", icon: Bot },
-  { href: "/print-studio", label: "Printable Studio", helper: "Approved staff notices and printables", icon: Printer },
+const starterShoutOuts: ShoutOut[] = [
+  {
+    id: 1,
+    from: "TCS Leadership Team",
+    message: "Thank you for the heart you bring to this work every day. Safe, happy, nurturing spaces happen because of you.",
+  },
+  {
+    id: 2,
+    from: "Team TCS",
+    message: "Shout-out to everyone who jumps in when another classroom, route, or teammate needs support. That teamwork matters.",
+  },
 ];
 
-const starterChecklist = [
-  "Check my assigned location for today",
-  "Read today’s announcements and reminders",
-  "Review the tools I need for my shift",
-  "Check for transportation or coverage updates",
+const breakIdeas = [
+  "Play your favorite song and dance it out for three minutes.",
+  "Take a five-minute nature walk and leave your phone in your pocket.",
+  "Grab water, stretch your shoulders, and reset before the next transition.",
+  "Share something funny with a teammate who could use a smile.",
+  "Read a chapter, doodle, or do something that has nothing to do with work for five minutes.",
+  "Tell a teammate one thing you appreciate about how they show up for the team.",
+];
+
+const wellnessCards = [
+  { title: "Mindfulness & Calm", note: "60-second reset", icon: Heart },
+  { title: "Movement & Energy", note: "Stretch or walk", icon: Sparkles },
+  { title: "Mental Health Support", note: "Use your support system", icon: HeartHandshake },
+  { title: "Healthy Living", note: "Water + real fuel", icon: Leaf },
+  { title: "Work-Life Balance", note: "Protect your off time", icon: Coffee },
+];
+
+const quickLinks = [
+  { label: "Our People", href: "/employees", icon: Users },
+  { label: "My Schedule", href: "/scheduling", icon: CalendarDays },
+  { label: "My Work", href: "/work-plans", icon: Trophy },
+  { label: "Health & Safety", href: "/health-safety", icon: HeartHandshake },
+  { label: "Printable Studio", href: "/print-studio", icon: BookOpen },
+  { label: "TCS AI", href: "/ai-director", icon: Lightbulb },
 ];
 
 export default function EmployeeLoungePage() {
   const { profile } = useAuth();
-  const [checked, setChecked] = useState<boolean[]>(starterChecklist.map(() => false));
+  const [shoutOuts, setShoutOuts] = useState<ShoutOut[]>(starterShoutOuts);
+  const [newShoutOut, setNewShoutOut] = useState("");
+  const [showShoutOutForm, setShowShoutOutForm] = useState(false);
+  const [breakIdeaIndex, setBreakIdeaIndex] = useState(0);
 
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem("tcs-employee-lounge-checklist-v1");
-      if (saved) {
-        const parsed = JSON.parse(saved) as boolean[];
-        if (Array.isArray(parsed) && parsed.length === starterChecklist.length) setChecked(parsed);
-      }
-    } catch {
-      // A checklist is a convenience only; the Lounge still works without browser storage.
-    }
-  }, []);
-
-  function toggle(index: number) {
-    setChecked((current) => {
-      const next = current.map((item, itemIndex) => itemIndex === index ? !item : item);
-      try { window.localStorage.setItem("tcs-employee-lounge-checklist-v1", JSON.stringify(next)); } catch {}
-      return next;
-    });
-  }
-
-  const visibleTools = useMemo(
-    () => quickTools.filter((tool) => canAccessRoute(profile, tool.href)),
+  const firstName = profile?.full_name?.trim().split(/\s+/)[0] || "Team Member";
+  const visibleLinks = useMemo(
+    () => quickLinks.filter((item) => canAccessRoute(profile, item.href)),
     [profile],
   );
-  const firstName = profile?.full_name?.trim().split(/\s+/)[0] || "Team";
-  const locations = profile?.locations?.length ? profile.locations.join(" • ") : "TCS Team";
-  const completed = checked.filter(Boolean).length;
+
+  function submitShoutOut(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const message = newShoutOut.trim();
+    if (!message) return;
+    setShoutOuts((current) => [
+      { id: Date.now(), from: profile?.full_name || "TCS Team Member", message },
+      ...current,
+    ]);
+    setNewShoutOut("");
+    setShowShoutOutForm(false);
+  }
+
+  function nextBreakIdea() {
+    setBreakIdeaIndex((current) => (current + 1) % breakIdeas.length);
+  }
 
   return (
     <MainLayout>
-      <div className="mx-auto max-w-[1500px] space-y-6">
-        <section className="relative overflow-hidden rounded-[2rem] border shadow-xl" style={{ borderColor: "#d6aa4666", background: `linear-gradient(135deg, ${NAVY} 0%, #0b2f35 55%, ${GREEN} 100%)` }}>
-          <div className="absolute -right-12 -top-12 h-52 w-52 rounded-full border border-white/10 bg-white/5" />
-          <div className="absolute -bottom-20 left-1/3 h-48 w-48 rounded-full" style={{ background: "radial-gradient(circle, rgba(214,170,70,.28), transparent 70%)" }} />
-          <div className="relative grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-white/85"><Coffee className="h-4 w-4" /> Employee Lounge</div>
-              <h1 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-5xl">Hey {firstName} — welcome to your space. 💚</h1>
-              <p className="mt-3 max-w-3xl text-sm font-semibold leading-7 text-white/75 sm:text-base">Catch up, get shift-ready, find your work tools, and see what the TCS team needs to know today.</p>
-              <div className="mt-5 flex flex-wrap gap-2 text-xs font-black">
-                <span className="rounded-full bg-white/10 px-3 py-1.5 text-white">{profile?.role || "TCS Staff"}</span>
-                <span className="rounded-full px-3 py-1.5" style={{ background: GOLD, color: NAVY }}>{locations}</span>
+      <div className="min-h-full bg-[#f7f0e3] pb-12">
+        <section className="relative overflow-hidden rounded-[2rem] border border-[#e4d2b0] bg-[#fffaf1] shadow-xl">
+          <div className="absolute -left-16 -top-16 h-48 w-48 rounded-full bg-emerald-900/10" />
+          <div className="absolute -right-10 bottom-0 text-[10rem] leading-none opacity-[0.08]">🌿</div>
+          <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1.4fr_0.6fr] lg:p-10">
+            <div className="relative z-10">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-[#b77713]">Good team • Great vibes • Stronger together</p>
+              <h1 className="mt-3 max-w-3xl text-4xl font-black tracking-tight text-[#0b3153] sm:text-5xl lg:text-6xl">
+                Welcome to the <span className="font-serif italic text-[#2f6b37]">Employee Lounge</span>
+              </h1>
+              <p className="mt-4 max-w-3xl text-base font-semibold leading-7 text-slate-700 sm:text-lg">
+                A space to connect, celebrate, recharge, and support one another. You make TCS a great place to be, {firstName}. 💚
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowShoutOutForm(true)}
+                  className="inline-flex items-center gap-2 rounded-full bg-[#d89a23] px-5 py-3 text-sm font-black text-[#0b3153] shadow-lg transition hover:-translate-y-0.5"
+                >
+                  <Megaphone className="h-4 w-4" /> Give a Shout-Out
+                </button>
+                {canAccessRoute(profile, "/work-plans") && (
+                  <Link href="/work-plans" className="inline-flex items-center gap-2 rounded-full bg-[#0b3153] px-5 py-3 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5">
+                    <Trophy className="h-4 w-4" /> My Work
+                  </Link>
+                )}
               </div>
             </div>
-            <div className="mx-auto flex h-36 w-36 items-center justify-center rounded-[2rem] border-4 border-white/15 bg-white/10 text-7xl shadow-2xl lg:mx-0" aria-label="TCS gator mascot">🐊</div>
+
+            <div className="relative z-10 flex items-center justify-center">
+              <div className="relative flex h-64 w-full max-w-sm items-center justify-center rounded-[2rem] border-4 border-white bg-[#0b3153] p-5 text-center shadow-2xl">
+                <div className="absolute -right-3 -top-6 rotate-6 rounded-2xl bg-[#d89a23] px-4 py-2 text-xs font-black text-[#0b3153] shadow-lg">YOU BELONG HERE ♥</div>
+                <div>
+                  <div className="text-8xl">🐊</div>
+                  <p className="mt-2 text-xl font-black text-white">TCS Team Gator</p>
+                  <p className="mt-1 text-sm font-bold text-emerald-200">Teamwork makes brighter tomorrows.</p>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
-        <div className="grid gap-6 xl:grid-cols-[1.15fr_.85fr]">
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div><p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: GREEN }}>Start here</p><h2 className="mt-1 text-2xl font-black text-slate-950">My Shift Starter</h2><p className="mt-1 text-sm text-slate-500">A fast reset before you jump into the day.</p></div>
-              <div className="rounded-2xl px-4 py-2 text-center" style={{ background: CREAM }}><p className="text-2xl font-black" style={{ color: NAVY }}>{completed}/{starterChecklist.length}</p><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Ready</p></div>
+        <div className="mt-6 grid gap-5 xl:grid-cols-3">
+          <section className="rounded-3xl border border-[#e8dcc8] bg-white p-5 shadow-lg">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#dfead7] text-[#2f6b37]"><Megaphone className="h-5 w-5" /></span>
+                <div><h2 className="text-lg font-black text-[#0b3153]">Team Shout-Outs</h2><p className="text-xs font-semibold text-slate-500">Good people doing great things.</p></div>
+              </div>
+              <button type="button" onClick={() => setShowShoutOutForm(true)} className="text-xs font-black text-[#0b3153] underline">Add one</button>
             </div>
-            <div className="mt-5 space-y-3">
-              {starterChecklist.map((item, index) => (
-                <button key={item} type="button" onClick={() => toggle(index)} className="flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md" style={{ borderColor: checked[index] ? "#0f6b4f55" : "#e2e8f0", background: checked[index] ? "#eef9f4" : "white" }}>
-                  {checked[index] ? <CheckCircle2 className="h-6 w-6 shrink-0" style={{ color: GREEN }} /> : <Circle className="h-6 w-6 shrink-0 text-slate-300" />}
-                  <span className={`font-bold ${checked[index] ? "text-slate-500 line-through" : "text-slate-800"}`}>{item}</span>
-                </button>
+            <div className="mt-4 space-y-3">
+              {shoutOuts.slice(0, 3).map((item) => (
+                <article key={item.id} className="rounded-2xl bg-[#fff8ed] p-4">
+                  <p className="text-sm font-semibold italic leading-6 text-slate-700">“{item.message}”</p>
+                  <p className="mt-2 text-xs font-black text-[#2f6b37]">— {item.from}</p>
+                </article>
               ))}
             </div>
-            <p className="mt-3 text-xs text-slate-400">This little checklist saves on this device only.</p>
           </section>
 
-          <section className="overflow-hidden rounded-[2rem] border shadow-sm" style={{ borderColor: "#b8894b55", background: "linear-gradient(135deg,#b78345,#d4aa72)" }}>
-            <div className="border-b border-black/10 px-5 py-4 sm:px-6"><p className="text-xs font-black uppercase tracking-[0.18em] text-white/75">Pinned for the team</p><h2 className="mt-1 text-2xl font-black text-white">Employee Bulletin Board</h2></div>
-            <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
-              <PinnedNote title="Weekly schedules" text="Family schedules are due Friday by 6 PM." icon={<CalendarDays className="h-5 w-5" />} rotate="-rotate-1" />
-              <PinnedNote title="Morning route" text="Morning transportation departs at 7:00 AM." icon={<Bus className="h-5 w-5" />} rotate="rotate-1" />
-              <PinnedNote title="Privacy matters" text="Keep child, medical and staff details inside the secure Hub." icon={<ShieldCheck className="h-5 w-5" />} rotate="rotate-1" />
-              <PinnedNote title="Team standard" text="If something changes during your shift, document it before handoff." icon={<ClipboardCheck className="h-5 w-5" />} rotate="-rotate-1" />
+          <section className="rounded-3xl border border-[#e8dcc8] bg-white p-5 shadow-lg">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fff0c9] text-[#b77713]"><CakeSlice className="h-5 w-5" /></span>
+              <div><h2 className="text-lg font-black text-[#0b3153]">Birthdays This Month</h2><p className="text-xs font-semibold text-slate-500">Celebrate our amazing team.</p></div>
+            </div>
+            <div className="mt-5 rounded-2xl border border-dashed border-[#d8c49c] bg-[#fffaf1] p-5 text-center">
+              <PartyPopper className="mx-auto h-9 w-9 text-[#d89a23]" />
+              <p className="mt-3 text-sm font-black text-[#0b3153]">Birthday board ready</p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">Team birthdays can populate here from employee profiles once the birthday field is connected.</p>
+            </div>
+            {canAccessRoute(profile, "/employees") && (
+              <Link href="/employees" className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#d89a23] px-4 py-3 text-sm font-black text-[#0b3153]">
+                <Users className="h-4 w-4" /> Open Our People
+              </Link>
+            )}
+          </section>
+
+          <section className="rounded-3xl border border-[#e8dcc8] bg-white p-5 shadow-lg">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fff0c9] text-[#b77713]"><Heart className="h-5 w-5" /></span>
+              <div><h2 className="text-lg font-black text-[#0b3153]">You Make a Difference</h2><p className="text-xs font-semibold text-slate-500">Kind words. Stronger together.</p></div>
+            </div>
+            <blockquote className="mt-5 rounded-2xl bg-[#f8f1e5] p-5 text-sm font-semibold italic leading-7 text-slate-700">
+              “Thank you for the heart you bring to this work every single day. You create safe, happy, nurturing spaces for children, and that changes lives.”
+              <footer className="mt-3 font-black not-italic text-[#0b3153]">— TCS Leadership Team</footer>
+            </blockquote>
+          </section>
+        </div>
+
+        <div className="mt-5 grid gap-5 lg:grid-cols-[1.15fr_0.85fr] xl:grid-cols-3">
+          <section className="rounded-3xl border border-[#e8dcc8] bg-white p-5 shadow-lg xl:col-span-1">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#dfead7] text-[#2f6b37]"><Leaf className="h-5 w-5" /></span>
+              <div><h2 className="text-lg font-black text-[#0b3153]">Wellness & Recharge</h2><p className="text-xs font-semibold text-slate-500">Take care of you, too.</p></div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5 lg:grid-cols-2 xl:grid-cols-2">
+              {wellnessCards.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.title} className="rounded-2xl bg-[#fffaf1] p-3 text-center">
+                    <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#2f6b37] shadow"><Icon className="h-5 w-5" /></span>
+                    <p className="mt-2 text-xs font-black text-[#0b3153]">{item.title}</p>
+                    <p className="mt-1 text-[11px] font-semibold text-slate-500">{item.note}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-[#e8dcc8] bg-white p-5 shadow-lg xl:col-span-1">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fff0c9] text-[#b77713]"><Coffee className="h-5 w-5" /></span>
+              <div><h2 className="text-lg font-black text-[#0b3153]">Break-Time Ideas</h2><p className="text-xs font-semibold text-slate-500">Small breaks make a difference.</p></div>
+            </div>
+            <div className="mt-5 flex min-h-44 flex-col justify-between rounded-2xl bg-[#fff8ed] p-5">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#b77713]">Reset • Refuel • Return stronger</p>
+                <p className="mt-3 text-lg font-black leading-7 text-[#0b3153]">{breakIdeas[breakIdeaIndex]}</p>
+              </div>
+              <button type="button" onClick={nextBreakIdea} className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-[#d89a23] px-4 py-3 text-sm font-black text-[#0b3153]">
+                <RefreshCw className="h-4 w-4" /> Give Me Another Idea
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-[#e8dcc8] bg-white p-5 shadow-lg lg:col-span-2 xl:col-span-1">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#dbe9f2] text-[#0b3153]"><Sparkles className="h-5 w-5" /></span>
+              <div><h2 className="text-lg font-black text-[#0b3153]">Quick Team Links</h2><p className="text-xs font-semibold text-slate-500">Your go-to Hub tools.</p></div>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {visibleLinks.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link key={item.href} href={item.href} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-black text-[#0b3153] transition hover:-translate-y-0.5 hover:border-[#d89a23] hover:shadow-md">
+                    <Icon className="h-4 w-4" /> {item.label}
+                  </Link>
+                );
+              })}
             </div>
           </section>
         </div>
 
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex items-end justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: GREEN }}>Get to work fast</p><h2 className="mt-1 text-2xl font-black text-slate-950">My Work Tools</h2><p className="mt-1 text-sm text-slate-500">You only see shortcuts your account is allowed to open.</p></div><span className="hidden rounded-full px-3 py-1.5 text-xs font-black sm:inline-flex" style={{ background: CREAM, color: NAVY }}>{visibleTools.length} available</span></div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {visibleTools.map((tool) => {
-              const Icon = tool.icon;
-              return <Link key={tool.href} href={tool.href} className="group flex min-h-32 flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:-translate-y-1 hover:border-emerald-300 hover:bg-white hover:shadow-lg"><div className="flex items-start justify-between gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-sm" style={{ background: GREEN }}><Icon className="h-5 w-5" /></span><ArrowRight className="h-5 w-5 text-slate-300 transition group-hover:translate-x-1 group-hover:text-slate-600" /></div><div className="mt-4"><p className="font-black text-slate-950">{tool.label}</p><p className="mt-1 text-xs leading-5 text-slate-500">{tool.helper}</p></div></Link>;
-            })}
-          </div>
-        </section>
-
-        <div className="grid gap-6 lg:grid-cols-3">
-          <LoungeCard icon={<Bell className="h-6 w-6" />} title="Team Updates" kicker="Know what changed">
-            <p>Use this space for the reminders that matter to the whole team — schedule deadlines, route changes, closures, trainings, and policy updates.</p>
-            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-950">Next build: leadership-posted announcements with staff acknowledgment.</div>
-          </LoungeCard>
-          <LoungeCard icon={<Star className="h-6 w-6" />} title="Recognition Wall" kicker="Catch people doing it right">
-            <p>Celebrate great teamwork, clean handoffs, strong classroom support, safe transportation, and staff who jump in when coverage gets tight.</p>
-            <div className="mt-4 flex items-center gap-3 rounded-2xl p-3" style={{ background: CREAM }}><span className="text-3xl">⭐</span><div><p className="font-black" style={{ color: NAVY }}>Team Win of the Week</p><p className="text-xs text-slate-600">Recognition posting is coming next.</p></div></div>
-          </LoungeCard>
-          <LoungeCard icon={<BookOpen className="h-6 w-6" />} title="Grow With TCS" kicker="Training & development">
-            <p>Keep your required learning, coaching, goals, certifications, and skill-building easy to find from one staff-centered home.</p>
-            <div className="mt-4 flex flex-wrap gap-2"><Tag>Training</Tag><Tag>Goals</Tag><Tag>Certificates</Tag><Tag>Badges</Tag></div>
-          </LoungeCard>
-        </div>
-
-        <section className="rounded-[2rem] border p-5 shadow-sm sm:p-6" style={{ borderColor: "#d6aa4666", background: CREAM }}>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-4"><div className="flex h-14 w-14 items-center justify-center rounded-2xl text-3xl" style={{ background: NAVY }}>🐊</div><div><p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: GREEN }}>TCS Employee Lounge</p><h2 className="text-xl font-black" style={{ color: NAVY }}>One place for the team — not another boring staff portal.</h2></div></div><div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-black text-slate-600 shadow-sm"><Users className="h-4 w-4" /> Staff only</div></div>
-        </section>
+        <footer className="mt-6 rounded-3xl bg-[#0b3153] px-6 py-5 text-center text-white shadow-xl">
+          <p className="text-xl font-black">We’re better together. 💚</p>
+          <p className="mt-1 text-sm font-semibold text-white/75">Take a moment to relax, recharge, and celebrate all that makes TCS special.</p>
+        </footer>
       </div>
+
+      {showShoutOutForm && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" onMouseDown={() => setShowShoutOutForm(false)}>
+          <form onSubmit={submitShoutOut} onMouseDown={(event) => event.stopPropagation()} className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
+            <div className="flex items-center gap-3">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fff0c9] text-[#b77713]"><Megaphone className="h-5 w-5" /></span>
+              <div><h2 className="text-xl font-black text-[#0b3153]">Give a Team Shout-Out</h2><p className="text-sm text-slate-500">Celebrate something a teammate did well.</p></div>
+            </div>
+            <textarea
+              value={newShoutOut}
+              onChange={(event) => setNewShoutOut(event.target.value)}
+              rows={5}
+              autoFocus
+              placeholder="Example: Huge shout-out to the closing team for jumping in and helping each other today…"
+              className="mt-5 w-full rounded-2xl border border-slate-300 p-4 text-sm leading-6 outline-none focus:border-[#d89a23] focus:ring-4 focus:ring-amber-100"
+            />
+            <p className="mt-2 text-xs text-slate-500">Preview note: shout-outs on this test page are session-only until the shared Employee Lounge feed is connected.</p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button type="button" onClick={() => setShowShoutOutForm(false)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-600">Cancel</button>
+              <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-[#0b3153] px-5 py-2.5 text-sm font-black text-white"><Send className="h-4 w-4" /> Post Shout-Out</button>
+            </div>
+          </form>
+        </div>
+      )}
     </MainLayout>
   );
-}
-
-function PinnedNote({ title, text, icon, rotate }: { title: string; text: string; icon: React.ReactNode; rotate: string }) {
-  return <article className={`${rotate} relative rounded-sm bg-[#fff4b8] p-4 shadow-lg`}><span className="absolute left-1/2 top-1 h-3 w-3 -translate-x-1/2 rounded-full bg-red-500 shadow" /><div className="mt-2 flex items-center gap-2 font-black text-slate-900">{icon}{title}</div><p className="mt-2 text-sm font-semibold leading-6 text-slate-700">{text}</p></article>;
-}
-
-function LoungeCard({ icon, title, kicker, children }: { icon: React.ReactNode; title: string; kicker: string; children: React.ReactNode }) {
-  return <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm"><div className="flex h-12 w-12 items-center justify-center rounded-2xl text-white" style={{ background: NAVY }}>{icon}</div><p className="mt-4 text-xs font-black uppercase tracking-[0.16em]" style={{ color: GREEN }}>{kicker}</p><h2 className="mt-1 text-xl font-black text-slate-950">{title}</h2><div className="mt-3 text-sm font-medium leading-6 text-slate-600">{children}</div></section>;
-}
-
-function Tag({ children }: { children: React.ReactNode }) {
-  return <span className="rounded-full px-3 py-1.5 text-xs font-black" style={{ background: "#edf7f2", color: GREEN }}>{children}</span>;
 }
