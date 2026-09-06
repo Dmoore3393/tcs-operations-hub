@@ -16,7 +16,6 @@ import {
   Pin,
   Plus,
   Search,
-  ShieldCheck,
   Star,
   Trash2,
   Trophy,
@@ -260,7 +259,7 @@ export default function EmployeeBulletinPage() {
             {board[openPanel].map((item) => (
               <div key={item.id} className="flex gap-3 rounded-2xl border border-slate-200 p-4">
                 <span className={`mt-1 h-3 w-3 shrink-0 rounded-full ${dotClass[item.tone]}`} />
-                <div className="min-w-0 flex-1"><p className="font-black text-[#0b3158] whitespace-pre-line">{item.title}</p>{item.subtitle && <p className="mt-1 text-sm text-slate-500">{item.subtitle}</p>}{item.date && <p className="mt-2 text-xs font-bold text-slate-400">{item.date}</p>}</div>
+                <div className="min-w-0 flex-1"><p className="whitespace-pre-line font-black text-[#0b3158]">{item.title}</p>{item.subtitle && <p className="mt-1 text-sm text-slate-500">{item.subtitle}</p>}{item.date && <p className="mt-2 text-xs font-bold text-slate-400">{item.date}</p>}</div>
                 {canManageSystem && <div className="flex shrink-0 gap-2"><button onClick={() => setEditing({ section: openPanel, item: { ...item } })} className="rounded-lg border border-slate-200 p-2 text-slate-600"><Pencil className="h-4 w-4" /></button><button onClick={() => deleteItem(openPanel, item.id)} className="rounded-lg border border-red-200 p-2 text-red-600"><Trash2 className="h-4 w-4" /></button></div>}
               </div>
             ))}
@@ -287,7 +286,7 @@ export default function EmployeeBulletinPage() {
 }
 
 function BulletinNav({ href, icon, label, active = false }: { href?: string; icon: React.ReactNode; label: string; active?: boolean }) {
-  const content = <>{<span className="[&>svg]:h-5 [&>svg]:w-5">{icon}</span>}<span className="whitespace-pre-line">{label}</span></>;
+  const content = <><span className="[&>svg]:h-5 [&>svg]:w-5">{icon}</span><span className="whitespace-pre-line">{label}</span></>;
   const className = `mx-2 flex items-center gap-4 rounded-lg px-4 py-3.5 text-sm font-semibold ${active ? "bg-[#67a232] text-white shadow" : "text-white hover:bg-white/10"}`;
   return href ? <Link href={href} className={className}>{content}</Link> : <div className={className}>{content}</div>;
 }
