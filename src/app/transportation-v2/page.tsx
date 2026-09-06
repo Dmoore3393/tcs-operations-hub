@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
@@ -7,7 +8,14 @@ import { usePersistentState } from "@/hooks/usePersistentState";
 import { localIsoDate } from "@/lib/date-utils";
 import { initialChildren, type ChildRecord } from "@/lib/children";
 import { starterCareLogs, type CareLogEntry } from "@/lib/employee-care";
-import { starterRoutes, starterSchools, starterVehicles, type TransportationRoute } from "@/lib/hub-data";
+import {
+  starterRoutes,
+  starterSchools,
+  starterVehicles,
+  type SchoolRecord,
+  type TransportationRoute,
+  type VehicleRecord,
+} from "@/lib/hub-data";
 import type { LocationKey } from "@/lib/location-config";
 import {
   AlertTriangle,
@@ -17,6 +25,7 @@ import {
   Clock3,
   MapPin,
   Navigation,
+  Pencil,
   ShieldCheck,
   UserCheck,
 } from "lucide-react";
@@ -93,15 +102,18 @@ function isLeadership(name: string, email: string) {
 }
 
 export default function TransportationV2Page() {
-  const { profile } = useAuth();
+  const { profile, canManageSystem, isLocationLicensee } = useAuth();
   const { location: activeLocation } = useHubLocation();
   const [routes, setRoutes] = usePersistentState<LiveRoute[]>("tcs-routes", starterRoutes as LiveRoute[]);
+  const [schools] = usePersistentState<SchoolRecord[]>("tcs-schools-v2", starterSchools);
+  const [vehicles] = usePersistentState<VehicleRecord[]>("tcs-vehicles-v2", starterVehicles);
   const [children, setChildren] = usePersistentState<ChildRecord[]>("tcs-children-v1", initialChildren);
   const [careLogs, setCareLogs] = usePersistentState<CareLogEntry[]>("tcs-daily-care-v1", starterCareLogs);
   const [selectedRoute, setSelectedRoute] = useState("");
   const today = localIsoDate();
   const actor = profile?.full_name?.trim() || profile?.email || "TCS Staff";
   const leader = isLeadership(profile?.full_name || "", profile?.email || "");
+  const canManageTransportation = canManageSystem || isLocationLicensee;
 
   const todayRoutes = useMemo(
     () => routes.filter((route) => route.status !== "Not Riding" && scheduledToday(route.days) && matchesLocation(route, activeLocation)),
@@ -118,7 +130,7 @@ export default function TransportationV2Page() {
   const onboard = todayRoutes.filter((route) => statusFor(route, today) === "Picked Up").length;
   const arrived = todayRoutes.filter((route) => statusFor(route, today) === "Arrived").length;
   const checkedIn = todayRoutes.filter((route) => statusFor(route, today) === "Checked In").length;
-  const fleetReady = starterVehicles.filter((vehicle) => vehicle.status === "Ready").length;
+  const fleetReady = vehicles.filter((vehicle) => vehicle.status === "Ready").length;
 
   const locationArrivals = todayRoutes.filter((route) => {
     const status = statusFor(route, today);
@@ -199,7 +211,7 @@ export default function TransportationV2Page() {
           <Metric label="In Transit" value={onboard} icon={<Navigation className="h-5 w-5" />} tone="blue" />
           <Metric label="Arrived" value={arrived} icon={<MapPin className="h-5 w-5" />} tone="purple" />
           <Metric label="Checked In" value={checkedIn} icon={<CheckCircle2 className="h-5 w-5" />} tone="green" />
-          <Metric label="Fleet Ready" value={`${fleetReady}/${starterVehicles.length}`} icon={<ShieldCheck className="h-5 w-5" />} tone="slate" />
+          <Metric label="Fleet Ready" value={`${fleetReady}/${vehicles.length}`} icon={<ShieldCheck className="h-5 w-5" />} tone="slate" />
         </div>
 
         {leader && leadershipExceptions.length > 0 && <section className="rounded-3xl border border-amber-300 bg-amber-50 p-5 shadow-sm"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-6 w-6 text-amber-700" /><div><p className="text-xs font-black uppercase tracking-[.16em] text-amber-700">Danielle + Jen only</p><h2 className="mt-1 text-xl font-black text-amber-950">Transportation handoffs to review</h2><p className="mt-1 text-sm font-semibold text-amber-900">These children were picked up but have not completed the destination handoff yet. This is intentionally leadership-only so field trips and off-site care can be checked without alarming site staff.</p></div></div><div className="mt-4 grid gap-3 md:grid-cols-2">{leadershipExceptions.map((route) => <div key={route.id} className="rounded-2xl bg-white p-4 ring-1 ring-amber-200"><p className="font-black text-slate-950">{route.child}</p><p className="mt-1 text-sm font-bold text-amber-800">{statusFor(route, today)} • {routeKey(route)}</p><p className="mt-1 text-xs font-semibold text-slate-500">Expected: {route.dropoffLocation || "destination not entered"}</p></div>)}</div></section>}
@@ -207,7 +219,7 @@ export default function TransportationV2Page() {
         {locationArrivals.length > 0 && <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm"><div className="flex items-start gap-3"><BellRing className="mt-0.5 h-6 w-6 text-[#1769d2]" /><div><p className="text-xs font-black uppercase tracking-[.16em] text-[#1769d2]">Location arrival notice</p><h2 className="mt-1 text-xl font-black text-[#102a56]">A transported child has arrived</h2><p className="mt-1 text-sm font-semibold text-slate-600">Program directors and authorized staff only need the arrival notice. Missing-drop-off alerts stay with Danielle and Jen.</p></div></div></section>}
 
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#1769d2]">My Route Today</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">Choose the route you are running</h2><p className="mt-1 text-sm font-semibold text-slate-500">Pickup and destination confirmation happen one child at a time.</p></div></div>
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#1769d2]">My Route Today</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">Choose the route you are running</h2><p className="mt-1 text-sm font-semibold text-slate-500">Pickup and destination confirmation happen one child at a time.</p></div>{canManageTransportation && <Link href="/transportation" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#102a56] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#1769d2]"><Pencil className="h-4 w-4" /> MANAGE TRANSPORTATION SETUP</Link>}</div>
           <div className="mt-5 flex flex-wrap gap-2">{routeNames.map((name) => <button key={name} onClick={() => setSelectedRoute(name)} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${effectiveRoute === name ? "border-[#1769d2] bg-[#eef6ff] text-[#102a56]" : "border-slate-200 bg-white text-slate-600"}`}>{name}</button>)}{!routeNames.length && <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">No active routes are scheduled for today at this location.</p>}</div>
         </section>
 
@@ -232,7 +244,7 @@ export default function TransportationV2Page() {
           })}</div>
         </section>}
 
-        <section className="grid gap-5 xl:grid-cols-3"><Panel title="Recent Pickups" icon={<UserCheck className="h-5 w-5" />}>{todayRoutes.filter((route) => route.pickedUpAt).sort((a, b) => String(b.pickedUpAt).localeCompare(String(a.pickedUpAt))).slice(0, 5).map((route) => <Row key={route.id} top={route.child} bottom={`${timeLabel(route.pickedUpAt)} • ${route.school}`} />)}</Panel><Panel title="Schools" icon={<MapPin className="h-5 w-5" />}>{starterSchools.filter((school) => school.status === "Active").slice(0, 5).map((school) => <Row key={school.id} top={school.school} bottom={`${school.area} • ${school.dismissal || "dismissal not entered"}`} />)}</Panel><Panel title="Transportation Reminders" icon={<ShieldCheck className="h-5 w-5" />}><Row top="One child at a time" bottom="Never bulk-confirm pickups or handoffs." /><Row top="Arrival is not check-in" bottom="TCS destination handoff requires a separate location check-in." /><Row top="Field trip exception review" bottom="Missing destination handoffs alert Danielle and Jen only." /></Panel></section>
+        <section className="grid gap-5 xl:grid-cols-3"><Panel title="Recent Pickups" icon={<UserCheck className="h-5 w-5" />}>{todayRoutes.filter((route) => route.pickedUpAt).sort((a, b) => String(b.pickedUpAt).localeCompare(String(a.pickedUpAt))).slice(0, 5).map((route) => <Row key={route.id} top={route.child} bottom={`${timeLabel(route.pickedUpAt)} • ${route.school}`} />)}</Panel><Panel title="Schools" icon={<MapPin className="h-5 w-5" />}>{schools.filter((school) => school.status === "Active").slice(0, 5).map((school) => <Row key={school.id} top={school.school} bottom={`${school.area} • ${school.dismissal || "dismissal not entered"}`} />)}</Panel><Panel title="Transportation Reminders" icon={<ShieldCheck className="h-5 w-5" />}><Row top="One child at a time" bottom="Never bulk-confirm pickups or handoffs." /><Row top="Arrival is not check-in" bottom="TCS destination handoff requires a separate location check-in." /><Row top="Field trip exception review" bottom="Missing destination handoffs alert Danielle and Jen only." /></Panel></section>
       </div>
     </MainLayout>
   );
