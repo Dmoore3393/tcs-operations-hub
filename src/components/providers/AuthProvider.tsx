@@ -55,6 +55,7 @@ const ownerOnlyWriteStateKeys = new Set([
   "tcs-schools-v2",
   "tcs-vehicles-v2",
   "tcs-timesheet-department-routes-v1",
+  "tcs-employee-bulletin-v1",
 ]);
 
 export function normalizedStaffRole(role = "") {
