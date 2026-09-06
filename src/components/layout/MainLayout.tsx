@@ -102,6 +102,7 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/print-studio": { title: "AI Printable Studio", subtitle: "Ratio plans, work plans, menus, notices, and transportation boards" },
   "/ai-director": { title: "AI Director", subtitle: "Draft, plan, review, and organize daily operations" },
   "/locations": { title: "Locations", subtitle: "Daily open/closed times, capacity, licensing, and colors" },
+  "/locations/tehachapi": { title: "Thomason Family Childcare", subtitle: "Tehachapi location overview, staffing, roster, daily operations, and files" },
   "/audit-log": { title: "Audit Log", subtitle: "Immutable create, update, review, export, and deletion history" },
   "/settings": { title: "Hub Settings", subtitle: "Policies, defaults, notifications, and system setup" },
 };
@@ -137,7 +138,6 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     window.addEventListener(HUB_SYNC_EVENT, handleSync);
     return () => window.removeEventListener(HUB_SYNC_EVENT, handleSync);
   }, []);
-
   const syncVisual = sync.state === "saving" || sync.state === "loading"
     ? { label: sync.state === "saving" ? "Saving" : "Loading", icon: <LoaderCircle className="h-4 w-4 animate-spin" />, className: "text-blue-700 bg-blue-50 border-blue-200" }
     : sync.state === "error" || sync.state === "conflict"
