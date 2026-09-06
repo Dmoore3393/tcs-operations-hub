@@ -10,6 +10,7 @@ import {
   HeartHandshake,
   Leaf,
   Lightbulb,
+  LoaderCircle,
   Megaphone,
   PartyPopper,
   RefreshCw,
@@ -18,25 +19,27 @@ import {
   Trophy,
   Users,
 } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import MainLayout from "@/components/layout/MainLayout";
 import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
 
 type ShoutOut = {
-  id: number;
+  id: string;
   from: string;
   message: string;
+  created_at?: string;
+  created_by?: string;
 };
 
 const starterShoutOuts: ShoutOut[] = [
   {
-    id: 1,
+    id: "leadership-welcome",
     from: "TCS Leadership Team",
     message: "Thank you for the heart you bring to this work every day. Safe, happy, nurturing spaces happen because of you.",
   },
   {
-    id: 2,
+    id: "teamwork-welcome",
     from: "Team TCS",
     message: "Shout-out to everyone who jumps in when another classroom, route, or teammate needs support. That teamwork matters.",
   },
@@ -69,28 +72,92 @@ const quickLinks = [
 ];
 
 export default function EmployeeLoungePage() {
-  const { profile } = useAuth();
-  const [shoutOuts, setShoutOuts] = useState<ShoutOut[]>(starterShoutOuts);
+  const { profile, session } = useAuth();
+  const [savedShoutOuts, setSavedShoutOuts] = useState<ShoutOut[]>([]);
   const [newShoutOut, setNewShoutOut] = useState("");
   const [showShoutOutForm, setShowShoutOutForm] = useState(false);
   const [breakIdeaIndex, setBreakIdeaIndex] = useState(0);
+  const [loadingShoutOuts, setLoadingShoutOuts] = useState(true);
+  const [savingShoutOut, setSavingShoutOut] = useState(false);
+  const [feedError, setFeedError] = useState("");
+  const [feedNotice, setFeedNotice] = useState("");
 
   const firstName = profile?.full_name?.trim().split(/\s+/)[0] || "Team Member";
   const visibleLinks = useMemo(
     () => quickLinks.filter((item) => canAccessRoute(profile, item.href)),
     [profile],
   );
+  const visibleShoutOuts = useMemo(
+    () => [...savedShoutOuts, ...starterShoutOuts].slice(0, 3),
+    [savedShoutOuts],
+  );
 
-  function submitShoutOut(event: FormEvent<HTMLFormElement>) {
+  const apiRequest = useCallback(async (url: string, options: RequestInit = {}) => {
+    if (!session) throw new Error("Your staff session expired. Sign in again.");
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+        ...(options.headers ?? {}),
+      },
+    });
+    const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!response.ok) {
+      throw new Error(typeof payload.error === "string" ? payload.error : "The shout-out feed could not be updated.");
+    }
+    return payload;
+  }, [session]);
+
+  const loadShoutOuts = useCallback(async (quiet = false) => {
+    if (!session) return;
+    if (!quiet) setLoadingShoutOuts(true);
+    try {
+      const payload = await apiRequest("/api/employee-lounge/shout-outs", { method: "GET" });
+      setSavedShoutOuts(Array.isArray(payload.shoutOuts) ? payload.shoutOuts as ShoutOut[] : []);
+      setFeedError("");
+    } catch (error) {
+      if (!quiet) setFeedError(error instanceof Error ? error.message : "Could not load team shout-outs.");
+    } finally {
+      if (!quiet) setLoadingShoutOuts(false);
+    }
+  }, [apiRequest, session]);
+
+  useEffect(() => {
+    if (!session) return;
+    const initial = window.setTimeout(() => { void loadShoutOuts(); }, 0);
+    const interval = window.setInterval(() => { void loadShoutOuts(true); }, 30000);
+    const handleFocus = () => { void loadShoutOuts(true); };
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [loadShoutOuts, session]);
+
+  async function submitShoutOut(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = newShoutOut.trim();
-    if (!message) return;
-    setShoutOuts((current) => [
-      { id: Date.now(), from: profile?.full_name || "TCS Team Member", message },
-      ...current,
-    ]);
-    setNewShoutOut("");
-    setShowShoutOutForm(false);
+    if (!message || savingShoutOut) return;
+
+    setSavingShoutOut(true);
+    setFeedError("");
+    try {
+      const payload = await apiRequest("/api/employee-lounge/shout-outs", {
+        method: "POST",
+        body: JSON.stringify({ message }),
+      });
+      setSavedShoutOuts(Array.isArray(payload.shoutOuts) ? payload.shoutOuts as ShoutOut[] : []);
+      setNewShoutOut("");
+      setShowShoutOutForm(false);
+      setFeedNotice("Shout-out saved and shared with the TCS team. 💚");
+      window.setTimeout(() => setFeedNotice(""), 3500);
+    } catch (error) {
+      setFeedError(error instanceof Error ? error.message : "The shout-out could not be saved.");
+    } finally {
+      setSavingShoutOut(false);
+    }
   }
 
   function nextBreakIdea() {
@@ -141,6 +208,9 @@ export default function EmployeeLoungePage() {
           </div>
         </section>
 
+        {feedNotice && <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-black text-emerald-900">{feedNotice}</div>}
+        {feedError && <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800">{feedError}</div>}
+
         <div className="mt-6 grid gap-5 xl:grid-cols-3">
           <section className="rounded-3xl border border-[#e8dcc8] bg-white p-5 shadow-lg">
             <div className="flex items-center justify-between gap-3">
@@ -148,16 +218,20 @@ export default function EmployeeLoungePage() {
                 <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#dfead7] text-[#2f6b37]"><Megaphone className="h-5 w-5" /></span>
                 <div><h2 className="text-lg font-black text-[#0b3153]">Team Shout-Outs</h2><p className="text-xs font-semibold text-slate-500">Good people doing great things.</p></div>
               </div>
-              <button type="button" onClick={() => setShowShoutOutForm(true)} className="text-xs font-black text-[#0b3153] underline">Add one</button>
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={() => void loadShoutOuts()} className="text-[#2f6b37]" aria-label="Refresh team shout-outs"><RefreshCw className={`h-4 w-4 ${loadingShoutOuts ? "animate-spin" : ""}`} /></button>
+                <button type="button" onClick={() => setShowShoutOutForm(true)} className="text-xs font-black text-[#0b3153] underline">Add one</button>
+              </div>
             </div>
             <div className="mt-4 space-y-3">
-              {shoutOuts.slice(0, 3).map((item) => (
+              {visibleShoutOuts.map((item) => (
                 <article key={item.id} className="rounded-2xl bg-[#fff8ed] p-4">
                   <p className="text-sm font-semibold italic leading-6 text-slate-700">“{item.message}”</p>
                   <p className="mt-2 text-xs font-black text-[#2f6b37]">— {item.from}</p>
                 </article>
               ))}
             </div>
+            <p className="mt-4 text-[11px] font-bold text-slate-400">Shared shout-outs save to the TCS database and refresh automatically across staff devices.</p>
           </section>
 
           <section className="rounded-3xl border border-[#e8dcc8] bg-white p-5 shadow-lg">
@@ -250,7 +324,7 @@ export default function EmployeeLoungePage() {
       </div>
 
       {showShoutOutForm && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" onMouseDown={() => setShowShoutOutForm(false)}>
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" onMouseDown={() => !savingShoutOut && setShowShoutOutForm(false)}>
           <form onSubmit={submitShoutOut} onMouseDown={(event) => event.stopPropagation()} className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
             <div className="flex items-center gap-3">
               <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fff0c9] text-[#b77713]"><Megaphone className="h-5 w-5" /></span>
@@ -260,14 +334,23 @@ export default function EmployeeLoungePage() {
               value={newShoutOut}
               onChange={(event) => setNewShoutOut(event.target.value)}
               rows={5}
+              maxLength={500}
               autoFocus
+              disabled={savingShoutOut}
               placeholder="Example: Huge shout-out to the closing team for jumping in and helping each other today…"
-              className="mt-5 w-full rounded-2xl border border-slate-300 p-4 text-sm leading-6 outline-none focus:border-[#d89a23] focus:ring-4 focus:ring-amber-100"
+              className="mt-5 w-full rounded-2xl border border-slate-300 p-4 text-sm leading-6 outline-none focus:border-[#d89a23] focus:ring-4 focus:ring-amber-100 disabled:bg-slate-50"
             />
-            <p className="mt-2 text-xs text-slate-500">Shout-outs are currently session-only until the shared Employee Lounge feed is connected.</p>
+            <div className="mt-2 flex items-center justify-between gap-3 text-xs text-slate-500">
+              <p>Posts save to the shared TCS database and are visible to active staff.</p>
+              <span className="font-black">{newShoutOut.length}/500</span>
+            </div>
+            {feedError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-700">{feedError}</p>}
             <div className="mt-5 flex justify-end gap-3">
-              <button type="button" onClick={() => setShowShoutOutForm(false)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-600">Cancel</button>
-              <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-[#0b3153] px-5 py-2.5 text-sm font-black text-white"><Send className="h-4 w-4" /> Post Shout-Out</button>
+              <button type="button" disabled={savingShoutOut} onClick={() => setShowShoutOutForm(false)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-600 disabled:opacity-50">Cancel</button>
+              <button type="submit" disabled={savingShoutOut || !newShoutOut.trim()} className="inline-flex items-center gap-2 rounded-xl bg-[#0b3153] px-5 py-2.5 text-sm font-black text-white disabled:opacity-50">
+                {savingShoutOut ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {savingShoutOut ? "Saving…" : "Post Shout-Out"}
+              </button>
             </div>
           </form>
         </div>
