@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import MainLayout from "@/components/layout/MainLayout";
+import TransportationConsentForm from "@/components/transportation/TransportationConsentForm";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -23,6 +24,7 @@ import {
   Bus,
   CheckCircle2,
   Clock3,
+  FileText,
   MapPin,
   Navigation,
   Pencil,
@@ -110,6 +112,7 @@ export default function TransportationV2Page() {
   const [children, setChildren] = usePersistentState<ChildRecord[]>("tcs-children-v1", initialChildren);
   const [careLogs, setCareLogs] = usePersistentState<CareLogEntry[]>("tcs-daily-care-v1", starterCareLogs);
   const [selectedRoute, setSelectedRoute] = useState("");
+  const [showConsentForm, setShowConsentForm] = useState(false);
   const today = localIsoDate();
   const actor = profile?.full_name?.trim() || profile?.email || "TCS Staff";
   const leader = isLeadership(profile?.full_name || "", profile?.email || "");
@@ -214,6 +217,16 @@ export default function TransportationV2Page() {
           <Metric label="Fleet Ready" value={`${fleetReady}/${vehicles.length}`} icon={<ShieldCheck className="h-5 w-5" />} tone="slate" />
         </div>
 
+        <section className="overflow-hidden rounded-3xl border border-amber-200 bg-gradient-to-r from-[#fff9e6] via-white to-[#eef6ff] shadow-sm">
+          <div className="flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[#ffc72c] text-[#102a56] shadow-sm"><FileText className="h-7 w-7" /></div>
+              <div><p className="text-xs font-black uppercase tracking-[.18em] text-[#1769d2]">2026-2027 Forms</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">Transportation Consent Forms</h2><p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">Open the full four-page School Transportation Consent packet, fill it out on screen, then print it or save it as a PDF for the child’s file.</p></div>
+            </div>
+            <button onClick={() => setShowConsentForm(true)} className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#1769d2] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#102a56]"><FileText className="h-4 w-4" /> OPEN CONSENT FORM</button>
+          </div>
+        </section>
+
         {leader && leadershipExceptions.length > 0 && <section className="rounded-3xl border border-amber-300 bg-amber-50 p-5 shadow-sm"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-6 w-6 text-amber-700" /><div><p className="text-xs font-black uppercase tracking-[.16em] text-amber-700">Danielle + Jen only</p><h2 className="mt-1 text-xl font-black text-amber-950">Transportation handoffs to review</h2><p className="mt-1 text-sm font-semibold text-amber-900">These children were picked up but have not completed the destination handoff yet. This is intentionally leadership-only so field trips and off-site care can be checked without alarming site staff.</p></div></div><div className="mt-4 grid gap-3 md:grid-cols-2">{leadershipExceptions.map((route) => <div key={route.id} className="rounded-2xl bg-white p-4 ring-1 ring-amber-200"><p className="font-black text-slate-950">{route.child}</p><p className="mt-1 text-sm font-bold text-amber-800">{statusFor(route, today)} • {routeKey(route)}</p><p className="mt-1 text-xs font-semibold text-slate-500">Expected: {route.dropoffLocation || "destination not entered"}</p></div>)}</div></section>}
 
         {locationArrivals.length > 0 && <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm"><div className="flex items-start gap-3"><BellRing className="mt-0.5 h-6 w-6 text-[#1769d2]" /><div><p className="text-xs font-black uppercase tracking-[.16em] text-[#1769d2]">Location arrival notice</p><h2 className="mt-1 text-xl font-black text-[#102a56]">A transported child has arrived</h2><p className="mt-1 text-sm font-semibold text-slate-600">Program directors and authorized staff only need the arrival notice. Missing-drop-off alerts stay with Danielle and Jen.</p></div></div></section>}
@@ -246,6 +259,7 @@ export default function TransportationV2Page() {
 
         <section className="grid gap-5 xl:grid-cols-3"><Panel title="Recent Pickups" icon={<UserCheck className="h-5 w-5" />}>{todayRoutes.filter((route) => route.pickedUpAt).sort((a, b) => String(b.pickedUpAt).localeCompare(String(a.pickedUpAt))).slice(0, 5).map((route) => <Row key={route.id} top={route.child} bottom={`${timeLabel(route.pickedUpAt)} • ${route.school}`} />)}</Panel><Panel title="Schools" icon={<MapPin className="h-5 w-5" />}>{schools.filter((school) => school.status === "Active").slice(0, 5).map((school) => <Row key={school.id} top={school.school} bottom={`${school.area} • ${school.dismissal || "dismissal not entered"}`} />)}</Panel><Panel title="Transportation Reminders" icon={<ShieldCheck className="h-5 w-5" />}><Row top="One child at a time" bottom="Never bulk-confirm pickups or handoffs." /><Row top="Arrival is not check-in" bottom="TCS destination handoff requires a separate location check-in." /><Row top="Field trip exception review" bottom="Missing destination handoffs alert Danielle and Jen only." /></Panel></section>
       </div>
+      {showConsentForm && <TransportationConsentForm onClose={() => setShowConsentForm(false)} />}
     </MainLayout>
   );
 }
