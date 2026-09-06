@@ -2,11 +2,12 @@
 
 import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
-import { Bot, ClipboardCheck, HeartPulse, Home, Plus, ShieldCheck, Utensils, X } from "lucide-react";
+import { Bot, ClipboardCheck, HeartPulse, Home, Plus, ShieldCheck, Users, Utensils, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
 const quickItems = [
+  { href: "/employee-lounge", label: "Lounge", icon: Users },
   { href: "/daily-care", label: "Care Log", icon: ClipboardCheck },
   { href: "/meals", label: "Meal", icon: Utensils },
   { href: "/shift-reports", label: "Reports", icon: ClipboardCheck },
@@ -21,10 +22,18 @@ export default function MobileQuickActions() {
   const [open, setOpen] = useState(false);
   const visible = quickItems.filter((item) => canAccessRoute(profile, item.href));
   const canOpenChildren = canAccessRoute(profile, "/children");
+  const canOpenLounge = canAccessRoute(profile, "/employee-lounge");
   const primary = visible.slice(0, 3);
 
   return (
     <>
+      {canOpenLounge && (
+        <Link href="/employee-lounge" className="fixed bottom-6 right-6 z-[60] hidden items-center gap-3 rounded-2xl border border-white/20 px-5 py-3 text-sm font-black text-white shadow-2xl transition hover:-translate-y-1 hover:shadow-xl lg:flex" style={{ background: `linear-gradient(135deg, ${theme.primary}, ${theme.primaryDark})` }}>
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15"><Users className="h-5 w-5" /></span>
+          Employee Lounge
+        </Link>
+      )}
+
       {open && (
         <div className="fixed inset-0 z-[70] bg-slate-950/45 backdrop-blur-sm lg:hidden" onClick={() => setOpen(false)}>
           <div className="absolute inset-x-3 bottom-24 rounded-3xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
