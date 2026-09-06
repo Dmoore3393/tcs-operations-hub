@@ -7,14 +7,16 @@ const preserveStarterData = new Set([
   "tcs-vehicle-readiness-v2",
   "tcs-timesheet-department-routes-v1",
   "tcs-weekly-menus-v1",
+  "tcs-employee-bulletin-v1",
 ]);
 
 /**
  * Earlier development builds contained sample people, care logs, and workflow records.
  * A newly connected admin-pilot database must start clean so sample records
  * are never confused with live childcare records. Location configuration,
- * operating hours, school/vehicle setup, routing templates, and menus are
- * retained because they are editable system configuration.
+ * operating hours, school/vehicle setup, routing templates, menus, and the
+ * employee bulletin starter layout are retained because they are editable
+ * system configuration rather than sample child/family records.
  */
 export function getProductionInitialValue<T>(key: string, starterValue: T): T {
   if (preserveStarterData.has(key)) return starterValue;
