@@ -20,7 +20,7 @@ const starter: LocationRecord[] = (Object.keys(locationThemes) as LocationKey[])
   type: locationThemes[key].programType,
   capacity: locationThemes[key].capacity,
   facilityNumber: key === "42nd Street" ? "Facility #197701124" : "Add facility number",
-  address: key === "Halcom" ? "Lancaster, CA" : key === "42nd Street" ? "44027 42nd St W, Lancaster, CA 93536" : "Add site address",
+  address: key === "Halcom" ? "Lancaster, CA" : key === "42nd Street" ? "44027 42nd St W, Lancaster, CA 93536" : key === "Tehachapi" ? "Tehachapi, CA" : "Add site address",
   phone: "(760) 382-5742",
   status: "Active",
 }));
@@ -77,11 +77,12 @@ export default function LocationsPage() {
         return <article key={location.id} className={`overflow-hidden rounded-3xl border bg-white shadow-sm ${selected ? "ring-4" : "border-slate-200"}`} style={selected ? { borderColor: theme.primary, boxShadow: `0 0 0 4px ${theme.primarySoft}` } : undefined}>
           <div className="p-5" style={{ background: `linear-gradient(135deg, ${theme.primaryDark}, ${theme.primary})`, color: theme.textOnPrimary }}>
             <div className="flex items-start justify-between gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15"><Building2 className="h-6 w-6" /></div><div className="flex gap-2"><StatusBadge tone={location.status === "Active" ? "green" : "amber"}>{location.status}</StatusBadge><button onClick={() => { setEditing(location); setShowModal(true); }} className="rounded-xl bg-white/15 p-2 hover:bg-white/25" aria-label={`Edit ${location.shortName}`}><Pencil className="h-4 w-4" /></button></div></div>
-            <h2 className="mt-4 text-2xl font-black">{location.shortName}</h2><p className="mt-1 text-sm font-bold opacity-85">{location.name} • {location.type}</p>
+            <h2 className="mt-4 text-2xl font-black">{theme.label}</h2><p className="mt-1 text-sm font-bold opacity-85">{location.shortName === "Tehachapi" ? theme.fullName : location.name} • {location.shortName === "Tehachapi" ? theme.programType : location.type}</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <button onClick={() => setActiveLocation(location.shortName)} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-black" style={{ color: theme.ink }}>{selected ? <><Check className="h-4 w-4" /> Active Location</> : "Use This Location"}</button>
               {location.shortName === "Division" && <Link href="/locations/division" onClick={() => setActiveLocation("Division")} className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/15 px-3 py-2 text-xs font-black text-white hover:bg-white/25">Open School Age Center Home →</Link>}
               {location.shortName === "42nd Street" && <Link href="/locations/42nd-street" onClick={() => setActiveLocation("42nd Street")} className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/15 px-3 py-2 text-xs font-black text-white hover:bg-white/25">Open Lara Family Childcare Home →</Link>}
+              {location.shortName === "Tehachapi" && <Link href="/locations/tehachapi" onClick={() => setActiveLocation("Tehachapi")} className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/15 px-3 py-2 text-xs font-black text-white hover:bg-white/25">Open Thomason Family Childcare Home →</Link>}
             </div>
           </div>
           <div className="p-5">
