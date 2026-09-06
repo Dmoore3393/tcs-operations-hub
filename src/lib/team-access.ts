@@ -164,6 +164,7 @@ const routePermissionMap: Record<string, EmployeePermission> = {
   "/work-plans": "work_plans",
   "/ratios": "ratios",
   "/transportation": "transportation",
+  "/transportation-consents": "transportation",
   "/health-safety": "health_safety",
   "/print-studio": "printables",
   "/ai-director": "ai_assistant",
