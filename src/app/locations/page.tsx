@@ -19,9 +19,8 @@ const starter: LocationRecord[] = (Object.keys(locationThemes) as LocationKey[])
   shortName: key,
   type: locationThemes[key].programType,
   capacity: locationThemes[key].capacity,
-
-  facilityNumber: "Add facility number",
-  address: key === "Halcom" ? "Lancaster, CA" : "Add site address",
+  facilityNumber: key === "42nd Street" ? "Facility #197701124" : "Add facility number",
+  address: key === "Halcom" ? "Lancaster, CA" : key === "42nd Street" ? "44027 42nd St W, Lancaster, CA 93536" : "Add site address",
   phone: "(760) 382-5742",
   status: "Active",
 }));
@@ -82,6 +81,7 @@ export default function LocationsPage() {
             <div className="mt-4 flex flex-wrap gap-2">
               <button onClick={() => setActiveLocation(location.shortName)} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-black" style={{ color: theme.ink }}>{selected ? <><Check className="h-4 w-4" /> Active Location</> : "Use This Location"}</button>
               {location.shortName === "Division" && <Link href="/locations/division" onClick={() => setActiveLocation("Division")} className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/15 px-3 py-2 text-xs font-black text-white hover:bg-white/25">Open School Age Center Home →</Link>}
+              {location.shortName === "42nd Street" && <Link href="/locations/42nd-street" onClick={() => setActiveLocation("42nd Street")} className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/15 px-3 py-2 text-xs font-black text-white hover:bg-white/25">Open Lara Family Childcare Home →</Link>}
             </div>
           </div>
           <div className="p-5">
