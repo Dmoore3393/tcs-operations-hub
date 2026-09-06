@@ -169,7 +169,7 @@ const routePermissionMap: Record<string, EmployeePermission> = {
   "/ai-director": "ai_assistant",
 };
 
-const employeeAlwaysAllowedRoutes = new Set(["/", "/employee-lounge", "/login", "/accept-invite"]);
+const employeeAlwaysAllowedRoutes = new Set(["/", "/employee-lounge", "/employee-bulletin", "/login", "/accept-invite"]);
 
 export function employeeCanAccessRoute(permissions: string[], pathname: string) {
   if (employeeAlwaysAllowedRoutes.has(pathname)) return true;
@@ -183,6 +183,8 @@ function hasAnyPermission(permissions: string[], required: EmployeePermission[])
 
 export function employeeCanReadState(permissions: string[], stateKey: string) {
   switch (stateKey) {
+    case "tcs-employee-bulletin-v1":
+      return true;
     case "tcs-children-v1":
       return hasAnyPermission(permissions, ["children_basic", "daily_care", "meals", "schedules", "ratios", "transportation", "health_safety"]);
     case "tcs-child-schedules-v2":
