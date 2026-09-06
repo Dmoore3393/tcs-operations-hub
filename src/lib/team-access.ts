@@ -49,6 +49,11 @@ export const EMPLOYEE_PERMISSION_OPTIONS = [
     description: "View care alerts and create incident, illness, medication, and safety entries.",
   },
   {
+    key: "student_store",
+    label: "Student Store & Gator Cash",
+    description: "Open assigned-location Gator Profiles, award Gator Cash, help children complete job applications, assign jobs, and ring up store purchases.",
+  },
+  {
     key: "printables",
     label: "Printable Studio",
     description: "Create approved printable ratio, menu, work-plan, notice, and transportation graphics from accessible records.",
@@ -141,7 +146,7 @@ export const ROLE_PERMISSION_SUMMARIES: Record<AccessRole, string[]> = {
   ],
   "Location Licensee": [
     "Operational access for the assigned location only",
-    "Children, schedules, ratios, meals, KidKare, internal reports, employee/child files, transportation fees, enrollment, digital forms, compliance, and work plans for that location",
+    "Children, schedules, ratios, meals, KidKare, internal reports, employee/child files, transportation fees, enrollment, digital forms, compliance, work plans, and the Student Store for that location",
     "Prepare location Timesheets and send them into the workflow",
     "No Team Access, global Settings, role management, or other-location records",
   ],
@@ -165,6 +170,7 @@ const routePermissionMap: Record<string, EmployeePermission> = {
   "/ratios": "ratios",
   "/transportation": "transportation",
   "/health-safety": "health_safety",
+  "/student-store": "student_store",
   "/print-studio": "printables",
   "/ai-director": "ai_assistant",
 };
@@ -185,10 +191,17 @@ export function employeeCanReadState(permissions: string[], stateKey: string) {
   switch (stateKey) {
     case "tcs-employee-bulletin-v1":
       return true;
+    case "tcs-store-products-v1":
+    case "tcs-gator-ledger-v1":
+    case "tcs-store-orders-v1":
+    case "tcs-student-jobs-v1":
+    case "tcs-job-applications-v1":
+    case "tcs-job-assignments-v1":
+      return permissions.includes("student_store");
     case "tcs-children-v1":
-      return hasAnyPermission(permissions, ["children_basic", "daily_care", "meals", "schedules", "ratios", "transportation", "health_safety"]);
+      return hasAnyPermission(permissions, ["children_basic", "daily_care", "meals", "schedules", "ratios", "transportation", "health_safety", "student_store"]);
     case "tcs-child-schedules-v2":
-      return hasAnyPermission(permissions, ["schedules", "meals", "ratios", "transportation"]);
+      return hasAnyPermission(permissions, ["schedules", "meals", "ratios", "transportation", "student_store"]);
     case "tcs-daily-care-v1":
       return hasAnyPermission(permissions, ["daily_care", "meals", "shift_reports"]);
     case "tcs-meal-services-v1":
@@ -216,6 +229,13 @@ export function employeeCanReadState(permissions: string[], stateKey: string) {
 
 export function employeeCanWriteState(permissions: string[], stateKey: string) {
   switch (stateKey) {
+    case "tcs-store-products-v1":
+    case "tcs-gator-ledger-v1":
+    case "tcs-store-orders-v1":
+    case "tcs-student-jobs-v1":
+    case "tcs-job-applications-v1":
+    case "tcs-job-assignments-v1":
+      return permissions.includes("student_store");
     case "tcs-daily-care-v1":
       return hasAnyPermission(permissions, ["daily_care", "meals"]);
     case "tcs-meal-services-v1":
