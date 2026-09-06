@@ -41,7 +41,7 @@ export const locationThemes: Record<LocationKey, {
   Division: { label: "School Age Center", fullName: "The School Age Center • Division", primary: "#1769d2", primaryDark: "#0a53a7", primaryLight: "#55c9d2", primarySoft: "#eef6ff", ink: "#102a56", textOnPrimary: "#ffffff", accent: "#ffc21b", capacity: 17, programType: "School Age Center" },
   "33rd Street": { label: "33rd Street", fullName: "Cornejo Family Childcare • 33rd Street", primary: "#ca8a04", primaryDark: "#713f12", primaryLight: "#fde047", primarySoft: "#fef9c3", ink: "#422006", textOnPrimary: "#111827", accent: "#111827", capacity: 14, programType: "Family Childcare" },
   Tehachapi: { label: "Tehachapi", fullName: "Tehachapi Transportation Hub", primary: "#1e3a8a", primaryDark: "#172554", primaryLight: "#60a5fa", primarySoft: "#dbeafe", ink: "#172554", textOnPrimary: "#ffffff", accent: "#fbbf24", capacity: 14, programType: "Transportation / Care Hub" },
-  "42nd Street": { label: "42nd Street", fullName: "Lara Family Childcare • 42nd Street", primary: "#7e22ce", primaryDark: "#581c87", primaryLight: "#c084fc", primarySoft: "#f3e8ff", ink: "#3b0764", textOnPrimary: "#ffffff", accent: "#fbbf24", capacity: 14, programType: "Family Childcare" },
+  "42nd Street": { label: "Lara Family Childcare", fullName: "Lara Family Childcare • 42nd Street", primary: "#0b3153", primaryDark: "#06233c", primaryLight: "#6b8f71", primarySoft: "#f7f0e3", ink: "#0b3153", textOnPrimary: "#ffffff", accent: "#d89a23", capacity: 14, programType: "Family Childcare" },
 };
 
 export const selectableLocations = Object.keys(locationThemes) as LocationKey[];
