@@ -1,10 +1,17 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const sql = readFileSync(new URL("../supabase/production-hardening.sql", import.meta.url), "utf8");
 const setup = readFileSync(new URL("../supabase/setup.sql", import.meta.url), "utf8");
 const roles = readFileSync(new URL("../src/lib/team-access.ts", import.meta.url), "utf8");
 const relational = readFileSync(new URL("../src/lib/relational-state.ts", import.meta.url), "utf8");
 const documentCrypto = readFileSync(new URL("../src/lib/server/document-crypto.ts", import.meta.url), "utf8");
+const childrenSource = readFileSync(new URL("../src/lib/children.ts", import.meta.url), "utf8");
+const schedulesSource = readFileSync(new URL("../src/lib/child-schedules.ts", import.meta.url), "utf8");
+const complianceSource = readFileSync(new URL("../src/lib/compliance-ops.ts", import.meta.url), "utf8");
+const careSource = readFileSync(new URL("../src/lib/employee-care.ts", import.meta.url), "utf8");
+const hubDataSource = readFileSync(new URL("../src/lib/hub-data.ts", import.meta.url), "utf8");
 
 const failures = [];
 function assert(condition, message) {
@@ -72,9 +79,68 @@ assert(documentCrypto.includes("getAuthTag"), "Authenticated encryption tag hand
 assert(sql.includes("not legal_hold and retention_until <= current_date"), "Retention/legal-hold purge protection is missing");
 assert(setup.includes("TCS Operations Hub production hardening"), "Combined setup.sql does not include production hardening");
 
+// Live people data must never be shipped as application defaults.
+assert(/export const initialChildren:\s*ChildRecord\[\]\s*=\s*\[\s*\];/s.test(childrenSource), "initialChildren must stay empty; child records belong in Supabase");
+assert(/export const starterChildSchedules:\s*ChildScheduleRecord\[\]\s*=\s*\[\s*\];/s.test(schedulesSource), "starterChildSchedules must stay empty");
+assert(/export const starterTimesheets:\s*TimesheetRecord\[\]\s*=\s*\[\s*\];/s.test(complianceSource), "starterTimesheets must stay empty");
+assert(/export const starterCareLogs:\s*CareLogEntry\[\]\s*=\s*\[\s*\];/s.test(careSource), "starterCareLogs must stay empty");
+assert(/export const starterHealthSafety:\s*HealthSafetyRecord\[\]\s*=\s*\[\s*\];/s.test(careSource), "starterHealthSafety must stay empty");
+assert(/export const starterFamilies:\s*FamilyRecord\[\]\s*=\s*\[\s*\];/s.test(hubDataSource), "starterFamilies must stay empty");
+assert(/export const starterRoutes:\s*TransportationRoute\[\]\s*=\s*\[\s*\];/s.test(hubDataSource), "starterRoutes must stay empty");
+assert(/export const starterFiles:\s*FileRecord\[\]\s*=\s*\[\s*\];/s.test(hubDataSource), "starterFiles must stay empty");
+
+// Guard against accidentally committing any of the former development child /
+// guardian records back into the production bundle. This is intentionally kept
+// inside the security script, which is not part of the browser bundle.
+const blockedPersonFragments = [
+  "Bryson Brinkley",
+  "Scarlett Diaz",
+  "Ezekiel Brinkley",
+  "Elias Brinkley",
+  "Daniel Moreno",
+  "Silas Moreno",
+  "Israel Palomo",
+  "Chanel Palomo",
+  "Tiffany Palomo",
+  "Alarik Rosales",
+  "Kayla Shiina",
+  "Keira Shiina",
+  "Kendru Shiina",
+  "Bernard Brinkley",
+  "Guadalupe Diaz",
+  "Amber Bock",
+  "Vanity Palomo",
+  "Ramiro Rosales",
+  "Katelyn Estrada",
+  "Metha Shiina",
+  "Kaelyn Shiina",
+];
+
+const textExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json", ".md", ".txt", ".svg"]);
+const repoRoot = fileURLToPath(new URL("..", import.meta.url));
+const scanRoots = [join(repoRoot, "src"), join(repoRoot, "public")];
+
+function scanDirectory(directory) {
+  for (const entry of readdirSync(directory)) {
+    const path = join(directory, entry);
+    const stats = statSync(path);
+    if (stats.isDirectory()) {
+      scanDirectory(path);
+      continue;
+    }
+    if (!textExtensions.has(extname(path).toLowerCase())) continue;
+    const value = readFileSync(path, "utf8");
+    for (const fragment of blockedPersonFragments) {
+      if (value.includes(fragment)) failures.push(`Former child/guardian development record is still present in ${path.replace(repoRoot, "")}`);
+    }
+    assert(!/SUPABASE_(?:SERVICE_ROLE_KEY|SECRET_KEY)\s*=/.test(value), `A Supabase server secret appears to be committed in ${path.replace(repoRoot, "")}`);
+  }
+}
+for (const root of scanRoots) scanDirectory(root);
+
 if (failures.length) {
-  console.error("Production security verification failed:\n- " + failures.join("\n- "));
+  console.error("Production security verification failed:\n- " + [...new Set(failures)].join("\n- "));
   process.exit(1);
 }
 
-console.log(`Production security verification passed (${locationTables.length} location-owned tables, ${collectionKeys.length} relational client mappings).`);
+console.log(`Production security verification passed (${locationTables.length} location-owned tables, ${collectionKeys.length} relational client mappings, no bundled child/family records).`);
