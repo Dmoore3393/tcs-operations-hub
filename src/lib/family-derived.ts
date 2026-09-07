@@ -47,9 +47,10 @@ export function deriveFamiliesFromChildren(children: ChildRecord[]): FamilyRecor
     const subsidy: FamilyRecord["subsidy"] = subsidyValue === "CCRC" || subsidyValue === "DCFS" || subsidyValue === "CCCC"
       ? subsidyValue
       : "Private Pay";
+    const generatedId = Math.abs([...key].reduce((hash, char) => Math.imul(hash ^ char.charCodeAt(0), 16777619), 2166136261)) || index + 1;
 
     return {
-      id: primary.familyId ?? Math.abs([...key].reduce((hash, char) => Math.imul(hash ^ char.charCodeAt(0), 16777619), 2166136261)) || index + 1,
+      id: primary.familyId ?? generatedId,
       familyName: primary.familyName?.trim() || `${primary.lastName || "Family"} Family`,
       primaryGuardian: primary.primaryGuardian,
       secondaryGuardian: primary.secondaryGuardian ?? "",
