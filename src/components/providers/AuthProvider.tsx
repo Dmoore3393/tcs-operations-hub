@@ -56,7 +56,15 @@ const ownerOnlyWriteStateKeys = new Set([
   "tcs-vehicles-v2",
   "tcs-timesheet-department-routes-v1",
   "tcs-employee-bulletin-v1",
+  "tcs-team-trainings-v1",
 ]);
+const trainingAdminNames = new Set(["danielle moore", "jennifer thomason", "heather graham"]);
+
+function isTrainingAdminProfile(profile: StaffAccessProfile | null) {
+  if (!profile) return false;
+  if (isOwnerAccessRole(profile.role)) return true;
+  return trainingAdminNames.has((profile.full_name || "").trim().toLowerCase());
+}
 
 export function normalizedStaffRole(role = "") {
   return normalizeAccessRole(role);
@@ -100,6 +108,7 @@ export function canReadStateKey(profile: StaffAccessProfile | null, stateKey: st
 
 export function canWriteStateKey(profile: StaffAccessProfile | null, stateKey: string) {
   if (!profile) return false;
+  if (stateKey === "tcs-team-trainings-v1" && isTrainingAdminProfile(profile)) return true;
   if (isOwnerRole(profile.role)) return true;
   if (isLicenseeRole(profile.role)) return !ownerOnlyWriteStateKeys.has(stateKey);
   if (isEmployeeRole(profile.role)) return employeeCanWriteState(profile.permissions ?? [], stateKey);
