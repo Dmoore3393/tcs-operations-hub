@@ -22,7 +22,6 @@ type TimesheetRow = {
   created_at: string;
   updated_at: string;
 };
-
 type RouteRow = {
   id: string;
   organization_id: string;
@@ -35,10 +34,18 @@ type RouteRow = {
   file_name_format: string | null;
   record_data: Record<string, unknown> | null;
 };
-
+type ChildRow = {
+  id: string;
+  legacy_id: string;
+  location_id: string;
+  first_name: string;
+  last_name: string;
+  enrollment_status: string;
+  record_data: Record<string, unknown> | null;
+};
+type RouteConfig = { department: string; email: string; deadline: string; fileNameFormat: string };
 type Actor = {
   name: string;
-  lowerName: string;
   isOwner: boolean;
   collectorSlug: string | null;
   isDynasty: boolean;
@@ -56,36 +63,38 @@ const COLLECTOR_LABELS: Record<string, string> = {
   tehachapi: "Jennifer or Noah",
   "21st-street": "Heather",
 };
+const DEFAULT_FILE_NAME = "LastName_FirstName_ServiceMonth_Location.pdf";
 
 function text(value: unknown) {
   return typeof value === "string" ? value : "";
 }
-
 function bool(value: unknown) {
   return value === true;
 }
-
 function object(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
+function deny(message: string, status = 403): never {
+  throw new Response(message, { status });
+}
 
-function actorFor(profile: { full_name: string; role: string }, isOwner: boolean): Actor {
-  const lowerName = (profile.full_name || "").trim().toLowerCase();
-  const isDynasty = /\bdynasty\b/.test(lowerName);
-  const isDanielle = /\bdanielle\b/.test(lowerName);
-  const isJennifer = /\bjennifer\b|\bjen\b/.test(lowerName);
-  const isAnthony = /\banthony\b|\btony\b/.test(lowerName);
+function actorFor(profile: { full_name: string }, isOwner: boolean): Actor {
+  const name = (profile.full_name || "").trim();
+  const lower = name.toLowerCase();
+  const isDynasty = /\bdynasty\b/.test(lower);
+  const isDanielle = /\bdanielle\b/.test(lower);
+  const isJennifer = /\bjennifer\b|\bjen\b/.test(lower);
+  const isAnthony = /\banthony\b|\btony\b/.test(lower);
   let collectorSlug: string | null = null;
-  if (/\bnathaly\b/.test(lowerName)) collectorSlug = "33rd-street";
+  if (/\bnathaly\b/.test(lower)) collectorSlug = "33rd-street";
   else if (isDynasty) collectorSlug = "42nd-street";
-  else if (/\blatrice\b/.test(lowerName)) collectorSlug = "halcom";
+  else if (/\blatrice\b/.test(lower)) collectorSlug = "halcom";
   else if (isDanielle) collectorSlug = "division";
-  else if (isJennifer || /\bnoah\b/.test(lowerName)) collectorSlug = "tehachapi";
-  else if (/\bheather\b/.test(lowerName)) collectorSlug = "21st-street";
+  else if (isJennifer || /\bnoah\b/.test(lower)) collectorSlug = "tehachapi";
+  else if (/\bheather\b/.test(lower)) collectorSlug = "21st-street";
 
   return {
-    name: profile.full_name || "TCS Staff",
-    lowerName,
+    name: name || "TCS Staff",
     isOwner,
     collectorSlug,
     isDynasty,
@@ -107,43 +116,34 @@ function normalizeType(value: unknown): CommandTypeValue {
   if (source.includes("respite")) return "Respite";
   return "CCRC";
 }
-
 function isFinalType(value: CommandTypeValue): value is CommandType {
   return (COMMAND_TYPES as readonly string[]).includes(value);
 }
 
-function deriveStage(data: Record<string, unknown>, row?: TimesheetRow) {
+function collectorIsSigned(data: Record<string, unknown>) {
   const prep = object(data.prep);
-  const collectorSigned = bool(data.collectorSigned)
+  return bool(data.collectorSigned)
     || Boolean(text(data.licenseeSubmittedAt))
     || (bool(prep.parentSignature) && bool(prep.providerSignature));
-  const dynastyStatus = text(data.dynastyStatus);
-  const handoff = text(data.dynastyHandedToJenniferAt) || text(data.jenniferReceivedAt);
-  const completed = text(data.completedAt);
-  const scanned = text(data.scannedAt);
-  const sentToJen = text(data.sentToJenniferAt);
-  const emailed = text(data.emailedAt) || text(data.emailedByJenniferAt);
-
-  if (!collectorSigned) return "Location Sign-Off";
-  if (dynastyStatus !== "Accounted For") return "Dynasty Review";
-  if (!handoff) return "Personal Handoff";
-  if (!completed) return "Jen + Danielle Fill Out";
-  if (!scanned || !sentToJen) return "Scan & Send to Jennifer";
-  if (!emailed) return "Jennifer Email";
+}
+function deriveStage(data: Record<string, unknown>) {
+  if (!collectorIsSigned(data)) return "Location Sign-Off";
+  if (text(data.dynastyStatus) !== "Accounted For") return "Dynasty Review";
+  if (!(text(data.dynastyHandedToJenniferAt) || text(data.jenniferReceivedAt))) return "Personal Handoff";
+  if (!text(data.completedAt)) return "Jen + Danielle Fill Out";
+  if (!text(data.scannedAt) || !text(data.sentToJenniferAt)) return "Scan & Send to Jennifer";
+  if (!(text(data.emailedAt) || text(data.emailedByJenniferAt))) return "Jennifer Email";
   return "Complete";
+}
+function canViewLocation(actor: Actor, slug: string) {
+  return actor.canViewAll || actor.collectorSlug === slug;
 }
 
 function normalizeRecord(row: TimesheetRow, location: LocationRow) {
   const data = object(row.record_data);
-  const prep = object(data.prep);
   const timesheetType = normalizeType(data.timesheetType ?? data.fundingSource ?? row.funding_source);
-  const collectorSigned = bool(data.collectorSigned)
-    || Boolean(text(data.licenseeSubmittedAt))
-    || (bool(prep.parentSignature) && bool(prep.providerSignature));
-  const emailedAt = text(data.emailedAt) || text(data.emailedByJenniferAt);
   const handoffAt = text(data.dynastyHandedToJenniferAt) || text(data.jenniferReceivedAt);
-  const handoffDate = text(data.dynastyHandoffDate) || handoffAt.slice(0, 10);
-
+  const emailedAt = text(data.emailedAt) || text(data.emailedByJenniferAt);
   return {
     id: row.legacy_id,
     rowId: row.id,
@@ -155,15 +155,15 @@ function normalizeRecord(row: TimesheetRow, location: LocationRow) {
     collector: COLLECTOR_LABELS[location.slug] ?? "Assigned staff",
     timesheetType,
     needsCcrcStage: timesheetType === "CCRC",
-    stage: deriveStage(data, row),
-    collectorSigned,
+    stage: deriveStage(data),
+    collectorSigned: collectorIsSigned(data),
     collectorSignedAt: text(data.collectorSignedAt) || text(data.licenseeSubmittedAt),
     collectorSignedBy: text(data.collectorSignedBy) || text(data.licenseeInitials),
     collectorNotes: text(data.collectorNotes),
     dynastyStatus: text(data.dynastyStatus) || "Awaiting",
     dynastyReviewedAt: text(data.dynastyReviewedAt),
     dynastyReviewedBy: text(data.dynastyReviewedBy) || text(data.dynastyInitials),
-    dynastyHandoffDate: handoffDate,
+    dynastyHandoffDate: text(data.dynastyHandoffDate) || handoffAt.slice(0, 10),
     dynastyHandedToJenniferAt: handoffAt,
     dynastyHandoffBy: text(data.dynastyHandoffBy) || text(data.batchReceivedBy),
     certificateVerified: bool(data.certificateVerified),
@@ -184,14 +184,6 @@ function normalizeRecord(row: TimesheetRow, location: LocationRow) {
   };
 }
 
-function canViewLocation(actor: Actor, slug: string) {
-  return actor.canViewAll || actor.collectorSlug === slug;
-}
-
-function deny(message: string, status = 403): never {
-  throw new Response(message, { status });
-}
-
 async function loadLocations(admin: Awaited<ReturnType<typeof requireStaff>>["admin"], organizationId: string) {
   const { data, error } = await admin
     .from("locations")
@@ -201,12 +193,7 @@ async function loadLocations(admin: Awaited<ReturnType<typeof requireStaff>>["ad
   if (error) throw error;
   return (data ?? []) as LocationRow[];
 }
-
-async function loadRecord(
-  admin: Awaited<ReturnType<typeof requireStaff>>["admin"],
-  organizationId: string,
-  legacyId: string,
-) {
+async function loadTimesheet(admin: Awaited<ReturnType<typeof requireStaff>>["admin"], organizationId: string, legacyId: string) {
   const { data, error } = await admin
     .from("timesheets")
     .select("*")
@@ -218,73 +205,62 @@ async function loadRecord(
   return data as TimesheetRow;
 }
 
-async function writeRecord(
+async function writeTimesheet(
   admin: Awaited<ReturnType<typeof requireStaff>>["admin"],
   userId: string,
   row: TimesheetRow,
   patch: Record<string, unknown>,
-  action: string,
+  auditAction: string,
 ) {
   const merged = { ...object(row.record_data), ...patch, updatedAt: new Date().toISOString() };
-  const stage = deriveStage(merged, row);
   const type = normalizeType(merged.timesheetType ?? merged.fundingSource ?? row.funding_source);
-  merged.stage = stage;
+  const stage = deriveStage(merged);
   merged.timesheetType = type;
   merged.fundingSource = type;
+  merged.stage = stage;
 
   const { data, error } = await admin
     .from("timesheets")
-    .update({
-      workflow_stage: stage,
-      funding_source: type,
-      record_data: merged,
-      updated_by: userId,
-      updated_at: new Date().toISOString(),
-    })
+    .update({ workflow_stage: stage, funding_source: type, record_data: merged, updated_by: userId, updated_at: new Date().toISOString() })
     .eq("id", row.id)
     .select("*")
     .maybeSingle();
   if (error) throw error;
   if (!data) throw new Error("The timesheet update did not return a saved record.");
 
-  await admin.from("audit_log").insert({
+  const { error: auditError } = await admin.from("audit_log").insert({
     organization_id: row.organization_id,
     location_id: row.location_id,
     actor_user_id: userId,
     action: "REVIEW",
     table_name: "timesheets",
     row_id: row.id,
-    metadata: { command_action: action, stage },
+    metadata: { command_action: auditAction, stage },
   });
-
+  if (auditError) throw auditError;
   return data as TimesheetRow;
 }
 
-async function routeMap(
-  admin: Awaited<ReturnType<typeof requireStaff>>["admin"],
-  organizationId: string,
-) {
+async function loadRouteMap(admin: Awaited<ReturnType<typeof requireStaff>>["admin"], organizationId: string) {
   const { data, error } = await admin
     .from("timesheet_submission_routes")
     .select("*")
     .eq("organization_id", organizationId);
   if (error) throw error;
-  const rows = (data ?? []) as RouteRow[];
-  const result: Record<string, { department: string; email: string; deadline: string; fileNameFormat: string }> = {};
-  for (const row of rows) {
+  const result = {} as Record<CommandType, RouteConfig>;
+  for (const type of COMMAND_TYPES) result[type] = { department: "", email: "", deadline: "", fileNameFormat: DEFAULT_FILE_NAME };
+
+  for (const row of (data ?? []) as RouteRow[]) {
     const raw = object(row.record_data);
     const type = normalizeType(raw.timesheetType ?? raw.fundingSource ?? row.funding_source);
     if (!isFinalType(type)) continue;
-    const next = {
+    const next: RouteConfig = {
       department: row.department ?? text(raw.department),
       email: row.department_email ?? text(raw.email),
       deadline: row.deadline ?? text(raw.deadline),
-      fileNameFormat: row.file_name_format ?? text(raw.fileNameFormat) || "LastName_FirstName_ServiceMonth_Location.pdf",
+      fileNameFormat: (row.file_name_format ?? text(raw.fileNameFormat)) || DEFAULT_FILE_NAME,
     };
-    if (!result[type] || (!result[type].department && next.department)) result[type] = next;
-  }
-  for (const type of COMMAND_TYPES) {
-    result[type] ??= { department: "", email: "", deadline: "", fileNameFormat: "LastName_FirstName_ServiceMonth_Location.pdf" };
+    if (!result[type].department || next.department) result[type] = next;
   }
   return result;
 }
@@ -296,7 +272,7 @@ export async function GET(request: Request) {
     if (!actor.canViewAll && !actor.collectorSlug) deny("This account is not assigned to the Timesheet Command Center.");
 
     const locations = await loadLocations(admin, profile.organization_id);
-    const locationById = new Map(locations.map((item) => [item.id, item]));
+    const locationById = new Map(locations.map((location) => [location.id, location]));
     const { data, error } = await admin
       .from("timesheets")
       .select("*")
@@ -309,11 +285,11 @@ export async function GET(request: Request) {
         const location = locationById.get(row.location_id);
         return location && canViewLocation(actor, location.slug) ? normalizeRecord(row, location) : null;
       })
-      .filter(Boolean);
+      .filter((record): record is NonNullable<typeof record> => Boolean(record));
 
-    const routes = await routeMap(admin, profile.organization_id);
-    const collectorCards = locations
-      .filter((location) => COLLECTOR_LABELS[location.slug])
+    const routes = await loadRouteMap(admin, profile.organization_id);
+    const collectors = locations
+      .filter((location) => Boolean(COLLECTOR_LABELS[location.slug]))
       .filter((location) => actor.canViewAll || actor.collectorSlug === location.slug)
       .map((location) => ({ slug: location.slug, location: location.full_name || location.name, collector: COLLECTOR_LABELS[location.slug] }));
 
@@ -321,7 +297,7 @@ export async function GET(request: Request) {
       records,
       routes,
       types: COMMAND_TYPES,
-      collectors: collectorCards,
+      collectors,
       actor: {
         name: actor.name,
         collectorSlug: actor.collectorSlug,
@@ -345,10 +321,11 @@ export async function POST(request: Request) {
     const { admin, profile, user, isOwner } = await requireStaff(request);
     const actor = actorFor(profile, isOwner);
     if (!actor.canViewAll && !actor.collectorSlug) deny("This account is not assigned to the Timesheet Command Center.");
+
     const body = object(await request.json().catch(() => ({})));
     const action = text(body.action);
     const locations = await loadLocations(admin, profile.organization_id);
-    const locationById = new Map(locations.map((item) => [item.id, item]));
+    const locationById = new Map(locations.map((location) => [location.id, location]));
 
     if (action === "createBatch") {
       if (!(actor.isDanielle || actor.isJennifer || actor.isOwner)) deny("Only Danielle or Jennifer can create the monthly timesheet batch.");
@@ -357,23 +334,22 @@ export async function POST(request: Request) {
 
       const { data: existing, error: existingError } = await admin
         .from("timesheets")
-        .select("child_id,legacy_id")
+        .select("child_id")
         .eq("organization_id", profile.organization_id)
         .eq("service_period", servicePeriod);
       if (existingError) throw existingError;
-      const existingChildIds = new Set((existing ?? []).map((item: { child_id: string | null }) => item.child_id).filter(Boolean));
+      const existingChildIds = new Set((existing ?? []).map((item: { child_id: string | null }) => item.child_id).filter((id): id is string => Boolean(id)));
 
-      const { data: children, error: childError } = await admin
+      const { data: childData, error: childError } = await admin
         .from("children")
         .select("id,legacy_id,location_id,first_name,last_name,enrollment_status,record_data")
         .eq("organization_id", profile.organization_id)
         .eq("enrollment_status", "Active");
       if (childError) throw childError;
 
-      const rows = (children ?? []).flatMap((child: any) => {
+      const rows = ((childData ?? []) as ChildRow[]).flatMap((child) => {
         if (existingChildIds.has(child.id)) return [];
-        const childData = object(child.record_data);
-        const subsidy = text(childData.subsidy).trim();
+        const subsidy = text(object(child.record_data).subsidy).trim();
         const lower = subsidy.toLowerCase();
         if (!subsidy || lower.includes("private") || lower.includes("cash")) return [];
         let timesheetType: CommandTypeValue | null = null;
@@ -450,7 +426,7 @@ export async function POST(request: Request) {
       const department = text(body.department).trim();
       const email = text(body.email).trim();
       const deadline = text(body.deadline).trim();
-      const fileNameFormat = text(body.fileNameFormat).trim() || "LastName_FirstName_ServiceMonth_Location.pdf";
+      const fileNameFormat = text(body.fileNameFormat).trim() || DEFAULT_FILE_NAME;
       const slugKey = timesheetType.toLowerCase().replace(/[^a-z0-9]+/g, "-");
       const rows = locations.map((location) => ({
         organization_id: profile.organization_id,
@@ -461,7 +437,16 @@ export async function POST(request: Request) {
         department_email: email,
         deadline,
         file_name_format: fileNameFormat,
-        record_data: { id: `command-route:${location.slug}:${slugKey}`, location: location.full_name || location.name, fundingSource: timesheetType, timesheetType, department, email, deadline, fileNameFormat },
+        record_data: {
+          id: `command-route:${location.slug}:${slugKey}`,
+          location: location.full_name || location.name,
+          fundingSource: timesheetType,
+          timesheetType,
+          department,
+          email,
+          deadline,
+          fileNameFormat,
+        },
         created_by: user.id,
         updated_by: user.id,
       }));
@@ -472,7 +457,7 @@ export async function POST(request: Request) {
 
     const id = text(body.id);
     if (!id) deny("A timesheet record is required.", 400);
-    const row = await loadRecord(admin, profile.organization_id, id);
+    const row = await loadTimesheet(admin, profile.organization_id, id);
     const location = locationById.get(row.location_id);
     if (!location || !canViewLocation(actor, location.slug)) deny("You cannot access this timesheet.");
     const current = object(row.record_data);
@@ -480,8 +465,7 @@ export async function POST(request: Request) {
     if (action === "setType") {
       const nextType = normalizeType(body.timesheetType);
       if (!isFinalType(nextType)) deny("Select CCRC Stage 1, CCRC Stage 2, CCCC, DCFS, or Respite.", 400);
-      if (!(actor.canViewAll || actor.collectorSlug === location.slug)) deny("You cannot classify this timesheet.");
-      await writeRecord(admin, user.id, row, { timesheetType: nextType, fundingSource: nextType }, "SET_TYPE");
+      await writeTimesheet(admin, user.id, row, { timesheetType: nextType, fundingSource: nextType }, "SET_TYPE");
       return Response.json({ ok: true });
     }
 
@@ -518,16 +502,15 @@ export async function POST(request: Request) {
         emailedAt: "",
         emailedByJenniferAt: "",
       };
-      await writeRecord(admin, user.id, row, patch, signed ? "FORM_SIGNED" : "SIGNATURE_UNCHECKED");
+      await writeTimesheet(admin, user.id, row, patch, signed ? "FORM_SIGNED" : "SIGNATURE_UNCHECKED");
       return Response.json({ ok: true });
     }
 
     if (action === "dynastyReview") {
       if (!actor.isDynasty) deny("Dynasty is the required reviewer for all timesheets.");
       const status = text(body.status);
-      if (!['Accounted For', 'Needs Correction'].includes(status)) deny("Choose Accounted For or Needs Correction.", 400);
-      const signed = bool(current.collectorSigned) || Boolean(text(current.licenseeSubmittedAt));
-      if (status === "Accounted For" && !signed) deny("The location must check off the child's signed form first.", 400);
+      if (status !== "Accounted For" && status !== "Needs Correction") deny("Choose Accounted For or Needs Correction.", 400);
+      if (status === "Accounted For" && !collectorIsSigned(current)) deny("The location must check off the child's signed form first.", 400);
       const now = new Date().toISOString();
       const patch = status === "Accounted For" ? {
         dynastyStatus: status,
@@ -548,7 +531,7 @@ export async function POST(request: Request) {
         dynastyHandoffDate: "",
         dynastyHandoffBy: "",
       };
-      await writeRecord(admin, user.id, row, patch, status === "Accounted For" ? "DYNASTY_ACCOUNTED" : "DYNASTY_CORRECTION");
+      await writeTimesheet(admin, user.id, row, patch, status === "Accounted For" ? "DYNASTY_ACCOUNTED" : "DYNASTY_CORRECTION");
       return Response.json({ ok: true });
     }
 
@@ -557,7 +540,7 @@ export async function POST(request: Request) {
       if (text(current.dynastyStatus) !== "Accounted For") deny("Dynasty must first confirm the timesheet is accounted for and signed.", 400);
       const handoffDate = text(body.handoffDate) || new Date().toISOString().slice(0, 10);
       const now = new Date().toISOString();
-      await writeRecord(admin, user.id, row, {
+      await writeTimesheet(admin, user.id, row, {
         dynastyHandoffDate: handoffDate,
         dynastyHandedToJenniferAt: now,
         dynastyHandoffBy: actor.name,
@@ -569,10 +552,10 @@ export async function POST(request: Request) {
 
     if (action === "fillOut") {
       if (!(actor.isDanielle || actor.isJennifer)) deny("Only Jennifer or Danielle can fill out timesheets from the child's certificate.");
-      const handoff = text(current.dynastyHandedToJenniferAt) || text(current.jenniferReceivedAt);
-      if (!handoff) deny("Dynasty's personal handoff to Jennifer must be recorded first.", 400);
+      const handedOff = text(current.dynastyHandedToJenniferAt) || text(current.jenniferReceivedAt);
+      if (!handedOff) deny("Dynasty's personal handoff to Jennifer must be recorded first.", 400);
       if (!bool(body.certificateVerified) || !bool(body.tuitionPolicyAcknowledged)) deny("Verify the child's certificate and acknowledge that tuition is charged regardless of attendance.", 400);
-      await writeRecord(admin, user.id, row, {
+      await writeTimesheet(admin, user.id, row, {
         certificateVerified: true,
         tuitionPolicyAcknowledged: true,
         completedBy: actor.name,
@@ -586,7 +569,7 @@ export async function POST(request: Request) {
       if (!text(current.completedAt)) deny("Jennifer or Danielle must fill out this timesheet first.", 400);
       if (!bool(body.scanQualityChecked)) deny("Confirm the scan is readable and complete.", 400);
       const now = new Date().toISOString();
-      await writeRecord(admin, user.id, row, {
+      await writeTimesheet(admin, user.id, row, {
         scanQualityChecked: true,
         scannedBy: actor.name,
         scannedAt: now,
@@ -600,11 +583,11 @@ export async function POST(request: Request) {
       if (!text(current.sentToJenniferAt)) deny("The completed timesheet must be scanned and sent to Jennifer first.", 400);
       const timesheetType = normalizeType(current.timesheetType ?? current.fundingSource ?? row.funding_source);
       if (!isFinalType(timesheetType)) deny("Choose CCRC Stage 1 or CCRC Stage 2 before final submission.", 400);
-      const routes = await routeMap(admin, profile.organization_id);
+      const routes = await loadRouteMap(admin, profile.organization_id);
       const route = routes[timesheetType];
-      if (!route?.department || !route?.email) deny(`Department routing for ${timesheetType} is not configured yet.`, 400);
+      if (!route.department || !route.email) deny(`Department routing for ${timesheetType} is not configured yet.`, 400);
       const now = new Date().toISOString();
-      await writeRecord(admin, user.id, row, {
+      await writeTimesheet(admin, user.id, row, {
         department: route.department,
         departmentEmail: route.email,
         attachmentConfirmed: true,
