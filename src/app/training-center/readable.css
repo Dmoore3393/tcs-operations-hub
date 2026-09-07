@@ -1,0 +1,47 @@
+.training-center-readable .text-xs {
+  font-size: 0.875rem !important;
+  line-height: 1.25rem !important;
+}
+
+.training-center-readable .text-sm {
+  font-size: 1rem !important;
+  line-height: 1.5rem !important;
+}
+
+.training-center-readable button,
+.training-center-readable a,
+.training-center-readable input,
+.training-center-readable select,
+.training-center-readable textarea {
+  font-size: 0.95rem;
+}
+
+.training-center-readable input,
+.training-center-readable select,
+.training-center-readable textarea {
+  min-height: 44px;
+}
+
+.training-center-readable textarea {
+  line-height: 1.5;
+}
+
+.training-center-readable .leading-6,
+.training-center-readable .leading-7 {
+  line-height: 1.65 !important;
+}
+
+.training-center-readable [class*="rounded-full"][class*="text-xs"] {
+  padding-top: 0.35rem !important;
+  padding-bottom: 0.35rem !important;
+}
+
+@media (max-width: 700px) {
+  .training-center-readable .text-xs {
+    font-size: 0.9rem !important;
+  }
+
+  .training-center-readable .text-sm {
+    font-size: 1rem !important;
+  }
+}
