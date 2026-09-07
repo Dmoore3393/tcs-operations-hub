@@ -1,0 +1,480 @@
+.student-store-shell {
+  --store-ink: #07131d;
+  --store-ink-2: #0d1d27;
+  --store-teal: #25ded2;
+  --store-teal-soft: #d9fbf8;
+  --store-line: #dce4e8;
+  min-height: 100vh;
+  background: #f4f7f8;
+  color: #101820;
+}
+
+.student-store-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 80;
+  display: flex;
+  width: 240px;
+  flex-direction: column;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #07131d 0%, #0b1d27 55%, #0c1c25 100%);
+  color: white;
+  box-shadow: 10px 0 30px rgb(2 15 23 / 10%);
+}
+
+.store-logo-block {
+  padding: 24px 20px 22px;
+  text-align: center;
+}
+
+.store-crown {
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 2px;
+  color: var(--store-teal);
+  filter: drop-shadow(0 0 8px rgb(37 222 210 / 25%));
+}
+
+.store-logo-the {
+  font-size: 23px;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.store-logo-hub {
+  margin-top: -2px;
+  font-size: 50px;
+  font-weight: 1000;
+  line-height: 0.95;
+  letter-spacing: -0.055em;
+}
+
+.store-logo-sub {
+  margin-top: 8px;
+  color: var(--store-teal);
+  font-size: 17px;
+  font-style: italic;
+  font-weight: 950;
+  letter-spacing: 0.02em;
+  transform: rotate(-2deg);
+}
+
+.store-sidebar-nav {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0 12px 18px;
+}
+
+.store-side-button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 13px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  padding: 11px 13px;
+  color: #f4f7f8;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 750;
+  text-decoration: none;
+  transition: 160ms ease;
+}
+
+.store-side-button svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  stroke-width: 2;
+}
+
+.store-side-button:hover {
+  background: rgb(255 255 255 / 7%);
+}
+
+.store-side-button.is-active {
+  background: linear-gradient(90deg, #27ded3, #38e8dc);
+  color: #07131d;
+  box-shadow: 0 8px 24px rgb(37 222 210 / 22%);
+}
+
+.store-side-divider {
+  height: 1px;
+  margin: 10px 7px 8px;
+  background: rgb(255 255 255 / 15%);
+}
+
+.store-side-heading {
+  margin: 0 13px 3px;
+  color: #c7d2d7;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.store-sidebar-slogan {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 20px 24px 28px;
+  color: #e9f5f5;
+  font-size: 22px;
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.08;
+  transform: rotate(-4deg);
+}
+
+.store-sidebar-slogan span:nth-child(2) { color: #f7fbfb; }
+.store-sidebar-slogan span:nth-child(3) { color: #f7fbfb; }
+.store-sidebar-slogan svg {
+  width: 42px;
+  height: 42px;
+  margin: 10px 0 0 auto;
+  color: var(--store-teal);
+}
+
+.student-store-workspace {
+  min-height: 100vh;
+  margin-left: 240px;
+}
+
+.student-store-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 70;
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(230px, 300px) auto auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
+  padding: 10px 18px;
+  border-bottom: 1px solid #e2e8eb;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 4px 18px rgb(15 23 42 / 4%);
+  backdrop-filter: blur(12px);
+}
+
+.store-global-search,
+.store-location-picker {
+  display: flex;
+  height: 42px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d9e2e6;
+  border-radius: 9px;
+  background: white;
+  padding: 0 13px;
+}
+
+.store-global-search svg {
+  width: 19px;
+  height: 19px;
+  color: #4f5e66;
+}
+
+.store-global-search input,
+.store-location-picker select {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #24313a;
+  outline: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.store-location-dot {
+  color: #12cbbb;
+  font-size: 18px;
+}
+
+.store-bell {
+  position: relative;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #0a1923;
+}
+
+.store-bell svg { width: 21px; height: 21px; }
+.store-bell span {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #ef3340;
+  color: white;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.store-user {
+  display: flex;
+  min-width: 165px;
+  align-items: center;
+  gap: 10px;
+}
+
+.store-avatar {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+  background: #0d2a3c;
+  color: white;
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: 0 5px 14px rgb(13 42 60 / 20%);
+}
+
+.store-user span,
+.store-user strong {
+  display: block;
+  line-height: 1.15;
+}
+
+.store-user span { color: #56636b; font-size: 11px; }
+.store-user strong { margin-top: 3px; color: #101820; font-size: 13px; }
+
+.student-store-page {
+  padding: 10px 12px 30px;
+}
+
+/* Strip the regular Operations Hub chrome only on this route. */
+.student-store-page .tcs-theme > aside { display: none !important; }
+.student-store-page .tcs-theme > div[class*="lg:pl-72"] { padding-left: 0 !important; }
+.student-store-page .tcs-theme > div[class*="lg:pl-72"] > header { display: none !important; }
+.student-store-page .tcs-theme { min-height: 0 !important; background: transparent !important; }
+.student-store-page .tcs-theme main { padding: 0 0 44px !important; }
+.student-store-page .tcs-theme main > div { max-width: none !important; }
+
+/* Hide the old internal tab strip. Sidebar controls it now. */
+.student-store-page .tcs-theme main > div > div.flex.flex-wrap.gap-2 { display: none !important; }
+
+/* Hide the duplicate page search; the white top bar controls it. */
+.student-store-page .tcs-theme main div.relative:has(input[placeholder^="Search snacks"]) { display: none !important; }
+
+/* Hero banner */
+.student-store-page .tcs-theme main section:first-of-type {
+  position: relative;
+  min-height: 218px;
+  overflow: hidden;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background:
+    linear-gradient(105deg, rgb(3 17 25 / 96%), rgb(9 38 47 / 93%)),
+    repeating-linear-gradient(135deg, transparent 0 18px, rgb(255 255 255 / 3%) 18px 36px) !important;
+  box-shadow: 0 7px 20px rgb(2 15 23 / 15%) !important;
+}
+
+.student-store-page .tcs-theme main section:first-of-type::before,
+.student-store-page .tcs-theme main section:first-of-type::after {
+  position: absolute;
+  color: var(--store-teal);
+  font-size: 62px;
+  font-weight: 200;
+  line-height: 1;
+  content: "✦";
+  opacity: 0.95;
+}
+.student-store-page .tcs-theme main section:first-of-type::before { left: 82px; top: 55px; }
+.student-store-page .tcs-theme main section:first-of-type::after { right: 76px; top: 60px; content: "♕"; }
+
+.student-store-page .tcs-theme main section:first-of-type > div {
+  position: relative;
+  z-index: 2;
+  min-height: 218px;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.student-store-page .tcs-theme main section:first-of-type > div > div:first-child {
+  width: 100%;
+  text-align: center;
+}
+
+.student-store-page .tcs-theme main section:first-of-type > div > div:last-child { display: none !important; }
+.student-store-page .tcs-theme main section:first-of-type p:first-child { display: none !important; }
+.student-store-page .tcs-theme main section:first-of-type h1 {
+  margin: 0 !important;
+  color: transparent !important;
+  font-size: 0 !important;
+}
+
+.student-store-page .tcs-theme main section:first-of-type h1::before {
+  display: block;
+  content: "THE HUB";
+  color: #fff;
+  font-size: clamp(72px, 8vw, 122px);
+  font-weight: 1000;
+  line-height: 0.82;
+  letter-spacing: -0.07em;
+  text-shadow: 3px 3px 0 #0b2931, 0 0 2px #29dcd1;
+}
+
+.student-store-page .tcs-theme main section:first-of-type h1::after {
+  display: block;
+  margin-top: 10px;
+  content: "STUDENT STORE";
+  color: var(--store-teal);
+  font-size: clamp(28px, 3.2vw, 48px);
+  font-style: italic;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  transform: rotate(-1deg);
+}
+
+.student-store-page .tcs-theme main section:first-of-type h1 + p {
+  position: absolute;
+  right: 54px;
+  top: 74px;
+  width: 140px;
+  margin: 0 !important;
+  color: #fff !important;
+  font-size: 18px !important;
+  font-style: italic;
+  line-height: 1.15;
+  transform: rotate(-7deg);
+}
+
+.student-store-page .tcs-theme main section:first-of-type h1 + p + p {
+  margin-top: 15px !important;
+  color: #f2f7f8 !important;
+  font-size: 11px !important;
+  letter-spacing: 0.36em !important;
+}
+
+/* Shop structure */
+.student-store-page .tcs-theme main section:first-of-type + div + div,
+.student-store-page .tcs-theme main section:first-of-type + div {
+  margin-top: 10px;
+}
+
+.student-store-page .tcs-theme main div[class*="xl:grid-cols-[1fr_360px]"] {
+  gap: 10px !important;
+  grid-template-columns: minmax(0, 1fr) 330px !important;
+}
+
+.student-store-page .tcs-theme main div.grid.grid-cols-3.gap-2.md\:grid-cols-6 {
+  gap: 8px !important;
+  margin-top: 0 !important;
+}
+
+.student-store-page .tcs-theme main div.grid.grid-cols-3.gap-2.md\:grid-cols-6 > button {
+  min-height: 68px;
+  border-color: #dfe6e9 !important;
+  border-radius: 10px !important;
+  background: white;
+  color: #111d24;
+  box-shadow: 0 3px 10px rgb(15 23 42 / 4%);
+}
+
+.student-store-page .tcs-theme main div.grid.grid-cols-3.gap-2.md\:grid-cols-6 > button:first-child,
+.student-store-page .tcs-theme main div.grid.grid-cols-3.gap-2.md\:grid-cols-6 > button[class*="bg-[#07131d]"] {
+  border-color: var(--store-teal) !important;
+  background: var(--store-ink) !important;
+  color: white !important;
+  box-shadow: inset 0 0 0 1px rgb(37 222 210 / 80%), 0 4px 12px rgb(2 15 23 / 12%);
+}
+
+.student-store-page .tcs-theme main h2 { letter-spacing: -0.03em; }
+.student-store-page .tcs-theme main h2.text-2xl { font-size: 24px !important; }
+
+.student-store-page .tcs-theme main article {
+  border-radius: 10px !important;
+  border-color: #dfe6e9 !important;
+  padding: 10px !important;
+  box-shadow: 0 3px 12px rgb(15 23 42 / 6%) !important;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.student-store-page .tcs-theme main article:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgb(15 23 42 / 9%) !important;
+}
+.student-store-page .tcs-theme main article > div:first-child {
+  height: 122px !important;
+  border-radius: 8px !important;
+  background: linear-gradient(180deg, #fbfcfd, #f2f6f7) !important;
+  font-size: 64px !important;
+}
+.student-store-page .tcs-theme main article h3 { font-size: 14px; }
+.student-store-page .tcs-theme main article button {
+  border-radius: 7px !important;
+  background: linear-gradient(90deg, #27dfd3, #3ce8db) !important;
+}
+
+@media (min-width: 1280px) {
+  .student-store-page .tcs-theme main div[class*="xl:grid-cols-4"] {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Right rail */
+.student-store-page .tcs-theme main aside { gap: 10px !important; }
+.student-store-page .tcs-theme main aside > div {
+  border-radius: 10px !important;
+  box-shadow: 0 3px 12px rgb(15 23 42 / 6%);
+}
+.student-store-page .tcs-theme main aside > div:first-child {
+  border-color: #b9efea !important;
+  background: linear-gradient(135deg, #e8fffd, #d7f8f6) !important;
+}
+.student-store-page .tcs-theme main aside > div:first-child p.text-5xl {
+  color: #07131d;
+  font-size: 54px !important;
+  letter-spacing: -0.06em;
+}
+.student-store-page .tcs-theme main aside button[class*="bg-[#35e2d2]"] {
+  background: linear-gradient(90deg, #22ddd1, #3be7db) !important;
+}
+
+/* Tables, profile cards and other tabs keep the same brand language. */
+.student-store-page .tcs-theme main table,
+.student-store-page .tcs-theme main button[class*="rounded-2xl"],
+.student-store-page .tcs-theme main div[class*="rounded-2xl"] {
+  border-color: #dfe6e9;
+}
+
+@media (max-width: 1100px) {
+  .student-store-sidebar { width: 205px; }
+  .student-store-workspace { margin-left: 205px; }
+  .student-store-topbar { grid-template-columns: minmax(240px, 1fr) minmax(190px, 240px) auto; }
+  .store-user { display: none; }
+  .student-store-page .tcs-theme main div[class*="xl:grid-cols-[1fr_360px]"] { grid-template-columns: 1fr !important; }
+  .student-store-page .tcs-theme main section:first-of-type h1 + p { display: none; }
+}
+
+@media (max-width: 760px) {
+  .student-store-sidebar { display: none; }
+  .student-store-workspace { margin-left: 0; }
+  .student-store-topbar {
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    padding: 8px;
+  }
+  .store-location-picker { grid-column: 1 / -1; grid-row: 2; }
+  .store-bell { grid-column: 2; grid-row: 1; }
+  .student-store-page { padding: 8px; }
+  .student-store-page .tcs-theme main section:first-of-type { min-height: 170px; }
+  .student-store-page .tcs-theme main section:first-of-type > div { min-height: 170px; }
+  .student-store-page .tcs-theme main section:first-of-type h1::before { font-size: 58px; }
+  .student-store-page .tcs-theme main section:first-of-type h1::after { font-size: 28px; }
+  .student-store-page .tcs-theme main section:first-of-type::before,
+  .student-store-page .tcs-theme main section:first-of-type::after { display: none; }
+}
