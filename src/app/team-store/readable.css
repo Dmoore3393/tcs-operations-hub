@@ -1,0 +1,121 @@
+.team-store-readable .team-store-sidebar nav button,
+.team-store-readable .team-store-sidebar nav a {
+  font-size: 15px !important;
+  line-height: 1.3 !important;
+  padding-top: 11px !important;
+  padding-bottom: 11px !important;
+}
+
+.team-store-readable .nav-heading {
+  font-size: 13px !important;
+}
+
+.team-store-readable .team-store-logo small {
+  font-size: 11px !important;
+  line-height: 1.5 !important;
+}
+
+.team-store-readable .team-search input,
+.team-store-readable .team-location select {
+  font-size: 15px !important;
+}
+
+.team-store-readable .team-user small {
+  font-size: 12px !important;
+}
+
+.team-store-readable .team-user strong {
+  font-size: 14px !important;
+}
+
+.team-store-readable .team-notice {
+  font-size: 14px !important;
+}
+
+.team-store-readable .hero-copy small,
+.team-store-readable .hero-copy b {
+  font-size: 11px !important;
+}
+
+.team-store-readable .reward-categories button {
+  font-size: 13px !important;
+}
+
+.team-store-readable .section-heading p,
+.team-store-readable .section-heading select {
+  font-size: 13px !important;
+}
+
+.team-store-readable .reward-card h3 {
+  font-size: 15px !important;
+  line-height: 1.25 !important;
+}
+
+.team-store-readable .reward-price {
+  font-size: 15px !important;
+}
+
+.team-store-readable .reward-card small {
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+}
+
+.team-store-readable .redeem-button,
+.team-store-readable .primary-action,
+.team-store-readable .xp-card > button,
+.team-store-readable .cart-redeem,
+.team-store-readable .location-stats > button {
+  font-size: 13px !important;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+.team-store-readable .empty-rewards p,
+.team-store-readable .empty-cart,
+.team-store-readable .empty-row {
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+}
+
+.team-store-readable .xp-head p,
+.team-store-readable .xp-mini span,
+.team-store-readable .cart-title button,
+.team-store-readable .cart-name strong,
+.team-store-readable .cart-name span,
+.team-store-readable .cart-step span,
+.team-store-readable .earn-title small,
+.team-store-readable .earn-card > p,
+.team-store-readable .earn-card li strong,
+.team-store-readable .earn-card li small,
+.team-store-readable .location-stat-title strong,
+.team-store-readable .location-stat-title small,
+.team-store-readable .location-stats > div:nth-child(2) span,
+.team-store-readable .mini-title strong,
+.team-store-readable .mini-title small,
+.team-store-readable .mini-title button,
+.team-store-readable .leader-row p,
+.team-store-readable .leader-row small,
+.team-store-readable .no-leaders,
+.team-store-readable .location-manage-card strong,
+.team-store-readable .location-manage-card small {
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+}
+
+.team-store-readable .xp-mini strong,
+.team-store-readable .cart-title strong,
+.team-store-readable .cart-total,
+.team-store-readable .earn-title strong {
+  font-size: 14px !important;
+}
+
+@media (max-width: 900px) {
+  .team-store-readable .team-store-sidebar nav button,
+  .team-store-readable .team-store-sidebar nav a {
+    font-size: 16px !important;
+  }
+
+  .team-store-readable .reward-card h3 {
+    font-size: 16px !important;
+  }
+}
