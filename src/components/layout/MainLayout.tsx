@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Bot,
+  BookOpen,
   BriefcaseBusiness,
   Building2,
   Bus,
@@ -51,6 +52,8 @@ const navItems = [
   { label: "Families", href: "/families", icon: Users },
   { label: "Children", href: "/children", icon: UserRound },
   { label: "Student Store", href: "/student-store", icon: Store },
+  { label: "Team Store", href: "/team-store", icon: Store },
+  { label: "Training Center", href: "/training-center", icon: BookOpen },
   { label: "Child Schedules", href: "/child-schedules", icon: CalendarClock },
   { label: "Daily Care", href: "/daily-care", icon: Utensils },
   { label: "Meals & Menus", href: "/meals", icon: Utensils },
@@ -85,6 +88,8 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/families": { title: "Family Accounts", subtitle: "Guardians, billing, subsidies, and communication" },
   "/children": { title: "Children", subtitle: "Enrollment, health alerts, and child files" },
   "/student-store": { title: "The Hub Student Store", subtitle: "Gator Cash, child profiles, school-age jobs, applications, purchases, and location inventory" },
+  "/team-store": { title: "The Hub Team Store", subtitle: "Complete trainings, earn XP, and redeem staff rewards" },
+  "/training-center": { title: "Training Center", subtitle: "Assigned trainings, certificate uploads, verification, renewals, and XP" },
   "/child-schedules": { title: "Child Schedules", subtitle: "Exact daily care times that drive ratios" },
   "/daily-care": { title: "Daily Care", subtitle: "Bottles, diapers, potty progress, rest, and daily notes" },
   "/meals": { title: "Meals & Menus", subtitle: "Weekly menus, food served, and individual child intake" },
@@ -241,7 +246,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 <p className="max-w-44 truncate text-sm font-black text-slate-800">{profile?.full_name || user?.email}</p>
               </div>
               <button onClick={() => setShowUserMenu((current) => !current)} className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-black" style={{ background: theme.primarySoft, color: theme.ink }} aria-label="Open user menu">{staffInitials(profile, user?.email)}</button>
-              {showLocationHelp && <div className="absolute right-12 top-14 z-40 w-80 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600 shadow-xl"><p className="font-black text-slate-950">Active location selector</p><p className="mt-1">It changes the Hub’s colors and tells location-aware pages—such as Child Schedules, Meals, Ratios, Work Plans, Student Store, and Marketing—which site you are working on. {locationLocked ? "Your login is limited to the location access assigned by Danielle or Jennifer. You cannot switch to another site or the company-wide view." : "Choose All Locations for company-wide information."}</p></div>}
+              {showLocationHelp && <div className="absolute right-12 top-14 z-40 w-80 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600 shadow-xl"><p className="font-black text-slate-950">Active location selector</p><p className="mt-1">It changes the Hub’s colors and tells location-aware pages—such as Child Schedules, Meals, Ratios, Work Plans, Student Store, Team Store, Training Center, and Marketing—which site you are working on. {locationLocked ? "Your login is limited to the location access assigned by Danielle or Jennifer. You cannot switch to another site or the company-wide view." : "Choose All Locations for company-wide information."}</p></div>}
               {showUserMenu && <div className="absolute right-0 top-14 z-40 w-72 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-xl"><p className="font-black text-slate-950">{profile?.full_name || "TCS Staff"}</p><p className="mt-1 truncate text-xs text-slate-500">{profile?.email || user?.email}</p><p className="mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{profile?.role}</p><button onClick={() => void signOut()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button></div>}
             </div>
           </div>
