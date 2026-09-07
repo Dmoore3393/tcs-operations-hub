@@ -216,8 +216,151 @@ export async function POST(request: Request) {
 
     const body = asObject(await request.json().catch(() => ({})));
     const action = asText(body.action);
-    if (action === "createBatch" || action === "saveRoute") {
-      return Response.json({ error: "This setup action is still being enabled." }, { status: 503 });
+
+    if (action === "createBatch") {
+      if (!(actor.isDanielle || actor.isJennifer || actor.isOwner)) return Response.json({ error: "Only Danielle or Jennifer can create the monthly timesheet batch." }, { status: 403 });
+      const servicePeriod = asText(body.servicePeriod).trim();
+      if (!servicePeriod) return Response.json({ error: "Choose a service period before creating the batch." }, { status: 400 });
+
+      const existingResult = await admin
+        .from("timesheets")
+        .select("child_id")
+        .eq("organization_id", profile.organization_id)
+        .eq("service_period", servicePeriod);
+      if (existingResult.error) throw existingResult.error;
+      const existingChildIds = new Set<string>();
+      for (const item of (existingResult.data ?? []) as unknown as DbRow[]) {
+        const childId = asText(item.child_id);
+        if (childId) existingChildIds.add(childId);
+      }
+
+      const childrenResult = await admin
+        .from("children")
+        .select("id,legacy_id,location_id,first_name,last_name,enrollment_status,record_data")
+        .eq("organization_id", profile.organization_id)
+        .eq("enrollment_status", "Active");
+      if (childrenResult.error) throw childrenResult.error;
+      const locations = await liveLocations(admin, profile.organization_id);
+      const locationById = new Map<string, DbRow>();
+      for (const location of locations) locationById.set(asText(location.id), location);
+
+      const rows: DbRow[] = [];
+      for (const child of (childrenResult.data ?? []) as unknown as DbRow[]) {
+        const childId = asText(child.id);
+        if (!childId || existingChildIds.has(childId)) continue;
+        const childData = asObject(child.record_data);
+        const subsidy = asText(childData.subsidy).trim();
+        const subsidyLower = subsidy.toLowerCase();
+        if (!subsidy || subsidyLower.includes("private") || subsidyLower.includes("cash")) continue;
+
+        let timesheetType = "";
+        if (subsidyLower.includes("dcfs")) timesheetType = "DCFS";
+        else if (subsidyLower.includes("cccc")) timesheetType = "CCCC";
+        else if (subsidyLower.includes("respite")) timesheetType = "Respite";
+        else if (subsidyLower.includes("ccrc")) timesheetType = "CCRC";
+        if (!timesheetType) continue;
+
+        const location = locationById.get(asText(child.location_id));
+        if (!location) continue;
+        const legacyId = `ts-${servicePeriod.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${asText(child.legacy_id)}`;
+        const childName = `${asText(child.first_name)} ${asText(child.last_name)}`.trim();
+        const familyName = `${asText(child.last_name)} Family`;
+        const recordData: DbRow = {
+          id: legacyId,
+          childName,
+          familyName,
+          servicePeriod,
+          location: asText(location.full_name) || asText(location.name),
+          timesheetType,
+          fundingSource: timesheetType,
+          stage: "Location Sign-Off",
+          collectorSigned: false,
+          collectorSignedAt: "",
+          collectorSignedBy: "",
+          dynastyStatus: "Awaiting",
+          dynastyReviewedAt: "",
+          dynastyReviewedBy: "",
+          dynastyHandoffDate: "",
+          dynastyHandedToJenniferAt: "",
+          dynastyHandoffBy: "",
+          certificateVerified: false,
+          tuitionPolicyAcknowledged: false,
+          completedBy: "",
+          completedAt: "",
+          scanQualityChecked: false,
+          scannedBy: "",
+          scannedAt: "",
+          sentToJenniferAt: "",
+          department: "",
+          departmentEmail: "",
+          attachmentConfirmed: false,
+          emailedBy: "",
+          emailedAt: "",
+          notes: "",
+        };
+        rows.push({
+          organization_id: profile.organization_id,
+          location_id: child.location_id,
+          child_id: child.id,
+          legacy_id: legacyId,
+          child_name: childName,
+          family_name: familyName,
+          service_period: servicePeriod,
+          funding_source: timesheetType,
+          workflow_stage: "Location Sign-Off",
+          record_data: recordData,
+          created_by: user.id,
+          updated_by: user.id,
+        });
+      }
+
+      if (rows.length) {
+        const insertResult = await admin.from("timesheets").upsert(rows, { onConflict: "organization_id,legacy_id" });
+        if (insertResult.error) throw insertResult.error;
+      }
+      return Response.json({ ok: true, created: rows.length });
+    }
+
+    if (action === "saveRoute") {
+      if (!(actor.isDanielle || actor.isJennifer || actor.isOwner)) return Response.json({ error: "Only Danielle or Jennifer can change department routing." }, { status: 403 });
+      const timesheetType = normalizeType(body.timesheetType);
+      if (!COMMAND_TYPES.some((item) => item === timesheetType)) return Response.json({ error: "Choose CCRC Stage 1, CCRC Stage 2, CCCC, DCFS, or Respite." }, { status: 400 });
+      const department = asText(body.department).trim();
+      const email = asText(body.email).trim();
+      const deadline = asText(body.deadline).trim();
+      const fileNameFormat = asText(body.fileNameFormat).trim() || DEFAULT_FILE_NAME;
+      const typeSlug = timesheetType.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const locations = await liveLocations(admin, profile.organization_id);
+      const rows = locations.map((location) => {
+        const legacyId = `command-route:${asText(location.slug)}:${typeSlug}`;
+        return {
+          organization_id: profile.organization_id,
+          location_id: location.id,
+          legacy_id: legacyId,
+          funding_source: timesheetType,
+          department,
+          department_email: email,
+          deadline,
+          file_name_format: fileNameFormat,
+          record_data: {
+            id: legacyId,
+            location: asText(location.full_name) || asText(location.name),
+            fundingSource: timesheetType,
+            timesheetType,
+            department,
+            email,
+            deadline,
+            fileNameFormat,
+          },
+          created_by: user.id,
+          updated_by: user.id,
+        };
+      });
+      if (rows.length) {
+        const routeResult = await admin.from("timesheet_submission_routes").upsert(rows, { onConflict: "organization_id,legacy_id" });
+        if (routeResult.error) throw routeResult.error;
+      }
+      return Response.json({ ok: true });
     }
 
     const id = asText(body.id);
