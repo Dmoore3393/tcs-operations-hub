@@ -12,8 +12,36 @@ export type TourBoardStage =
 
 export type TourVisitStatus = "Scheduled" | "Completed" | "No Show" | "Cancelled" | "Rescheduled";
 export type TourRating = "Excellent Fit" | "Good Fit" | "Needs Follow-Up" | "Not a Fit" | "Not Rated";
-export type LeadSource = "Website" | "Facebook" | "Instagram" | "Google" | "Parent Referral" | "Phone" | "Text" | "Walk-In" | "Community Event" | "Agency" | "Other";
-export type ContactMethod = "Phone Call" | "Text" | "Email" | "Website" | "Facebook" | "Instagram" | "In Person" | "Other";
+export type TourDisposition = "Ready to Enroll" | "Thinking It Over" | "Needs Follow-Up" | "Waitlist" | "Not a Fit" | "";
+export type LeadSource =
+  | "Website"
+  | "Facebook"
+  | "Instagram"
+  | "Google"
+  | "TikTok"
+  | "Parent Referral"
+  | "Staff Referral"
+  | "Phone"
+  | "Text"
+  | "Walk-In"
+  | "Community Event"
+  | "CCRC"
+  | "Crystal Stairs"
+  | "DCFS"
+  | "Other Agency"
+  | "Agency"
+  | "Other";
+export type ContactMethod =
+  | "Phone Call"
+  | "Text"
+  | "Email"
+  | "Website"
+  | "Facebook Messenger"
+  | "Instagram DM"
+  | "Facebook"
+  | "Instagram"
+  | "In Person"
+  | "Other";
 
 export type TourVisit = {
   id: string;
@@ -23,6 +51,7 @@ export type TourVisit = {
   lateMinutes: number;
   conductedBy: string;
   rating: TourRating;
+  disposition?: TourDisposition;
   familyReaction: string;
   questionsConcerns: string;
   notes: string;
@@ -35,7 +64,7 @@ export type TourVisit = {
 export type LeadActivity = {
   id: string;
   at: string;
-  kind: "Inquiry" | "Contact" | "Reminder" | "Tour" | "Follow-Up" | "Packet" | "Status Change" | "Note";
+  kind: "Inquiry" | "Contact" | "Reminder" | "Tour" | "Tour Check-In" | "Follow-Up" | "Packet" | "Status Change" | "Note";
   by: string;
   note: string;
 };
@@ -44,9 +73,13 @@ export type TourBoardLead = Omit<EnrollmentLeadRecord, "stage"> & {
   stage: TourBoardStage;
   programType: string;
   ageGroup: string;
+  additionalChildren: string;
   leadSource: LeadSource;
   inquiryMethod: ContactMethod;
   preferredStartDate: string;
+  scheduleNeeded: string;
+  schoolName: string;
+  bestContactTime: string;
   contactedAt: string;
   nextAction: string;
   priority: "Normal" | "Hot Lead" | "Urgent";
@@ -94,7 +127,7 @@ function mapLegacyStage(stage: string): TourBoardStage {
 
 export function normalizeTourLead(input: Partial<TourBoardLead> & Partial<EnrollmentLeadRecord>): TourBoardLead {
   const id = Number(input.id || Date.now());
-  const createdAt = input.createdAt || new Date().toISOString().slice(0, 10);
+  const createdAt = input.createdAt || new Date().toISOString();
   const existingTours = Array.isArray(input.tourHistory) ? input.tourHistory : [];
   const legacyTour = !existingTours.length && input.tourDate
     ? [{
@@ -104,6 +137,7 @@ export function normalizeTourLead(input: Partial<TourBoardLead> & Partial<Enroll
         lateMinutes: 0,
         conductedBy: input.assignedTo || "",
         rating: "Not Rated" as const,
+        disposition: "" as const,
         familyReaction: "",
         questionsConcerns: "",
         notes: "",
@@ -137,9 +171,13 @@ export function normalizeTourLead(input: Partial<TourBoardLead> & Partial<Enroll
     createdAt,
     programType: input.programType || input.requestedCare || "",
     ageGroup: input.ageGroup || input.childAge || "",
+    additionalChildren: input.additionalChildren || "",
     leadSource: input.leadSource || "Other",
     inquiryMethod: input.inquiryMethod || "Other",
     preferredStartDate: input.preferredStartDate || "",
+    scheduleNeeded: input.scheduleNeeded || "",
+    schoolName: input.schoolName || "",
+    bestContactTime: input.bestContactTime || "",
     contactedAt: input.contactedAt || "",
     nextAction: input.nextAction || "",
     priority: input.priority || "Normal",
