@@ -3,6 +3,7 @@ import type { LocationKey } from "@/lib/location-config";
 export type TeamStoreLocation = Exclude<LocationKey, "All Locations">;
 export type TeamRewardCategory = "Gift Cards" | "Team Gear" | "Self-Care" | "Office Essentials" | "Recognition";
 export type TeamTrainingStatus = "Submitted" | "Verified" | "Rejected";
+export type TeamTrainingDelivery = "External Link" | "Uploaded Content" | "In-House";
 
 export type TeamReward = {
   id: string;
@@ -65,6 +66,13 @@ export type TeamTraining = {
   active: boolean;
   createdBy: string;
   createdAt: string;
+  deliveryType?: TeamTrainingDelivery;
+  contentId?: string;
+  contentName?: string;
+  contentMimeType?: string;
+  lessonContent?: string;
+  includeLeadership?: boolean;
+  durationMinutes?: number;
 };
 
 export type TeamTrainingCompletion = {
