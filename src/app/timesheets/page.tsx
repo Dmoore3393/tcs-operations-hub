@@ -1,393 +1,417 @@
 "use client";
 
+import "./timesheet-command.css";
 import MainLayout from "@/components/layout/MainLayout";
-import { DemoNotice, inputClass, Modal, PrimaryButton, SecondaryButton, SectionCard, StatCard, StatusBadge } from "@/components/hub/HubUI";
-import { AnimatedStep, FloatingOperationsGraphic, SuccessBurst } from "@/components/hub/AnimatedVisuals";
-import { useHubLocation } from "@/components/providers/LocationProvider";
-import { usePersistentState } from "@/hooks/usePersistentState";
-import {
-  nextTimesheetStage,
-  prepComplete,
-  stageIndex,
-  starterDepartmentRoutes,
-  starterTimesheets,
-  timesheetStageOrder,
-  type DepartmentRoute,
-  type TestUserRole,
-  type TimesheetRecord,
-  type TimesheetStage,
-} from "@/lib/compliance-ops";
-import { initialChildren, type ChildRecord } from "@/lib/children";
-import { currentServicePeriod } from "@/lib/date-utils";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useAuth } from "@/components/providers/AuthProvider";
 import {
   AlertTriangle,
   CheckCircle2,
-  ChevronRight,
   ClipboardCheck,
   FileCheck2,
-  FileClock,
-  FilePenLine,
   Mail,
-  Pencil,
+  PenLine,
   Plus,
+  RefreshCw,
   ScanLine,
   Search,
-  Send,
   Settings2,
   Signature,
-  Sparkles,
-  UserCheck,
+  Truck,
+  X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
-import { useAuth } from "@/components/providers/AuthProvider";
-import { recordAuditEvent } from "@/lib/audit";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-const checklistLabels: Array<[keyof TimesheetRecord["prep"], string, string]> = [
-  ["parentSignature", "Parent signature", "Parent signed the location timesheet"],
-  ["providerSignature", "Provider/licensee signature", "Licensee signed for the location"],
-  ["formDated", "Form dated", "Required dates are written on the form"],
-  ["noAttendanceXs", "No-attendance X marks", "Every day without attendance is marked X"],
-  ["schoolPickupTimes", "School pickup times", "Pickup times are written where required"],
-  ["closureDates", "Closure dates", "School and childcare closures are recorded"],
+const COMMAND_TYPES = ["CCRC Stage 1", "CCRC Stage 2", "CCCC", "DCFS", "Respite"] as const;
+type CommandType = (typeof COMMAND_TYPES)[number];
+type CommandTypeValue = CommandType | "CCRC";
+
+type CommandStage =
+  | "Location Sign-Off"
+  | "Dynasty Review"
+  | "Personal Handoff"
+  | "Jen + Danielle Fill Out"
+  | "Scan & Send to Jennifer"
+  | "Jennifer Email"
+  | "Complete";
+
+const STAGES: Array<{ key: CommandStage; title: string; helper: string }> = [
+  { key: "Location Sign-Off", title: "Location Sign-Off", helper: "Assigned collector checks off each signed child form" },
+  { key: "Dynasty Review", title: "Dynasty Review", helper: "Every timesheet accounted for and signed" },
+  { key: "Personal Handoff", title: "Delivered to Jennifer", helper: "Dynasty personally hands the physical timesheets to Jennifer" },
+  { key: "Jen + Danielle Fill Out", title: "Jen + Danielle Fill Out", helper: "Complete each form from the child certificate" },
+  { key: "Scan & Send to Jennifer", title: "Scan & Send to Jen", helper: "Danielle or Anthony scans and sends to Jennifer" },
+  { key: "Jennifer Email", title: "Jennifer Email", helper: "Jennifer sends to the correct department" },
+  { key: "Complete", title: "Complete", helper: "Fully submitted and recorded" },
 ];
 
-const stageDetails: Record<TimesheetStage, { title: string; helper: string; icon: React.ReactNode }> = {
-  "Licensee Preparation": { title: "Licensee Prep", helper: "Signatures, dates, X marks, pickup times, and closures", icon: <Signature className="h-4 w-4" /> },
-  "Dynasty Review": { title: "Dynasty Review", helper: "Confirm every location timesheet is accounted for", icon: <ClipboardCheck className="h-4 w-4" /> },
-  "Jennifer Received": { title: "Batch Received", helper: "Record the physical batch handoff", icon: <UserCheck className="h-4 w-4" /> },
-  Completion: { title: "Fill Out", helper: "Only Danielle or Jennifer completes the timesheet", icon: <FilePenLine className="h-4 w-4" /> },
-  Scanning: { title: "Scan", helper: "Danielle, Jennifer, or Tony can scan", icon: <ScanLine className="h-4 w-4" /> },
-  "Jennifer Email": { title: "Final Email", helper: "Danielle or Jennifer submits to the correct department", icon: <Mail className="h-4 w-4" /> },
-  Complete: { title: "Complete", helper: "Signed, filled out, scanned, and submitted", icon: <CheckCircle2 className="h-4 w-4" /> },
+type RecordItem = {
+  id: string;
+  rowId: string;
+  childName: string;
+  familyName: string;
+  servicePeriod: string;
+  location: string;
+  locationSlug: string;
+  collector: string;
+  timesheetType: CommandTypeValue;
+  needsCcrcStage: boolean;
+  stage: CommandStage;
+  collectorSigned: boolean;
+  collectorSignedAt: string;
+  collectorSignedBy: string;
+  collectorNotes: string;
+  dynastyStatus: string;
+  dynastyReviewedAt: string;
+  dynastyReviewedBy: string;
+  dynastyHandoffDate: string;
+  dynastyHandedToJenniferAt: string;
+  dynastyHandoffBy: string;
+  certificateVerified: boolean;
+  tuitionPolicyAcknowledged: boolean;
+  completedBy: string;
+  completedAt: string;
+  scanQualityChecked: boolean;
+  scannedBy: string;
+  scannedAt: string;
+  sentToJenniferAt: string;
+  department: string;
+  departmentEmail: string;
+  attachmentConfirmed: boolean;
+  emailedBy: string;
+  emailedAt: string;
+  notes: string;
+  updatedAt: string;
 };
 
-export default function TimesheetsPage() {
-  const [timesheets, setTimesheets] = usePersistentState<TimesheetRecord[]>("tcs-timesheets-v1", starterTimesheets);
-  const [routes, setRoutes] = usePersistentState<DepartmentRoute[]>("tcs-timesheet-department-routes-v1", starterDepartmentRoutes);
-  const [children] = usePersistentState<ChildRecord[]>("tcs-children-v1", initialChildren);
-  const { profile, canManageSystem, isLocationLicensee } = useAuth();
-  const actorName = profile?.full_name || "Approved Administrator";
-  const userRole = useMemo<TestUserRole>(() => {
-    const name = profile?.full_name.toLowerCase() ?? "";
-    const role = profile?.role.toLowerCase() ?? "";
-    if (name.includes("danielle")) return "Danielle";
-    if (name.includes("jennifer")) return "Jennifer";
-    if (name.includes("dynasty")) return "Dynasty";
-    if (name.includes("tony") || name.includes("anthony")) return "Tony";
-    if (["administrator", "admin", "director", "owner / director", "corporate / admin", "corporate admin", "operations admin"].includes(role)) return "Administrator";
-    return "Location Licensee";
-  }, [profile]);
-  const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState<"All" | TimesheetStage>("All");
-  const [selected, setSelected] = useState<TimesheetRecord | null>(null);
-  const [editingRoute, setEditingRoute] = useState<DepartmentRoute | null>(null);
+type RouteConfig = { department: string; email: string; deadline: string; fileNameFormat: string };
+type CollectorCard = { slug: string; location: string; collector: string };
+type ActorCaps = {
+  name: string;
+  collectorSlug: string | null;
+  canViewAll: boolean;
+  canCreateBatch: boolean;
+  canDynastyReview: boolean;
+  canDynastyHandoff: boolean;
+  canFillOut: boolean;
+  canScan: boolean;
+  canEmail: boolean;
+  canManageRoutes: boolean;
+};
+type ApiData = {
+  records: RecordItem[];
+  routes: Record<CommandType, RouteConfig>;
+  types: readonly CommandType[];
+  collectors: CollectorCard[];
+  actor: ActorCaps;
+};
+
+function formatStamp(value: string) {
+  if (!value) return "Not recorded";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
+}
+
+function currentServicePeriod() {
+  return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date());
+}
+
+function stageIndex(stage: CommandStage) {
+  return STAGES.findIndex((item) => item.key === stage);
+}
+
+function stageTone(stage: CommandStage) {
+  if (stage === "Complete") return "green";
+  if (stage === "Jennifer Email") return "plum";
+  if (stage === "Scan & Send to Jennifer") return "blue";
+  if (stage === "Jen + Danielle Fill Out" || stage === "Personal Handoff") return "gold";
+  if (stage === "Dynasty Review") return "red";
+  return "";
+}
+
+export default function TimesheetCommandCenterPage() {
+  const { session } = useAuth();
+  const [data, setData] = useState<ApiData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [selected, setSelected] = useState<RecordItem | null>(null);
   const [showRoutes, setShowRoutes] = useState(false);
-  const [success, setSuccess] = useState("");
-  const { location: selectedHubLocation, theme } = useHubLocation();
-  const reducedMotion = useReducedMotion();
-  const servicePeriod = useMemo(() => currentServicePeriod(), []);
+  const [search, setSearch] = useState("");
+  const [locationFilter, setLocationFilter] = useState("All Locations");
+  const [typeFilter, setTypeFilter] = useState("All Types");
+  const [periodFilter, setPeriodFilter] = useState(currentServicePeriod());
 
-  const visible = useMemo(() => timesheets.filter((record) => {
-    const hubMatch = selectedHubLocation === "All Locations" || record.location.includes(selectedHubLocation);
-    const searchMatch = `${record.childName} ${record.familyName} ${record.location} ${record.fundingSource}`.toLowerCase().includes(search.toLowerCase());
-    const stageMatch = stageFilter === "All" || record.stage === stageFilter;
-    return hubMatch && searchMatch && stageMatch;
-  }), [timesheets, selectedHubLocation, search, stageFilter]);
-
-  const completeCount = visible.filter((item) => item.stage === "Complete").length;
-  const licenseeCount = visible.filter((item) => item.stage === "Licensee Preparation").length;
-  const scanCount = visible.filter((item) => item.stage === "Scanning").length;
-  const emailCount = visible.filter((item) => item.stage === "Jennifer Email").length;
-
-  function flash(message: string) {
-    setSuccess(message);
-    window.setTimeout(() => setSuccess(""), 2400);
-  }
-
-  function updateRecord(id: number, updater: (record: TimesheetRecord) => TimesheetRecord, message?: string) {
-    const source = selected?.id === id ? selected : timesheets.find((record) => record.id === id);
-    if (!source) return;
-    const next = updater(source);
-    const staged = { ...next, stage: nextTimesheetStage(next) };
-    setTimesheets((current) => current.map((record) => record.id === id ? staged : record));
-    if (selected?.id === id) setSelected(staged);
-    if (source.dynastyStatus !== staged.dynastyStatus || source.stage !== staged.stage || source.jenniferReceivedAt !== staged.jenniferReceivedAt || source.completedAt !== staged.completedAt || source.scannedAt !== staged.scannedAt || source.emailedByJenniferAt !== staged.emailedByJenniferAt) {
-      void recordAuditEvent({
-        action: "REVIEW",
-        tableName: "timesheets",
-        legacyId: id,
-        location: staged.location,
-        metadata: { fromStage: source.stage, toStage: staged.stage, dynastyStatus: staged.dynastyStatus, actor: actorName },
-      });
+  const request = useCallback(async (method: "GET" | "POST", body?: Record<string, unknown>) => {
+    if (!session?.access_token) throw new Error("Your staff session is not available yet.");
+    const response = await fetch("/api/timesheets", {
+      method,
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        ...(body ? { "Content-Type": "application/json" } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+    });
+    const raw = await response.text();
+    let payload: any = {};
+    if (raw) {
+      try { payload = JSON.parse(raw); } catch { payload = { error: raw }; }
     }
-    if (message) flash(message);
+    if (!response.ok) throw new Error(payload.error || raw || "Timesheet Command Center request failed.");
+    return payload;
+  }, [session?.access_token]);
+
+  const load = useCallback(async (quiet = false) => {
+    if (!session?.access_token) return;
+    if (!quiet) setLoading(true);
+    setError("");
+    try {
+      const payload = await request("GET") as ApiData;
+      setData(payload);
+      setSelected((current) => current ? payload.records.find((record) => record.id === current.id) ?? null : null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not load the live timesheet database.");
+    } finally {
+      if (!quiet) setLoading(false);
+    }
+  }, [request, session?.access_token]);
+
+  useEffect(() => {
+    void load();
+    const timer = window.setInterval(() => void load(true), 30000);
+    return () => window.clearInterval(timer);
+  }, [load]);
+
+  async function runAction(body: Record<string, unknown>, successText: string) {
+    setSaving(true);
+    setError("");
+    try {
+      await request("POST", body);
+      setMessage(successText);
+      window.setTimeout(() => setMessage(""), 2600);
+      await load(true);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The change could not be saved.");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function now() {
-    return new Date().toLocaleString([], { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-  }
+  const records = data?.records ?? [];
+  const periods = useMemo(() => {
+    const values = new Set([currentServicePeriod(), ...records.map((record) => record.servicePeriod).filter(Boolean)]);
+    return [...values];
+  }, [records]);
 
-  function permission(step: "prep" | "dynasty" | "receive" | "complete" | "scan" | "email") {
-    // Danielle and Jennifer are full-workflow users and can step in at any point.
-    if (userRole === "Danielle" || userRole === "Jennifer" || userRole === "Administrator") return true;
-    if (step === "prep") return userRole === "Location Licensee";
-    if (step === "dynasty") return userRole === "Dynasty";
-    if (step === "scan") return userRole === "Tony";
-    return false;
-  }
+  const periodRecords = useMemo(() => records.filter((record) => periodFilter === "All Periods" || record.servicePeriod === periodFilter), [records, periodFilter]);
+  const filtered = useMemo(() => periodRecords.filter((record) => {
+    const locationMatch = locationFilter === "All Locations" || record.locationSlug === locationFilter;
+    const typeMatch = typeFilter === "All Types" || record.timesheetType === typeFilter;
+    const q = search.trim().toLowerCase();
+    const searchMatch = !q || `${record.childName} ${record.familyName} ${record.location} ${record.timesheetType} ${record.stage}`.toLowerCase().includes(q);
+    return locationMatch && typeMatch && searchMatch;
+  }), [periodRecords, locationFilter, typeFilter, search]);
 
-  function roleMessage(step: "prep" | "dynasty" | "receive" | "complete" | "scan" | "email") {
-    const names = {
-      prep: "the location licensee, Danielle, or Jennifer",
-      dynasty: "Dynasty, Danielle, or Jennifer",
-      receive: "Danielle or Jennifer",
-      complete: "Danielle or Jennifer",
-      scan: "Danielle, Jennifer, or Tony",
-      email: "Danielle or Jennifer",
-    };
-    return `This step is restricted to ${names[step]}. Your signed-in account does not have permission for this action.`;
-  }
+  const stats = useMemo(() => ({
+    total: periodRecords.length,
+    missing: periodRecords.filter((record) => !record.collectorSigned).length,
+    review: periodRecords.filter((record) => record.stage === "Dynasty Review").length,
+    handoff: periodRecords.filter((record) => record.stage === "Personal Handoff").length,
+    fill: periodRecords.filter((record) => record.stage === "Jen + Danielle Fill Out").length,
+    scan: periodRecords.filter((record) => record.stage === "Scan & Send to Jennifer").length,
+    email: periodRecords.filter((record) => record.stage === "Jennifer Email").length,
+    complete: periodRecords.filter((record) => record.stage === "Complete").length,
+  }), [periodRecords]);
 
-  function routeFor(record: TimesheetRecord) {
-    return routes.find((route) => route.location === record.location && route.fundingSource === record.fundingSource);
-  }
-
-  function createNextBatch() {
-    const nextId = Math.max(0, ...timesheets.map((item) => item.id)) + 1;
-    const existingNames = new Set(timesheets.filter((item) => item.servicePeriod === servicePeriod).map((item) => `${item.childName}|${item.location}`));
-    const additions = children.filter((child) => {
-      const locationAllowed = !isLocationLicensee || selectedHubLocation === "All Locations" || child.location.includes(selectedHubLocation);
-      return locationAllowed && child.enrollmentStatus === "Active" && child.subsidy !== "Private Pay" && !existingNames.has(`${child.firstName} ${child.lastName}|${child.location}`);
-    }).map((child, index): TimesheetRecord => ({
-      id: nextId + index,
-      childName: `${child.firstName} ${child.lastName}`,
-      familyName: `${child.lastName} Family`,
-      servicePeriod,
-      location: child.location,
-      fundingSource: child.subsidy === "DCFS" ? "DCFS" : child.subsidy === "CCCC" ? "CCCC" : "CCRC",
-      stage: "Licensee Preparation",
-      prep: { parentSignature: false, providerSignature: false, formDated: false, noAttendanceXs: false, schoolPickupTimes: false, closureDates: false },
-      licenseeInitials: "",
-      licenseeSubmittedAt: "",
-      dynastyStatus: "Awaiting",
-      dynastyInitials: "",
-      dynastyReviewedAt: "",
-      jenniferReceivedAt: "",
-      batchReceivedBy: "",
-      completedBy: "",
-      completedAt: "",
-      scannedBy: "",
-      scannedAt: "",
-      scanQualityChecked: false,
-      sentToJenniferAt: "",
-      department: "",
-      departmentEmail: "",
-      emailedByJenniferAt: "",
-      emailedBy: "",
-      attachmentConfirmed: false,
-      confirmationReceived: false,
-      notes: "New monthly timesheet created for location preparation.",
-    }));
-    if (!additions.length) return flash(`No new ${servicePeriod} timesheets are needed`);
-    setTimesheets((current) => [...current, ...additions]);
-    flash(`${additions.length} ${servicePeriod} timesheets created`);
-  }
-
-  function saveRoute() {
-    if (!editingRoute) return;
-    setRoutes((current) => current.map((route) => route.id === editingRoute.id ? editingRoute : route));
-    setEditingRoute(null);
-    flash("Submission route saved");
-  }
-
-  function statusTone(stage: TimesheetStage): "green" | "amber" | "red" | "blue" | "purple" | "slate" {
-    if (stage === "Complete") return "green";
-    if (stage === "Jennifer Email") return "purple";
-    if (stage === "Scanning") return "blue";
-    if (stage === "Dynasty Review" || stage === "Completion") return "amber";
-    if (stage === "Licensee Preparation") return "red";
-    return "slate";
-  }
+  const workflowCounts = useMemo(() => new Map(STAGES.map((stage) => [stage.key, periodRecords.filter((record) => record.stage === stage.key).length])), [periodRecords]);
+  const collectorCards = data?.collectors ?? [];
 
   return (
     <MainLayout>
-      <SuccessBurst show={Boolean(success)} text={success} />
-      <div className="mx-auto max-w-[1600px] space-y-6">
-        <section className="relative overflow-hidden rounded-[2rem] text-white shadow-xl" style={{ background: `linear-gradient(135deg, ${theme.primaryDark}, ${theme.primary}, ${theme.accent})` }}>
-          <div className="tcs-animated-gradient grid gap-8 p-6 sm:p-8 lg:grid-cols-[1.25fr_.75fr] lg:items-center">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-white/75">Controlled document workflow</p>
-              <h1 className="mt-3 text-3xl font-black sm:text-4xl">Timesheet Command Center</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-white/85 sm:text-base">Track every physical timesheet from location preparation through final submission. Danielle and Jennifer have full access to complete any workflow step, while supporting roles remain limited to their assigned responsibilities.</p>
-              <div className="mt-5 flex flex-wrap items-center gap-3">
-                <PrimaryButton onClick={createNextBatch}><Plus className="h-4 w-4" /> Create {servicePeriod} Batch</PrimaryButton>
-                {canManageSystem && <button onClick={() => setShowRoutes(true)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/30 bg-white/10 px-4 py-2.5 text-sm font-black text-white hover:bg-white/20"><Settings2 className="h-4 w-4" /> Submission Routing</button>}
+      <div className="tscc">
+        <section className="tscc-shell">
+          <header className="tscc-hero">
+            <div className="tscc-hero-copy">
+              <p className="tscc-kicker">Operations / Compliance / Children / Brighter Tomorrows</p>
+              <h1>Timesheet Command Center</h1>
+              <p className="tscc-subtitle">From signatures to submission — one controlled chain of custody</p>
+              <div className="tscc-hero-actions">
+                {data?.actor.canCreateBatch && <button className="tscc-btn primary" disabled={saving} onClick={() => void runAction({ action: "createBatch", servicePeriod: currentServicePeriod() }, `Current ${currentServicePeriod()} batch created from active subsidized children.`)}><Plus size={15}/> Create {currentServicePeriod()} Batch</button>}
+                {data?.actor.canManageRoutes && <button className="tscc-btn" onClick={() => setShowRoutes(true)}><Settings2 size={15}/> Department Routing</button>}
+                <button className="tscc-btn" disabled={loading} onClick={() => void load()}><RefreshCw size={15}/> Refresh Live Data</button>
               </div>
             </div>
-            <FloatingOperationsGraphic variant="timesheets" />
-          </div>
-        </section>
+            <div className="tscc-live-card">
+              <div className="tscc-live-row"><strong>Live Database</strong><span className="tscc-live-dot" /></div>
+              <small>Every checkoff, Dynasty review, personal handoff date, certificate completion, scan, and final email is written to the shared Supabase timesheet record and audit trail.</small>
+            </div>
+          </header>
 
-        <DemoNotice />
-
-
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          <StatCard label="In Licensee Prep" value={licenseeCount} helper="Signatures and attendance details" icon={<Signature className="h-5 w-5" />} tone="red" />
-          <StatCard label="Waiting to Scan" value={scanCount} helper="Danielle, Jennifer, or Tony" icon={<ScanLine className="h-5 w-5" />} tone="blue" />
-          <StatCard label="Waiting to Email" value={emailCount} helper="Danielle or Jennifer" icon={<Mail className="h-5 w-5" />} tone="purple" />
-          <StatCard label="Complete" value={completeCount} helper="Successfully submitted" icon={<CheckCircle2 className="h-5 w-5" />} tone="emerald" />
-          <StatCard label="Total Showing" value={visible.length} helper={selectedHubLocation === "All Locations" ? "All locations" : selectedHubLocation} icon={<FileCheck2 className="h-5 w-5" />} tone="slate" />
-        </section>
-
-        <SectionCard title="Workflow Journey" description="Each card lights up when a timesheet reaches that handoff">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
-            {timesheetStageOrder.map((stage, index) => {
-              const count = visible.filter((item) => item.stage === stage).length;
-              const detail = stageDetails[stage];
-              return <div key={stage} className="relative"><AnimatedStep active={count > 0 && stage !== "Complete"} complete={stage === "Complete" && count > 0} icon={detail.icon} title={detail.title} helper={`${count} currently here`} index={index} />{index < timesheetStageOrder.length - 1 && <ChevronRight className="absolute -right-3 top-1/2 z-10 hidden h-5 w-5 -translate-y-1/2 text-slate-300 xl:block" />}</div>;
-            })}
-          </div>
-        </SectionCard>
-
-        <SectionCard title="Timesheet Tracker" description="Open a record to complete the next authorized step" action={<StatusBadge tone={visible.some((item) => item.stage !== "Complete") ? "amber" : "green"}>{visible.filter((item) => item.stage !== "Complete").length} still in progress</StatusBadge>}>
-          <div className="grid gap-3 border-b border-slate-100 pb-5 md:grid-cols-[1fr_240px]">
-            <label className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} pl-10`} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search child, family, location, or funding source" /></label>
-            <select className={inputClass} value={stageFilter} onChange={(event) => setStageFilter(event.target.value as "All" | TimesheetStage)}><option value="All">All workflow stages</option>{timesheetStageOrder.map((stage) => <option key={stage}>{stage}</option>)}</select>
-          </div>
-          <div className="mt-5 space-y-3">
-            <AnimatePresence initial={false}>
-              {visible.map((record) => {
-                const route = routeFor(record);
-                const configured = Boolean(route?.department && route?.email);
-                const progress = Math.round((stageIndex(record.stage) / (timesheetStageOrder.length - 1)) * 100);
-                return (
-                  <motion.button key={record.id} layout initial={reducedMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} onClick={() => setSelected(record)} className="tcs-hover-lift w-full rounded-2xl border border-slate-200 p-4 text-left">
-                    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                      <div className="flex min-w-0 items-start gap-3">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white"><FileClock className="h-6 w-6" /></div>
-                        <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-black text-slate-950">{record.childName}</p><StatusBadge tone={statusTone(record.stage)}>{record.stage}</StatusBadge>{!configured && <StatusBadge tone="red">Routing not set</StatusBadge>}</div><p className="mt-1 text-sm font-semibold text-slate-600">{record.servicePeriod} • {record.fundingSource}</p><p className="mt-1 text-xs text-slate-500">{record.location}</p></div>
-                      </div>
-                      <div className="min-w-[260px] xl:w-[34%]"><div className="flex items-center justify-between text-xs font-black text-slate-500"><span>{stageDetails[record.stage].title}</span><span>{progress}%</span></div><div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-100"><motion.div className="h-full rounded-full" style={{ background: record.stage === "Complete" ? "#16a34a" : "var(--theme-600)" }} initial={reducedMotion ? false : { width: 0 }} animate={{ width: `${progress}%` }} transition={{ duration: .6 }} /></div></div>
-                      <span className="inline-flex items-center gap-2 text-xs font-black text-emerald-800">Open workflow <ChevronRight className="h-4 w-4" /></span>
-                    </div>
-                  </motion.button>
-                );
+          <div className="tscc-workflow-wrap">
+            <div className="tscc-workflow">
+              {STAGES.map((stage, index) => {
+                const count = workflowCounts.get(stage.key) ?? 0;
+                const done = stage.key === "Complete" && count > 0;
+                const active = count > 0 && !done;
+                return <div className={`tscc-step ${done ? "done" : active ? "active" : ""}`} key={stage.key}><div className="tscc-step-top"><span className="tscc-step-num">{done ? "✓" : index + 1}</span><strong>{stage.title}</strong></div><small>{stage.helper}<br/><b>{count}</b> currently here</small></div>;
               })}
-            </AnimatePresence>
+            </div>
           </div>
-        </SectionCard>
 
-        {selected && (
-          <Modal title={`${selected.childName} • ${selected.servicePeriod}`} description={`${selected.location} • ${selected.fundingSource}`} onClose={() => setSelected(null)} footer={<SecondaryButton onClick={() => setSelected(null)}>Close</SecondaryButton>}>
-            <TimesheetWorkflow
-              record={selected}
-              route={routeFor(selected)}
-              role={userRole}
-              actor={actorName}
-              permission={permission}
-              roleMessage={roleMessage}
-              update={(updater, message) => updateRecord(selected.id, updater, message)}
-              editRoute={(route) => route ? setEditingRoute(route) : setShowRoutes(true)}
-              now={now}
-            />
-          </Modal>
-        )}
+          <div className="tscc-body">
+            {(message || error) && <div className="tscc-alert"><span>{error ? `⚠ ${error}` : `✓ ${message}`}</span><button onClick={() => { setMessage(""); setError(""); }}><X size={14}/></button></div>}
 
-        {canManageSystem && showRoutes && (
-          <Modal title="Timesheet Submission Routing" description="Enter the exact department and email for each location and funding source. Blank starter fields are intentional—we do not want to guess live submission information." onClose={() => setShowRoutes(false)} footer={<SecondaryButton onClick={() => setShowRoutes(false)}>Close</SecondaryButton>}>
-            <div className="space-y-3">
-              {routes.map((route) => <button key={route.id} onClick={() => setEditingRoute(route)} className="tcs-hover-lift flex w-full items-start justify-between gap-3 rounded-2xl border border-slate-200 p-4 text-left"><div><div className="flex flex-wrap items-center gap-2"><p className="font-black text-slate-950">{route.location}</p><StatusBadge tone="blue">{route.fundingSource}</StatusBadge></div><p className="mt-1 text-sm text-slate-500">{route.department || "Department not entered"}</p><p className="text-xs text-slate-400">{route.email || "Email not entered"}</p></div><Pencil className="mt-1 h-4 w-4 text-slate-400" /></button>)}
+            <section className="tscc-kpis">
+              <Kpi label="Total Timesheets" value={stats.total} helper={periodFilter} />
+              <Kpi label="Missing Sign-Off" value={stats.missing} helper="location follow-up" />
+              <Kpi label="Waiting for Dynasty" value={stats.review} helper="accountability review" />
+              <Kpi label="Ready for Handoff" value={stats.handoff} helper="personally to Jennifer" />
+              <Kpi label="In Fill-Out" value={stats.fill} helper="Jennifer + Danielle" />
+              <Kpi label="Waiting to Scan" value={stats.scan} helper="Danielle or Anthony" />
+              <Kpi label="Waiting for Jennifer" value={stats.email} helper={`${stats.complete} complete`} />
+            </section>
+
+            <div className="tscc-grid">
+              <section className="tscc-panel">
+                <div className="tscc-panel-head"><div><h2>Location Collectors</h2><p>Each assigned person checks off every child whose physical timesheet has been signed.</p></div><span className="tscc-chip green"><Signature size={12}/> child-by-child</span></div>
+                <div className="tscc-panel-body">
+                  <div className="tscc-collectors">
+                    {collectorCards.map((collector) => {
+                      const rows = periodRecords.filter((record) => record.locationSlug === collector.slug);
+                      const signed = rows.filter((record) => record.collectorSigned).length;
+                      const pct = rows.length ? Math.round((signed / rows.length) * 100) : 0;
+                      const canCollect = data?.actor.collectorSlug === collector.slug;
+                      return <article className="tscc-collector" key={collector.slug}>
+                        <div className="tscc-collector-title"><div><strong>{collector.collector}</strong><small>{collector.location}</small></div><span className="tscc-count">{signed}/{rows.length}</span></div>
+                        <div className="tscc-progress"><i style={{ width: `${pct}%` }}/></div>
+                        <div className="tscc-child-list">
+                          {rows.length === 0 && <div className="tscc-empty">No timesheets for {periodFilter}.</div>}
+                          {rows.map((record) => <div className="tscc-child" key={record.id}>
+                            <input type="checkbox" aria-label={`Signed form for ${record.childName}`} checked={record.collectorSigned} disabled={!canCollect || saving || stageIndex(record.stage) > 1} onChange={(event) => void runAction({ action: "markSigned", id: record.id, signed: event.target.checked }, `${record.childName} ${event.target.checked ? "checked off as signed" : "returned to unsigned"}.`)} />
+                            <div><span className="tscc-child-name">{record.childName}</span>{record.needsCcrcStage && <span className="tscc-needs-stage">CCRC stage still needs classification</span>}</div>
+                            <select value={record.timesheetType === "CCRC" ? "" : record.timesheetType} disabled={saving || stageIndex(record.stage) >= 5} onChange={(event) => event.target.value && void runAction({ action: "setType", id: record.id, timesheetType: event.target.value }, `${record.childName} classified as ${event.target.value}.`)}><option value="">Choose type</option>{COMMAND_TYPES.map((type) => <option key={type}>{type}</option>)}</select>
+                          </div>)}
+                        </div>
+                      </article>;
+                    })}
+                  </div>
+                </div>
+              </section>
+
+              <section className="tscc-panel">
+                <div className="tscc-panel-head"><div><h2>Timesheet Batches & Pipeline</h2><p>Track the five agency timesheet types through every step.</p></div><span className="tscc-chip gold"><ClipboardCheck size={12}/> {periodFilter}</span></div>
+                <div className="tscc-panel-body tscc-table-wrap">
+                  <table className="tscc-pipeline"><thead><tr><th>Type</th><th>Missing</th><th>Dynasty</th><th>Handoff</th><th>Fill</th><th>Scan</th><th>Email</th></tr></thead><tbody>
+                    {COMMAND_TYPES.map((type) => {
+                      const rows = periodRecords.filter((record) => record.timesheetType === type);
+                      return <tr key={type}><td><strong>{type}</strong></td><td><span className="tscc-cell red">{rows.filter((r) => !r.collectorSigned).length}</span></td><td><span className="tscc-cell gold">{rows.filter((r) => r.stage === "Dynasty Review").length}</span></td><td><span className="tscc-cell gold">{rows.filter((r) => r.stage === "Personal Handoff").length}</span></td><td><span className="tscc-cell blue">{rows.filter((r) => r.stage === "Jen + Danielle Fill Out").length}</span></td><td><span className="tscc-cell green">{rows.filter((r) => r.stage === "Scan & Send to Jennifer").length}</span></td><td><span className="tscc-cell plum">{rows.filter((r) => r.stage === "Jennifer Email" || r.stage === "Complete").length}</span></td></tr>;
+                    })}
+                    {periodRecords.some((record) => record.timesheetType === "CCRC") && <tr><td><strong>CCRC — Needs Stage</strong></td><td><span className="tscc-cell red">{periodRecords.filter((r) => r.timesheetType === "CCRC").length}</span></td><td colSpan={5} style={{textAlign:"left",color:"#9a4d40",fontWeight:900}}>Choose Stage 1 or Stage 2 before final submission.</td></tr>}
+                  </tbody></table>
+                </div>
+              </section>
             </div>
-          </Modal>
-        )}
 
-        {canManageSystem && editingRoute && (
-          <Modal title="Edit Submission Route" description={`${editingRoute.location} • ${editingRoute.fundingSource}`} onClose={() => setEditingRoute(null)} footer={<><SecondaryButton onClick={() => setEditingRoute(null)}>Cancel</SecondaryButton><PrimaryButton onClick={saveRoute}>Save Route</PrimaryButton></>}>
-            <div className="space-y-4">
-              <Field label="Correct department"><input className={inputClass} value={editingRoute.department} onChange={(event) => setEditingRoute({ ...editingRoute, department: event.target.value })} placeholder="Enter exact department name" /></Field>
-              <Field label="Submission email"><input type="email" className={inputClass} value={editingRoute.email} onChange={(event) => setEditingRoute({ ...editingRoute, email: event.target.value })} placeholder="Enter exact department email" /></Field>
-              <Field label="Submission deadline"><input className={inputClass} value={editingRoute.deadline} onChange={(event) => setEditingRoute({ ...editingRoute, deadline: event.target.value })} placeholder="Example: 5th business day" /></Field>
-              <Field label="File naming format"><input className={inputClass} value={editingRoute.fileNameFormat} onChange={(event) => setEditingRoute({ ...editingRoute, fileNameFormat: event.target.value })} /></Field>
-              <Field label="Notes"><textarea className={`${inputClass} min-h-24`} value={editingRoute.notes} onChange={(event) => setEditingRoute({ ...editingRoute, notes: event.target.value })} /></Field>
+            <div className="tscc-grid">
+              <QueuePanel title="Dynasty Review & Personal Handoff" helper="Dynasty verifies every form, then personally hands the batch to Jennifer — no third-party drop-off." icon={<Truck size={16}/>} rows={periodRecords.filter((record) => record.stage === "Dynasty Review" || record.stage === "Personal Handoff")} onOpen={setSelected} />
+              <QueuePanel title="Jennifer + Danielle Completion" helper="Fill out every timesheet from the child certificate. Tuition is charged regardless of attendance." icon={<PenLine size={16}/>} rows={periodRecords.filter((record) => record.stage === "Jen + Danielle Fill Out")} onOpen={setSelected} />
             </div>
-          </Modal>
-        )}
+
+            <div className="tscc-grid">
+              <QueuePanel title="Scan Queue" helper="Danielle or Anthony scans completed paperwork and sends the scan to Jennifer." icon={<ScanLine size={16}/>} rows={periodRecords.filter((record) => record.stage === "Scan & Send to Jennifer")} onOpen={setSelected} />
+              <QueuePanel title="Jennifer Department Email Queue" helper="Jennifer is the final sender to the configured department for CCRC Stage 1, CCRC Stage 2, CCCC, DCFS, and Respite." icon={<Mail size={16}/>} rows={periodRecords.filter((record) => record.stage === "Jennifer Email")} onOpen={setSelected} />
+            </div>
+
+            <section className="tscc-panel tscc-records">
+              <div className="tscc-panel-head"><div><h2>Master Timesheet Ledger</h2><p>Every child, location, type, current stage, and recorded handoff date in one place.</p></div><span className="tscc-chip blue"><FileCheck2 size={12}/> {filtered.length} showing</span></div>
+              <div className="tscc-panel-body">
+                <div className="tscc-toolbar">
+                  <label style={{position:"relative"}}><Search size={14} style={{position:"absolute",left:11,top:12,color:"#8d7f73"}}/><input className="tscc-input" style={{paddingLeft:32}} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search child, family, location, type, or stage"/></label>
+                  <select className="tscc-select" value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value)}><option>All Periods</option>{periods.map((period) => <option key={period}>{period}</option>)}</select>
+                  <select className="tscc-select" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}><option>All Locations</option>{collectorCards.map((collector) => <option key={collector.slug} value={collector.slug}>{collector.location}</option>)}</select>
+                </div>
+                <div className="tscc-toolbar" style={{gridTemplateColumns:"180px 1fr",marginTop:8}}>
+                  <select className="tscc-select" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option>All Types</option><option value="CCRC">CCRC — Needs Stage</option>{COMMAND_TYPES.map((type) => <option key={type}>{type}</option>)}</select>
+                  <div />
+                </div>
+                <div className="tscc-table-wrap" style={{marginTop:9}}><table className="tscc-table"><thead><tr><th>Child</th><th>Location</th><th>Type</th><th>Stage</th><th>Signed</th><th>Dynasty</th><th>Handoff Date</th><th>Completed</th><th>Scanned</th><th>Email</th><th></th></tr></thead><tbody>
+                  {filtered.map((record) => <tr key={record.id}><td><strong>{record.childName}</strong><br/><small>{record.familyName}</small></td><td>{record.location}</td><td>{record.timesheetType === "CCRC" ? <span className="tscc-chip red">Needs CCRC stage</span> : record.timesheetType}</td><td><span className={`tscc-chip ${stageTone(record.stage)}`}>{record.stage}</span></td><td>{record.collectorSigned ? "✓" : "—"}</td><td>{record.dynastyStatus}</td><td>{record.dynastyHandoffDate || "—"}</td><td>{record.completedBy || "—"}</td><td>{record.scannedBy || "—"}</td><td>{record.emailedBy || "—"}</td><td><button onClick={() => setSelected(record)}>Open Workflow</button></td></tr>)}
+                  {!filtered.length && <tr><td colSpan={11}><div className="tscc-empty">No live timesheets match these filters.</div></td></tr>}
+                </tbody></table></div>
+              </div>
+            </section>
+
+            <footer className="tscc-footer">People • Process • Compliance • Brighter Tomorrows</footer>
+          </div>
+        </section>
+
+        {loading && !data && <div className="tscc-modal-backdrop"><div className="tscc-modal" style={{maxWidth:420}}><div className="tscc-modal-body" style={{textAlign:"center",padding:35}}><RefreshCw className="animate-spin" style={{margin:"0 auto"}}/><h2 style={{marginTop:12}}>Loading the live timesheet database…</h2></div></div></div>}
+        {selected && data && <RecordModal record={selected} actor={data.actor} routes={data.routes} saving={saving} onClose={() => setSelected(null)} onAction={runAction} />}
+        {showRoutes && data && <RouteModal routes={data.routes} saving={saving} onClose={() => setShowRoutes(false)} onSave={(type, route) => runAction({ action: "saveRoute", timesheetType: type, ...route }, `${type} department routing saved.`)} />}
       </div>
     </MainLayout>
   );
 }
 
-function TimesheetWorkflow({ record, route, role, actor, permission, roleMessage, update, editRoute, now }: {
-  record: TimesheetRecord;
-  route?: DepartmentRoute;
-  role: TestUserRole;
-  actor: string;
-  permission: (step: "prep" | "dynasty" | "receive" | "complete" | "scan" | "email") => boolean;
-  roleMessage: (step: "prep" | "dynasty" | "receive" | "complete" | "scan" | "email") => string;
-  update: (updater: (record: TimesheetRecord) => TimesheetRecord, message?: string) => void;
-  editRoute: (route?: DepartmentRoute) => void;
-  now: () => string;
-}) {
-  const routeReady = Boolean(route?.department && route?.email);
+function Kpi({ label, value, helper }: { label: string; value: number; helper: string }) {
+  return <div className="tscc-kpi"><span>{label}</span><strong>{value}</strong><small>{helper}</small></div>;
+}
+
+function QueuePanel({ title, helper, icon, rows, onOpen }: { title: string; helper: string; icon: React.ReactNode; rows: RecordItem[]; onOpen: (record: RecordItem) => void }) {
+  return <section className="tscc-panel"><div className="tscc-panel-head"><div><h2 style={{display:"flex",alignItems:"center",gap:7}}>{icon}{title}</h2><p>{helper}</p></div><span className="tscc-count" style={{background:"#e7d7c1",color:"#5c4639"}}>{rows.length}</span></div><div className="tscc-panel-body"><div className="tscc-queue">{rows.slice(0,8).map((record) => <div className="tscc-queue-row" key={record.id}><div><strong>{record.childName}</strong><span>{record.location} • {record.timesheetType}</span></div><button className="tscc-btn light" style={{minHeight:30}} onClick={() => onOpen(record)}>Open</button></div>)}{rows.length === 0 && <div className="tscc-empty">Nothing waiting here right now.</div>}{rows.length > 8 && <div className="tscc-empty">+ {rows.length - 8} more in the master ledger</div>}</div></div></section>;
+}
+
+function RecordModal({ record, actor, routes, saving, onClose, onAction }: { record: RecordItem; actor: ActorCaps; routes: Record<CommandType, RouteConfig>; saving: boolean; onClose: () => void; onAction: (body: Record<string, unknown>, successText: string) => Promise<void> }) {
+  const [handoffDate, setHandoffDate] = useState(record.dynastyHandoffDate || new Date().toISOString().slice(0,10));
+  const [certificateVerified, setCertificateVerified] = useState(record.certificateVerified);
+  const [tuitionAck, setTuitionAck] = useState(record.tuitionPolicyAcknowledged);
+  const [scanChecked, setScanChecked] = useState(record.scanQualityChecked);
   const step = stageIndex(record.stage);
-  const [initials, setInitials] = useState(record.licenseeInitials);
+  const route = record.timesheetType === "CCRC" ? null : routes[record.timesheetType];
+  const canCollect = actor.collectorSlug === record.locationSlug;
 
-  return (
-    <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-wider text-slate-400">Current workflow stage</p><p className="mt-1 text-xl font-black text-slate-950">{record.stage}</p></div><StatusBadge tone={record.stage === "Complete" ? "green" : "amber"}>Signed in: {actor}</StatusBadge></div>
-        <div className="mt-5 grid gap-2 sm:grid-cols-4 lg:grid-cols-7">{timesheetStageOrder.map((stage, index) => <div key={stage} className={`rounded-xl px-2 py-3 text-center text-[10px] font-black ${index < step || record.stage === "Complete" ? "bg-emerald-600 text-white" : index === step ? "bg-amber-400 text-amber-950" : "bg-white text-slate-400"}`}>{stageDetails[stage].title}</div>)}</div>
-      </div>
+  return <div className="tscc-modal-backdrop"><div className="tscc-modal">
+    <div className="tscc-modal-head"><div><h2>{record.childName}</h2><p>{record.location} • {record.servicePeriod} • {record.stage}</p></div><button className="tscc-close" onClick={onClose}><X size={16}/></button></div>
+    <div className="tscc-modal-body">
+      <div className="tscc-stage-card current"><h3><FileCheck2 size={16}/> Timesheet Type</h3><p>CCRC forms must be classified as Stage 1 or Stage 2 before Jennifer can submit them.</p><div className="tscc-stage-actions"><select className="tscc-select" style={{maxWidth:230}} value={record.timesheetType === "CCRC" ? "" : record.timesheetType} disabled={saving || step >= 5} onChange={(event) => event.target.value && void onAction({ action:"setType", id:record.id, timesheetType:event.target.value }, `${record.childName} classified as ${event.target.value}.`)}><option value="">Choose timesheet type</option>{COMMAND_TYPES.map((type) => <option key={type}>{type}</option>)}</select>{record.needsCcrcStage && <span className="tscc-chip red"><AlertTriangle size={11}/> CCRC stage required</span>}</div></div>
 
-      <WorkflowSection title="1. Location licensee preparation" helper="The location licensee normally prepares the form; Danielle or Jennifer can step in when needed." icon={<Signature className="h-5 w-5" />} locked={!permission("prep")} lockMessage={roleMessage("prep")}>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {checklistLabels.map(([key, title, helper]) => <label key={key} className={`flex items-start gap-3 rounded-2xl border p-4 ${record.prep[key] ? "border-emerald-200 bg-emerald-50" : "border-slate-200"}`}><input type="checkbox" disabled={!permission("prep")} checked={record.prep[key]} onChange={(event) => update((current) => ({ ...current, prep: { ...current.prep, [key]: event.target.checked } }))} className="mt-1 h-5 w-5" /><span><span className="block font-black text-slate-900">{title}</span><span className="text-xs leading-5 text-slate-500">{helper}</span></span></label>)}
-        </div>
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row"><input className={inputClass} disabled={!permission("prep")} value={initials} onChange={(event) => setInitials(event.target.value.toUpperCase())} placeholder="Licensee initials" /><PrimaryButton disabled={!permission("prep") || !prepComplete(record.prep) || !initials.trim()} onClick={() => update((current) => ({ ...current, licenseeInitials: initials.trim(), licenseeSubmittedAt: now(), dynastyStatus: "Awaiting" }), "Sent to Dynasty review")}>Ready for Dynasty</PrimaryButton></div>
-      </WorkflowSection>
+      <StageCard number={1} title="Location Sign-Off" helper={`${record.collector} is assigned to get the form signed and check off this child.`} done={record.collectorSigned} current={step === 0} icon={<Signature size={16}/>}>
+        <div className="tscc-stage-actions"><button className={`tscc-btn ${record.collectorSigned ? "light" : "green"}`} disabled={!canCollect || saving || step > 1} onClick={() => void onAction({ action:"markSigned", id:record.id, signed:!record.collectorSigned }, `${record.childName} ${record.collectorSigned ? "returned to unsigned" : "checked off as signed"}.`)}>{record.collectorSigned ? "Undo Signed Checkoff" : "✓ Check Off Signed Form"}</button><span className="tscc-chip">{record.collectorSignedAt ? formatStamp(record.collectorSignedAt) : "Not signed off yet"}</span></div>
+      </StageCard>
 
-      <WorkflowSection title="2. Dynasty Lara accountability review" helper="Dynasty normally verifies the batch; Danielle or Jennifer can also complete or correct this review." icon={<ClipboardCheck className="h-5 w-5" />} locked={!permission("dynasty")} lockMessage={roleMessage("dynasty")}>
-        <div className="flex flex-wrap gap-2"><button disabled={!permission("dynasty")} onClick={() => update((current) => ({ ...current, dynastyStatus: "Needs Correction", dynastyInitials: role === "Dynasty" ? "DL" : role === "Danielle" ? "DM" : role === "Jennifer" ? "J" : "ADM", dynastyReviewedAt: now(), licenseeInitials: "", licenseeSubmittedAt: "", notes: `${current.notes}\nReturned to location for correction.`.trim() }), "Returned for correction")} className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-black text-red-800 disabled:opacity-40">Needs Correction</button><PrimaryButton disabled={!permission("dynasty") || !record.licenseeSubmittedAt} onClick={() => update((current) => ({ ...current, dynastyStatus: "Accounted For", dynastyInitials: role === "Dynasty" ? "DL" : role === "Danielle" ? "DM" : role === "Jennifer" ? "J" : "ADM", dynastyReviewedAt: now() }), `${actor} marked it accounted for`)}>Accounted For</PrimaryButton></div>
-        <p className="mt-3 text-xs text-slate-500">Status: {record.dynastyStatus} {record.dynastyReviewedAt && `• ${record.dynastyReviewedAt}`}</p>
-      </WorkflowSection>
+      <StageCard number={2} title="Dynasty Review" helper="All timesheets go to Dynasty. She confirms every form is accounted for and signed." done={step > 1 || record.dynastyStatus === "Accounted For"} current={step === 1} icon={<ClipboardCheck size={16}/>}>
+        <div className="tscc-stage-actions"><button className="tscc-btn red" disabled={!actor.canDynastyReview || saving || !record.collectorSigned} onClick={() => void onAction({ action:"dynastyReview", id:record.id, status:"Needs Correction" }, `${record.childName} returned to the location for correction.`)}>Needs Correction</button><button className="tscc-btn green" disabled={!actor.canDynastyReview || saving || !record.collectorSigned} onClick={() => void onAction({ action:"dynastyReview", id:record.id, status:"Accounted For" }, `${record.childName} accounted for by Dynasty.`)}>Accounted For + Signed</button><span className="tscc-chip">{record.dynastyReviewedAt ? formatStamp(record.dynastyReviewedAt) : record.dynastyStatus}</span></div>
+      </StageCard>
 
-      <WorkflowSection title="3. Batch received for completion" helper="Danielle or Jennifer records that the verified batch is ready to be filled out." icon={<UserCheck className="h-5 w-5" />} locked={!permission("receive")} lockMessage={roleMessage("receive")}>
-        <PrimaryButton disabled={!permission("receive") || record.dynastyStatus !== "Accounted For"} onClick={() => update((current) => ({ ...current, jenniferReceivedAt: now(), batchReceivedBy: actor }), `Batch receipt recorded by ${actor}`)}>Confirm Batch Received</PrimaryButton>
-        <p className="mt-3 text-xs text-slate-500">Received by: {record.batchReceivedBy || "Not recorded"} {record.jenniferReceivedAt && `• ${record.jenniferReceivedAt}`}</p>
-      </WorkflowSection>
+      <StageCard number={3} title="Dynasty → Jennifer Personal Handoff" helper="Dynasty gives the physical timesheets directly to Jennifer. No third-party drop-off. The completion date is permanently recorded." done={step > 2} current={step === 2} icon={<Truck size={16}/>}>
+        <div className="tscc-note" style={{marginBottom:9}}>PERSONAL HANDOFF ONLY — Dynasty to Jennifer.</div><div className="tscc-stage-actions"><input type="date" value={handoffDate} onChange={(event) => setHandoffDate(event.target.value)} disabled={!actor.canDynastyHandoff || saving}/><button className="tscc-btn primary" disabled={!actor.canDynastyHandoff || saving || record.dynastyStatus !== "Accounted For"} onClick={() => void onAction({ action:"dynastyHandoff", id:record.id, handoffDate }, `Personal handoff to Jennifer recorded for ${handoffDate}.`)}>Confirm Personal Handoff</button>{record.dynastyHandedToJenniferAt && <span className="tscc-chip green">Recorded {record.dynastyHandoffDate}</span>}</div>
+      </StageCard>
 
-      <WorkflowSection title="4. Danielle and Jennifer fill out timesheets" helper="Danielle or Jennifer can complete and verify the timesheet." icon={<FilePenLine className="h-5 w-5" />} locked={!permission("complete")} lockMessage={roleMessage("complete")}>
-        <PrimaryButton disabled={!permission("complete") || !record.jenniferReceivedAt} onClick={() => update((current) => ({ ...current, completedBy: actor, completedAt: now() }), `Timesheet completed by ${actor}`)}>Mark Filled Out</PrimaryButton>
-        <p className="mt-3 text-xs text-slate-500">Completed by: {record.completedBy || "Not completed"} {record.completedAt && `• ${record.completedAt}`}</p>
-      </WorkflowSection>
+      <StageCard number={4} title="Jennifer + Danielle Fill Out" helper="Use the child's certificate to complete the timesheet." done={step > 3} current={step === 3} icon={<PenLine size={16}/>}>
+        <div className="tscc-tuition">Tuition is charged regardless of attendance.</div><div className="tscc-stage-actions" style={{marginTop:9}}><label className="tscc-check"><input type="checkbox" checked={certificateVerified} onChange={(event) => setCertificateVerified(event.target.checked)} disabled={!actor.canFillOut || saving}/><span>Child certificate reviewed and correct program/rates verified</span></label><label className="tscc-check"><input type="checkbox" checked={tuitionAck} onChange={(event) => setTuitionAck(event.target.checked)} disabled={!actor.canFillOut || saving}/><span>Tuition policy applied regardless of attendance</span></label><button className="tscc-btn primary" disabled={!actor.canFillOut || saving || !certificateVerified || !tuitionAck || !record.dynastyHandedToJenniferAt} onClick={() => void onAction({ action:"fillOut", id:record.id, certificateVerified, tuitionPolicyAcknowledged:tuitionAck }, `${record.childName} timesheet marked filled out from the certificate.`)}>Mark Timesheet Filled Out</button>{record.completedAt && <span className="tscc-chip green">{record.completedBy} • {formatStamp(record.completedAt)}</span>}</div>
+      </StageCard>
 
-      <WorkflowSection title="5. Scan the completed form" helper="Danielle, Jennifer, or Tony can scan and quality-check the completed packet." icon={<ScanLine className="h-5 w-5" />} locked={!permission("scan")} lockMessage={roleMessage("scan")}>
-        <label className="mb-4 flex items-center gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" disabled={!permission("scan")} checked={record.scanQualityChecked} onChange={(event) => update((current) => ({ ...current, scanQualityChecked: event.target.checked }))} className="h-5 w-5" /><span><span className="block font-black text-slate-900">Scan quality checked</span><span className="text-xs text-slate-500">All pages are readable, upright, and complete</span></span></label>
-        <PrimaryButton disabled={!permission("scan") || !record.completedAt || !record.scanQualityChecked} onClick={() => update((current) => ({ ...current, scannedBy: actor, scannedAt: now(), sentToJenniferAt: now() }), `Scanned packet recorded by ${actor}`)}>Mark Scanned & Ready</PrimaryButton>
-        <p className="mt-3 text-xs text-slate-500">Scanned by: {record.scannedBy || "Not scanned"} {record.scannedAt && `• ${record.scannedAt}`}</p>
-      </WorkflowSection>
+      <StageCard number={5} title="Danielle or Anthony Scan + Send to Jennifer" helper="Scan all pages, confirm quality, then send the completed scan to Jennifer." done={step > 4} current={step === 4} icon={<ScanLine size={16}/>}>
+        <div className="tscc-stage-actions"><label className="tscc-check"><input type="checkbox" checked={scanChecked} onChange={(event) => setScanChecked(event.target.checked)} disabled={!actor.canScan || saving}/><span>Scan is readable, upright, complete, and includes every page</span></label><button className="tscc-btn primary" disabled={!actor.canScan || saving || !scanChecked || !record.completedAt} onClick={() => void onAction({ action:"scan", id:record.id, scanQualityChecked:scanChecked }, `${record.childName} scanned and sent to Jennifer.`)}>Mark Scanned + Sent to Jen</button>{record.scannedAt && <span className="tscc-chip blue">{record.scannedBy} • {formatStamp(record.scannedAt)}</span>}</div>
+      </StageCard>
 
-      <WorkflowSection title="6. Email the correct department" helper="Danielle or Jennifer completes the final submission using the editable route for this location and funding source." icon={<Send className="h-5 w-5" />} locked={!permission("email")} lockMessage={roleMessage("email")}>
-        <div className={`rounded-2xl border p-4 ${routeReady ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className={`font-black ${routeReady ? "text-emerald-950" : "text-red-950"}`}>{routeReady ? route?.department : "Submission route not configured"}</p><p className={`mt-1 text-sm ${routeReady ? "text-emerald-800" : "text-red-800"}`}>{routeReady ? route?.email : "Enter the exact department and email before final submission."}</p></div><button onClick={() => editRoute(route)} className="inline-flex items-center gap-2 rounded-xl border border-current px-3 py-2 text-xs font-black"><Pencil className="h-3.5 w-3.5" /> Edit route</button></div></div>
-        <label className="my-4 flex items-center gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" disabled={!permission("email")} checked={record.attachmentConfirmed} onChange={(event) => update((current) => ({ ...current, attachmentConfirmed: event.target.checked }))} className="h-5 w-5" /><span><span className="block font-black text-slate-900">Attachment confirmed</span><span className="text-xs text-slate-500">Correct child, service period, and all pages attached</span></span></label>
-        <PrimaryButton disabled={!permission("email") || !record.sentToJenniferAt || !record.attachmentConfirmed || !routeReady} onClick={() => update((current) => ({ ...current, department: route?.department ?? "", departmentEmail: route?.email ?? "", emailedByJenniferAt: now(), emailedBy: actor }), `Final email submitted by ${actor}`)}>Mark Emailed</PrimaryButton>
-        <p className="mt-3 text-xs text-slate-500">Emailed by: {record.emailedBy || "Not submitted"} {record.emailedByJenniferAt && `• ${record.emailedByJenniferAt}`}</p>
-      </WorkflowSection>
+      <StageCard number={6} title="Jennifer Emails Correct Department" helper="Jennifer is the final sender. Submission routing comes from the configured department for this timesheet type." done={record.stage === "Complete"} current={step === 5} icon={<Mail size={16}/>}>
+        {record.timesheetType === "CCRC" ? <div className="tscc-note">Choose CCRC Stage 1 or CCRC Stage 2 first.</div> : <div className={`tscc-note`}><strong>{route?.department || "Department not configured"}</strong><br/>{route?.email || "Email not configured"}{route?.deadline ? ` • ${route.deadline}` : ""}</div>}
+        <div className="tscc-stage-actions" style={{marginTop:9}}><button className="tscc-btn primary" disabled={!actor.canEmail || saving || !record.sentToJenniferAt || !route?.department || !route?.email} onClick={() => void onAction({ action:"email", id:record.id }, `${record.childName} marked emailed to the correct department by Jennifer.`)}>Mark Emailed to Department</button>{record.emailedAt && <span className="tscc-chip green">{record.emailedBy} • {formatStamp(record.emailedAt)}</span>}</div>
+      </StageCard>
 
-      {record.stage === "Complete" && <motion.div initial={{ opacity: 0, scale: .95 }} animate={{ opacity: 1, scale: 1 }} className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 text-center"><Sparkles className="mx-auto h-8 w-8 text-amber-500" /><p className="mt-2 text-xl font-black text-emerald-950">Timesheet complete!</p><p className="mt-1 text-sm text-emerald-800">Every required handoff and final submission has been recorded.</p></motion.div>}
-
-      <WorkflowSection title="Notes and correction history" helper="Internal operations notes only" icon={<AlertTriangle className="h-5 w-5" />}>
-        <textarea className={`${inputClass} min-h-28`} value={record.notes} onChange={(event) => update((current) => ({ ...current, notes: event.target.value }))} />
-      </WorkflowSection>
+      {record.stage === "Complete" && <div className="tscc-stage-card done" style={{textAlign:"center"}}><CheckCircle2 size={28} style={{margin:"0 auto",color:"#2f7652"}}/><h3 style={{justifyContent:"center",marginTop:7}}>Timesheet Complete</h3><p>Signed, reviewed by Dynasty, personally handed to Jennifer, filled out from the certificate, scanned, returned to Jennifer, and emailed to the department.</p></div>}
     </div>
-  );
+  </div></div>;
 }
 
-function WorkflowSection({ title, helper, icon, locked = false, lockMessage = "", children }: { title: string; helper: string; icon: React.ReactNode; locked?: boolean; lockMessage?: string; children: React.ReactNode }) {
-  return <section className="rounded-3xl border border-slate-200 p-5"><div className="mb-4 flex items-start gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800">{icon}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-black text-slate-950">{title}</h3>{locked && <StatusBadge tone="slate">Locked for this role</StatusBadge>}</div><p className="mt-1 text-sm leading-6 text-slate-500">{helper}</p></div></div>{locked && <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">{lockMessage}</div>}{children}</section>;
+function StageCard({ number, title, helper, done, current, icon, children }: { number: number; title: string; helper: string; done: boolean; current: boolean; icon: React.ReactNode; children: React.ReactNode }) {
+  return <section className={`tscc-stage-card ${done ? "done" : current ? "current" : ""}`}><h3><span className="tscc-step-num" style={{width:23,height:23,fontSize:9,background:done?"#347755":current?"#ad6a43":"#7e807b"}}>{done ? "✓" : number}</span>{icon}{title}</h3><p>{helper}</p>{children}</section>;
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label><span className="mb-1.5 block text-sm font-bold text-slate-700">{label}</span>{children}</label>;
+function RouteModal({ routes, saving, onClose, onSave }: { routes: Record<CommandType, RouteConfig>; saving: boolean; onClose: () => void; onSave: (type: CommandType, route: RouteConfig) => Promise<void> }) {
+  const [draft, setDraft] = useState<Record<CommandType, RouteConfig>>(() => JSON.parse(JSON.stringify(routes)));
+  return <div className="tscc-modal-backdrop"><div className="tscc-modal"><div className="tscc-modal-head"><div><h2>Department Email Routing</h2><p>Jennifer uses these live routes for final submission. No department or email is guessed.</p></div><button className="tscc-close" onClick={onClose}><X size={16}/></button></div><div className="tscc-modal-body"><div className="tscc-route-grid">{COMMAND_TYPES.map((type) => <section className="tscc-route-card" key={type}><h3>{type}</h3><label>Department<input value={draft[type].department} onChange={(event) => setDraft((current) => ({...current,[type]:{...current[type],department:event.target.value}}))} placeholder="Exact department name"/></label><label>Email<input type="email" value={draft[type].email} onChange={(event) => setDraft((current) => ({...current,[type]:{...current[type],email:event.target.value}}))} placeholder="Exact submission email"/></label><label>Deadline<input value={draft[type].deadline} onChange={(event) => setDraft((current) => ({...current,[type]:{...current[type],deadline:event.target.value}}))} placeholder="Optional deadline"/></label><label>File Name Format<input value={draft[type].fileNameFormat} onChange={(event) => setDraft((current) => ({...current,[type]:{...current[type],fileNameFormat:event.target.value}}))}/></label><button className="tscc-btn primary" style={{marginTop:9}} disabled={saving} onClick={() => void onSave(type,draft[type])}>Save {type} Route</button></section>)}</div></div></div></div>;
 }
