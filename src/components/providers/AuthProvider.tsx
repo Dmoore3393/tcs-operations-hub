@@ -66,6 +66,13 @@ function isTrainingAdminProfile(profile: StaffAccessProfile | null) {
   return trainingAdminNames.has((profile.full_name || "").trim().toLowerCase());
 }
 
+function isAssignedTimesheetStaff(profile: StaffAccessProfile | null) {
+  if (!profile) return false;
+  const name = (profile.full_name || "").trim().toLowerCase();
+  return ["nathaly", "dynasty", "latrice", "danielle", "jennifer", "heather", "anthony", "tony"].some((firstName) => new RegExp(`\\b${firstName}\\b`).test(name))
+    || /\bnoah\b/.test(name);
+}
+
 export function normalizedStaffRole(role = "") {
   return normalizeAccessRole(role);
 }
@@ -92,6 +99,7 @@ export function isApprovedPilotRole(role = "") {
 
 export function canAccessRoute(profile: StaffAccessProfile | null, pathname: string) {
   if (!profile) return false;
+  if (pathname === "/timesheets" && isAssignedTimesheetStaff(profile)) return true;
   if (isOwnerRole(profile.role)) return true;
   if (isLicenseeRole(profile.role)) return !ownerOnlyRoutes.has(pathname);
   if (isEmployeeRole(profile.role)) return employeeCanAccessRoute(profile.permissions ?? [], pathname);
