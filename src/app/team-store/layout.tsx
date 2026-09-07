@@ -1,5 +1,6 @@
 "use client";
 
+import "./readable.css";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -22,5 +23,5 @@ export default function TeamStoreLayout({ children }: { children: React.ReactNod
     return () => document.removeEventListener("click", routeTrainingActions, true);
   }, [router]);
 
-  return children;
+  return <div className="team-store-readable">{children}</div>;
 }
