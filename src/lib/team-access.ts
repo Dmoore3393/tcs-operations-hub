@@ -146,13 +146,13 @@ export const ROLE_PERMISSION_SUMMARIES: Record<AccessRole, string[]> = {
   ],
   "Location Licensee": [
     "Operational access for the assigned location only",
-    "Children, schedules, ratios, meals, KidKare, internal reports, employee/child files, transportation fees, enrollment, digital forms, compliance, work plans, and the Student Store for that location",
+    "Children, schedules, ratios, meals, KidKare, internal reports, employee/child files, transportation fees, enrollment, digital forms, compliance, work plans, Student Store, and location Team Store rewards",
     "Prepare location Timesheets and send them into the workflow",
-    "No Team Access, global Settings, role management, or other-location records",
+    "No Team Access, global Settings, role management, company training setup, or other-location records",
   ],
   Employee: [
     "Invited by email and assigned to one or more work locations",
-    "Only sees the operational tools individually approved by an Owner/Admin",
+    "Only sees the operational tools individually approved by an Owner/Admin, plus the Team Store, Training Center, Employee Lounge, and Bulletin Board",
     "No Team Access, global Settings, role management, security controls, or company-wide administration",
     "No KidKare or Timesheet access; those tools are limited to Owner/Admin and Location Licensee accounts",
     "No transportation billing, confidential employee files, or confidential child files",
@@ -175,7 +175,7 @@ const routePermissionMap: Record<string, EmployeePermission> = {
   "/ai-director": "ai_assistant",
 };
 
-const employeeAlwaysAllowedRoutes = new Set(["/", "/employee-lounge", "/employee-bulletin", "/login", "/accept-invite"]);
+const employeeAlwaysAllowedRoutes = new Set(["/", "/employee-lounge", "/employee-bulletin", "/team-store", "/login", "/accept-invite"]);
 
 export function employeeCanAccessRoute(permissions: string[], pathname: string) {
   if (employeeAlwaysAllowedRoutes.has(pathname)) return true;
@@ -190,6 +190,11 @@ function hasAnyPermission(permissions: string[], required: EmployeePermission[])
 export function employeeCanReadState(permissions: string[], stateKey: string) {
   switch (stateKey) {
     case "tcs-employee-bulletin-v1":
+    case "tcs-team-rewards-v1":
+    case "tcs-team-reward-orders-v1":
+    case "tcs-team-xp-ledger-v1":
+    case "tcs-team-trainings-v1":
+    case "tcs-team-training-completions-v1":
       return true;
     case "tcs-store-products-v1":
     case "tcs-gator-ledger-v1":
@@ -229,6 +234,13 @@ export function employeeCanReadState(permissions: string[], stateKey: string) {
 
 export function employeeCanWriteState(permissions: string[], stateKey: string) {
   switch (stateKey) {
+    case "tcs-team-reward-orders-v1":
+    case "tcs-team-xp-ledger-v1":
+    case "tcs-team-training-completions-v1":
+      return true;
+    case "tcs-team-rewards-v1":
+    case "tcs-team-trainings-v1":
+      return false;
     case "tcs-store-products-v1":
     case "tcs-gator-ledger-v1":
     case "tcs-store-orders-v1":
