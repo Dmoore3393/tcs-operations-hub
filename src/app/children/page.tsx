@@ -1,3 +1,3 @@
-import SecureChildrenPage from "@/components/children/SecureChildrenPage";
+import ChildrenCenterPage from "@/components/children/ChildrenCenterPage";
 
-export default SecureChildrenPage;
+export default ChildrenCenterPage;
