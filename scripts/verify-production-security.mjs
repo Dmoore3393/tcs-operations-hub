@@ -89,33 +89,9 @@ assert(/export const starterFamilies:\s*FamilyRecord\[\]\s*=\s*\[\s*\];/s.test(h
 assert(/export const starterRoutes:\s*TransportationRoute\[\]\s*=\s*\[\s*\];/s.test(hubDataSource), "starterRoutes must stay empty");
 assert(/export const starterFiles:\s*FileRecord\[\]\s*=\s*\[\s*\];/s.test(hubDataSource), "starterFiles must stay empty");
 
-// Guard against accidentally committing any of the former development child /
-// guardian records back into the production bundle. This is intentionally kept
-// inside the security script, which is not part of the browser bundle.
-const blockedPersonFragments = [
-  "Bryson Brinkley",
-  "Scarlett Diaz",
-  "Ezekiel Brinkley",
-  "Elias Brinkley",
-  "Daniel Moreno",
-  "Silas Moreno",
-  "Israel Palomo",
-  "Chanel Palomo",
-  "Tiffany Palomo",
-  "Alarik Rosales",
-  "Kayla Shiina",
-  "Keira Shiina",
-  "Kendru Shiina",
-  "Bernard Brinkley",
-  "Guadalupe Diaz",
-  "Amber Bock",
-  "Vanity Palomo",
-  "Ramiro Rosales",
-  "Katelyn Estrada",
-  "Metha Shiina",
-  "Kaelyn Shiina",
-];
-
+// Scan shipped application text for accidentally committed server secrets.
+// Person-specific deny lists are intentionally NOT stored in this repository:
+// privacy checks should validate structure and data boundaries without repeating PII.
 const textExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json", ".md", ".txt", ".svg"]);
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const scanRoots = [join(repoRoot, "src"), join(repoRoot, "public")];
@@ -130,9 +106,6 @@ function scanDirectory(directory) {
     }
     if (!textExtensions.has(extname(path).toLowerCase())) continue;
     const value = readFileSync(path, "utf8");
-    for (const fragment of blockedPersonFragments) {
-      if (value.includes(fragment)) failures.push(`Former child/guardian development record is still present in ${path.replace(repoRoot, "")}`);
-    }
     assert(!/SUPABASE_(?:SERVICE_ROLE_KEY|SECRET_KEY)\s*=/.test(value), `A Supabase server secret appears to be committed in ${path.replace(repoRoot, "")}`);
   }
 }
