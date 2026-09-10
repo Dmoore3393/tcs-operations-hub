@@ -1,4 +1,4 @@
-import type { ChildRecord } from "@/lib/children";
+import { normalizeFundingSource, type ChildRecord } from "@/lib/children";
 import type { FamilyRecord } from "@/lib/hub-data";
 
 function digits(value = "") {
@@ -46,7 +46,7 @@ export function deriveFamiliesFromChildren(children: ChildRecord[]): FamilyRecor
     // Preserve the exact funding/payment source saved on the child record.
     // Do not coerce valid sources such as CCRC Stage 1/2, Respite,
     // Crystal Stairs, or Cash Pay into Private Pay.
-    const subsidy: FamilyRecord["subsidy"] = primary.subsidy?.trim() || "Private Pay";
+    const subsidy: FamilyRecord["subsidy"] = normalizeFundingSource(primary.subsidy || "") || "Not Set";
     const generatedId = Math.abs([...key].reduce((hash, char) => Math.imul(hash ^ char.charCodeAt(0), 16777619), 2166136261)) || index + 1;
 
     return {
