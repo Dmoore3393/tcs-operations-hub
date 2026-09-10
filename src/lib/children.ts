@@ -3,6 +3,22 @@ export type EnrollmentStatus = "Active" | "Pending" | "Archived";
 export type AttendanceStatus = "Present" | "Not Scheduled" | "Absent";
 export type AgeGroup = "Infant" | "Toddler" | "Preschool" | "School Age";
 
+export const fundingSources = [
+  "Cash Pay",
+  "CCRC Stage 1",
+  "CCRC Stage 2",
+  "CCCC",
+  "DCFS",
+  "Respite",
+  "Crystal Stairs",
+] as const;
+
+export function normalizeFundingSource(value: string) {
+  const source = value.trim();
+  if (/^private pay$/i.test(source)) return "Cash Pay";
+  return source;
+}
+
 export type ChildRecord = {
   id: number;
   firstName: string;
@@ -145,7 +161,7 @@ export const emptyForm: ChildFormState = {
   phone: "",
   familyName: "",
   guardianEmail: "",
-  subsidy: "Private Pay",
+  subsidy: "",
   weeklySchedule: "",
   transportation: "No transportation",
   allergies: "None reported",
