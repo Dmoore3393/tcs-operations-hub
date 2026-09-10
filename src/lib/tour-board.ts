@@ -91,7 +91,7 @@ export type TourBoardLead = Omit<EnrollmentLeadRecord, "stage"> & {
   tourHistory: TourVisit[];
   activity: LeadActivity[];
   tags: string[];
-  childRecordCreatedAt: string;
+  childRecordStartedAt: string;
 };
 
 export const TOUR_BOARD_COLUMNS: TourBoardStage[] = [
@@ -191,7 +191,7 @@ export function normalizeTourLead(input: Partial<TourBoardLead> & Partial<Enroll
     tourHistory: [...existingTours, ...legacyTour],
     activity,
     tags: Array.isArray(input.tags) ? input.tags.filter((tag): tag is string => typeof tag === "string" && Boolean(tag.trim())).map((tag) => tag.trim()) : [],
-    childRecordCreatedAt: input.childRecordCreatedAt || "",
+    childRecordStartedAt: input.childRecordStartedAt || "",
   };
 }
 
