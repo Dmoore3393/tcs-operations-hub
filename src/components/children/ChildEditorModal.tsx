@@ -139,7 +139,7 @@ export default function ChildEditorModal({
                     <Field label="Secondary guardian"><input className={inputClass} disabled={lockFamily} value={form.secondaryGuardian} onChange={(e) => setForm({ ...form, secondaryGuardian: e.target.value })} /></Field>
                     <Field label="Phone"><input className={inputClass} disabled={lockFamily} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
                     <Field label="Email"><input type="email" className={inputClass} disabled={lockFamily} value={form.guardianEmail} onChange={(e) => setForm({ ...form, guardianEmail: e.target.value })} /></Field>
-                    <Field label="Funding"><select className={inputClass} disabled={lockFamily} value={form.subsidy} onChange={(e) => setForm({ ...form, subsidy: e.target.value })}><option>Private Pay</option><option>CCRC</option><option>CCRC Stage 1</option><option>CCRC Stage 2</option><option>CCCC</option><option>DCFS</option><option>Respite</option></select></Field>
+                    <Field label="Funding"><select className={inputClass} disabled={lockFamily} value={form.subsidy} onChange={(e) => setForm({ ...form, subsidy: e.target.value })}><option>Private Pay</option><option>Cash Pay</option><option>CCRC</option><option>CCRC Stage 1</option><option>CCRC Stage 2</option><option>CCCC</option><option>DCFS</option><option>Respite</option><option>Crystal Stairs</option></select></Field>
                   </Grid>
                 </SectionCard>
 
