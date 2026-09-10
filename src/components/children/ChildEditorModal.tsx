@@ -2,6 +2,7 @@
 
 import type { FamilyRecord } from "@/lib/hub-data";
 import {
+  deriveChildAgeProfile,
   locations,
   type AgeGroup,
   type AttendanceStatus,
@@ -97,14 +98,25 @@ export default function ChildEditorModal({
 
               <div className="space-y-4">
                 <SectionCard icon={<Baby className="h-5 w-5" />} title="Child Information" subtitle="Basic child record and enrollment details">
+                  <div className="mb-4 rounded-xl border border-[#cbd9bd] bg-[#edf4e8] px-3 py-2 text-xs font-bold text-[#466047]">🌿 Enter the date of birth and The Hub will automatically calculate the child’s current age, age group, and room.</div>
                   <Grid>
                     <Field label="First name"><input required className={inputClass} value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></Field>
                     <Field label="Last name"><input required className={inputClass} value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></Field>
-                    <Field label="Date of birth"><input type="date" className={inputClass} value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} /></Field>
-                    <Field label="Display age"><input className={inputClass} placeholder="Example: 4 years" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} /></Field>
-                    <Field label="Age group"><select className={inputClass} value={form.ageGroup} onChange={(e) => setForm({ ...form, ageGroup: e.target.value as AgeGroup })}><option>Infant</option><option>Toddler</option><option>Preschool</option><option>School Age</option></select></Field>
+                    <Field label="Date of birth"><input required type="date" className={inputClass} value={form.dateOfBirth} onChange={(e) => {
+                      const dateOfBirth = e.target.value;
+                      const profile = deriveChildAgeProfile(dateOfBirth);
+                      setForm({
+                        ...form,
+                        dateOfBirth,
+                        age: profile?.age ?? "",
+                        ageGroup: profile?.ageGroup ?? "Infant",
+                        classroom: profile?.classroom ?? "Infant Room",
+                      });
+                    }} /></Field>
+                    <Field label="Current age"><input readOnly className={inputClass} placeholder="Calculated from date of birth" value={form.age} /></Field>
+                    <Field label="Age group"><select disabled className={inputClass} value={form.ageGroup} onChange={(e) => setForm({ ...form, ageGroup: e.target.value as AgeGroup })}><option>Infant</option><option>Toddler</option><option>Preschool</option><option>School Age</option></select></Field>
                     <Field label="Location"><select className={inputClass} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })}>{locations.map((location) => <option key={location}>{location}</option>)}</select></Field>
-                    <Field label="Classroom"><input className={inputClass} value={form.classroom} onChange={(e) => setForm({ ...form, classroom: e.target.value })} /></Field>
+                    <Field label="Classroom"><input readOnly className={inputClass} value={form.classroom} /></Field>
                     <Field label="Enrollment status"><select className={inputClass} value={form.enrollmentStatus} onChange={(e) => setForm({ ...form, enrollmentStatus: e.target.value as EnrollmentStatus })}><option>Active</option><option>Pending</option><option>Archived</option></select></Field>
                     <Field label="Attendance today"><select className={inputClass} value={form.attendanceToday} onChange={(e) => setForm({ ...form, attendanceToday: e.target.value as AttendanceStatus })}><option>Not Scheduled</option><option>Present</option><option>Absent</option></select></Field>
                   </Grid>
