@@ -10,6 +10,7 @@ import {
   type ChildFormState,
   type EnrollmentStatus,
   type LicensingStatus,
+  type MedicalConsentStatus,
 } from "@/lib/children";
 import {
   Baby,
@@ -90,6 +91,7 @@ export default function ChildEditorModal({
                   <SectionNav icon={<Baby className="h-4 w-4" />} title="Child" note="Identity, age & location" />
                   <SectionNav icon={<UsersRound className="h-4 w-4" />} title="Parent / Family" note="Guardians & funding" />
                   <SectionNav icon={<HeartPulse className="h-4 w-4" />} title="Care & Safety" note="Schedule, alerts & notes" />
+                  <SectionNav icon={<ShieldCheck className="h-4 w-4" />} title="Emergency Card" note="Consent & emergency contacts" />
                   <SectionNav icon={<ShieldCheck className="h-4 w-4" />} title="File Status" note="Licensing documents" />
                 </div>
                 <div className="mt-5 rounded-xl bg-[#385b39] p-3 text-xs leading-5 text-[#f6f1df]">
@@ -151,6 +153,43 @@ export default function ChildEditorModal({
                     <Field label="Allergies / medical alerts"><textarea className={`${inputClass} min-h-28 resize-y`} placeholder="Enter None reported if there are no known allergies" value={form.allergies} onChange={(e) => setForm({ ...form, allergies: e.target.value })} /></Field>
                     <Field label="Medical / support notes"><textarea className={`${inputClass} min-h-28 resize-y`} placeholder="Supports, accommodations, emergency or care notes" value={form.medicalNotes} onChange={(e) => setForm({ ...form, medicalNotes: e.target.value })} /></Field>
                   </div>
+                </SectionCard>
+
+                <SectionCard icon={<ShieldCheck className="h-5 w-5" />} title="Emergency Medical Card" subtitle="Information authorized staff may need immediately during an emergency or transportation route">
+                  <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-800">🚨 Mark consent <strong>On File</strong> only after the signed emergency medical authorization has actually been received and verified.</div>
+                  <Grid>
+                    <Field label="Medical consent status"><select className={inputClass} value={form.medicalConsentStatus} onChange={(e) => setForm({ ...form, medicalConsentStatus: e.target.value as MedicalConsentStatus })}><option>Missing</option><option>On File</option><option>Needs Update</option></select></Field>
+                    <Field label="Consent signed date"><input type="date" className={inputClass} value={form.medicalConsentSignedAt} onChange={(e) => setForm({ ...form, medicalConsentSignedAt: e.target.value })} /></Field>
+                    <Field label="Last verified"><input type="date" className={inputClass} value={form.medicalConsentVerifiedAt} onChange={(e) => setForm({ ...form, medicalConsentVerifiedAt: e.target.value })} /></Field>
+                    <Field label="Medical provider / physician"><input className={inputClass} value={form.medicalProvider} onChange={(e) => setForm({ ...form, medicalProvider: e.target.value })} /></Field>
+                    <Field label="Medical provider phone"><input type="tel" className={inputClass} value={form.medicalProviderPhone} onChange={(e) => setForm({ ...form, medicalProviderPhone: e.target.value })} /></Field>
+                    <Field label="Transportation restraint"><select className={inputClass} value={form.transportRestraint} onChange={(e) => setForm({ ...form, transportRestraint: e.target.value })}><option value="">Not entered</option><option>Car Seat</option><option>5-Point Harness</option><option>Booster Seat</option><option>Seat Belt</option><option>No Special Restraint</option><option>Other / See Notes</option></select></Field>
+                    <Field label="Dentist"><input className={inputClass} value={form.dentistProvider} onChange={(e) => setForm({ ...form, dentistProvider: e.target.value })} /></Field>
+                    <Field label="Dentist phone"><input type="tel" className={inputClass} value={form.dentistPhone} onChange={(e) => setForm({ ...form, dentistPhone: e.target.value })} /></Field>
+                    <Field label="Insurance / medical plan"><input className={inputClass} value={form.insuranceProvider} onChange={(e) => setForm({ ...form, insuranceProvider: e.target.value })} /></Field>
+                    <Field label="Plan / member ID"><input className={inputClass} value={form.insuranceMemberId} onChange={(e) => setForm({ ...form, insuranceMemberId: e.target.value })} /></Field>
+                  </Grid>
+
+                  <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-2xl border border-[#e5dcc8] bg-[#faf7ef] p-4">
+                      <p className="mb-3 text-xs font-black uppercase tracking-[.12em] text-[#65705d]">Emergency Contact 1</p>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <Field label="Name"><input className={inputClass} value={form.emergencyContact1Name} onChange={(e) => setForm({ ...form, emergencyContact1Name: e.target.value })} /></Field>
+                        <Field label="Phone"><input type="tel" className={inputClass} value={form.emergencyContact1Phone} onChange={(e) => setForm({ ...form, emergencyContact1Phone: e.target.value })} /></Field>
+                        <Field label="Relationship"><input className={inputClass} value={form.emergencyContact1Relationship} onChange={(e) => setForm({ ...form, emergencyContact1Relationship: e.target.value })} /></Field>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-[#e5dcc8] bg-[#faf7ef] p-4">
+                      <p className="mb-3 text-xs font-black uppercase tracking-[.12em] text-[#65705d]">Emergency Contact 2</p>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <Field label="Name"><input className={inputClass} value={form.emergencyContact2Name} onChange={(e) => setForm({ ...form, emergencyContact2Name: e.target.value })} /></Field>
+                        <Field label="Phone"><input type="tel" className={inputClass} value={form.emergencyContact2Phone} onChange={(e) => setForm({ ...form, emergencyContact2Phone: e.target.value })} /></Field>
+                        <Field label="Relationship"><input className={inputClass} value={form.emergencyContact2Relationship} onChange={(e) => setForm({ ...form, emergencyContact2Relationship: e.target.value })} /></Field>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4"><Field label="Emergency instructions / critical information"><textarea className={`${inputClass} min-h-28 resize-y`} placeholder="Emergency action instructions, medication information, special considerations, or other critical details." value={form.emergencyInstructions} onChange={(e) => setForm({ ...form, emergencyInstructions: e.target.value })} /></Field></div>
                 </SectionCard>
 
                 <SectionCard icon={<ShieldCheck className="h-5 w-5" />} title="Child File Status" subtitle="Track licensing documents that still need follow-up">
