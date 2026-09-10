@@ -2,6 +2,7 @@ export type LicensingStatus = "Complete" | "Missing Documents";
 export type EnrollmentStatus = "Active" | "Pending" | "Archived";
 export type AttendanceStatus = "Present" | "Not Scheduled" | "Absent";
 export type AgeGroup = "Infant" | "Toddler" | "Preschool" | "School Age";
+export type MedicalConsentStatus = "On File" | "Missing" | "Needs Update";
 
 export const fundingSources = [
   "Cash Pay",
@@ -43,6 +44,23 @@ export type ChildRecord = {
   missingDocuments: string[];
   enrollmentStatus: EnrollmentStatus;
   attendanceToday: AttendanceStatus;
+  medicalConsentStatus?: MedicalConsentStatus;
+  medicalConsentSignedAt?: string;
+  medicalConsentVerifiedAt?: string;
+  medicalProvider?: string;
+  medicalProviderPhone?: string;
+  dentistProvider?: string;
+  dentistPhone?: string;
+  insuranceProvider?: string;
+  insuranceMemberId?: string;
+  emergencyContact1Name?: string;
+  emergencyContact1Phone?: string;
+  emergencyContact1Relationship?: string;
+  emergencyContact2Name?: string;
+  emergencyContact2Phone?: string;
+  emergencyContact2Relationship?: string;
+  transportRestraint?: string;
+  emergencyInstructions?: string;
 };
 
 export type ChildFormState = {
@@ -67,6 +85,23 @@ export type ChildFormState = {
   missingDocuments: string;
   enrollmentStatus: EnrollmentStatus;
   attendanceToday: AttendanceStatus;
+  medicalConsentStatus: MedicalConsentStatus;
+  medicalConsentSignedAt: string;
+  medicalConsentVerifiedAt: string;
+  medicalProvider: string;
+  medicalProviderPhone: string;
+  dentistProvider: string;
+  dentistPhone: string;
+  insuranceProvider: string;
+  insuranceMemberId: string;
+  emergencyContact1Name: string;
+  emergencyContact1Phone: string;
+  emergencyContact1Relationship: string;
+  emergencyContact2Name: string;
+  emergencyContact2Phone: string;
+  emergencyContact2Relationship: string;
+  transportRestraint: string;
+  emergencyInstructions: string;
 };
 
 export type ChildAgeProfile = {
@@ -170,6 +205,23 @@ export const emptyForm: ChildFormState = {
   missingDocuments: "",
   enrollmentStatus: "Active",
   attendanceToday: "Not Scheduled",
+  medicalConsentStatus: "Missing",
+  medicalConsentSignedAt: "",
+  medicalConsentVerifiedAt: "",
+  medicalProvider: "",
+  medicalProviderPhone: "",
+  dentistProvider: "",
+  dentistPhone: "",
+  insuranceProvider: "",
+  insuranceMemberId: "",
+  emergencyContact1Name: "",
+  emergencyContact1Phone: "",
+  emergencyContact1Relationship: "",
+  emergencyContact2Name: "",
+  emergencyContact2Phone: "",
+  emergencyContact2Relationship: "",
+  transportRestraint: "",
+  emergencyInstructions: "",
 };
 
 export type ChildDatabaseRow = {
