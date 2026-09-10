@@ -317,9 +317,75 @@ export default function TourBoardPage() {
         <div className="tour-actions"><button className="tour-primary" onClick={openNewLead}><Plus/>Add New Lead</button><button className="tour-action" disabled={!selected} onClick={()=>selected&&openSchedule(selected)}><CalendarPlus/>Schedule Tour</button><button className="tour-action" disabled={!selected} onClick={()=>selected&&openActivity(selected,"Reminder")}><Send/>Send / Log Reminder</button><button className="tour-action" disabled={!selected} onClick={()=>selected&&openActivity(selected,"Follow-Up")}><Phone/>Log Follow-Up</button><button className="tour-action" disabled={!selected} onClick={()=>selected&&markPacketSent(selected)}><ClipboardCheck/>Enrollment Packet Sent</button>{selected&&<span style={{alignSelf:"center",fontSize:10,fontWeight:900,color:"#9b5551"}}>Selected: {selected.familyName}</span>}</div>
       </section>
 
-      <section className="tour-kpi-strip"><div className="tour-kpi"><span>Tours Today</span><strong>{toursToday}</strong></div><div className="tour-kpi danger"><span>Tour No-Shows</span><strong>{noShows}</strong></div><div className="tour-kpi warn"><span>Late Tour Arrivals</span><strong>{lateTours}</strong></div><div className={`tour-kpi ${overdueFollowUps?"danger":"good"}`}><span>Overdue Follow-Ups</span><strong>{overdueFollowUps}</strong></div></section>
+      <section className="tour-kpi-strip">
+        <div className="tour-kpi"><span>Tours Today</span><strong>{toursToday}</strong></div>
+        <div className="tour-kpi danger"><span>Needs Attention</span><strong>{needsAttention}</strong></div>
+        <div className="tour-kpi hot"><span>Hot Leads</span><strong>{hotLeads}</strong></div>
+        <div className={`tour-kpi ${overdueFollowUps?"danger":"good"}`}><span>Overdue Follow-Ups</span><strong>{overdueFollowUps}</strong></div>
+      </section>
+      <section className="tour-crm-focus">
+        <div><span className="tour-focus-icon">☎</span><p><strong>{untouchedNewLeads}</strong> New leads not contacted yet</p></div>
+        <div><span className="tour-focus-icon">✉</span><p><strong>{packetsWaiting}</strong> Enrollment packets waiting</p></div>
+        <div><span className="tour-focus-icon">⚠</span><p><strong>{noShows}</strong> Tour no-shows need follow-up</p></div>
+        <div><span className="tour-focus-icon">⏱</span><p><strong>{lateTours}</strong> Late tour arrivals logged</p></div>
+      </section>
 
-      <div className="tour-board-wrap"><section className="tour-board">{TOUR_BOARD_COLUMNS.map((column)=>{const rows=filtered.filter((lead)=>lead.stage===column);return <div className="tour-column" key={column}><div className="tour-col-head"><strong>{column}</strong><span className="tour-col-count">{rows.length}</span></div>{rows.length===0&&<div className="tour-empty">No families here right now.</div>}{rows.map((lead)=>{const recent=latestTour(lead);return <article className={`tour-card ${selectedId===lead.id?"selected":""}`} key={lead.id} onClick={()=>setSelectedId(lead.id)}><div className="tour-card-top"><div><h3>{lead.familyName || "Family name needed"}</h3>{lead.priority!=="Normal"&&<span className="tour-priority">★ {lead.priority}</span>}</div><span className="tour-initials">{personInitials(lead.familyName)}</span></div><div className="tour-card-meta"><span><UserRound/>{lead.childAge||lead.ageGroup||"Age not entered"}</span><span><MapPin/>{lead.location}</span><span><Users/>{lead.programType||lead.requestedCare||"Program not entered"}</span><span><CalendarDays/>{lead.preferredStartDate?`Start ${formatShortDate(lead.preferredStartDate)}`:"Start date not entered"}</span><span><Sparkles/>{lead.subsidy||"Funding not entered"}</span></div>{recent?.status==="No Show"&&<div className="tour-card-alert">⚠ No-show on {formatShortDate(recent.scheduledAt)}</div>}{recent?.status==="Completed"&&recent.lateMinutes>0&&<div className="tour-card-alert">⏱ Arrived {recent.lateMinutes} minutes late for latest tour</div>}{lead.followUpDate&&isPastDue(lead.followUpDate)&&!["Enrolled","Waitlist"].includes(lead.stage)&&<div className="tour-card-alert">Follow-up overdue since {formatShortDate(lead.followUpDate)}</div>}<div className="tour-card-bottom"><span className={`tour-chip ${column==="Enrolled"?"good":column==="Toured"?"good":column==="Tour Scheduled"?"warn":column==="Waitlist"?"purple":""}`}>{recent&&column==="Tour Scheduled"?`Tour ${formatShortDate(recent.scheduledAt)}`:column}</span><div style={{display:"flex",gap:4}}>{column==="Tour Scheduled"&&<button className="tour-chip good" onClick={(e)=>{e.stopPropagation();openTourOutcome(lead)}}>Record Tour</button>}<button className="tour-chip" onClick={(e)=>{e.stopPropagation();setDetailLead(lead);setSelectedId(lead.id)}}>Open</button></div></div></article>})}</div>})}</section></div>
+      <div className="tour-board-wrap">
+        <section className="tour-board">
+          {TOUR_BOARD_COLUMNS.map((column) => {
+            const rows = filtered.filter((lead) => lead.stage === column);
+            return <div className="tour-column" key={column}>
+              <div className="tour-col-head"><strong>{column}</strong><span className="tour-col-count">{rows.length}</span></div>
+              {rows.length === 0 && <div className="tour-empty">No families here right now.</div>}
+              {rows.map((lead) => {
+                const recent = latestTour(lead);
+                const lastContact = lastContactActivity(lead);
+                const temperature = leadTemperature(lead);
+                const tags = crmTags(lead);
+                const ageDays = leadAgeDays(lead);
+                return <article className={`tour-card ${selectedId===lead.id?"selected":""} ${temperature==="Needs Attention"?"needs-attention":""}`} key={lead.id} onClick={() => setSelectedId(lead.id)}>
+                  <div className="tour-card-top">
+                    <div>
+                      <div className="tour-temp-row">
+                        <span className={`tour-temperature ${temperature.toLowerCase().replace(" ","-")}`}>{temperature === "Hot" ? "🔥 Hot" : temperature === "Warm" ? "● Warm" : temperature === "Needs Attention" ? "⚠ Needs Attention" : "Normal"}</span>
+                        <span className="tour-lead-age">{ageDays === 0 ? "New today" : `${ageDays}d in pipeline`}</span>
+                      </div>
+                      <h3>{lead.familyName || "Family name needed"}</h3>
+                      <p className="tour-card-owner">{lead.assignedTo ? `Owner: ${lead.assignedTo}` : "Unassigned"}</p>
+                    </div>
+                    <span className="tour-initials">{personInitials(lead.familyName)}</span>
+                  </div>
+
+                  <div className="tour-card-meta">
+                    <span><UserRound/>{lead.childName || "Child name needed"} • {lead.childAge || lead.ageGroup || "Age not entered"}</span>
+                    <span><MapPin/>{lead.location}</span>
+                    <span><Users/>{lead.programType || lead.requestedCare || "Program not entered"}</span>
+                  </div>
+
+                  <div className="tour-contact-summary">
+                    <div><small>Last contact</small><strong>{lastContact ? relativeLabel(lastContact.at) : "No contact yet"}</strong></div>
+                    <div><small>Next step</small><strong>{lead.nextAction || (lead.followUpDate ? `Follow up ${formatShortDate(lead.followUpDate)}` : "Set next action")}</strong></div>
+                  </div>
+
+                  {tags.length > 0 && <div className="tour-tags">{tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
+                  {recent?.status === "No Show" && <div className="tour-card-alert">⚠ No-show on {formatShortDate(recent.scheduledAt)}</div>}
+                  {recent?.status === "Completed" && recent.lateMinutes > 0 && <div className="tour-card-alert">⏱ Arrived {recent.lateMinutes} minutes late for latest tour</div>}
+                  {lead.followUpDate && isPastDue(lead.followUpDate) && !["Enrolled","Waitlist"].includes(lead.stage) && <div className="tour-card-alert">Follow-up overdue since {formatShortDate(lead.followUpDate)}</div>}
+
+                  <div className="tour-card-quick" onClick={(event) => event.stopPropagation()}>
+                    <button onClick={() => quickContact(lead,"Call")}><Phone/>Call</button>
+                    <button onClick={() => quickContact(lead,"Text")}><MessageCircle/>Text</button>
+                    {column === "Tour Scheduled" && <button onClick={() => openTourOutcome(lead)}><CheckCircle2/>Record Tour</button>}
+                    {column !== "Enrolled" && !["Waitlist","Declined"].includes(column) && <button onClick={() => markEnrolled(lead)}><FileCheck2/>Enrolled</button>}
+                    {column === "Enrolled" && <button className="good" onClick={() => startChildRecord(lead)}><UserRound/>Child Record</button>}
+                    <button onClick={() => { setDetailLead(lead); setSelectedId(lead.id); }}>Open</button>
+                  </div>
+                </article>;
+              })}
+            </div>;
+          })}
+        </section>
+      </div>
 
       {statusFilter==="Declined"&&<div style={{padding:"0 15px 10px"}}><section className="tour-panel"><div className="tour-panel-title"><strong>Declined / Closed Leads</strong><span>{filtered.filter(l=>l.stage==="Declined").length}</span></div></section></div>}
 
