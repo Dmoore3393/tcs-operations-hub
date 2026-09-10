@@ -4,7 +4,7 @@ import ChildEditorModal from "@/components/children/ChildEditorModal";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { deriveFamiliesFromChildren } from "@/lib/family-derived";
-import { emptyForm, type ChildFormState, type ChildRecord } from "@/lib/children";
+import { applyChildAgeProfile, deriveChildAgeProfile, emptyForm, type ChildFormState, type ChildRecord } from "@/lib/children";
 import {
   Archive,
   Baby,
@@ -65,29 +65,32 @@ function locationKey(location: LiveLocation): SiteKey {
 const nameOf = (child: ChildRecord) => `${child.firstName} ${child.lastName}`.trim();
 const initials = (child: ChildRecord) => `${child.firstName?.[0] ?? ""}${child.lastName?.[0] ?? ""}`.toUpperCase();
 
-const toForm = (child: ChildRecord): ChildFormState => ({
-  firstName: child.firstName,
-  lastName: child.lastName,
-  age: child.age,
-  dateOfBirth: child.dateOfBirth,
-  ageGroup: child.ageGroup,
-  location: child.location,
-  classroom: child.classroom,
-  primaryGuardian: child.primaryGuardian,
-  secondaryGuardian: child.secondaryGuardian ?? "",
-  phone: child.phone,
-  familyName: child.familyName ?? "",
-  guardianEmail: child.guardianEmail ?? "",
-  subsidy: child.subsidy,
-  weeklySchedule: child.weeklySchedule,
-  transportation: child.transportation,
-  allergies: child.allergies,
-  medicalNotes: child.medicalNotes,
-  licensingStatus: child.licensingStatus,
-  missingDocuments: child.missingDocuments.join(", "),
-  enrollmentStatus: child.enrollmentStatus,
-  attendanceToday: child.attendanceToday,
-});
+const toForm = (child: ChildRecord): ChildFormState => {
+  const normalized = applyChildAgeProfile(child);
+  return ({
+  firstName: normalized.firstName,
+  lastName: normalized.lastName,
+  age: normalized.age,
+  dateOfBirth: normalized.dateOfBirth,
+  ageGroup: normalized.ageGroup,
+  location: normalized.location,
+  classroom: normalized.classroom,
+  primaryGuardian: normalized.primaryGuardian,
+  secondaryGuardian: normalized.secondaryGuardian ?? "",
+  phone: normalized.phone,
+  familyName: normalized.familyName ?? "",
+  guardianEmail: normalized.guardianEmail ?? "",
+  subsidy: normalized.subsidy,
+  weeklySchedule: normalized.weeklySchedule,
+  transportation: normalized.transportation,
+  allergies: normalized.allergies,
+  medicalNotes: normalized.medicalNotes,
+  licensingStatus: normalized.licensingStatus,
+  missingDocuments: normalized.missingDocuments.join(", "),
+  enrollmentStatus: normalized.enrollmentStatus,
+  attendanceToday: normalized.attendanceToday,
+  });
+};
 
 export default function ChildrenCenterLivePage() {
   const { session, isEmployee } = useAuth();
@@ -135,7 +138,8 @@ export default function ChildrenCenterLivePage() {
     setLoading(true);
     try {
       const payload = await request("GET");
-      setChildren(Array.isArray(payload.children) ? payload.children as ChildRecord[] : []);
+      const loadedChildren = Array.isArray(payload.children) ? payload.children as ChildRecord[] : [];
+      setChildren(loadedChildren.map((child) => applyChildAgeProfile(child)));
       setLocations(Array.isArray(payload.locations) ? payload.locations as LiveLocation[] : []);
       setError("");
     } catch (loadError) {
@@ -228,15 +232,17 @@ export default function ChildrenCenterLivePage() {
     if (familyMode === "existing" && selectedFamilyId === "") return setError("Choose an existing family or Create New Family.");
     const family = selectedFamilyId === "" ? undefined : families.find((item) => item.id === selectedFamilyId);
     const missingDocuments = form.licensingStatus === "Missing Documents" ? form.missingDocuments.split(",").map((item) => item.trim()).filter(Boolean) : [];
+    const ageProfile = deriveChildAgeProfile(form.dateOfBirth);
+    if (!ageProfile) return setError("Enter a valid date of birth so The Hub can calculate age and room.");
     const child: ChildRecord = {
       id: editing?.id || Date.now(),
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
-      age: form.age.trim() || "Age not entered",
+      age: ageProfile.age,
       dateOfBirth: form.dateOfBirth,
-      ageGroup: form.ageGroup,
+      ageGroup: ageProfile.ageGroup,
       location: form.location,
-      classroom: form.classroom.trim() || `${form.ageGroup} Room`,
+      classroom: ageProfile.classroom,
       primaryGuardian: family?.primaryGuardian ?? form.primaryGuardian.trim(),
       secondaryGuardian: (family?.secondaryGuardian ?? form.secondaryGuardian.trim()) || undefined,
       phone: family?.phone ?? form.phone.trim(),
