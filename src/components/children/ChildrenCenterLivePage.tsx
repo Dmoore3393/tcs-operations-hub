@@ -128,6 +128,7 @@ export default function ChildrenCenterLivePage() {
   const [familyMode, setFamilyMode] = useState<"existing" | "new">("new");
   const [selectedFamilyId, setSelectedFamilyId] = useState<number | "">("");
   const tourHandoffProcessed = useRef(false);
+  const editQueryProcessed = useRef(false);
 
   const request = useCallback(async (method: "GET" | "POST", body?: Record<string, unknown>) => {
     if (!session?.access_token) throw new Error("Your staff session is not ready yet.");
@@ -168,6 +169,18 @@ export default function ChildrenCenterLivePage() {
   }, [request, session?.access_token]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (loading || editQueryProcessed.current || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const editChildId = Number(params.get("editChild"));
+    if (!Number.isSafeInteger(editChildId) || editChildId <= 0) return;
+    editQueryProcessed.current = true;
+    const child = children.find((item) => item.id === editChildId);
+    if (!child) return;
+    openEdit(child);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [children, loading]);
 
   useEffect(() => {
     if (loading || tourHandoffProcessed.current || typeof window === "undefined") return;
