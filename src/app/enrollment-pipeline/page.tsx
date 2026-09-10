@@ -441,7 +441,75 @@ export default function TourBoardPage() {
 
     {activityLead&&<ModalShell title={`${activityKind} • ${activityLead.familyName}`} subtitle="Keep a running contact history so anyone can pick up the family relationship." onClose={()=>setActivityLead(null)}><div className="tour-form"><Field label={`${activityKind} notes`} full><textarea value={activityNote} onChange={(e)=>setActivityNote(e.target.value)} placeholder="What was sent, said, promised, or decided?"/></Field></div><div className="tour-modal-actions"><button className="tour-cancel" onClick={()=>setActivityLead(null)}>Cancel</button><button className="tour-save" onClick={saveActivity}>Save {activityKind}</button></div></ModalShell>}
 
-    {detailLead&&<ModalShell title={detailLead.familyName} subtitle={`${detailLead.parentName} • ${detailLead.phone || "No phone"} • ${detailLead.email || "No email"}`} onClose={()=>setDetailLead(null)} wide><div className="tour-detail-grid"><section className="tour-detail-box"><h3>Family Snapshot</h3><div className="tour-card-meta"><span><UserRound/>Child: {detailLead.childName||"Not entered"} • {detailLead.childAge||detailLead.ageGroup||"Age not entered"}</span><span><MapPin/>{detailLead.location}</span><span><Users/>{detailLead.programType||detailLead.requestedCare||"Program not entered"}</span><span><Sparkles/>{detailLead.subsidy||"Funding not entered"}</span><span><Phone/>{detailLead.phone||"No phone"}</span><span><Mail/>{detailLead.email||"No email"}</span></div><p style={{fontSize:11,lineHeight:1.5}}><b>Next action:</b> {detailLead.nextAction||"Not set"}<br/><b>Follow-up:</b> {detailLead.followUpDate?formatShortDate(detailLead.followUpDate):"Not set"}<br/><b>Enrollment packet:</b> {detailLead.enrollmentPacketSentAt?`Sent ${formatShortDate(detailLead.enrollmentPacketSentAt)}`:"Not marked sent"}</p><div className="tour-actions"><button className="tour-action" onClick={()=>{setLeadDraft(detailLead);setDetailLead(null)}}>Edit Lead</button><button className="tour-action" onClick={()=>{openSchedule(detailLead);setDetailLead(null)}}>Schedule Tour</button><button className="tour-action" onClick={()=>{openTourOutcome(detailLead);setDetailLead(null)}}>Record Tour</button><button className="tour-action" onClick={()=>{openActivity(detailLead,"Contact");setDetailLead(null)}}>Log Contact</button></div></section><section className="tour-detail-box"><h3>Tour History</h3><div className="tour-history">{detailLead.tourHistory.length===0&&<div className="tour-empty">No tours scheduled yet.</div>}{[...detailLead.tourHistory].sort((a,b)=>b.scheduledAt.localeCompare(a.scheduledAt)).map((tour)=><div className="tour-history-entry" key={tour.id}><strong>{tour.status} • {formatDateTime(tour.scheduledAt)}</strong><small>{tour.conductedBy?`Tour host: ${tour.conductedBy}`:"Host not assigned"}{tour.lateMinutes?` • ${tour.lateMinutes} min late`:""}</small>{tour.rating!=="Not Rated"&&<div>Fit: {tour.rating}</div>}{tour.familyReaction&&<div>Family reaction: {tour.familyReaction}</div>}{tour.questionsConcerns&&<div>Questions/concerns: {tour.questionsConcerns}</div>}{tour.notes&&<div>Notes: {tour.notes}</div>}{tour.nextStep&&<div>Next: {tour.nextStep}</div>}</div>)}</div></section><section className="tour-detail-box" style={{gridColumn:"1/-1"}}><h3>Complete Contact & Activity History</h3><div className="tour-history">{[...detailLead.activity].sort((a,b)=>b.at.localeCompare(a.at)).map((entry)=><div className="tour-history-entry" key={entry.id}><strong>{entry.kind} • {formatDateTime(entry.at)}</strong><small>{entry.by||"TCS Team"}</small><div>{entry.note}</div></div>)}</div></section></div></ModalShell>}
+    {detailLead&&<ModalShell title={detailLead.familyName} subtitle={`${detailLead.parentName} • ${detailLead.phone || "No phone"} • ${detailLead.email || "No email"}`} onClose={()=>setDetailLead(null)} wide>
+      <div className="tour-crm-profile-head">
+        <div>
+          <span className={`tour-temperature ${leadTemperature(detailLead).toLowerCase().replace(" ","-")}`}>{leadTemperature(detailLead)==="Hot"?"🔥 Hot":leadTemperature(detailLead)==="Warm"?"● Warm":leadTemperature(detailLead)==="Needs Attention"?"⚠ Needs Attention":"Normal"}</span>
+          <strong>{detailLead.stage}</strong>
+        </div>
+        <div><small>Lead age</small><b>{leadAgeDays(detailLead)} days</b></div>
+        <div><small>Last contact</small><b>{lastContactActivity(detailLead)?relativeLabel(lastContactActivity(detailLead)!.at):"No contact yet"}</b></div>
+        <div><small>Next follow-up</small><b>{detailLead.followUpDate?formatShortDate(detailLead.followUpDate):"Not scheduled"}</b></div>
+      </div>
+
+      <div className="tour-tags tour-profile-tags">{crmTags(detailLead).map((tag)=><span key={tag}>{tag}</span>)}</div>
+
+      <div className="tour-profile-actions">
+        <button onClick={()=>{quickContact(detailLead,"Call");setDetailLead(null)}}><Phone/>Log Call</button>
+        <button onClick={()=>{quickContact(detailLead,"Text");setDetailLead(null)}}><MessageCircle/>Log Text</button>
+        <button onClick={()=>{openActivity(detailLead,"Follow-Up");setDetailLead(null)}}><Clock3/>Follow-Up</button>
+        <button onClick={()=>{openSchedule(detailLead);setDetailLead(null)}}><CalendarPlus/>Schedule Tour</button>
+        <button onClick={()=>{markPacketSent(detailLead);setDetailLead(null)}}><ClipboardCheck/>Packet Sent</button>
+        {detailLead.stage!=="Enrolled"&&<button className="good" onClick={()=>{markEnrolled(detailLead);setDetailLead(null)}}><CheckCircle2/>Mark Enrolled</button>}
+        {detailLead.stage==="Enrolled"&&<button className="good" onClick={()=>startChildRecord(detailLead)}><UserRound/>Create Child Record</button>}
+      </div>
+
+      <div className="tour-detail-grid">
+        <section className="tour-detail-box">
+          <h3>Family & Child Snapshot</h3>
+          <div className="tour-card-meta">
+            <span><UserRound/>Child: {detailLead.childName||"Not entered"} • {detailLead.childAge||detailLead.ageGroup||"Age not entered"}</span>
+            {detailLead.additionalChildren&&<span><Users/>Additional children: {detailLead.additionalChildren}</span>}
+            <span><MapPin/>{detailLead.location}</span>
+            <span><Users/>{detailLead.programType||detailLead.requestedCare||"Program not entered"}</span>
+            <span><Sparkles/>{detailLead.subsidy||"Funding not entered"}</span>
+            <span><Phone/>{detailLead.phone||"No phone"}</span>
+            <span><Mail/>{detailLead.email||"No email"}</span>
+          </div>
+          <div className="tour-crm-facts">
+            <p><b>Preferred start:</b><span>{detailLead.preferredStartDate?formatShortDate(detailLead.preferredStartDate):"Not entered"}</span></p>
+            <p><b>Schedule needed:</b><span>{detailLead.scheduleNeeded||detailLead.requestedCare||"Not entered"}</span></p>
+            <p><b>Transportation:</b><span>{detailLead.transportationNeeded?(detailLead.schoolName?`Yes • ${detailLead.schoolName}`:"Yes"):"No"}</span></p>
+            <p><b>Best contact time:</b><span>{detailLead.bestContactTime||"Not entered"}</span></p>
+            <p><b>Lead source:</b><span>{detailLead.leadSource}</span></p>
+            <p><b>Assigned to:</b><span>{detailLead.assignedTo||"Unassigned"}</span></p>
+          </div>
+        </section>
+
+        <section className="tour-detail-box">
+          <h3>What Happens Next</h3>
+          <div className={`tour-next-step-box ${leadNeedsAttention(detailLead)?"attention":""}`}>
+            <small>Next action</small>
+            <strong>{detailLead.nextAction||"Set the next action for this family"}</strong>
+            <span>{detailLead.followUpDate?`Follow up ${formatShortDate(detailLead.followUpDate)}`:"No follow-up date scheduled"}</span>
+          </div>
+          <p className="tour-profile-note"><b>Enrollment packet:</b> {detailLead.enrollmentPacketSentAt?`Sent ${formatShortDate(detailLead.enrollmentPacketSentAt)}`:"Not marked sent"}</p>
+          {detailLead.stage==="Declined"&&<p className="tour-profile-note"><b>Closed reason:</b> {detailLead.declinedReason||"Not entered"}</p>}
+          {detailLead.stage==="Waitlist"&&<p className="tour-profile-note"><b>Waitlist reason:</b> {detailLead.waitlistReason||"Not entered"}</p>}
+          <div className="tour-actions"><button className="tour-action" onClick={()=>{setLeadDraft(detailLead);setDetailLead(null)}}>Edit Family Record</button><button className="tour-action" onClick={()=>{openTourOutcome(detailLead);setDetailLead(null)}}>Record Tour Outcome</button></div>
+        </section>
+
+        <section className="tour-detail-box">
+          <h3>Tour History</h3>
+          <div className="tour-history">{detailLead.tourHistory.length===0&&<div className="tour-empty">No tours scheduled yet.</div>}{[...detailLead.tourHistory].sort((a,b)=>b.scheduledAt.localeCompare(a.scheduledAt)).map((tour)=><div className="tour-history-entry" key={tour.id}><strong>{tour.status} • {formatDateTime(tour.scheduledAt)}</strong><small>{tour.conductedBy?`Tour host: ${tour.conductedBy}`:"Host not assigned"}{tour.lateMinutes?` • ${tour.lateMinutes} min late`:""}</small>{tour.rating!=="Not Rated"&&<div>Fit: {tour.rating}</div>}{tour.familyReaction&&<div>Family reaction: {tour.familyReaction}</div>}{tour.questionsConcerns&&<div>Questions/concerns: {tour.questionsConcerns}</div>}{tour.notes&&<div>Notes: {tour.notes}</div>}{tour.nextStep&&<div>Next: {tour.nextStep}</div>}</div>)}</div>
+        </section>
+
+        <section className="tour-detail-box">
+          <h3>CRM Activity Timeline</h3>
+          <div className="tour-history">{[...detailLead.activity].sort((a,b)=>b.at.localeCompare(a.at)).map((entry)=><div className="tour-history-entry crm" key={entry.id}><strong>{entry.kind} • {formatDateTime(entry.at)}</strong><small>{entry.by||"TCS Team"}</small><div>{entry.note}</div></div>)}</div>
+        </section>
+      </div>
+    </ModalShell>}
   </div>;
 }
 
