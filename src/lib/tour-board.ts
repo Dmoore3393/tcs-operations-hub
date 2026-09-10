@@ -90,6 +90,8 @@ export type TourBoardLead = Omit<EnrollmentLeadRecord, "stage"> & {
   updatedAt: string;
   tourHistory: TourVisit[];
   activity: LeadActivity[];
+  tags: string[];
+  childRecordCreatedAt: string;
 };
 
 export const TOUR_BOARD_COLUMNS: TourBoardStage[] = [
@@ -188,9 +190,65 @@ export function normalizeTourLead(input: Partial<TourBoardLead> & Partial<Enroll
     updatedAt: input.updatedAt || createdAt,
     tourHistory: [...existingTours, ...legacyTour],
     activity,
+    tags: Array.isArray(input.tags) ? input.tags.filter((tag): tag is string => typeof tag === "string" && Boolean(tag.trim())).map((tag) => tag.trim()) : [],
+    childRecordCreatedAt: input.childRecordCreatedAt || "",
   };
 }
 
 export function latestTour(lead: TourBoardLead) {
   return [...lead.tourHistory].sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt))[0];
+}
+
+
+export type CrmTemperature = "Hot" | "Warm" | "Normal" | "Needs Attention";
+
+export function latestActivity(lead: TourBoardLead) {
+  return [...lead.activity].sort((a, b) => b.at.localeCompare(a.at))[0];
+}
+
+export function lastContactActivity(lead: TourBoardLead) {
+  return [...lead.activity]
+    .filter((entry) => ["Contact", "Follow-Up", "Reminder", "Tour", "Tour Check-In"].includes(entry.kind))
+    .sort((a, b) => b.at.localeCompare(a.at))[0];
+}
+
+export function daysSince(value: string, now = new Date()) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return Math.max(0, Math.floor((now.getTime() - date.getTime()) / 86400000));
+}
+
+export function leadAgeDays(lead: TourBoardLead, now = new Date()) {
+  return daysSince(lead.createdAt, now) ?? 0;
+}
+
+export function leadNeedsAttention(lead: TourBoardLead, now = new Date()) {
+  if (["Enrolled", "Waitlist", "Declined"].includes(lead.stage)) return false;
+  const today = now.toISOString().slice(0, 10);
+  if (lead.followUpDate && lead.followUpDate < today) return true;
+  const lastTouch = lastContactActivity(lead);
+  const untouchedDays = daysSince(lastTouch?.at || lead.createdAt, now) ?? 0;
+  if (lead.stage === "New Inquiry" && untouchedDays >= 1) return true;
+  return untouchedDays >= 5;
+}
+
+export function leadTemperature(lead: TourBoardLead, now = new Date()): CrmTemperature {
+  if (leadNeedsAttention(lead, now)) return "Needs Attention";
+  if (lead.priority === "Urgent" || lead.priority === "Hot Lead") return "Hot";
+  if (["Tour Scheduled", "Toured", "Follow-Up"].includes(lead.stage)) return "Warm";
+  return "Normal";
+}
+
+export function crmTags(lead: TourBoardLead) {
+  const tags = new Set(lead.tags || []);
+  if (lead.transportationNeeded) tags.add("Transportation");
+  if (lead.subsidy) tags.add(lead.subsidy);
+  if (lead.ageGroup) tags.add(lead.ageGroup);
+  if (lead.additionalChildren?.trim()) tags.add("Sibling Enrollment");
+  const requested = `${lead.requestedCare} ${lead.programType}`.toLowerCase();
+  if (requested.includes("extended")) tags.add("Extended Hours");
+  if (requested.includes("weekend")) tags.add("Weekend Care");
+  if (lead.enrollmentPacketSentAt && lead.stage !== "Enrolled") tags.add("Packet Sent");
+  return [...tags].filter(Boolean).slice(0, 8);
 }
