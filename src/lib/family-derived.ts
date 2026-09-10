@@ -43,10 +43,10 @@ export function deriveFamiliesFromChildren(children: ChildRecord[]): FamilyRecor
       : statuses.has("Pending")
         ? "Enrollment Pending"
         : "Inactive";
-    const subsidyValue = primary.subsidy;
-    const subsidy: FamilyRecord["subsidy"] = subsidyValue === "CCRC" || subsidyValue === "DCFS" || subsidyValue === "CCCC"
-      ? subsidyValue
-      : "Private Pay";
+    // Preserve the exact funding/payment source saved on the child record.
+    // Do not coerce valid sources such as CCRC Stage 1/2, Respite,
+    // Crystal Stairs, or Cash Pay into Private Pay.
+    const subsidy: FamilyRecord["subsidy"] = primary.subsidy?.trim() || "Private Pay";
     const generatedId = Math.abs([...key].reduce((hash, char) => Math.imul(hash ^ char.charCodeAt(0), 16777619), 2166136261)) || index + 1;
 
     return {
