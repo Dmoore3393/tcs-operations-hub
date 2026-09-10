@@ -89,6 +89,23 @@ const toForm = (child: ChildRecord): ChildFormState => {
   missingDocuments: normalized.missingDocuments.join(", "),
   enrollmentStatus: normalized.enrollmentStatus,
   attendanceToday: normalized.attendanceToday,
+  medicalConsentStatus: normalized.medicalConsentStatus ?? "Missing",
+  medicalConsentSignedAt: normalized.medicalConsentSignedAt ?? "",
+  medicalConsentVerifiedAt: normalized.medicalConsentVerifiedAt ?? "",
+  medicalProvider: normalized.medicalProvider ?? "",
+  medicalProviderPhone: normalized.medicalProviderPhone ?? "",
+  dentistProvider: normalized.dentistProvider ?? "",
+  dentistPhone: normalized.dentistPhone ?? "",
+  insuranceProvider: normalized.insuranceProvider ?? "",
+  insuranceMemberId: normalized.insuranceMemberId ?? "",
+  emergencyContact1Name: normalized.emergencyContact1Name ?? "",
+  emergencyContact1Phone: normalized.emergencyContact1Phone ?? "",
+  emergencyContact1Relationship: normalized.emergencyContact1Relationship ?? "",
+  emergencyContact2Name: normalized.emergencyContact2Name ?? "",
+  emergencyContact2Phone: normalized.emergencyContact2Phone ?? "",
+  emergencyContact2Relationship: normalized.emergencyContact2Relationship ?? "",
+  transportRestraint: normalized.transportRestraint ?? "",
+  emergencyInstructions: normalized.emergencyInstructions ?? "",
   });
 };
 
@@ -294,6 +311,23 @@ export default function ChildrenCenterLivePage() {
       missingDocuments,
       enrollmentStatus: form.enrollmentStatus,
       attendanceToday: form.attendanceToday,
+      medicalConsentStatus: form.medicalConsentStatus,
+      medicalConsentSignedAt: form.medicalConsentSignedAt,
+      medicalConsentVerifiedAt: form.medicalConsentVerifiedAt,
+      medicalProvider: form.medicalProvider.trim(),
+      medicalProviderPhone: form.medicalProviderPhone.trim(),
+      dentistProvider: form.dentistProvider.trim(),
+      dentistPhone: form.dentistPhone.trim(),
+      insuranceProvider: form.insuranceProvider.trim(),
+      insuranceMemberId: form.insuranceMemberId.trim(),
+      emergencyContact1Name: form.emergencyContact1Name.trim(),
+      emergencyContact1Phone: form.emergencyContact1Phone.trim(),
+      emergencyContact1Relationship: form.emergencyContact1Relationship.trim(),
+      emergencyContact2Name: form.emergencyContact2Name.trim(),
+      emergencyContact2Phone: form.emergencyContact2Phone.trim(),
+      emergencyContact2Relationship: form.emergencyContact2Relationship.trim(),
+      transportRestraint: form.transportRestraint.trim(),
+      emergencyInstructions: form.emergencyInstructions.trim(),
     };
     setSaving(true);
     try {
@@ -368,10 +402,10 @@ export default function ChildrenCenterLivePage() {
         </section>
 
         <section className="woodland-table-panel">
-          {loading ? <div className="flex min-h-56 items-center justify-center gap-2 text-slate-500"><LoaderCircle className="h-5 w-5 animate-spin" /> Loading secured child records…</div> : filtered.length === 0 ? <div className="p-12 text-center"><Baby className="mx-auto h-9 w-9 text-[#718164]" /><h2 className="mt-2 font-black">No children match this view</h2></div> : <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-sm"><thead className="bg-[#faf7f1] text-xs text-slate-500"><tr>{["Child", "Age", "Location", "Program / Age Group", "Schedule", "Pay Source", "Status", "Actions"].map((heading) => <th key={heading} className="px-4 py-3 font-black">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{filtered.map((child) => <tr key={child.id} className="hover:bg-[#fffaf1]"><td className="px-4 py-3"><button onClick={() => setSelected(child)} className="flex items-center gap-3 font-black"><span className="grid h-9 w-9 place-items-center rounded-full bg-[#e7eee1] text-xs text-[#506447]">{initials(child)}</span>{nameOf(child)}</button></td><td className="px-4 py-3">{child.age}</td><td className="px-4 py-3">{keyFor(child.location)}</td><td className="px-4 py-3">{child.ageGroup}</td><td className="max-w-40 truncate px-4 py-3">{child.weeklySchedule}</td><td className="px-4 py-3">{child.subsidy}</td><td className="px-4 py-3"><span className={`rounded-md px-2 py-1 text-xs font-black ${child.enrollmentStatus === "Active" ? "bg-[#dceedd] text-[#315b36]" : "bg-amber-100 text-amber-800"}`}>{child.enrollmentStatus}</span></td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => setSelected(child)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black">View File</button><button onClick={() => setSelected(child)} className="rounded-lg border border-slate-200 p-1.5"><MoreHorizontal className="h-4 w-4" /></button></div></td></tr>)}</tbody></table></div>}
+          {loading ? <div className="flex min-h-56 items-center justify-center gap-2 text-slate-500"><LoaderCircle className="h-5 w-5 animate-spin" /> Loading secured child records…</div> : filtered.length === 0 ? <div className="p-12 text-center"><Baby className="mx-auto h-9 w-9 text-[#718164]" /><h2 className="mt-2 font-black">No children match this view</h2></div> : <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-sm"><thead className="bg-[#faf7f1] text-xs text-slate-500"><tr>{["Child", "Age", "Location", "Program / Age Group", "Schedule", "Pay Source", "Status", "Actions"].map((heading) => <th key={heading} className="px-4 py-3 font-black">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{filtered.map((child) => <tr key={child.id} className="hover:bg-[#fffaf1]"><td className="px-4 py-3"><button onClick={() => setSelected(child)} className="flex items-center gap-3 font-black"><span className="grid h-9 w-9 place-items-center rounded-full bg-[#e7eee1] text-xs text-[#506447]">{initials(child)}</span>{nameOf(child)}</button></td><td className="px-4 py-3">{child.age}</td><td className="px-4 py-3">{keyFor(child.location)}</td><td className="px-4 py-3">{child.ageGroup}</td><td className="max-w-40 truncate px-4 py-3">{child.weeklySchedule}</td><td className="px-4 py-3">{child.subsidy}</td><td className="px-4 py-3"><span className={`rounded-md px-2 py-1 text-xs font-black ${child.enrollmentStatus === "Active" ? "bg-[#dceedd] text-[#315b36]" : "bg-amber-100 text-amber-800"}`}>{child.enrollmentStatus}</span></td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => setSelected(child)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black">View File</button><Link href={`/emergency-cards?child=${child.id}`} className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-black text-red-800">Emergency Card</Link><button onClick={() => setSelected(child)} className="rounded-lg border border-slate-200 p-1.5"><MoreHorizontal className="h-4 w-4" /></button></div></td></tr>)}</tbody></table></div>}
         </section>
 
-        <section className="flex flex-wrap gap-3">{canManage && <button onClick={openAdd} className="inline-flex items-center gap-2 rounded-xl bg-[#445b37] px-5 py-3 text-sm font-black text-white"><Plus className="h-4 w-4" /> Add Child</button>}<Link href="/enrollment-pipeline" className="inline-flex items-center gap-2 rounded-xl bg-[#b95d3b] px-5 py-3 text-sm font-black text-white"><FileWarning className="h-4 w-4" /> Start Enrollment</Link><Link href="/child-schedules" className="inline-flex items-center gap-2 rounded-xl border border-[#e6dfd4] bg-[#fffaf2] px-5 py-3 text-sm font-black"><CalendarClock className="h-4 w-4" /> Child Schedules</Link><button onClick={exportRoster} className="inline-flex items-center gap-2 rounded-xl border border-[#e6dfd4] bg-[#fffaf2] px-5 py-3 text-sm font-black"><Download className="h-4 w-4" /> Export Roster</button></section>
+        <section className="flex flex-wrap gap-3">{canManage && <button onClick={openAdd} className="inline-flex items-center gap-2 rounded-xl bg-[#445b37] px-5 py-3 text-sm font-black text-white"><Plus className="h-4 w-4" /> Add Child</button>}<Link href="/emergency-cards" className="inline-flex items-center gap-2 rounded-xl bg-[#a83232] px-5 py-3 text-sm font-black text-white"><HeartPulse className="h-4 w-4" /> Emergency Medical Cards</Link><Link href="/enrollment-pipeline" className="inline-flex items-center gap-2 rounded-xl bg-[#b95d3b] px-5 py-3 text-sm font-black text-white"><FileWarning className="h-4 w-4" /> Start Enrollment</Link><Link href="/child-schedules" className="inline-flex items-center gap-2 rounded-xl border border-[#e6dfd4] bg-[#fffaf2] px-5 py-3 text-sm font-black"><CalendarClock className="h-4 w-4" /> Child Schedules</Link><button onClick={exportRoster} className="inline-flex items-center gap-2 rounded-xl border border-[#e6dfd4] bg-[#fffaf2] px-5 py-3 text-sm font-black"><Download className="h-4 w-4" /> Export Roster</button></section>
       </div>
 
       <aside className="space-y-3">
@@ -390,7 +424,7 @@ export default function ChildrenCenterLivePage() {
     </section>
 
     {editing && <ChildEditorModal title={editing.id ? `Edit ${nameOf(editing)}` : "Add Child"} form={form} setForm={setForm} families={families} familyMode={familyMode} setFamilyMode={setFamilyMode} selectedFamilyId={selectedFamilyId} chooseFamily={chooseFamily} saving={saving} onClose={() => setEditing(null)} onSubmit={saveChild} />}
-    {selected && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4"><button className="absolute inset-0" onClick={() => setSelected(null)} aria-label="Close" /><section className="relative z-10 w-full max-w-2xl rounded-3xl bg-[#fffdf9] p-6 shadow-2xl"><div className="flex justify-between"><div><p className="text-xs font-black uppercase tracking-wider text-[#718164]">Child File</p><h2 className="text-2xl font-black">{nameOf(selected)}</h2><p className="text-sm text-slate-500">{selected.age} • {keyFor(selected.location)} • {selected.ageGroup}</p></div><button onClick={() => setSelected(null)}><X /></button></div><div className="mt-5 grid gap-3 sm:grid-cols-2"><Detail l="Parent / Guardian" v={selected.primaryGuardian} /><Detail l="Phone" v={selected.phone} /><Detail l="Schedule" v={selected.weeklySchedule} /><Detail l="Pay Source" v={selected.subsidy} /><Detail l="Transportation" v={selected.transportation} /><Detail l="File Status" v={selected.licensingStatus} /><Detail l="Allergies / Alerts" v={selected.allergies} /><Detail l="Support Notes" v={selected.medicalNotes} /></div>{canManage && <div className="mt-5 flex justify-end gap-2"><button onClick={() => openEdit(selected)} className="inline-flex items-center gap-2 rounded-xl bg-[#445b37] px-4 py-2.5 text-sm font-black text-white"><Pencil className="h-4 w-4" /> Edit File</button><button onClick={() => void archive(selected)} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-black"><Archive className="h-4 w-4" /> Archive</button></div>}</section></div>}
+    {selected && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4"><button className="absolute inset-0" onClick={() => setSelected(null)} aria-label="Close" /><section className="relative z-10 w-full max-w-2xl rounded-3xl bg-[#fffdf9] p-6 shadow-2xl"><div className="flex justify-between"><div><p className="text-xs font-black uppercase tracking-wider text-[#718164]">Child File</p><h2 className="text-2xl font-black">{nameOf(selected)}</h2><p className="text-sm text-slate-500">{selected.age} • {keyFor(selected.location)} • {selected.ageGroup}</p></div><button onClick={() => setSelected(null)}><X /></button></div><div className="mt-5 grid gap-3 sm:grid-cols-2"><Detail l="Parent / Guardian" v={selected.primaryGuardian} /><Detail l="Phone" v={selected.phone} /><Detail l="Schedule" v={selected.weeklySchedule} /><Detail l="Pay Source" v={selected.subsidy} /><Detail l="Transportation" v={selected.transportation} /><Detail l="File Status" v={selected.licensingStatus} /><Detail l="Allergies / Alerts" v={selected.allergies} /><Detail l="Support Notes" v={selected.medicalNotes} /><Detail l="Medical Consent" v={selected.medicalConsentStatus ?? "Missing"} /><Detail l="Emergency Contact" v={selected.emergencyContact1Name ? `${selected.emergencyContact1Name} • ${selected.emergencyContact1Phone || "No phone"}` : "Not entered"} /></div><div className="mt-5 flex flex-wrap justify-end gap-2"><Link href={`/emergency-cards?child=${selected.id}`} className="inline-flex items-center gap-2 rounded-xl bg-[#a83232] px-4 py-2.5 text-sm font-black text-white"><HeartPulse className="h-4 w-4" /> Emergency Card</Link>{canManage && <div className="mt-5 flex justify-end gap-2"><button onClick={() => openEdit(selected)} className="inline-flex items-center gap-2 rounded-xl bg-[#445b37] px-4 py-2.5 text-sm font-black text-white"><Pencil className="h-4 w-4" /> Edit File</button><button onClick={() => void archive(selected)} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-black"><Archive className="h-4 w-4" /> Archive</button>}</div></section></div>}
   </div></div></MainLayout>;
 }
 
