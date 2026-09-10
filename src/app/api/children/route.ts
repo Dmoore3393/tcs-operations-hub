@@ -13,10 +13,6 @@ function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function bool(value: unknown) {
-  return value === true;
-}
-
 function stringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean) : [];
 }
@@ -75,13 +71,27 @@ function normalizeChild(row: DbRow) {
   };
 }
 
+function normalizeLocation(row: DbRow) {
+  const parsedCapacity = Number(row.capacity);
+  return {
+    id: text(row.id),
+    slug: text(row.slug),
+    name: text(row.name),
+    fullName: text(row.full_name),
+    capacity: Number.isFinite(parsedCapacity) && parsedCapacity >= 0 ? parsedCapacity : 0,
+    programType: text(row.program_type) || "Family Childcare",
+    colorPrimary: text(row.color_primary) || "#506447",
+    colorSecondary: text(row.color_secondary) || "#b95d3b",
+  };
+}
+
 async function activeLocations(
   admin: Awaited<ReturnType<typeof requireStaff>>["admin"],
   organizationId: string,
 ) {
   const result = await admin
     .from("locations")
-    .select("id,slug,name,full_name")
+    .select("id,slug,name,full_name,capacity,program_type,color_primary,color_secondary")
     .eq("organization_id", organizationId)
     .eq("is_active", true);
   if (result.error) throw result.error;
@@ -147,13 +157,24 @@ function safeChildRecord(child: DbRow, id: number) {
 export async function GET(request: Request) {
   try {
     const { userClient } = await requireStaff(request);
-    const result = await userClient
-      .from("children")
-      .select("legacy_id,first_name,last_name,date_of_birth,age_group,enrollment_status,attendance_status,guardian_name,record_data,updated_at")
-      .order("last_name", { ascending: true })
-      .order("first_name", { ascending: true });
-    if (result.error) throw result.error;
-    return Response.json({ children: ((result.data ?? []) as unknown as DbRow[]).map(normalizeChild) });
+    const [childrenResult, locationsResult] = await Promise.all([
+      userClient
+        .from("children")
+        .select("legacy_id,first_name,last_name,date_of_birth,age_group,enrollment_status,attendance_status,guardian_name,record_data,updated_at")
+        .order("last_name", { ascending: true })
+        .order("first_name", { ascending: true }),
+      userClient
+        .from("locations")
+        .select("id,slug,name,full_name,capacity,program_type,color_primary,color_secondary")
+        .eq("is_active", true)
+        .order("name", { ascending: true }),
+    ]);
+    if (childrenResult.error) throw childrenResult.error;
+    if (locationsResult.error) throw locationsResult.error;
+    return Response.json({
+      children: ((childrenResult.data ?? []) as unknown as DbRow[]).map(normalizeChild),
+      locations: ((locationsResult.data ?? []) as unknown as DbRow[]).map(normalizeLocation),
+    });
   } catch (error) {
     return staffErrorResponse(error);
   }
