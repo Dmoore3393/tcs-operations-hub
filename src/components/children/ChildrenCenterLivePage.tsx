@@ -175,7 +175,7 @@ export default function ChildrenCenterLivePage() {
         phone: String(handoff.phone || ""),
         guardianEmail: String(handoff.guardianEmail || ""),
         location: matchedLocation,
-        subsidy: String(handoff.subsidy || "Private Pay"),
+        subsidy: String(handoff.subsidy || ""),
         weeklySchedule: String(handoff.weeklySchedule || ""),
         transportation: String(handoff.transportation || "No transportation"),
       });
