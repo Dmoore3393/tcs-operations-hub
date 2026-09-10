@@ -164,7 +164,7 @@ export default function ChildEditorModal({
     </div>
   );
 
-  return createPortal(modal, document.body);
+  if (typeof document === "undefined") return null;\n  return createPortal(modal, document.body);
 }
 
 function SectionCard({ icon, title, subtitle, children }: { icon: ReactNode; title: string; subtitle: string; children: ReactNode }) {
