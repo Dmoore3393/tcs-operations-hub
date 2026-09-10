@@ -191,6 +191,10 @@ export default function TourBoardPage() {
       setNotice("Family name and parent/guardian name are required.");
       return;
     }
+    if (/^CCRC$/i.test(leadDraft.subsidy.trim())) {
+      setNotice("CCRC must be identified as Stage 1 or Stage 2 before saving.");
+      return;
+    }
     const exists = leads.some((item) => item.id === leadDraft.id);
     const draft = normalizeTourLead(leadDraft as any);
     const updated = exists ? draft : { ...draft, activity: [...draft.activity, activity("Inquiry", `Inquiry recorded from ${draft.leadSource} via ${draft.inquiryMethod}.`)] };
