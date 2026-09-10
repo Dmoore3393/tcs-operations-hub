@@ -424,7 +424,36 @@ export default function ChildrenCenterLivePage() {
     </section>
 
     {editing && <ChildEditorModal title={editing.id ? `Edit ${nameOf(editing)}` : "Add Child"} form={form} setForm={setForm} families={families} familyMode={familyMode} setFamilyMode={setFamilyMode} selectedFamilyId={selectedFamilyId} chooseFamily={chooseFamily} saving={saving} onClose={() => setEditing(null)} onSubmit={saveChild} />}
-    {selected && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4"><button className="absolute inset-0" onClick={() => setSelected(null)} aria-label="Close" /><section className="relative z-10 w-full max-w-2xl rounded-3xl bg-[#fffdf9] p-6 shadow-2xl"><div className="flex justify-between"><div><p className="text-xs font-black uppercase tracking-wider text-[#718164]">Child File</p><h2 className="text-2xl font-black">{nameOf(selected)}</h2><p className="text-sm text-slate-500">{selected.age} • {keyFor(selected.location)} • {selected.ageGroup}</p></div><button onClick={() => setSelected(null)}><X /></button></div><div className="mt-5 grid gap-3 sm:grid-cols-2"><Detail l="Parent / Guardian" v={selected.primaryGuardian} /><Detail l="Phone" v={selected.phone} /><Detail l="Schedule" v={selected.weeklySchedule} /><Detail l="Pay Source" v={selected.subsidy} /><Detail l="Transportation" v={selected.transportation} /><Detail l="File Status" v={selected.licensingStatus} /><Detail l="Allergies / Alerts" v={selected.allergies} /><Detail l="Support Notes" v={selected.medicalNotes} /><Detail l="Medical Consent" v={selected.medicalConsentStatus ?? "Missing"} /><Detail l="Emergency Contact" v={selected.emergencyContact1Name ? `${selected.emergencyContact1Name} • ${selected.emergencyContact1Phone || "No phone"}` : "Not entered"} /></div><div className="mt-5 flex flex-wrap justify-end gap-2"><Link href={`/emergency-cards?child=${selected.id}`} className="inline-flex items-center gap-2 rounded-xl bg-[#a83232] px-4 py-2.5 text-sm font-black text-white"><HeartPulse className="h-4 w-4" /> Emergency Card</Link>{canManage && <div className="mt-5 flex justify-end gap-2"><button onClick={() => openEdit(selected)} className="inline-flex items-center gap-2 rounded-xl bg-[#445b37] px-4 py-2.5 text-sm font-black text-white"><Pencil className="h-4 w-4" /> Edit File</button><button onClick={() => void archive(selected)} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-black"><Archive className="h-4 w-4" /> Archive</button>}</div></section></div>}
+    {selected && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4">
+      <button className="absolute inset-0" onClick={() => setSelected(null)} aria-label="Close" />
+      <section className="relative z-10 w-full max-w-2xl rounded-3xl bg-[#fffdf9] p-6 shadow-2xl">
+        <div className="flex justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wider text-[#718164]">Child File</p>
+            <h2 className="text-2xl font-black">{nameOf(selected)}</h2>
+            <p className="text-sm text-slate-500">{selected.age} • {keyFor(selected.location)} • {selected.ageGroup}</p>
+          </div>
+          <button onClick={() => setSelected(null)}><X /></button>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <Detail l="Parent / Guardian" v={selected.primaryGuardian} />
+          <Detail l="Phone" v={selected.phone} />
+          <Detail l="Schedule" v={selected.weeklySchedule} />
+          <Detail l="Pay Source" v={selected.subsidy} />
+          <Detail l="Transportation" v={selected.transportation} />
+          <Detail l="File Status" v={selected.licensingStatus} />
+          <Detail l="Allergies / Alerts" v={selected.allergies} />
+          <Detail l="Support Notes" v={selected.medicalNotes} />
+          <Detail l="Medical Consent" v={selected.medicalConsentStatus ?? "Missing"} />
+          <Detail l="Emergency Contact" v={selected.emergencyContact1Name ? `${selected.emergencyContact1Name} • ${selected.emergencyContact1Phone || "No phone"}` : "Not entered"} />
+        </div>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <Link href={`/emergency-cards?child=${selected.id}`} className="inline-flex items-center gap-2 rounded-xl bg-[#a83232] px-4 py-2.5 text-sm font-black text-white"><HeartPulse className="h-4 w-4" /> Emergency Card</Link>
+          {canManage && <button onClick={() => openEdit(selected)} className="inline-flex items-center gap-2 rounded-xl bg-[#445b37] px-4 py-2.5 text-sm font-black text-white"><Pencil className="h-4 w-4" /> Edit File</button>}
+          {canManage && <button onClick={() => void archive(selected)} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-black"><Archive className="h-4 w-4" /> Archive</button>}
+        </div>
+      </section>
+    </div>}
   </div></div></MainLayout>;
 }
 
