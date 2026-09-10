@@ -23,6 +23,7 @@ import {
   Bus,
   CheckCircle2,
   Clock3,
+  HeartPulse,
   MapPin,
   Navigation,
   Pencil,
@@ -219,7 +220,7 @@ export default function TransportationV2Page() {
         {locationArrivals.length > 0 && <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm"><div className="flex items-start gap-3"><BellRing className="mt-0.5 h-6 w-6 text-[#1769d2]" /><div><p className="text-xs font-black uppercase tracking-[.16em] text-[#1769d2]">Location arrival notice</p><h2 className="mt-1 text-xl font-black text-[#102a56]">A transported child has arrived</h2><p className="mt-1 text-sm font-semibold text-slate-600">Program directors and authorized staff only need the arrival notice. Missing-drop-off alerts stay with Danielle and Jen.</p></div></div></section>}
 
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#1769d2]">My Route Today</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">Choose the route you are running</h2><p className="mt-1 text-sm font-semibold text-slate-500">Pickup and destination confirmation happen one child at a time.</p></div>{canManageTransportation && <Link href="/transportation" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#102a56] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#1769d2]"><Pencil className="h-4 w-4" /> MANAGE TRANSPORTATION SETUP</Link>}</div>
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#1769d2]">My Route Today</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">Choose the route you are running</h2><p className="mt-1 text-sm font-semibold text-slate-500">Pickup and destination confirmation happen one child at a time.</p></div><div className="flex flex-wrap gap-2"><Link href={effectiveRoute ? `/emergency-cards?route=${encodeURIComponent(effectiveRoute)}` : "/emergency-cards"} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#9f2f35] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#7e2228]"><HeartPulse className="h-4 w-4" /> EMERGENCY MEDICAL CARDS</Link>{canManageTransportation && <Link href="/transportation" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#102a56] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#1769d2]"><Pencil className="h-4 w-4" /> MANAGE TRANSPORTATION SETUP</Link>}</div></div>
           <div className="mt-5 flex flex-wrap gap-2">{routeNames.map((name) => <button key={name} onClick={() => setSelectedRoute(name)} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${effectiveRoute === name ? "border-[#1769d2] bg-[#eef6ff] text-[#102a56]" : "border-slate-200 bg-white text-slate-600"}`}>{name}</button>)}{!routeNames.length && <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">No active routes are scheduled for today at this location.</p>}</div>
         </section>
 
