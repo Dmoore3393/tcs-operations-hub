@@ -1,4 +1,5 @@
 import type { EnrollmentLeadRecord } from "@/lib/admin-ops";
+import { normalizeFundingSource } from "@/lib/children";
 
 export type TourBoardStage =
   | "New Inquiry"
@@ -164,7 +165,7 @@ export function normalizeTourLead(input: Partial<TourBoardLead> & Partial<Enroll
     childAge: input.childAge || "",
     requestedCare: input.requestedCare || "",
     transportationNeeded: Boolean(input.transportationNeeded),
-    subsidy: input.subsidy || "",
+    subsidy: normalizeFundingSource(input.subsidy || ""),
     stage: mapLegacyStage(String(input.stage || "Inquiry")),
     tourDate: input.tourDate || "",
     followUpDate: input.followUpDate || "",
