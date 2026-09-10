@@ -16,7 +16,7 @@ export type FamilyRecord = {
   email: string;
   children: string[];
   location: string;
-  subsidy: "CCRC" | "DCFS" | "Private Pay" | "CCCC";
+  subsidy: string;
   balance: number;
   status: "Active" | "Enrollment Pending" | "Inactive";
   transportation: string;
