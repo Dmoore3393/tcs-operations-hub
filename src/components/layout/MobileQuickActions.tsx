@@ -8,6 +8,7 @@ import { useState } from "react";
 
 const quickItems = [
   { href: "/employee-lounge", label: "Lounge", icon: Users },
+  { href: "/emergency-cards", label: "Emergency", icon: HeartPulse },
   { href: "/daily-care", label: "Care Log", icon: ClipboardCheck },
   { href: "/meals", label: "Meal", icon: Utensils },
   { href: "/shift-reports", label: "Reports", icon: ClipboardCheck },
