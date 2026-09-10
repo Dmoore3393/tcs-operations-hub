@@ -56,7 +56,7 @@ export const starterEnrollmentLeads: EnrollmentLeadRecord[] = [
     childAge: "School age",
     requestedCare: "After-school care",
     transportationNeeded: true,
-    subsidy: "CCRC",
+    subsidy: "CCRC Stage 1",
     stage: "Tour Scheduled",
     tourDate: "2026-08-10T13:00",
     followUpDate: "2026-08-11",
