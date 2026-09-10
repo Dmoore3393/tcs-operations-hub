@@ -295,26 +295,23 @@ export default function ChildrenCenterLivePage() {
     URL.revokeObjectURL(anchor.href);
   }
 
-  return <MainLayout><div className="mx-auto w-full max-w-[1500px] space-y-3 pb-8 text-[#293423]">
-    <section className="relative min-h-[190px] overflow-hidden rounded-b-[28px] border border-[#eadfce] bg-[#fff8ed] shadow-sm">
-      <div className="absolute -left-6 -top-12 h-40 w-48 rounded-[45%] bg-[#f5d7c5]/65" />
-      <div className="absolute left-[42%] -top-10 h-28 w-44 rounded-[50%] bg-[#efdcc6]/60" />
-      <div className="absolute right-[27%] -bottom-16 h-44 w-44 rounded-full bg-[#d8ddc8]/65" />
-      <div className="relative z-10 max-w-[62%] px-6 py-5 sm:px-8">
-        <p className="text-sm font-medium uppercase tracking-[.28em] text-[#718164]">The Hub</p>
-        <h1 className="mt-1 text-4xl font-black leading-none tracking-[-.045em] sm:text-5xl"><span className="text-[#35452f]">CHILDREN</span> <span className="text-[#b95d3b]">CENTER</span></h1>
-        <p className="mt-1 text-lg text-[#30352f]">Enrollment, capacity, and child records in one place.</p>
-        <p className="mt-4 font-serif text-base italic text-[#57624f]">Growing children, stronger communities.</p>
+  return <MainLayout><div className="woodland-center mx-auto w-full max-w-[1500px] text-[#293423]"><div className="woodland-inner space-y-3 pb-3">
+    <section className="woodland-hero">
+      <div className="wood-sign">
+        <p className="woodland-eyebrow">The Hub</p>
+        <h1 className="woodland-title">Children Center</h1>
+        <p className="woodland-subtitle">Enrollment, capacity, and child records in one place.</p>
       </div>
-      <img src={HERO_KIDS} alt="Four smiling children" className="absolute bottom-0 right-[3%] hidden h-[175px] w-auto object-contain lg:block" />
-      <div className="absolute right-5 top-5 hidden rotate-[-6deg] font-serif text-sm italic leading-5 text-[#875d49] xl:block">Kind.<br />Confident.<br />Connected.<br /><span className="text-[#65745e]">Brighter Tomorrows</span></div>
+      <p className="woodland-tagline">🌿 Growing children, stronger communities.</p>
+      <img src={HERO_KIDS} alt="Four smiling children" className="woodland-kids" />
+      <div className="woodland-note">Kind<br/>Connected<br/>Confident<br/><strong>Brighter Tomorrows</strong></div>
     </section>
 
     {(error || notice) && <div className={`flex justify-between rounded-xl border px-4 py-2 text-sm font-bold ${error ? "border-red-200 bg-red-50 text-red-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}><span>{error || notice}</span><button onClick={() => { setError(""); setNotice(""); }}><X className="h-4 w-4" /></button></div>}
 
     <section className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
-      {loading && siteRows.length === 0 ? Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-[116px] animate-pulse rounded-xl bg-[#f2eee7]" />) : siteRows.map((site) => <button key={site.id || site.slug} onClick={() => setSiteFilter(site.key)} className={`overflow-hidden rounded-xl border border-[#e5dacb] bg-gradient-to-br ${site.tone} text-left shadow-sm transition hover:-translate-y-0.5`}>
-        <div className="flex items-center justify-between border-b border-black/5 px-4 py-3"><span className="flex items-center gap-2"><Home className={`h-5 w-5 ${site.icon}`} /><strong>{site.key}</strong></span><span className="text-[9px] font-bold uppercase tracking-wide text-slate-500">{site.programType}</span></div>
+      {loading && siteRows.length === 0 ? Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-[116px] animate-pulse rounded-xl bg-[#f2eee7]" />) : siteRows.map((site) => <button key={site.id || site.slug} onClick={() => setSiteFilter(site.key)} className={`woodland-grid-card bg-gradient-to-br ${site.tone} text-left transition`}>
+        <div className="woodland-location-head justify-between"><span className="flex items-center gap-2"><Home className={`h-5 w-5 ${site.icon}`} /><strong>{site.key}</strong></span><span className="text-[9px] font-bold uppercase tracking-wide text-slate-500">{site.programType}</span></div>
         <div className="grid grid-cols-3 divide-x divide-[#e5dacb] p-3 text-center"><Cell n={site.capacity} l="Capacity" /><Cell n={site.enrolled} l="Enrolled" /><Cell n={site.open} l="Open Spots" hot /></div>
       </button>)}
     </section>
@@ -323,12 +320,12 @@ export default function ChildrenCenterLivePage() {
 
     <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_330px]">
       <div className="space-y-3">
-        <section className="rounded-xl border border-[#e8dfd4] bg-white p-3 shadow-sm">
+        <section className="woodland-filter rounded-2xl p-3">
           <div className="flex flex-wrap gap-2"><Pill active={ageFilter === "All Children"} onClick={() => setAgeFilter("All Children")}>All Children ({live.length})</Pill>{["Infant", "Toddler", "Preschool", "School Age"].map((age) => <Pill key={age} active={ageFilter === age} onClick={() => setAgeFilter(age)}>{age} ({live.filter((child) => child.ageGroup === age).length})</Pill>)}</div>
           <div className="mt-3 grid gap-2 md:grid-cols-[1fr_180px_180px]"><label className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search child, family, or pay source…" className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#a9b49e]" /></label><select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold"><option>All Locations</option>{siteRows.map((site) => <option key={site.key}>{site.key}</option>)}</select><select value={payFilter} onChange={(event) => setPayFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold"><option>All Pay Sources</option>{paySources.map((source) => <option key={source}>{source}</option>)}</select></div>
         </section>
 
-        <section className="overflow-hidden rounded-xl border border-[#e8dfd4] bg-white shadow-sm">
+        <section className="woodland-table-panel">
           {loading ? <div className="flex min-h-56 items-center justify-center gap-2 text-slate-500"><LoaderCircle className="h-5 w-5 animate-spin" /> Loading secured child records…</div> : filtered.length === 0 ? <div className="p-12 text-center"><Baby className="mx-auto h-9 w-9 text-[#718164]" /><h2 className="mt-2 font-black">No children match this view</h2></div> : <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-sm"><thead className="bg-[#faf7f1] text-xs text-slate-500"><tr>{["Child", "Age", "Location", "Program / Age Group", "Schedule", "Pay Source", "Status", "Actions"].map((heading) => <th key={heading} className="px-4 py-3 font-black">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{filtered.map((child) => <tr key={child.id} className="hover:bg-[#fffaf1]"><td className="px-4 py-3"><button onClick={() => setSelected(child)} className="flex items-center gap-3 font-black"><span className="grid h-9 w-9 place-items-center rounded-full bg-[#e7eee1] text-xs text-[#506447]">{initials(child)}</span>{nameOf(child)}</button></td><td className="px-4 py-3">{child.age}</td><td className="px-4 py-3">{keyFor(child.location)}</td><td className="px-4 py-3">{child.ageGroup}</td><td className="max-w-40 truncate px-4 py-3">{child.weeklySchedule}</td><td className="px-4 py-3">{child.subsidy}</td><td className="px-4 py-3"><span className={`rounded-md px-2 py-1 text-xs font-black ${child.enrollmentStatus === "Active" ? "bg-[#dceedd] text-[#315b36]" : "bg-amber-100 text-amber-800"}`}>{child.enrollmentStatus}</span></td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => setSelected(child)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black">View File</button><button onClick={() => setSelected(child)} className="rounded-lg border border-slate-200 p-1.5"><MoreHorizontal className="h-4 w-4" /></button></div></td></tr>)}</tbody></table></div>}
         </section>
 
@@ -339,13 +336,20 @@ export default function ChildrenCenterLivePage() {
         <section className="rounded-xl border border-[#e7dfd3] bg-[#fffdf8] p-4 shadow-sm"><h2 className="font-black">Enrollment Snapshot</h2><div className="mt-4 flex items-center gap-4"><div className="grid h-32 w-32 place-items-center rounded-full" style={{ background: `conic-gradient(#5d7557 ${capacityPct}%, #f1d2a5 0)` }}><div className="grid h-[86px] w-[86px] place-items-center rounded-full bg-[#fffdf8] text-center"><div><p className="text-2xl font-black">{enrolledInVisibleSites}</p><p className="text-[10px] font-semibold">Enrolled<br />({capacityPct}% capacity)</p></div></div></div><div className="space-y-2 text-sm"><p><i className="mr-2 inline-block h-3 w-3 rounded-full bg-[#5d7557]" />Enrolled <strong>{enrolledInVisibleSites}</strong></p><p><i className="mr-2 inline-block h-3 w-3 rounded-full bg-[#f1d2a5]" />Open Spots <strong>{openSpots}</strong></p><p className="pt-2 text-xs text-slate-500">Licensed Capacity</p><p className="text-lg font-black">{totalCapacity}</p></div></div></section>
         <section className="rounded-xl border border-[#e7dfd3] bg-[#fffdf8] p-4 shadow-sm"><h2 className="font-black">Capacity by Location</h2><div className="mt-3 space-y-3">{siteRows.map((site) => <div key={site.key} className="grid grid-cols-[74px_1fr_48px] items-center gap-2 text-xs"><span className="font-semibold">{site.key}</span><div className="h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full" style={{ width: `${site.pct}%`, backgroundColor: site.colorPrimary || "#718164" }} /></div><span className="text-right font-black">{site.enrolled}/{site.capacity}</span></div>)}</div><p className="mt-6 text-center font-serif italic text-[#80523b]">More children.<br />Brighter communities.</p></section>
         <section className="rounded-xl border border-[#e7dfd3] bg-[#fff8ed] p-4 shadow-sm"><h2 className="font-black">Needs Attention</h2><div className="mt-3 space-y-3"><Action icon={<FileWarning />} n={fileAlerts} label="Missing Child Files" /><Action icon={<CalendarClock />} n={pending.length} label="Pending Enrollments" /><Action icon={<HeartPulse />} n={healthAlerts} label="Health / Allergy Alerts" /></div></section>
-        <section className="rounded-xl border border-[#e7dfd3] bg-[#fffaf2] p-5 text-center shadow-sm"><p className="font-serif text-lg italic text-[#506047]">“Every child belongs.<br />Every family matters.”</p><p className="mt-2 text-xs font-black uppercase tracking-wider text-[#8a6652]">— The Hub</p></section>
+        <section className="woodland-quote p-5"><p className="font-serif text-lg italic">“Every child belongs.<br />Every family matters.”</p><p className="mt-2 text-xs font-black uppercase tracking-wider">— The Hub</p></section>
       </aside>
     </div>
 
+    <section className="woodland-footer">
+      <span className="woodland-animal left" aria-hidden="true">🐿️</span>
+      <p className="woodland-footer-copy">Same people. Brighter futures. 🌿</p>
+      <div className="woodland-footer-sign">Stronger Children<br/>Brighter Tomorrows</div>
+      <span className="woodland-animal right" aria-hidden="true">🦌</span>
+    </section>
+
     {editing && <ChildEditorModal title={editing.id ? `Edit ${nameOf(editing)}` : "Add Child"} form={form} setForm={setForm} families={families} familyMode={familyMode} setFamilyMode={setFamilyMode} selectedFamilyId={selectedFamilyId} chooseFamily={chooseFamily} saving={saving} onClose={() => setEditing(null)} onSubmit={saveChild} />}
     {selected && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4"><button className="absolute inset-0" onClick={() => setSelected(null)} aria-label="Close" /><section className="relative z-10 w-full max-w-2xl rounded-3xl bg-[#fffdf9] p-6 shadow-2xl"><div className="flex justify-between"><div><p className="text-xs font-black uppercase tracking-wider text-[#718164]">Child File</p><h2 className="text-2xl font-black">{nameOf(selected)}</h2><p className="text-sm text-slate-500">{selected.age} • {keyFor(selected.location)} • {selected.ageGroup}</p></div><button onClick={() => setSelected(null)}><X /></button></div><div className="mt-5 grid gap-3 sm:grid-cols-2"><Detail l="Parent / Guardian" v={selected.primaryGuardian} /><Detail l="Phone" v={selected.phone} /><Detail l="Schedule" v={selected.weeklySchedule} /><Detail l="Pay Source" v={selected.subsidy} /><Detail l="Transportation" v={selected.transportation} /><Detail l="File Status" v={selected.licensingStatus} /><Detail l="Allergies / Alerts" v={selected.allergies} /><Detail l="Support Notes" v={selected.medicalNotes} /></div>{canManage && <div className="mt-5 flex justify-end gap-2"><button onClick={() => openEdit(selected)} className="inline-flex items-center gap-2 rounded-xl bg-[#445b37] px-4 py-2.5 text-sm font-black text-white"><Pencil className="h-4 w-4" /> Edit File</button><button onClick={() => void archive(selected)} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-black"><Archive className="h-4 w-4" /> Archive</button></div>}</section></div>}
-  </div></MainLayout>;
+  </div></div></MainLayout>;
 }
 
 function Cell({ n, l, hot = false }: { n: number; l: string; hot?: boolean }) {
@@ -353,11 +357,11 @@ function Cell({ n, l, hot = false }: { n: number; l: string; hot?: boolean }) {
 }
 
 function MiniStat({ icon, n, l }: { icon: ReactNode; n: number; l: string }) {
-  return <div className="flex items-center gap-3 rounded-xl border border-[#e8dfd4] bg-white px-4 py-3 shadow-sm"><span className="text-[#718164]">{icon}</span><div><p className="text-2xl font-black leading-none">{n}</p><p className="mt-1 text-xs font-semibold text-slate-500">{l}</p></div></div>;
+  return <div className="woodland-stat"><span className="woodland-stat-icon">{icon}</span><div><p className="text-2xl font-black leading-none">{n}</p><p className="mt-1 text-xs font-semibold text-slate-500">{l}</p></div></div>;
 }
 
 function Pill({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
-  return <button onClick={onClick} className={`rounded-lg px-3 py-2 text-xs font-black ${active ? "bg-[#506447] text-white" : "bg-[#f4f2ed] text-slate-600"}`}>{children}</button>;
+  return <button onClick={onClick} className={`woodland-pill ${active ? "woodland-pill-active" : "woodland-pill-idle"}`}>{children}</button>;
 }
 
 function Action({ icon, n, label }: { icon: ReactNode; n: number; label: string }) {
