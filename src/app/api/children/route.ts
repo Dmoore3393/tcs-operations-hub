@@ -13,6 +13,12 @@ function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function fundingSource(value: unknown) {
+  const source = text(value);
+  if (/^private pay$/i.test(source)) return "Cash Pay";
+  return source;
+}
+
 function stringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean) : [];
 }
@@ -58,7 +64,7 @@ function normalizeChild(row: DbRow) {
     familyId: typeof record.familyId === "number" ? record.familyId : undefined,
     familyName: text(record.familyName) || undefined,
     guardianEmail: text(record.guardianEmail) || undefined,
-    subsidy: text(record.subsidy) || "Private Pay",
+    subsidy: fundingSource(record.subsidy) || "",
     weeklySchedule: text(record.weeklySchedule),
     transportation: text(record.transportation) || "No transportation",
     allergies: text(record.allergies) || "None reported",
@@ -119,6 +125,10 @@ function validateChild(value: unknown) {
   if (!text(child.primaryGuardian)) throw new Response("At least one parent or guardian is required.", { status: 400 });
   if (!text(child.location)) throw new Response("A childcare location is required.", { status: 400 });
   if (!text(child.ageGroup)) throw new Response("An age group is required.", { status: 400 });
+  const funding = fundingSource(child.subsidy);
+  if (!funding) throw new Response("Choose a funding source.", { status: 400 });
+  if (/^ccrc$/i.test(funding)) throw new Response("CCRC must be identified as Stage 1 or Stage 2.", { status: 400 });
+  child.subsidy = funding;
   return child;
 }
 
@@ -142,7 +152,7 @@ function safeChildRecord(child: DbRow, id: number) {
     familyId: typeof child.familyId === "number" ? child.familyId : undefined,
     familyName: text(child.familyName).slice(0, 160) || undefined,
     guardianEmail: text(child.guardianEmail).slice(0, 254) || undefined,
-    subsidy: (text(child.subsidy) || "Private Pay").slice(0, 100),
+    subsidy: fundingSource(child.subsidy).slice(0, 100),
     weeklySchedule: text(child.weeklySchedule).slice(0, 1000),
     transportation: (text(child.transportation) || "No transportation").slice(0, 1000),
     allergies: (text(child.allergies) || "None reported").slice(0, 2000),
