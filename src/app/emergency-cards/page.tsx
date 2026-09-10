@@ -253,7 +253,7 @@ export default function EmergencyCardsPage() {
         <button onClick={printPacket} disabled={!selectedChildren.length}><Printer /> Print Selected Emergency Cards</button>
       </section>
 
-      {openCard && <EmergencyCardModal child={openCard} onClose={() => setOpenCard(null)} />}
+      {openCard && <EmergencyCardModal child={openCard} onClose={() => setOpenCard(null)} onPrint={() => { setSelectedIds([openCard.id]); window.setTimeout(() => window.print(), 80); }} />}
 
       <div className="emergency-print-area" aria-hidden="true">
         <div className="print-cover">
@@ -268,7 +268,7 @@ export default function EmergencyCardsPage() {
   </MainLayout>;
 }
 
-function EmergencyCardModal({ child, onClose }: { child: ChildRecord; onClose: () => void }) {
+function EmergencyCardModal({ child, onClose, onPrint }: { child: ChildRecord; onClose: () => void; onPrint: () => void }) {
   const readiness = emergencyCardReadiness(child);
   return <div className="emergency-modal-backdrop">
     <button className="absolute inset-0" onClick={onClose} aria-label="Close emergency card" />
@@ -332,8 +332,8 @@ function EmergencyCardModal({ child, onClose }: { child: ChildRecord; onClose: (
       </div>
 
       <footer>
-        <Link href="/children">Edit information in Children Center</Link>
-        <button onClick={() => window.print()}><Printer /> Print</button>
+        <Link href={`/children?editChild=${child.id}`}>Edit information in Children Center</Link>
+        <button onClick={onPrint}><Printer /> Print This Card</button>
       </footer>
     </section>
   </div>;
