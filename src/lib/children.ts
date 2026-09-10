@@ -53,6 +53,67 @@ export type ChildFormState = {
   attendanceToday: AttendanceStatus;
 };
 
+export type ChildAgeProfile = {
+  age: string;
+  ageGroup: AgeGroup;
+  classroom: string;
+  monthsOld: number;
+};
+
+/**
+ * Derives the child's current age, program age group, and default room from DOB.
+ * TCS thresholds:
+ * - Infant: birth through 17 months
+ * - Toddler: 18 through 35 months
+ * - Preschool: 36 through 56 months
+ * - School Age: 57 months (4y9m) and older
+ */
+export function deriveChildAgeProfile(dateOfBirth: string, asOf = new Date()): ChildAgeProfile | null {
+  if (!dateOfBirth) return null;
+  const parts = dateOfBirth.split("-").map(Number);
+  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return null;
+  const [year, month, day] = parts;
+  const birth = new Date(year, month - 1, day);
+  if (
+    birth.getFullYear() !== year ||
+    birth.getMonth() !== month - 1 ||
+    birth.getDate() !== day ||
+    birth > asOf
+  ) return null;
+
+  let monthsOld = (asOf.getFullYear() - year) * 12 + (asOf.getMonth() - (month - 1));
+  if (asOf.getDate() < day) monthsOld -= 1;
+  monthsOld = Math.max(0, monthsOld);
+
+  const years = Math.floor(monthsOld / 12);
+  const months = monthsOld % 12;
+  const age = monthsOld < 24
+    ? `${monthsOld} ${monthsOld === 1 ? "month" : "months"}`
+    : months > 0
+      ? `${years} yrs ${months} mos`
+      : `${years} ${years === 1 ? "year" : "years"}`;
+
+  const ageGroup: AgeGroup = monthsOld < 18
+    ? "Infant"
+    : monthsOld < 36
+      ? "Toddler"
+      : monthsOld < 57
+        ? "Preschool"
+        : "School Age";
+
+  return {
+    age,
+    ageGroup,
+    classroom: `${ageGroup} Room`,
+    monthsOld,
+  };
+}
+
+export function applyChildAgeProfile<T extends Pick<ChildRecord, "dateOfBirth" | "age" | "ageGroup" | "classroom">>(child: T): T {
+  const profile = deriveChildAgeProfile(child.dateOfBirth);
+  return profile ? { ...child, age: profile.age, ageGroup: profile.ageGroup, classroom: profile.classroom } : child;
+}
+
 export const locations = [
   "Moore Family Childcare • Halcom",
   "Cathers Family Childcare • 21st Street",
