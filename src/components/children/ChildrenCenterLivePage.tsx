@@ -4,7 +4,7 @@ import ChildEditorModal from "@/components/children/ChildEditorModal";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { deriveFamiliesFromChildren } from "@/lib/family-derived";
-import { applyChildAgeProfile, deriveChildAgeProfile, emptyForm, type ChildFormState, type ChildRecord } from "@/lib/children";
+import { applyChildAgeProfile, deriveChildAgeProfile, emptyForm, locations as childLocationOptions, type ChildFormState, type ChildRecord } from "@/lib/children";
 import {
   Archive,
   Baby,
@@ -22,7 +22,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 const HERO_KIDS = "/children-center-kids.jpg";
 
@@ -110,6 +110,7 @@ export default function ChildrenCenterLivePage() {
   const [form, setForm] = useState<ChildFormState>({ ...emptyForm });
   const [familyMode, setFamilyMode] = useState<"existing" | "new">("new");
   const [selectedFamilyId, setSelectedFamilyId] = useState<number | "">("");
+  const tourHandoffProcessed = useRef(false);
 
   const request = useCallback(async (method: "GET" | "POST", body?: Record<string, unknown>) => {
     if (!session?.access_token) throw new Error("Your staff session is not ready yet.");
@@ -150,6 +151,41 @@ export default function ChildrenCenterLivePage() {
   }, [request, session?.access_token]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (loading || tourHandoffProcessed.current || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("fromTour") !== "1") return;
+    tourHandoffProcessed.current = true;
+    const raw = sessionStorage.getItem("tcs-tour-child-handoff");
+    if (!raw) return;
+    try {
+      const handoff = JSON.parse(raw) as Record<string, unknown>;
+      const requestedLocation = String(handoff.location || "");
+      const matchedLocation = childLocationOptions.find((option) => keyFor(option) === keyFor(requestedLocation)) || emptyForm.location;
+      setEditing({} as ChildRecord);
+      setFamilyMode("new");
+      setSelectedFamilyId("");
+      setForm({
+        ...emptyForm,
+        firstName: String(handoff.firstName || ""),
+        lastName: String(handoff.lastName || ""),
+        familyName: String(handoff.familyName || ""),
+        primaryGuardian: String(handoff.primaryGuardian || ""),
+        phone: String(handoff.phone || ""),
+        guardianEmail: String(handoff.guardianEmail || ""),
+        location: matchedLocation,
+        subsidy: String(handoff.subsidy || "Private Pay"),
+        weeklySchedule: String(handoff.weeklySchedule || ""),
+        transportation: String(handoff.transportation || "No transportation"),
+      });
+      sessionStorage.removeItem("tcs-tour-child-handoff");
+      window.history.replaceState({}, "", window.location.pathname);
+      flash("Enrollment information carried over from the Tour Board. Enter the date of birth to finish age and room placement.");
+    } catch {
+      sessionStorage.removeItem("tcs-tour-child-handoff");
+    }
+  }, [loading]);
 
   const live = children.filter((child) => child.enrollmentStatus !== "Archived");
   const active = live.filter((child) => child.enrollmentStatus === "Active");
