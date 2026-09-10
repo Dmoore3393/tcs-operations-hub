@@ -3,6 +3,7 @@
 import type { FamilyRecord } from "@/lib/hub-data";
 import {
   deriveChildAgeProfile,
+  fundingSources,
   locations,
   type AgeGroup,
   type AttendanceStatus,
@@ -139,7 +140,7 @@ export default function ChildEditorModal({
                     <Field label="Secondary guardian"><input className={inputClass} disabled={lockFamily} value={form.secondaryGuardian} onChange={(e) => setForm({ ...form, secondaryGuardian: e.target.value })} /></Field>
                     <Field label="Phone"><input className={inputClass} disabled={lockFamily} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
                     <Field label="Email"><input type="email" className={inputClass} disabled={lockFamily} value={form.guardianEmail} onChange={(e) => setForm({ ...form, guardianEmail: e.target.value })} /></Field>
-                    <Field label="Funding"><select className={inputClass} disabled={lockFamily} value={form.subsidy} onChange={(e) => setForm({ ...form, subsidy: e.target.value })}><option>Private Pay</option><option>Cash Pay</option><option>CCRC</option><option>CCRC Stage 1</option><option>CCRC Stage 2</option><option>CCCC</option><option>DCFS</option><option>Respite</option><option>Crystal Stairs</option></select></Field>
+                    <Field label="Funding"><select required className={inputClass} disabled={lockFamily} value={form.subsidy} onChange={(e) => setForm({ ...form, subsidy: e.target.value })}><option value="">Choose funding source…</option>{form.subsidy === "CCRC" && <option value="CCRC" disabled>CCRC — choose Stage 1 or Stage 2</option>}{fundingSources.map((source) => <option key={source}>{source}</option>)}</select></Field>
                   </Grid>
                 </SectionCard>
 
