@@ -8,6 +8,12 @@ import { usePersistentState } from "@/hooks/usePersistentState";
 import { starterEnrollmentLeads } from "@/lib/admin-ops";
 import {
   TOUR_BOARD_COLUMNS,
+  crmTags,
+  daysSince,
+  lastContactActivity,
+  leadAgeDays,
+  leadNeedsAttention,
+  leadTemperature,
   latestTour,
   makeTourId,
   normalizeTourLead,
@@ -76,6 +82,13 @@ function isPastDue(value: string) {
   if (!value) return false;
   return value < todayKey();
 }
+function relativeLabel(value: string) {
+  const days = daysSince(value);
+  if (days === null) return "No contact yet";
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  return `${days} days ago`;
+}
 function blankLead(location: string, staffName: string): TourBoardLead {
   const createdAt = new Date().toISOString();
   return normalizeTourLead({
@@ -83,6 +96,7 @@ function blankLead(location: string, staffName: string): TourBoardLead {
     subsidy: "", stage: "New Inquiry", tourDate: "", followUpDate: "", assignedTo: staffName, notes: "", createdAt,
     programType: "", ageGroup: "", leadSource: "Other", inquiryMethod: "Other", preferredStartDate: "", contactedAt: "", nextAction: "Contact family",
     priority: "Normal", enrollmentPacketSentAt: "", enrolledAt: "", waitlistReason: "", declinedReason: "", updatedAt: createdAt, tourHistory: [],
+    tags: [], childRecordStartedAt: "",
     activity: [{ id: makeTourId("activity"), at: createdAt, kind: "Inquiry", by: staffName, note: "New childcare inquiry added to the Tour Board." }],
   } as any);
 }
@@ -138,6 +152,10 @@ export default function TourBoardPage() {
   const noShows = allTours.filter(({ tour }) => tour.status === "No Show").length;
   const lateTours = allTours.filter(({ tour }) => tour.status === "Completed" && tour.lateMinutes > 0).length;
   const overdueFollowUps = scoped.filter((lead) => !["Enrolled", "Waitlist", "Declined"].includes(lead.stage) && isPastDue(lead.followUpDate)).length;
+  const needsAttention = scoped.filter((lead) => leadNeedsAttention(lead)).length;
+  const hotLeads = scoped.filter((lead) => leadTemperature(lead) === "Hot").length;
+  const untouchedNewLeads = scoped.filter((lead) => lead.stage === "New Inquiry" && !lastContactActivity(lead)).length;
+  const packetsWaiting = scoped.filter((lead) => lead.enrollmentPacketSentAt && !["Enrolled", "Declined"].includes(lead.stage)).length;
   const toursToday = allTours.filter(({ tour }) => tour.status === "Scheduled" && tour.scheduledAt.slice(0, 10) === todayKey()).length;
   const touredFamilies = scoped.filter((lead) => lead.tourHistory.some((tour) => tour.status === "Completed")).length;
   const enrolledCount = scoped.filter((lead) => lead.stage === "Enrolled").length;
@@ -217,8 +235,52 @@ export default function TourBoardPage() {
     persistLead({ ...tourLead, stage: nextStage, followUpDate: tourFollowUp, nextAction: tourNextStep || (tourStatus === "No Show" ? "Contact family to reschedule" : "Follow up after tour"), tourHistory: [...otherTours, completedVisit], activity: [...tourLead.activity, activity("Tour", statusNote)] });
     setTourLead(null); setNotice(statusNote);
   }
-  function openActivity(lead: TourBoardLead, kind: "Reminder" | "Contact" | "Follow-Up") {
-    setActivityLead(lead); setActivityKind(kind); setActivityNote(kind === "Reminder" ? `Tour reminder sent for ${formatDateTime(lead.tourDate)}.` : "");
+  function openActivity(lead: TourBoardLead, kind: "Reminder" | "Contact" | "Follow-Up", preset = "") {
+    setActivityLead(lead);
+    setActivityKind(kind);
+    setActivityNote(preset || (kind === "Reminder" ? `Tour reminder sent for ${formatDateTime(lead.tourDate)}.` : ""));
+  }
+  function quickContact(lead: TourBoardLead, method: "Call" | "Text") {
+    openActivity(lead, "Contact", `${method} with family: `);
+  }
+  function markEnrolled(lead: TourBoardLead) {
+    if (lead.stage === "Enrolled") return;
+    const when = new Date().toISOString();
+    persistLead({
+      ...lead,
+      stage: "Enrolled",
+      enrolledAt: when,
+      nextAction: "Create child record and complete enrollment setup",
+      activity: [...lead.activity, activity("Status Change", "Family marked enrolled in the Tour Board.")],
+    });
+    setNotice(`${lead.familyName} marked enrolled. You can now start the child record.`);
+  }
+  function startChildRecord(lead: TourBoardLead) {
+    const childParts = lead.childName.trim().split(/\s+/);
+    const handoff = {
+      tourLeadId: lead.id,
+      childName: lead.childName,
+      firstName: childParts[0] || "",
+      lastName: childParts.slice(1).join(" "),
+      familyName: lead.familyName,
+      primaryGuardian: lead.parentName,
+      phone: lead.phone,
+      guardianEmail: lead.email,
+      location: lead.location,
+      subsidy: lead.subsidy || "Private Pay",
+      ageGroup: lead.ageGroup || "",
+      weeklySchedule: lead.scheduleNeeded || lead.requestedCare || "",
+      transportation: lead.transportationNeeded ? (lead.schoolName ? `Transportation needed • ${lead.schoolName}` : "Transportation needed") : "No transportation",
+    };
+    sessionStorage.setItem("tcs-tour-child-handoff", JSON.stringify(handoff));
+    const when = new Date().toISOString();
+    persistLead({
+      ...lead,
+      childRecordStartedAt: when,
+      nextAction: "Finish child record in Children Center",
+      activity: [...lead.activity, activity("Status Change", "Child record handoff started in Children Center.")],
+    });
+    window.location.href = "/children?fromTour=1";
   }
   function saveActivity() {
     if (!activityLead || !activityNote.trim()) return;
