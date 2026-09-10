@@ -6,6 +6,7 @@ import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { starterEnrollmentLeads } from "@/lib/admin-ops";
+import { fundingSources } from "@/lib/children";
 import {
   TOUR_BOARD_COLUMNS,
   crmTags,
@@ -267,7 +268,7 @@ export default function TourBoardPage() {
       phone: lead.phone,
       guardianEmail: lead.email,
       location: lead.location,
-      subsidy: lead.subsidy || "Private Pay",
+      subsidy: lead.subsidy || "",
       ageGroup: lead.ageGroup || "",
       weeklySchedule: lead.scheduleNeeded || lead.requestedCare || "",
       transportation: lead.transportationNeeded ? (lead.schoolName ? `Transportation needed • ${lead.schoolName}` : "Transportation needed") : "No transportation",
@@ -413,7 +414,7 @@ export default function TourBoardPage() {
         <Field label="Age group"><select value={leadDraft.ageGroup} onChange={(e)=>setLeadDraft({...leadDraft,ageGroup:e.target.value})}><option value="">Choose age group</option>{ageGroups.map(item=><option key={item}>{item}</option>)}</select></Field>
         <Field label="Program type"><select value={leadDraft.programType} onChange={(e)=>setLeadDraft({...leadDraft,programType:e.target.value})}><option value="">Choose program</option>{programs.map(item=><option key={item}>{item}</option>)}</select></Field>
         <Field label="Preferred start date"><input type="date" value={leadDraft.preferredStartDate} onChange={(e)=>setLeadDraft({...leadDraft,preferredStartDate:e.target.value})}/></Field>
-        <Field label="Funding / subsidy"><input value={leadDraft.subsidy} onChange={(e)=>setLeadDraft({...leadDraft,subsidy:e.target.value})} placeholder="CCRC, Crystal Stairs, Cash Pay, DCFS..."/></Field>
+        <Field label="Funding / subsidy"><select value={leadDraft.subsidy} onChange={(e)=>setLeadDraft({...leadDraft,subsidy:e.target.value})}><option value="">Not known yet</option>{leadDraft.subsidy === "CCRC" && <option value="CCRC" disabled>CCRC — choose Stage 1 or Stage 2</option>}{fundingSources.map((source)=><option key={source}>{source}</option>)}</select></Field>
         <Field label="School name"><input value={leadDraft.schoolName} onChange={(e)=>setLeadDraft({...leadDraft,schoolName:e.target.value})} placeholder="If transportation is needed"/></Field>
         <Field label="Schedule needed" full><input value={leadDraft.scheduleNeeded} onChange={(e)=>setLeadDraft({...leadDraft,scheduleNeeded:e.target.value})} placeholder="Example: Mon–Fri after school until 5:30 PM"/></Field>
         <Field label="Requested care / notes about schedule" full><textarea value={leadDraft.requestedCare} onChange={(e)=>setLeadDraft({...leadDraft,requestedCare:e.target.value})} placeholder="Full day, after school, extended hours, weekend care, days needed..."/></Field>
