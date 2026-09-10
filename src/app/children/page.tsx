@@ -1,3 +1,3 @@
-import ChildrenCenterPage from "@/components/children/ChildrenCenterPage";
+import ChildrenCenterLivePage from "@/components/children/ChildrenCenterLivePage";
 
-export default ChildrenCenterPage;
+export default ChildrenCenterLivePage;
