@@ -200,7 +200,9 @@ function safeChildRecord(child: DbRow, id: number) {
 
 export async function GET(request: Request) {
   try {
-    const { userClient } = await requireStaff(request);
+    const { userClient, profile, isOwner, isLicensee } = await requireStaff(request);
+    const sensitiveChildAccess = isOwner || isLicensee || ["children_basic", "transportation", "health_safety"].some((permission) => profile.permissions.includes(permission));
+    if (!sensitiveChildAccess) throw new Response("This staff account is not approved to view child emergency records.", { status: 403 });
     const [childrenResult, locationsResult] = await Promise.all([
       userClient
         .from("children")
