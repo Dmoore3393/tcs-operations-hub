@@ -16,7 +16,6 @@ import {
   FileWarning,
   HeartPulse,
   LoaderCircle,
-  MapPin,
   Phone,
   Printer,
   RefreshCw,
