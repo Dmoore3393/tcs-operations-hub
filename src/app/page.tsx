@@ -22,7 +22,7 @@ import Link from "next/link";
 
 export default function Home() {
   const { profile } = useAuth();
-  const { availableLocations } = useHubLocation();
+  const { availableLocations, location } = useHubLocation();
   const canUseChildren = canAccessRoute(profile, "/children");
   const canUseKidKare = canAccessRoute(profile, "/kidkare");
   const canUseTimesheets = canAccessRoute(profile, "/timesheets");
@@ -112,8 +112,29 @@ export default function Home() {
   return (
     <MainLayout>
       <div className="mx-auto max-w-[1600px] space-y-6">
-        <DashboardHero />
-        <MorningBriefing snapshot={briefingSnapshot} />
+        <section className="space-y-4 lg:hidden">
+          <div className="overflow-hidden rounded-[28px] bg-gradient-to-br from-[#173d29] via-[#245a39] to-[#10291e] p-5 text-white shadow-xl">
+            <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-200">The Hub App • {location}</p>
+            <h1 className="mt-2 text-2xl font-black">What needs your attention right now?</h1>
+            <p className="mt-2 text-xs font-semibold leading-5 text-emerald-50/80">Fast mobile access to today’s transportation, emergency information, alerts, tours, and staffing.</p>
+            <div className="mt-5 grid grid-cols-4 gap-2">
+              {canUseTransportation && <MobileShortcut href="/transportation-v2" icon={<Bus className="h-5 w-5" />} label="Transport" />}
+              <MobileShortcut href="/emergency-cards" icon={<HeartPulse className="h-5 w-5" />} label="Emergency" />
+              <MobileShortcut href="/notifications" icon={<HeartPulse className="h-5 w-5" />} label="Alerts" />
+              {canUseScheduling ? <MobileShortcut href="/scheduling" icon={<CalendarClock className="h-5 w-5" />} label="Schedule" /> : canUseEnrollment ? <MobileShortcut href="/enrollment-pipeline" icon={<Users className="h-5 w-5" />} label="Tours" /> : null}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {canUseTransportation && <MobileAttention href="/transportation" value={routesNeedingReview.length} label="Routes to review" tone="blue" />}
+            {canUseEnrollment && <MobileAttention href="/enrollment-pipeline" value={activeEnrollmentLeads.length} label="Active family leads" tone="amber" />}
+            {canUseFiles && <MobileAttention href="/files" value={openFiles.length} label="File items open" tone="red" />}
+            {canUseWorkPlans && <MobileAttention href="/work-plans" value={urgentTasks} label="Urgent work items" tone="green" />}
+          </div>
+        </section>
+
+        <div className="hidden lg:block"><DashboardHero /></div>
+        <div className="hidden lg:block"><MorningBriefing snapshot={briefingSnapshot} /></div>
         <TodayAtTCS
           date={localIsoDate()}
           shifts={shifts}
@@ -207,4 +228,13 @@ function AlertItem({ icon, title, helper, href, tone }: { icon: React.ReactNode;
 
 function QuickTool({ href, icon, title, helper }: { href: string; icon: React.ReactNode; title: string; helper: string }) {
   return <Link href={href} className="group flex items-start gap-3 rounded-2xl border border-slate-200 p-4 transition hover:border-emerald-300 hover:bg-emerald-50/30"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800 transition group-hover:bg-emerald-600 group-hover:text-white">{icon}</div><div className="min-w-0 flex-1"><p className="font-black text-slate-950">{title}</p><p className="mt-1 text-xs leading-5 text-slate-500">{helper}</p></div><ArrowRight className="mt-2 h-4 w-4 text-slate-400" /></Link>;
+}
+
+function MobileShortcut({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
+  return <Link href={href} className="flex min-w-0 flex-col items-center gap-1 rounded-2xl bg-white/10 px-2 py-3 text-center text-[10px] font-black text-white backdrop-blur"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10">{icon}</span><span className="truncate">{label}</span></Link>;
+}
+
+function MobileAttention({ href, value, label, tone }: { href: string; value: number; label: string; tone: "red" | "amber" | "blue" | "green" }) {
+  const styles = { red: "border-red-200 bg-red-50 text-red-900", amber: "border-amber-200 bg-amber-50 text-amber-900", blue: "border-blue-200 bg-blue-50 text-blue-900", green: "border-emerald-200 bg-emerald-50 text-emerald-900" };
+  return <Link href={href} className={`rounded-2xl border p-4 shadow-sm ${styles[tone]}`}><strong className="text-2xl font-black">{value}</strong><p className="mt-1 text-[11px] font-black leading-4">{label}</p></Link>;
 }
