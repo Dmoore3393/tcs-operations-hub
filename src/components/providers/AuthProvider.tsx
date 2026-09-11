@@ -14,7 +14,7 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { AlertTriangle, Database, LoaderCircle, LockKeyhole, LogOut } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 export type StaffAccessProfile = {
   user_id: string;
@@ -144,6 +144,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<StaffAccessProfile | null>(null);
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [accessError, setAccessError] = useState("");
+  const lastActivityRef = useRef(Date.now());
+  const timeoutTriggeredRef = useRef(false);
 
   const loadProfile = useCallback(async (activeSession: Session | null) => {
     if (!supabase || !activeSession) {
@@ -237,6 +239,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(null);
     router.replace("/login");
   }, [router]);
+
+  useEffect(() => {
+    if (!session || !profile || pathname === "/login") return;
+
+    const idleLimitMs = 20 * 60 * 1000;
+    timeoutTriggeredRef.current = false;
+    lastActivityRef.current = Date.now();
+
+    const markActivity = () => {
+      if (document.visibilityState === "visible") lastActivityRef.current = Date.now();
+    };
+
+    const enforceTimeout = () => {
+      if (timeoutTriggeredRef.current) return;
+      if (Date.now() - lastActivityRef.current < idleLimitMs) return;
+      timeoutTriggeredRef.current = true;
+      window.sessionStorage.setItem("tcs-security-timeout", "1");
+      void signOut();
+    };
+
+    const visibility = () => {
+      if (document.visibilityState === "visible") {
+        enforceTimeout();
+        if (!timeoutTriggeredRef.current) markActivity();
+      }
+    };
+
+    const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "touchstart"];
+    events.forEach((eventName) => window.addEventListener(eventName, markActivity, { passive: true }));
+    document.addEventListener("visibilitychange", visibility);
+    const timer = window.setInterval(enforceTimeout, 30000);
+
+    return () => {
+      events.forEach((eventName) => window.removeEventListener(eventName, markActivity));
+      document.removeEventListener("visibilitychange", visibility);
+      window.clearInterval(timer);
+    };
+  }, [pathname, profile, session, signOut]);
 
   const value = useMemo<AuthContextValue>(() => {
     const isSystemOwner = isOwnerRole(profile?.role);
