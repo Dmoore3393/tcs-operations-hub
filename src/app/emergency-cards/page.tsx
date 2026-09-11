@@ -1,6 +1,7 @@
 "use client";
 
 import MainLayout from "@/components/layout/MainLayout";
+import { recordAuditEvent } from "@/lib/audit";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -135,7 +136,7 @@ export default function EmergencyCardsPage() {
       (childName && normalizedPersonName(childDisplayName(child)) === normalizedPersonName(childName)),
     );
     if (match) {
-      setOpenCard(match);
+      openEmergencyCard(match);
       setSelectedIds([match.id]);
     }
     setQueryHandled(true);
@@ -161,6 +162,19 @@ export default function EmergencyCardsPage() {
   const consentMissingCount = filtered.filter((child) => (child.medicalConsentStatus ?? "Missing") !== "On File").length;
   const criticalAlertCount = filtered.filter(hasCriticalMedicalAlert).length;
   const selectedChildren = children.filter((child) => selectedIds.includes(child.id));
+
+  function openEmergencyCard(child: ChildRecord) {
+    setOpenCard(child);
+    void recordAuditEvent({
+      action: "REVIEW",
+      tableName: "children",
+      location: child.location,
+      legacyId: child.id,
+      metadata: { kind: "emergency_medical_card_review" },
+    }).catch(() => {
+      // Emergency access must remain available even if audit delivery is temporarily unavailable.
+    });
+  }
 
   function toggleSelected(id: number) {
     setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
@@ -240,7 +254,7 @@ export default function EmergencyCardsPage() {
               </div>
               <div className="emergency-row-actions">
                 {child.phone && <a href={`tel:${normalizedPhone(child.phone)}`}><Phone /> Parent</a>}
-                <button onClick={() => setOpenCard(child)}><HeartPulse /> Open Card</button>
+                <button onClick={() => openEmergencyCard(child)}><HeartPulse /> Open Card</button>
               </div>
             </article>;
           })}
