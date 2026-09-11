@@ -44,11 +44,13 @@ import { useHubLocation } from "@/components/providers/LocationProvider";
 import { canAccessRoute, staffInitials, useAuth } from "@/components/providers/AuthProvider";
 import { HUB_SYNC_EVENT, type HubSyncDetail } from "@/lib/sync-events";
 import MobileQuickActions from "@/components/layout/MobileQuickActions";
+import NotificationBell from "@/components/notifications/NotificationBell";
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: Home },
   { label: "Employee Lounge", href: "/employee-lounge", icon: Coffee },
   { label: "Employee Bulletin Board", href: "/employee-bulletin", icon: Pin },
+  { label: "Notifications", href: "/notifications", icon: HeartPulse },
   { label: "Families", href: "/families", icon: Users },
   { label: "Children", href: "/children", icon: UserRound },
   { label: "Student Store", href: "/student-store", icon: Store },
@@ -86,6 +88,7 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Operations Dashboard", subtitle: "Today across Thomason Childcare Solutions" },
   "/employee-lounge": { title: "Employee Lounge", subtitle: "Connect, celebrate, recharge, and find your team tools" },
   "/employee-bulletin": { title: "Employee Bulletin Board", subtitle: "Announcements, reminders, policy updates, training, recognition, and pinned notes" },
+  "/notifications": { title: "Notification Center", subtitle: "Transportation, emergency, Tour Board, and staff schedule alerts" },
   "/families": { title: "Family Accounts", subtitle: "Guardians, billing, subsidies, and communication" },
   "/children": { title: "Children", subtitle: "Enrollment, health alerts, and child files" },
   "/student-store": { title: "The Hub Student Store", subtitle: "Gator Cash, child profiles, school-age jobs, applications, purchases, and location inventory" },
@@ -231,7 +234,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               </div>
             </div>
 
-            <div className="relative flex items-center gap-2 sm:gap-3">
+            <div className="relative flex items-center gap-2 sm:gap-3"><NotificationBell />
               <div className="relative">
                 <label className="relative block">
                   <span className="sr-only">Selected location</span>
