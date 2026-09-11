@@ -175,7 +175,7 @@ const routePermissionMap: Record<string, EmployeePermission> = {
   "/ai-director": "ai_assistant",
 };
 
-const employeeAlwaysAllowedRoutes = new Set(["/", "/employee-lounge", "/employee-bulletin", "/team-store", "/training-center", "/login", "/accept-invite"]);
+const employeeAlwaysAllowedRoutes = new Set(["/", "/employee-lounge", "/employee-bulletin", "/team-store", "/training-center", "/notifications", "/login", "/accept-invite"]);
 
 export function employeeCanAccessRoute(permissions: string[], pathname: string) {
   if (employeeAlwaysAllowedRoutes.has(pathname)) return true;
