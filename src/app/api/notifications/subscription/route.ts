@@ -1,11 +1,6 @@
-import { createHash } from "node:crypto";
-import { loadNotificationState, parsePushSubscriptions, savePushSubscriptions } from "@/lib/server/notifications";
+import { loadNotificationState, parsePushSubscriptions, pushDeviceId, savePushSubscriptions } from "@/lib/server/notifications";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 import { getVapidPublicKey, type StoredPushSubscription } from "@/lib/server/web-push";
-
-function deviceId(endpoint: string) {
-  return createHash("sha256").update(endpoint).digest("hex").slice(0, 20);
-}
 
 type SubscriptionBody = {
   endpoint?: string;
@@ -44,7 +39,7 @@ export async function GET(request: Request) {
       publicKey: getVapidPublicKey(),
       subscriptionCount: subscriptions.length,
       devices: subscriptions.map((item) => ({
-        id: deviceId(item.endpoint),
+        id: pushDeviceId(item.endpoint),
         createdAt: item.createdAt,
         lastSeenAt: item.lastSeenAt,
         userAgent: item.userAgent,
@@ -96,7 +91,7 @@ export async function DELETE(request: Request) {
 
     const state = await loadNotificationState(admin, user.id);
     const current = parsePushSubscriptions(state.user);
-    const next = current.filter((item) => endpoint ? item.endpoint !== endpoint : deviceId(item.endpoint) !== requestedDeviceId);
+    const next = current.filter((item) => endpoint ? item.endpoint !== endpoint : pushDeviceId(item.endpoint) !== requestedDeviceId);
     await savePushSubscriptions(admin, state.user, next);
 
     return Response.json({ ok: true, subscriptionCount: next.length });
