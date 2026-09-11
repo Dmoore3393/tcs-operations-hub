@@ -62,6 +62,7 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState("");
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
+  const [pushMessage, setPushMessage] = useState("");
 
   const load = useCallback(async () => {
     if (!session?.access_token) return;
@@ -135,8 +136,10 @@ export default function NotificationsPage() {
 
   async function enableSystemAlerts() {
     if (!session?.access_token) return;
+    setPushMessage("");
     const result = await enableHubPushNotifications(session.access_token);
     setPermission(result.permission === "unsupported" ? "unsupported" : result.permission);
+    setPushMessage(result.ok ? "Background notifications are registered on this device." : result.reason);
     if (result.ok) {
       const registration = await navigator.serviceWorker?.ready;
       await registration?.showNotification("The Hub notifications are on", {
@@ -146,6 +149,28 @@ export default function NotificationsPage() {
         tag: "tcs-notifications-enabled",
         data: { href: "/notifications" },
       });
+    }
+  }
+
+  async function testBackgroundPush() {
+    if (!session?.access_token) return;
+    setSaving("push-test");
+    setPushMessage("");
+    try {
+      const response = await fetch("/api/notifications/push-test", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const payload = await response.json() as { ok?: boolean; delivered?: number; error?: string };
+      if (!response.ok || !payload.ok) {
+        setPushMessage(payload.error || "The test notification could not be delivered.");
+      } else {
+        setPushMessage(`Test push sent to ${payload.delivered || 0} registered device${payload.delivered === 1 ? "" : "s"}.`);
+      }
+    } catch {
+      setPushMessage("The test notification could not be delivered.");
+    } finally {
+      setSaving("");
     }
   }
 
@@ -195,6 +220,8 @@ export default function NotificationsPage() {
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-100 text-emerald-700"><Smartphone className="h-5 w-5" /></span><div><h2 className="font-black text-slate-950">Device Alerts</h2><p className="text-xs text-slate-500">{permission === "granted" ? "Allowed on this device" : permission === "denied" ? "Blocked on this device" : permission === "unsupported" ? "Not supported here" : "Permission not requested"}</p></div></div>
             {permission === "default" && <button onClick={() => void enableSystemAlerts()} className="mt-4 w-full rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white">Enable Device Alerts</button>}
+            {permission === "granted" && <button disabled={saving === "push-test"} onClick={() => void testBackgroundPush()} className="mt-4 w-full rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-800 disabled:opacity-50">{saving === "push-test" ? "Sending Test…" : "Send Test Background Alert"}</button>}
+            {pushMessage && <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-semibold leading-5 text-slate-700">{pushMessage}</div>}
             {permission === "denied" && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900">Notifications were blocked in the device/browser settings. Change the permission there to turn them back on.</div>}
             {!isStandaloneHubApp() && <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs font-semibold leading-5 text-blue-900">On iPhone, install The Hub to the Home Screen before enabling notification permission.</div>}
           </section>
