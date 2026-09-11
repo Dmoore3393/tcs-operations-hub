@@ -83,7 +83,9 @@ export default function SettingsPage() {
   const [migrationStatus, setMigrationStatus] = useState("");
   const [retentionStatus, setRetentionStatus] = useState("");
   const [retentionPolicies, setRetentionPolicies] = useState<RetentionPolicy[]>([]);
-  const { profile } = useAuth();
+  const [healthStatus, setHealthStatus] = useState<Record<string, unknown> | null>(null);
+  const [healthMessage, setHealthMessage] = useState("");
+  const { profile, session } = useAuth();
 
   useEffect(() => {
     if (!supabase) return;
@@ -134,6 +136,24 @@ export default function SettingsPage() {
       return;
     }
     setMigrationStatus(`Migration complete: ${JSON.stringify(data)}`);
+  }
+
+  async function runHealthCheck() {
+    if (!session?.access_token) return;
+    setHealthMessage("Checking production services…");
+    try {
+      const response = await fetch("/api/system-health", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+      });
+      const payload = await response.json() as Record<string, unknown> & { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Health check failed.");
+      setHealthStatus(payload);
+      setHealthMessage(payload.ok ? "Production systems are responding normally." : "One or more production services need attention.");
+    } catch (error) {
+      setHealthStatus(null);
+      setHealthMessage(error instanceof Error ? error.message : "Health check failed.");
+    }
   }
 
   async function exportSharedData() {
@@ -284,7 +304,17 @@ export default function SettingsPage() {
         )}
 
         {tab === "Data" && (
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="space-y-6">
+            <SectionCard title="Production System Health" description="Owner-only live checks for the database, audit log, and encrypted document storage">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div><p className="font-black text-slate-950">Run a live health check before relying on production workflows.</p><p className="mt-1 text-sm text-slate-500">This check does not expose child, family, employee, or medical information.</p></div>
+                <button onClick={() => void runHealthCheck()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white"><CloudCheck className="h-4 w-4" /> Run Health Check</button>
+              </div>
+              {healthMessage && <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700">{healthMessage}</p>}
+              {healthStatus && <div className="mt-4 grid gap-3 md:grid-cols-3">{Object.entries((healthStatus.services as Record<string, { ok?: boolean; message?: string }>) || {}).map(([key, service]) => <div key={key} className={`rounded-2xl border p-4 ${service.ok ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}><p className="text-xs font-black uppercase tracking-wider text-slate-500">{key}</p><p className={`mt-1 font-black ${service.ok ? "text-emerald-900" : "text-red-900"}`}>{service.ok ? "Healthy" : "Needs Attention"}</p><p className="mt-1 text-xs text-slate-600">{service.message}</p></div>)}</div>}
+            </SectionCard>
+
+            <div className="grid gap-6 lg:grid-cols-2">
             <SectionCard title="Relational Shared Database" description="Operational records are stored separately and protected row by row">
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5"><div className="flex items-center gap-3"><CloudCheck className="h-7 w-7 text-emerald-700" /><div><p className="font-black text-emerald-950">Location-scoped storage enabled</p><p className="text-sm text-emerald-800">Every location-owned record carries a location ID and is checked by Row Level Security.</p></div></div></div>
               <div className="mt-4 space-y-2 text-sm text-slate-600"><p>• Children, schedules, care logs, meals, reports, incidents, KidKare, timesheets, and routes use separate tables.</p><p>• Owners have company-wide access; licensees and employees are checked against assigned locations.</p><p>• Create, update, review, export, and deletion activity is written to an immutable audit log.</p><p>• Documents are encrypted before upload and direct browser access is blocked.</p></div>
@@ -298,6 +328,7 @@ export default function SettingsPage() {
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"><strong>Protect the download:</strong> it may contain private child, family, health, employee, and timesheet information. Store it only in an approved encrypted location.</div>
               </div>
             </SectionCard>
+            </div>
           </div>
         )}
 
