@@ -7,6 +7,7 @@ import { useHubLocation } from "@/components/providers/LocationProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { starterEnrollmentLeads } from "@/lib/admin-ops";
 import { fundingSources } from "@/lib/children";
+import { sendHubNotificationEvent } from "@/lib/notification-client";
 import {
   TOUR_BOARD_COLUMNS,
   crmTags,
@@ -103,7 +104,7 @@ function blankLead(location: string, staffName: string): TourBoardLead {
 }
 
 export default function TourBoardPage() {
-  const { profile, user } = useAuth();
+  const { profile, user, session } = useAuth();
   const { location, setLocation, availableLocations } = useHubLocation();
   const staffName = profile?.full_name || profile?.email || user?.email || "TCS Team";
   const [storedLeads, setStoredLeads] = usePersistentState<TourBoardLead[]>("tcs-enrollment-pipeline-v1", starterEnrollmentLeads.map((item) => normalizeTourLead(item as any)));
@@ -198,7 +199,13 @@ export default function TourBoardPage() {
     const exists = leads.some((item) => item.id === leadDraft.id);
     const draft = normalizeTourLead(leadDraft as any);
     const updated = exists ? draft : { ...draft, activity: [...draft.activity, activity("Inquiry", `Inquiry recorded from ${draft.leadSource} via ${draft.inquiryMethod}.`)] };
-    persistLead(updated);
+    const saved = persistLead(updated);
+    void sendHubNotificationEvent({
+      accessToken: session?.access_token,
+      eventType: "tour_board_update",
+      location: saved.location,
+      eventKey: `tour-lead:${saved.id}:${saved.updatedAt}`,
+    });
     setLeadDraft(null);
     setNotice(`${updated.familyName} saved to the Tour Board.`);
   }
@@ -212,7 +219,13 @@ export default function TourBoardPage() {
   function saveSchedule() {
     if (!scheduleLead || !tourWhen) { setNotice("Choose a tour date and time."); return; }
     const visit: TourVisit = { id: makeTourId(), scheduledAt: tourWhen, status: "Scheduled", lateMinutes: 0, conductedBy: tourHost || staffName, rating: "Not Rated", familyReaction: "", questionsConcerns: "", notes: tourScheduleNote, nextStep: "Complete the tour and record the outcome.", followUpDate: "", loggedAt: new Date().toISOString(), loggedBy: staffName };
-    persistLead({ ...scheduleLead, stage: "Tour Scheduled", tourDate: tourWhen, assignedTo: tourHost || staffName, nextAction: "Tour scheduled", tourHistory: [...scheduleLead.tourHistory, visit], activity: [...scheduleLead.activity, activity("Tour", `Tour scheduled for ${formatDateTime(tourWhen)} with ${tourHost || staffName}.`)] });
+    const saved = persistLead({ ...scheduleLead, stage: "Tour Scheduled", tourDate: tourWhen, assignedTo: tourHost || staffName, nextAction: "Tour scheduled", tourHistory: [...scheduleLead.tourHistory, visit], activity: [...scheduleLead.activity, activity("Tour", `Tour scheduled for ${formatDateTime(tourWhen)} with ${tourHost || staffName}.`)] });
+    void sendHubNotificationEvent({
+      accessToken: session?.access_token,
+      eventType: "tour_board_update",
+      location: saved.location,
+      eventKey: `tour-scheduled:${saved.id}:${visit.id}`,
+    });
     setScheduleLead(null); setNotice("Tour scheduled and added to the family history.");
   }
   function openTourOutcome(lead: TourBoardLead) {
@@ -237,7 +250,13 @@ export default function TourBoardPage() {
     const statusNote = tourStatus === "Completed"
       ? `Tour completed by ${completedVisit.conductedBy}${lateMinutes ? `; family arrived ${lateMinutes} minutes late` : "; family arrived on time"}. Rating: ${tourRating}.`
       : tourStatus === "No Show" ? `Tour no-show recorded for ${formatDateTime(scheduledAt)}.` : `Tour marked ${tourStatus.toLowerCase()}.`;
-    persistLead({ ...tourLead, stage: nextStage, followUpDate: tourFollowUp, nextAction: tourNextStep || (tourStatus === "No Show" ? "Contact family to reschedule" : "Follow up after tour"), tourHistory: [...otherTours, completedVisit], activity: [...tourLead.activity, activity("Tour", statusNote)] });
+    const saved = persistLead({ ...tourLead, stage: nextStage, followUpDate: tourFollowUp, nextAction: tourNextStep || (tourStatus === "No Show" ? "Contact family to reschedule" : "Follow up after tour"), tourHistory: [...otherTours, completedVisit], activity: [...tourLead.activity, activity("Tour", statusNote)] });
+    void sendHubNotificationEvent({
+      accessToken: session?.access_token,
+      eventType: tourStatus === "No Show" || Boolean(tourFollowUp) ? "tour_follow_up" : "tour_board_update",
+      location: saved.location,
+      eventKey: `tour-outcome:${saved.id}:${completedVisit.id}:${completedVisit.loggedAt}`,
+    });
     setTourLead(null); setNotice(statusNote);
   }
   function openActivity(lead: TourBoardLead, kind: "Reminder" | "Contact" | "Follow-Up", preset = "") {
@@ -291,7 +310,15 @@ export default function TourBoardPage() {
     if (!activityLead || !activityNote.trim()) return;
     const nextStage = activityKind === "Contact" && activityLead.stage === "New Inquiry" ? "Contacted" : activityKind === "Follow-Up" ? "Follow-Up" : activityLead.stage;
     const contactedAt = activityKind === "Contact" ? new Date().toISOString() : activityLead.contactedAt;
-    persistLead({ ...activityLead, stage: nextStage, contactedAt, activity: [...activityLead.activity, activity(activityKind, activityNote.trim())] });
+    const saved = persistLead({ ...activityLead, stage: nextStage, contactedAt, activity: [...activityLead.activity, activity(activityKind, activityNote.trim())] });
+    if (activityKind === "Follow-Up") {
+      void sendHubNotificationEvent({
+        accessToken: session?.access_token,
+        eventType: "tour_follow_up",
+        location: saved.location,
+        eventKey: `tour-followup:${saved.id}:${saved.updatedAt}`,
+      });
+    }
     setActivityLead(null); setActivityNote(""); setNotice(`${activityKind} logged.`);
   }
   function markPacketSent(lead: TourBoardLead) {
