@@ -4,6 +4,8 @@ import ChildEditorModal from "@/components/children/ChildEditorModal";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { deriveFamiliesFromChildren } from "@/lib/family-derived";
+import { emergencyCardReadiness } from "@/lib/emergency-cards";
+import { sendHubNotificationEvent } from "@/lib/notification-client";
 import { applyChildAgeProfile, deriveChildAgeProfile, emptyForm, locations as childLocationOptions, type ChildFormState, type ChildRecord } from "@/lib/children";
 import {
   Archive,
@@ -347,6 +349,14 @@ export default function ChildrenCenterLivePage() {
       const payload = await request("POST", { action: "save", child });
       const saved = payload.child as ChildRecord;
       setChildren((current) => current.some((item) => item.id === saved.id) ? current.map((item) => item.id === saved.id ? saved : item) : [...current, saved]);
+      if (!emergencyCardReadiness(saved).ready) {
+        void sendHubNotificationEvent({
+          accessToken: session?.access_token,
+          eventType: "emergency_record_attention",
+          location: keyFor(saved.location),
+          eventKey: `emergency:${saved.id}:${saved.medicalConsentStatus || "Missing"}:${saved.medicalConsentVerifiedAt || "unverified"}`,
+        });
+      }
       setEditing(null);
       flash(`${nameOf(saved)} saved securely.`);
     } catch (saveError) {
