@@ -2,7 +2,7 @@
 
 import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
 import { AlertTriangle, Database, KeyRound, LoaderCircle, LockKeyhole, Mail } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const fieldClass =
@@ -14,6 +14,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [securityMessage, setSecurityMessage] = useState("");
+
+  useEffect(() => {
+    if (window.sessionStorage.getItem("tcs-security-timeout") === "1") {
+      setSecurityMessage("For privacy, The Hub signed you out after 20 minutes without activity. Sign in again to continue.");
+      window.sessionStorage.removeItem("tcs-security-timeout");
+    }
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -63,6 +71,8 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5 px-6 py-7 sm:px-8">
+          {securityMessage && <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold leading-6 text-blue-900"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" /><p>{securityMessage}</p></div>}
+
           {!isSupabaseConfigured && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
