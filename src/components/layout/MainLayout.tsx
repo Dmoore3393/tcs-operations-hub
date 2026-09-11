@@ -45,6 +45,7 @@ import { canAccessRoute, staffInitials, useAuth } from "@/components/providers/A
 import { HUB_SYNC_EVENT, type HubSyncDetail } from "@/lib/sync-events";
 import MobileQuickActions from "@/components/layout/MobileQuickActions";
 import NotificationBell from "@/components/notifications/NotificationBell";
+import AppSetupPrompt from "@/components/pwa/AppSetupPrompt";
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: Home },
@@ -106,6 +107,7 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/team-access": { title: "Team Access", subtitle: "Email invitations, staff roles, locations, and employee permissions" },
   "/scheduling": { title: "Staff Scheduling", subtitle: "Coverage, shifts, and classroom assignments" },
   "/transportation": { title: "Transportation", subtitle: "Routes, schools, drivers, and vehicle readiness" },
+  "/transportation-v2": { title: "Live Transportation", subtitle: "Pickup, transit, arrival, emergency access, and handoff confirmation" },
   "/transportation-fees": { title: "Transportation Fees", subtitle: "Weekly route-to-billing audit and family payment tracking" },
   "/ratios": { title: "Ratios & Daily Plan", subtitle: "Who is in care, when, and required coverage" },
   "/work-plans": { title: "Work Plans", subtitle: "Weekly goals, initials, and printable task sheets" },
@@ -259,6 +261,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
         <main className="p-4 pb-28 sm:p-6 sm:pb-28 lg:p-8">{children}</main>
       </div>
+      <AppSetupPrompt />
       <MobileQuickActions />
     </div>
   );
