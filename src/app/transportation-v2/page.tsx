@@ -6,6 +6,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { localIsoDate } from "@/lib/date-utils";
+import { emergencyCardReadiness } from "@/lib/emergency-cards";
 import { sendHubNotificationEvent } from "@/lib/notification-client";
 import { initialChildren, type ChildRecord } from "@/lib/children";
 import { starterCareLogs, type CareLogEntry } from "@/lib/employee-care";
@@ -18,6 +19,8 @@ import {
   type VehicleRecord,
 } from "@/lib/hub-data";
 import type { LocationKey } from "@/lib/location-config";
+import { HUB_SYNC_EVENT, type HubSyncDetail } from "@/lib/sync-events";
+import { clearOfflineTransportActions, queueOfflineTransportAction, readOfflineTransportActions } from "@/lib/transport-offline";
 import {
   AlertTriangle,
   BellRing,
@@ -30,8 +33,9 @@ import {
   Pencil,
   ShieldCheck,
   UserCheck,
+  WifiOff,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type RunStatus = "Waiting" | "Picked Up" | "Arrived" | "Checked In" | "Dropped Off";
 type LiveRoute = TransportationRoute & {
@@ -106,16 +110,69 @@ function isLeadership(name: string, email: string) {
 export default function TransportationV2Page() {
   const { profile, session, canManageSystem, isLocationLicensee } = useAuth();
   const { location: activeLocation } = useHubLocation();
-  const [routes, setRoutes] = usePersistentState<LiveRoute[]>("tcs-routes", starterRoutes as LiveRoute[]);
+  const [routes, setRoutes, routesHydrated] = usePersistentState<LiveRoute[]>("tcs-routes", starterRoutes as LiveRoute[]);
   const [schools] = usePersistentState<SchoolRecord[]>("tcs-schools-v2", starterSchools);
   const [vehicles] = usePersistentState<VehicleRecord[]>("tcs-vehicles-v2", starterVehicles);
   const [children, setChildren] = usePersistentState<ChildRecord[]>("tcs-children-v1", initialChildren);
   const [careLogs, setCareLogs] = usePersistentState<CareLogEntry[]>("tcs-daily-care-v1", starterCareLogs);
   const [selectedRoute, setSelectedRoute] = useState("");
+  const [isOnline, setIsOnline] = useState(true);
+  const [pendingOffline, setPendingOffline] = useState(0);
+  const [replayingOffline, setReplayingOffline] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState("");
   const today = localIsoDate();
   const actor = profile?.full_name?.trim() || profile?.email || "TCS Staff";
   const leader = isLeadership(profile?.full_name || "", profile?.email || "");
   const canManageTransportation = canManageSystem || isLocationLicensee;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const refresh = () => {
+      setIsOnline(window.navigator.onLine);
+      setPendingOffline(readOfflineTransportActions().length);
+    };
+    refresh();
+    window.addEventListener("online", refresh);
+    window.addEventListener("offline", refresh);
+    return () => {
+      window.removeEventListener("online", refresh);
+      window.removeEventListener("offline", refresh);
+    };
+  }, []);
+
+  useEffect(() => {
+    function syncListener(event: Event) {
+      const detail = (event as CustomEvent<HubSyncDetail>).detail;
+      if (detail.key !== "tcs-routes") return;
+      if (detail.state === "saved") {
+        clearOfflineTransportActions();
+        setPendingOffline(0);
+        setReplayingOffline(false);
+        setLastSyncAt(new Date().toISOString());
+      }
+      if (detail.state === "error") {
+        setPendingOffline(readOfflineTransportActions().length);
+        setReplayingOffline(false);
+      }
+    }
+    window.addEventListener(HUB_SYNC_EVENT, syncListener);
+    return () => window.removeEventListener(HUB_SYNC_EVENT, syncListener);
+  }, []);
+
+  useEffect(() => {
+    if (!routesHydrated || !isOnline || replayingOffline) return;
+    const queued = readOfflineTransportActions();
+    if (!queued.length) return;
+    setReplayingOffline(true);
+    const timer = window.setTimeout(() => {
+      setRoutes((current) => current.map((route) => {
+        const patches = queued.filter((item) => item.routeId === String(route.id));
+        if (!patches.length) return route;
+        return patches.reduce((next, item) => ({ ...next, ...item.patch }), route);
+      }));
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [isOnline, replayingOffline, routesHydrated, setRoutes]);
 
   const todayRoutes = useMemo(
     () => routes.filter((route) => route.status !== "Not Riding" && scheduledToday(route.days) && matchesLocation(route, activeLocation)),
@@ -133,6 +190,13 @@ export default function TransportationV2Page() {
   const arrived = todayRoutes.filter((route) => statusFor(route, today) === "Arrived").length;
   const checkedIn = todayRoutes.filter((route) => statusFor(route, today) === "Checked In").length;
   const fleetReady = vehicles.filter((vehicle) => vehicle.status === "Ready").length;
+  const currentRouteEmergency = myRoute.map((route) => {
+    const child = children.find((item) => `${item.firstName} ${item.lastName}`.trim().toLowerCase() === route.child.trim().toLowerCase());
+    const readiness = child ? emergencyCardReadiness(child) : null;
+    return { route, child, readiness, ready: Boolean(child && readiness?.ready) };
+  });
+  const currentRouteReadyCount = currentRouteEmergency.filter((item) => item.ready).length;
+  const currentRouteNeedsAttention = currentRouteEmergency.filter((item) => !item.ready);
 
   const locationArrivals = todayRoutes.filter((route) => {
     const status = statusFor(route, today);
@@ -145,10 +209,24 @@ export default function TransportationV2Page() {
   });
 
   function updateRoute(route: LiveRoute, patch: Partial<LiveRoute>) {
+    const offlinePatch = {
+      runDate: patch.runDate,
+      runStatus: patch.runStatus,
+      pickedUpAt: patch.pickedUpAt,
+      arrivedAt: patch.arrivedAt,
+      checkedInAt: patch.checkedInAt,
+      droppedOffAt: patch.droppedOffAt,
+    };
+    if (Object.values(offlinePatch).some((value) => typeof value === "string")) {
+      queueOfflineTransportAction(route.id, offlinePatch);
+      setPendingOffline(readOfflineTransportActions().length);
+    }
     setRoutes((current) => current.map((item) => item.id === route.id ? { ...item, ...patch } : item));
   }
 
   function markPickedUp(route: LiveRoute) {
+    const child = children.find((item) => `${item.firstName} ${item.lastName}`.trim().toLowerCase() === route.child.trim().toLowerCase());
+    if (!child || !emergencyCardReadiness(child).ready) return;
     const now = new Date().toISOString();
     updateRoute(route, { runDate: today, runStatus: "Picked Up", pickedUpAt: now, pickedUpBy: actor, arrivedAt: undefined, checkedInAt: undefined });
   }
@@ -214,6 +292,16 @@ export default function TransportationV2Page() {
           </div>
         </section>
 
+        <section className={`rounded-2xl border p-4 shadow-sm ${isOnline ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-red-300 bg-red-50 text-red-950"}`}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              {isOnline ? <ShieldCheck className="mt-0.5 h-5 w-5 flex-none text-emerald-700" /> : <WifiOff className="mt-0.5 h-5 w-5 flex-none text-red-700" />}
+              <div><p className="font-black">{isOnline ? "Transportation connection is online" : "Offline mode — route actions are being protected"}</p><p className="mt-1 text-xs font-semibold leading-5">{isOnline ? (pendingOffline ? `${pendingOffline} queued route action${pendingOffline === 1 ? "" : "s"} waiting to sync.` : "Route confirmations can sync to The Hub.") : "Pickup and handoff status changes are queued without storing child medical details on this device. Keep this screen open until service returns."}</p></div>
+            </div>
+            <div className="text-xs font-bold">{pendingOffline > 0 ? `${pendingOffline} pending` : lastSyncAt ? `Last synced ${timeLabel(lastSyncAt)}` : "Ready"}</div>
+          </div>
+        </section>
+
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
           <Metric label="Active Routes" value={routeNames.length} icon={<Bus className="h-5 w-5" />} />
           <Metric label="Waiting" value={waiting} icon={<Clock3 className="h-5 w-5" />} tone="amber" />
@@ -234,16 +322,25 @@ export default function TransportationV2Page() {
 
         {effectiveRoute && <section className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3"><Summary label="Route" value={effectiveRoute} /><Summary label="Driver" value={myRoute.find((route) => route.coveringDate === today && route.coveringDriver)?.coveringDriver || myRoute[0]?.driver || "Not assigned"} /><Summary label="Vehicle" value={myRoute[0]?.vehicle || "Not assigned"} /></div>
+          <div className={`rounded-3xl border p-5 ${currentRouteNeedsAttention.length ? "border-red-300 bg-red-50" : "border-emerald-300 bg-emerald-50"}`}>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-3">{currentRouteNeedsAttention.length ? <AlertTriangle className="mt-0.5 h-6 w-6 flex-none text-red-700" /> : <ShieldCheck className="mt-0.5 h-6 w-6 flex-none text-emerald-700" />}<div><p className={`text-xs font-black uppercase tracking-[.14em] ${currentRouteNeedsAttention.length ? "text-red-700" : "text-emerald-700"}`}>Route emergency readiness</p><h3 className={`mt-1 text-xl font-black ${currentRouteNeedsAttention.length ? "text-red-950" : "text-emerald-950"}`}>{currentRouteReadyCount}/{myRoute.length} children Emergency Ready</h3><p className="mt-1 text-sm font-semibold text-slate-700">{currentRouteNeedsAttention.length ? "Pickup is blocked for children whose emergency record is not ready. Review the missing information before departure." : "Emergency contacts, consent status, provider information, and allergy status are ready for this route."}</p></div></div>
+              <Link href={`/emergency-cards?route=${encodeURIComponent(effectiveRoute)}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#8f2a30] px-4 py-2.5 text-sm font-black text-white"><HeartPulse className="h-4 w-4" /> Review / Print Backup</Link>
+            </div>
+            {currentRouteNeedsAttention.length > 0 && <div className="mt-4 grid gap-2 md:grid-cols-2">{currentRouteNeedsAttention.map(({ route, readiness }) => <div key={route.id} className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs"><strong className="text-red-950">{route.child}</strong><p className="mt-1 text-red-700">{readiness ? readiness.missing.slice(0, 3).join(" • ") : "Child emergency record not found"}</p></div>)}</div>}
+          </div>
           <div className="rounded-3xl border border-blue-100 bg-[#f7fbff] p-5"><div className="flex items-start gap-3"><Navigation className="mt-0.5 h-5 w-5 text-[#1769d2]" /><p className="text-sm font-semibold leading-6 text-slate-700"><strong>Required chain:</strong> Tap Picked Up only when the child is physically with you. At the destination, tap Arrived. For a TCS location, the child must then be checked into that location before the handoff is complete.</p></div></div>
           <div className="grid gap-4 xl:grid-cols-2">{myRoute.map((route) => {
             const status = statusFor(route, today);
             const destination = destinationLocation(route.dropoffLocation);
+            const emergency = currentRouteEmergency.find((item) => item.route.id === route.id);
+            const emergencyReady = Boolean(emergency?.ready);
             return <article key={route.id} className={`rounded-3xl border p-5 shadow-sm ${status === "Checked In" ? "border-emerald-200 bg-emerald-50/60" : status === "Arrived" ? "border-purple-200 bg-purple-50/50" : status === "Picked Up" ? "border-blue-200 bg-blue-50/50" : "border-slate-200 bg-white"}`}>
               <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.15em] text-[#1769d2]">Stop {route.stopOrder ?? "—"} • {route.pickup || "Time not entered"}</p><h3 className="mt-1 text-xl font-black text-slate-950">{route.child}</h3><p className="mt-1 text-sm font-bold text-slate-600">{route.school || "Pickup destination not entered"}</p></div><Status status={status} /></div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2"><Info label="PICK UP AT" value={route.pickupArea || route.school || "Not entered"} /><Info label="DESTINATION" value={route.dropoffLocation || "Not entered"} /></div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link href={`/emergency-cards?name=${encodeURIComponent(route.child)}`} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800"><HeartPulse className="h-4 w-4" /> EMERGENCY CARD</Link>
-                {status === "Waiting" && <Action onClick={() => markPickedUp(route)}><UserCheck className="h-4 w-4" /> PICKED UP</Action>}
+                {status === "Waiting" && <Action disabled={!emergencyReady} title={!emergencyReady ? "Emergency record must be ready before pickup." : undefined} onClick={() => markPickedUp(route)}><UserCheck className="h-4 w-4" /> {emergencyReady ? "PICKED UP" : "EMERGENCY RECORD NOT READY"}</Action>}
                 {status === "Picked Up" && <Action onClick={() => markArrived(route)} tone="purple"><MapPin className="h-4 w-4" /> ARRIVED AT DESTINATION</Action>}
                 {status === "Arrived" && destination && <Action onClick={() => checkIntoLocation(route)} tone="green"><CheckCircle2 className="h-4 w-4" /> CHECK CHILD INTO {destination.toUpperCase()}</Action>}
                 {status === "Arrived" && !destination && <Action onClick={() => confirmExternalDropoff(route)} tone="green"><CheckCircle2 className="h-4 w-4" /> CONFIRM DROP-OFF COMPLETE</Action>}
@@ -265,6 +362,6 @@ function Metric({ label, value, icon, tone = "blue" }: { label: string; value: R
 function Summary({ label, value }: { label: string; value: string }) { return <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p><p className="mt-1 font-black text-slate-900">{value}</p></div>; }
 function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p><p className="mt-1 text-sm font-black text-slate-900">{value}</p></div>; }
 function Status({ status }: { status: RunStatus }) { const styles: Record<RunStatus, string> = { Waiting: "bg-amber-100 text-amber-800", "Picked Up": "bg-blue-100 text-blue-800", Arrived: "bg-purple-100 text-purple-800", "Checked In": "bg-emerald-100 text-emerald-800", "Dropped Off": "bg-emerald-100 text-emerald-800" }; return <span className={`rounded-full px-3 py-1.5 text-xs font-black ${styles[status]}`}>{status === "Picked Up" ? "IN TRANSIT" : status.toUpperCase()}</span>; }
-function Action({ children, onClick, tone = "blue" }: { children: React.ReactNode; onClick: () => void; tone?: "blue" | "purple" | "green" }) { const styles = { blue: "bg-[#1769d2]", purple: "bg-purple-600", green: "bg-[#34a853]" }; return <button onClick={onClick} className={`inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black text-white shadow-sm ${styles[tone]}`}>{children}</button>; }
+function Action({ children, onClick, tone = "blue", disabled = false, title }: { children: React.ReactNode; onClick: () => void; tone?: "blue" | "purple" | "green"; disabled?: boolean; title?: string }) { const styles = { blue: "bg-[#1769d2]", purple: "bg-purple-600", green: "bg-[#34a853]" }; return <button disabled={disabled} title={title} onClick={onClick} className={`inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black text-white shadow-sm ${disabled ? "cursor-not-allowed bg-slate-400 opacity-75" : styles[tone]}`}>{children}</button>; }
 function Panel({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) { return <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-2 text-[#102a56]">{icon}<h3 className="font-black">{title}</h3></div><div className="mt-4 space-y-3">{children}</div></section>; }
 function Row({ top, bottom }: { top: string; bottom: string }) { return <div className="rounded-2xl bg-slate-50 p-3"><p className="text-sm font-black text-slate-900">{top}</p><p className="mt-1 text-xs font-semibold text-slate-500">{bottom}</p></div>; }
