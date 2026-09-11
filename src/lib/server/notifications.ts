@@ -238,3 +238,102 @@ export async function dispatchHubNotification(args: {
 
   return { delivered, senderUserId };
 }
+
+
+export type ManualNotificationTargetGroup = "All Staff" | "Transportation" | "Program Staff" | "Leadership";
+
+function acceptsManualCategory(preferences: HubNotificationPreferences, category: HubNotification["category"]) {
+  if (!preferences.enabled) return false;
+  if (category === "transportation") return preferences.transportation;
+  if (category === "emergency") return preferences.emergency;
+  if (category === "tour") return preferences.tour;
+  if (category === "schedule") return preferences.schedule;
+  return true;
+}
+
+function targetGroupMatches(role: string, permissions: string[], group: ManualNotificationTargetGroup) {
+  if (group === "All Staff") return true;
+  if (group === "Leadership") return isOwnerAccessRole(role) || isLicenseeAccessRole(role);
+  if (isOwnerAccessRole(role) || isLicenseeAccessRole(role)) return true;
+  if (group === "Transportation") return permissions.includes("transportation");
+  return ["children_basic", "daily_care", "meals", "schedules", "ratios", "health_safety"].some((permission) => permissions.includes(permission));
+}
+
+export async function dispatchManualHubNotification(args: {
+  admin: SupabaseClient;
+  senderUserId: string;
+  organizationId: string;
+  targetLocation: string;
+  targetGroup: ManualNotificationTargetGroup;
+  category: HubNotification["category"];
+  title: string;
+  body: string;
+  href?: string;
+}) {
+  const { admin, organizationId } = args;
+  const targetLocation = args.targetLocation?.trim() || "All Locations";
+  const href = args.href?.startsWith("/") ? args.href : "/notifications";
+  const eventKey = `manual:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`;
+
+  const { data: rows, error } = await admin
+    .from("staff_access")
+    .select("user_id,role,locations,permissions,is_active,organization_id")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true);
+  if (error) throw new Error(error.message);
+
+  const recipients = (rows ?? []).filter((row) => {
+    const role = typeof row.role === "string" ? row.role : "";
+    const locations = stringArray(row.locations);
+    const permissions = stringArray(row.permissions);
+    return locationMatches(locations, targetLocation) && targetGroupMatches(role, permissions, args.targetGroup);
+  });
+
+  let delivered = 0;
+  for (const recipient of recipients) {
+    const userId = String(recipient.user_id || "");
+    if (!userId) continue;
+    const state = await loadNotificationState(admin, userId);
+    if (!acceptsManualCategory(state.preferences, args.category)) continue;
+
+    const notification: HubNotification = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      category: args.category,
+      severity: "attention",
+      title: args.title,
+      body: args.body,
+      href,
+      location: targetLocation,
+      createdAt: new Date().toISOString(),
+      readAt: "",
+      eventKey,
+    };
+
+    await saveNotificationState(admin, state.user, [notification, ...state.inbox].slice(0, MAX_NOTIFICATIONS), state.preferences);
+
+    const subscriptions = parsePushSubscriptions(state.user);
+    if (subscriptions.length && !quietHoursActive(state.preferences)) {
+      const activeSubscriptions: StoredPushSubscription[] = [];
+      for (const subscription of subscriptions) {
+        try {
+          const result = await sendWebPush(subscription, {
+            title: notification.title,
+            body: notification.body,
+            href: notification.href,
+            tag: notification.eventKey,
+          });
+          if (!result.stale) activeSubscriptions.push(subscription);
+        } catch {
+          activeSubscriptions.push(subscription);
+        }
+      }
+      if (activeSubscriptions.length !== subscriptions.length) {
+        const refreshed = await admin.auth.admin.getUserById(state.user.id);
+        if (refreshed.data.user) await savePushSubscriptions(admin, refreshed.data.user, activeSubscriptions);
+      }
+    }
+    delivered += 1;
+  }
+
+  return { delivered, senderUserId: args.senderUserId };
+}
