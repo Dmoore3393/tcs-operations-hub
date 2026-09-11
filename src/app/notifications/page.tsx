@@ -2,6 +2,7 @@
 
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { useHubLocation } from "@/components/providers/LocationProvider";
 import { enableHubPushNotifications, isStandaloneHubApp } from "@/lib/push-client";
 import {
   defaultNotificationPreferences,
@@ -63,7 +64,8 @@ function formatStamp(value: string) {
 }
 
 export default function NotificationsPage() {
-  const { session } = useAuth();
+  const { session, isSystemOwner, isLocationLicensee, profile } = useAuth();
+  const { availableLocations, location } = useHubLocation();
   const [items, setItems] = useState<HubNotification[]>([]);
   const [preferences, setPreferences] = useState<HubNotificationPreferences>(defaultNotificationPreferences);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -73,6 +75,12 @@ export default function NotificationsPage() {
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [pushMessage, setPushMessage] = useState("");
   const [devices, setDevices] = useState<RegisteredDevice[]>([]);
+  const [targetLocation, setTargetLocation] = useState(location === "All Locations" ? (availableLocations.find((item) => item !== "All Locations") || "All Locations") : location);
+  const [targetGroup, setTargetGroup] = useState("All Staff");
+  const [targetCategory, setTargetCategory] = useState("system");
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertBody, setAlertBody] = useState("");
+  const [broadcastMessage, setBroadcastMessage] = useState("");
 
   const load = useCallback(async () => {
     if (!session?.access_token) return;
@@ -223,6 +231,39 @@ export default function NotificationsPage() {
     }
   }
 
+  async function sendTargetedAlert() {
+    if (!session?.access_token || !alertTitle.trim() || !alertBody.trim()) return;
+    setSaving("broadcast");
+    setBroadcastMessage("");
+    try {
+      const response = await fetch("/api/notifications/broadcast", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          targetLocation,
+          targetGroup,
+          category: targetCategory,
+          title: alertTitle,
+          body: alertBody,
+          href: "/notifications",
+        }),
+      });
+      const payload = await response.json() as { delivered?: number; error?: string };
+      if (!response.ok) throw new Error(payload.error || "The alert could not be sent.");
+      setBroadcastMessage(`Alert sent to ${payload.delivered || 0} staff account${payload.delivered === 1 ? "" : "s"}.`);
+      setAlertTitle("");
+      setAlertBody("");
+      await load();
+    } catch (error) {
+      setBroadcastMessage(error instanceof Error ? error.message : "The alert could not be sent.");
+    } finally {
+      setSaving("");
+    }
+  }
+
   return <MainLayout>
     <div className="mx-auto max-w-[1320px] space-y-6 pb-12">
       <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-gradient-to-br from-slate-950 via-[#173c2a] to-[#225d3b] p-6 text-white shadow-2xl sm:p-8">
@@ -295,6 +336,22 @@ export default function NotificationsPage() {
               {preferences.quietHoursEnabled && <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 p-3"><label><span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">Start</span><input type="time" value={preferences.quietHoursStart} onChange={(event) => void updatePreference("quietHoursStart", event.target.value)} className="w-full rounded-lg border border-slate-200 px-2 py-2 text-xs font-bold" /></label><label><span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">End</span><input type="time" value={preferences.quietHoursEnd} onChange={(event) => void updatePreference("quietHoursEnd", event.target.value)} className="w-full rounded-lg border border-slate-200 px-2 py-2 text-xs font-bold" /></label><p className="col-span-2 text-[10px] leading-4 text-slate-500">Emergency alerts marked urgent still come through quiet hours. Times use TCS Pacific time.</p></div>}
             </div>
           </section>
+
+          {(isSystemOwner || isLocationLicensee) && <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="font-black text-slate-950">Send Team Alert</h2>
+            <p className="mt-1 text-xs leading-5 text-slate-500">Target by location and staff role. Do not put child names, diagnoses, insurance numbers, or other private details in a lock-screen alert.</p>
+            <div className="mt-4 space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <label><span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">Location</span><select value={targetLocation} onChange={(event) => setTargetLocation(event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold">{isSystemOwner && <option>All Locations</option>}{availableLocations.filter((item) => item !== "All Locations" && (isSystemOwner || profile?.locations?.includes("All Locations") || profile?.locations?.includes(item))).map((item) => <option key={item}>{item}</option>)}</select></label>
+                <label><span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">Recipients</span><select value={targetGroup} onChange={(event) => setTargetGroup(event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold"><option>All Staff</option><option>Transportation</option><option>Program Staff</option><option>Leadership</option></select></label>
+              </div>
+              <label><span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">Category</span><select value={targetCategory} onChange={(event) => setTargetCategory(event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold"><option value="system">General</option><option value="transportation">Transportation</option><option value="schedule">Schedule</option><option value="tour">Tour Board</option></select></label>
+              <label><span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">Title</span><input maxLength={80} value={alertTitle} onChange={(event) => setAlertTitle(event.target.value)} placeholder="Short alert title" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold" /></label>
+              <label><span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">Message</span><textarea maxLength={240} value={alertBody} onChange={(event) => setAlertBody(event.target.value)} placeholder="General action needed — open The Hub for details." className="min-h-24 w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold leading-5" /></label>
+              <button disabled={!alertTitle.trim() || !alertBody.trim() || saving === "broadcast"} onClick={() => void sendTargetedAlert()} className="w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white disabled:opacity-40">{saving === "broadcast" ? "Sending…" : "Send Targeted Alert"}</button>
+              {broadcastMessage && <div className="rounded-xl bg-slate-50 p-3 text-xs font-semibold text-slate-700">{broadcastMessage}</div>}
+            </div>
+          </section>}
 
           <section className="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-950">
             <div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 flex-none" /><div><h2 className="font-black">Privacy-first alerts</h2><p className="mt-1 text-xs font-semibold leading-5">Phone notifications do not display diagnoses, allergies, insurance numbers, or other child medical details. Staff must open the secured Hub record to see private information.</p></div></div>
