@@ -41,6 +41,14 @@ type RegisteredDevice = {
   expirationTime: number | null;
 };
 
+type StaffDeviceGroup = {
+  userId: string;
+  fullName: string;
+  email: string;
+  role: string;
+  devices: RegisteredDevice[];
+};
+
 const filters: Array<{ key: "all" | HubNotificationCategory; label: string }> = [
   { key: "all", label: "All" },
   { key: "transportation", label: "Transportation" },
@@ -81,6 +89,7 @@ export default function NotificationsPage() {
   const [alertTitle, setAlertTitle] = useState("");
   const [alertBody, setAlertBody] = useState("");
   const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [teamDevices, setTeamDevices] = useState<StaffDeviceGroup[]>([]);
 
   const load = useCallback(async () => {
     if (!session?.access_token) return;
@@ -115,7 +124,22 @@ export default function NotificationsPage() {
     }
   }, [session?.access_token]);
 
-  useEffect(() => { void load(); void loadDevices(); }, [load, loadDevices]);
+  const loadTeamDevices = useCallback(async () => {
+    if (!session?.access_token || !isSystemOwner) return;
+    try {
+      const response = await fetch("/api/notifications/admin-devices", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const payload = await response.json() as { staffDevices?: StaffDeviceGroup[] };
+      setTeamDevices(Array.isArray(payload.staffDevices) ? payload.staffDevices : []);
+    } catch {
+      // Team device oversight should not interrupt Notification Center.
+    }
+  }, [isSystemOwner, session?.access_token]);
+
+  useEffect(() => { void load(); void loadDevices(); void loadTeamDevices(); }, [load, loadDevices, loadTeamDevices]);
   useEffect(() => {
     if (typeof window !== "undefined") setPermission("Notification" in window ? Notification.permission : "unsupported");
   }, []);
@@ -231,6 +255,30 @@ export default function NotificationsPage() {
     }
   }
 
+  async function removeTeamDevice(group: StaffDeviceGroup, device: RegisteredDevice) {
+    if (!session?.access_token || !isSystemOwner) return;
+    setSaving(`team-device-${device.id}`);
+    setBroadcastMessage("");
+    try {
+      const response = await fetch("/api/notifications/admin-devices", {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId: group.userId, deviceId: device.id }),
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Could not revoke this team device.");
+      setBroadcastMessage(`${group.fullName}'s device was removed from background notifications.`);
+      await loadTeamDevices();
+    } catch (error) {
+      setBroadcastMessage(error instanceof Error ? error.message : "Could not revoke this team device.");
+    } finally {
+      setSaving("");
+    }
+  }
+
   async function sendTargetedAlert() {
     if (!session?.access_token || !alertTitle.trim() || !alertBody.trim()) return;
     setSaving("broadcast");
@@ -336,6 +384,13 @@ export default function NotificationsPage() {
               {preferences.quietHoursEnabled && <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 p-3"><label><span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">Start</span><input type="time" value={preferences.quietHoursStart} onChange={(event) => void updatePreference("quietHoursStart", event.target.value)} className="w-full rounded-lg border border-slate-200 px-2 py-2 text-xs font-bold" /></label><label><span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">End</span><input type="time" value={preferences.quietHoursEnd} onChange={(event) => void updatePreference("quietHoursEnd", event.target.value)} className="w-full rounded-lg border border-slate-200 px-2 py-2 text-xs font-bold" /></label><p className="col-span-2 text-[10px] leading-4 text-slate-500">Emergency alerts marked urgent still come through quiet hours. Times use TCS Pacific time.</p></div>}
             </div>
           </section>
+
+          {isSystemOwner && <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-3"><div><h2 className="font-black text-slate-950">Team Registered Devices</h2><p className="mt-1 text-xs leading-5 text-slate-500">Owner/Admin can revoke an old or lost staff phone without seeing its push endpoint or notification keys.</p></div><button onClick={() => void loadTeamDevices()} className="rounded-xl border border-slate-200 p-2 text-slate-600"><RefreshCw className="h-4 w-4" /></button></div>
+            <div className="mt-4 space-y-3">
+              {teamDevices.length === 0 ? <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">No staff devices are currently registered for background alerts.</p> : teamDevices.map((group) => <div key={group.userId} className="rounded-xl border border-slate-200 p-3"><div><strong className="text-xs text-slate-900">{group.fullName}</strong><p className="mt-0.5 text-[10px] text-slate-500">{group.role} • {group.devices.length} device{group.devices.length === 1 ? "" : "s"}</p></div><div className="mt-2 space-y-2">{group.devices.map((device) => <div key={device.id} className="flex items-start gap-2 rounded-lg bg-slate-50 p-2"><Smartphone className="mt-0.5 h-4 w-4 flex-none text-slate-500" /><div className="min-w-0 flex-1"><p className="truncate text-[10px] font-bold text-slate-700">{device.userAgent || "Registered device"}</p><p className="mt-0.5 text-[9px] text-slate-500">Last seen {formatStamp(device.lastSeenAt)}</p></div><button disabled={saving === `team-device-${device.id}`} onClick={() => void removeTeamDevice(group, device)} className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-700 disabled:opacity-40" title="Revoke device"><Trash2 className="h-3.5 w-3.5" /></button></div>)}</div></div>)}
+            </div>
+          </section>}
 
           {(isSystemOwner || isLocationLicensee) && <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="font-black text-slate-950">Send Team Alert</h2>
