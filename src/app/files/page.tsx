@@ -9,7 +9,7 @@ import { initialChildren, type ChildRecord } from "@/lib/children";
 import { childAttendsLocation, starterChildSchedules, type ChildScheduleRecord } from "@/lib/child-schedules";
 import { normalizeLocation, type LocationKey } from "@/lib/location-config";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { CheckCircle2, Download, FileCheck2, FileLock2, FileWarning, LoaderCircle, Plus, Search, ShieldCheck, Signature, Trash2, Upload } from "lucide-react";
+import { Camera, CheckCircle2, Download, FileCheck2, FileLock2, FileWarning, LoaderCircle, Plus, Search, ShieldCheck, Signature, Trash2, Upload } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 const blankFile: FileRecord = { id: 0, person: "", recordType: "Child", location: "Halcom", document: "", status: "Missing", due: "Now" };
@@ -110,6 +110,23 @@ export default function FilesPage() {
     return () => window.clearTimeout(timer);
   }, [activeLocation, availableLocations]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const child = params.get("child");
+    const type = params.get("type");
+    const requestedLocation = params.get("location");
+    if (child) setUploadChildId(child);
+    if (type && documentTypes.includes(type)) setUploadType(type);
+    if (requestedLocation && availableLocations.includes(requestedLocation as LocationKey) && requestedLocation !== "All Locations") {
+      setUploadLocation(requestedLocation as Exclude<LocationKey, "All Locations">);
+    }
+    if (child || type || requestedLocation) {
+      window.history.replaceState({}, "", window.location.pathname);
+      window.setTimeout(() => document.getElementById("encrypted-file")?.scrollIntoView({ behavior: "smooth", block: "center" }), 250);
+    }
+  }, [availableLocations]);
+
   function save(event: FormEvent) {
     event.preventDefault();
     if (!editing) return;
@@ -143,7 +160,9 @@ export default function FilesPage() {
       setUploadFile(null);
       setUploadChildId("");
       const fileInput = document.getElementById("encrypted-file") as HTMLInputElement | null;
+      const cameraInput = document.getElementById("encrypted-camera") as HTMLInputElement | null;
       if (fileInput) fileInput.value = "";
+      if (cameraInput) cameraInput.value = "";
       setVaultMessage("Encrypted document uploaded and retention date applied.");
       await loadDocuments();
     } catch (error) {
@@ -209,8 +228,8 @@ export default function FilesPage() {
         <Field label="Child (optional)"><select className={inputClass} value={uploadChildId} onChange={(event) => setUploadChildId(event.target.value)}><option value="">General location document</option>{uploadChildren.map((child) => <option key={child.id} value={String(child.id)}>{child.firstName} {child.lastName}</option>)}</select></Field>
         <Field label="Document type"><select className={inputClass} value={uploadType} onChange={(event) => setUploadType(event.target.value)}>{documentTypes.map((item) => <option key={item}>{item}</option>)}</select></Field>
         <Field label="Retention anchor date"><input type="date" className={inputClass} value={anchorDate} onChange={(event) => setAnchorDate(event.target.value)} /></Field>
-        <Field label="PDF or image"><input id="encrypted-file" required type="file" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,application/pdf,image/jpeg,image/png,image/heic,image/heif" className={inputClass} onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)} /></Field>
-        <div className="xl:col-span-5 flex flex-wrap items-center gap-3"><PrimaryButton type="submit" disabled={!uploadFile || uploading}>{uploading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Encrypt & Upload</PrimaryButton><p className="text-xs font-semibold text-slate-500">Maximum 15 MB. The retention anchor should be the child exit, incident, or service-period date when known.</p></div>
+        <Field label="PDF or image"><input id="encrypted-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,application/pdf,image/jpeg,image/png,image/heic,image/heif" className={inputClass} onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)} /><input id="encrypted-camera" type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)} />{uploadFile && <p className="mt-1 truncate text-[10px] font-bold text-emerald-700">Selected: {uploadFile.name}</p>}</Field>
+        <div className="xl:col-span-5 flex flex-wrap items-center gap-3"><button type="button" onClick={() => document.getElementById("encrypted-camera")?.click()} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-black text-blue-800"><Camera className="h-4 w-4" /> Take Photo / Scan</button><PrimaryButton type="submit" disabled={!uploadFile || uploading}>{uploading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Encrypt & Upload</PrimaryButton><p className="text-xs font-semibold text-slate-500">Use the phone camera for signed forms, insurance cards, and medical consent documents. Maximum 15 MB. Photos are encrypted before private storage.</p></div>
       </form>
       {vaultMessage && <p className="mt-4 rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700">{vaultMessage}</p>}
       <div className="mt-5 overflow-x-auto">
