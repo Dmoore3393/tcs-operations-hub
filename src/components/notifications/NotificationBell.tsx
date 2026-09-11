@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/components/providers/AuthProvider";
 import type { HubNotification } from "@/lib/notifications";
+import { enableHubPushNotifications, isStandaloneHubApp } from "@/lib/push-client";
 import { Bell, BellRing, CheckCheck, Smartphone, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -23,12 +24,6 @@ function timeAgo(value: string) {
   return `${days}d ago`;
 }
 
-function isStandaloneApp() {
-  if (typeof window === "undefined") return false;
-  const nav = navigator as Navigator & { standalone?: boolean };
-  return window.matchMedia("(display-mode: standalone)").matches || Boolean(nav.standalone);
-}
-
 export default function NotificationBell() {
   const { session } = useAuth();
   const [open, setOpen] = useState(false);
@@ -44,6 +39,11 @@ export default function NotificationBell() {
     if (typeof window === "undefined") return;
     setPermission("Notification" in window ? Notification.permission : "unsupported");
   }, []);
+
+  useEffect(() => {
+    if (!session?.access_token || !("Notification" in window) || Notification.permission !== "granted") return;
+    void enableHubPushNotifications(session.access_token);
+  }, [session?.access_token]);
 
   useEffect(() => {
     if (!session?.access_token) return;
@@ -145,13 +145,13 @@ export default function NotificationBell() {
   }
 
   async function enableAlerts() {
-    if (!("Notification" in window)) return;
-    const result = await Notification.requestPermission();
-    setPermission(result);
-    if (result === "granted") {
+    if (!session?.access_token) return;
+    const result = await enableHubPushNotifications(session.access_token);
+    setPermission(result.permission === "unsupported" ? "unsupported" : result.permission);
+    if (result.ok) {
       const registration = await navigator.serviceWorker?.ready;
       await registration?.showNotification("The Hub notifications are on", {
-        body: "Transportation, emergency, Tour Board, and schedule alerts can now appear while The Hub is running.",
+        body: "Transportation, emergency, Tour Board, and schedule alerts can now reach this device.",
         icon: "/app-icon-192.png",
         badge: "/app-icon-192.png",
         tag: "tcs-notifications-enabled",
@@ -183,7 +183,7 @@ export default function NotificationBell() {
       {permission === "default" && <div className="border-b border-amber-100 bg-amber-50 px-4 py-3">
         <button onClick={() => void enableAlerts()} className="flex w-full items-center gap-3 text-left">
           <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-amber-100 text-amber-800"><Smartphone className="h-4 w-4" /></span>
-          <span><strong className="block text-xs text-amber-950">Enable phone alerts</strong><small className="mt-0.5 block text-[10px] leading-4 text-amber-800">{isStandaloneApp() ? "Allow The Hub to show system notifications." : "For iPhone, add The Hub to your Home Screen first, then enable alerts from the app."}</small></span>
+          <span><strong className="block text-xs text-amber-950">Enable phone alerts</strong><small className="mt-0.5 block text-[10px] leading-4 text-amber-800">{isStandaloneHubApp() ? "Allow The Hub to send background alerts to this device." : "For iPhone, add The Hub to your Home Screen first, then enable alerts from the app."}</small></span>
         </button>
       </div>}
 
