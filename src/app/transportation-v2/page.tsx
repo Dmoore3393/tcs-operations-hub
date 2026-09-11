@@ -168,7 +168,7 @@ export default function TransportationV2Page() {
       setRoutes((current) => current.map((route) => {
         const patches = queued.filter((item) => item.routeId === String(route.id));
         if (!patches.length) return route;
-        return patches.reduce((next, item) => ({ ...next, ...item.patch }), route);
+        return patches.reduce<LiveRoute>((next, item) => ({ ...next, ...item.patch }), route);
       }));
     }, 400);
     return () => window.clearTimeout(timer);
