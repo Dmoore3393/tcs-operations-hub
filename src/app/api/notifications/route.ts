@@ -84,7 +84,7 @@ export async function PATCH(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { admin, user, profile, isOwner, isLicensee } = await requireStaff(request);
+    const { admin, userClient, user, profile, isOwner, isLicensee } = await requireStaff(request);
     const body = await request.json() as {
       eventType?: HubNotificationEventType;
       location?: string;
@@ -114,6 +114,19 @@ export async function POST(request: Request) {
       eventType,
       location,
       eventKey: body.eventKey,
+    });
+
+    await userClient.rpc("record_audit_event", {
+      p_action: "REVIEW",
+      p_table_name: "notifications",
+      p_row_id: null,
+      p_location_id: null,
+      p_metadata: {
+        kind: "automatic_hub_notification",
+        eventType,
+        location,
+        delivered: result.delivered,
+      },
     });
 
     return Response.json(result);
