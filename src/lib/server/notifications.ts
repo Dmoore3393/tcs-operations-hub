@@ -77,6 +77,36 @@ function acceptsCategory(preferences: HubNotificationPreferences, eventType: Hub
   return true;
 }
 
+function minutesFromClock(value: string) {
+  const match = /^(\d{2}):(\d{2})$/.exec(value || "");
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
+function pacificMinutesNow() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
+  return hour * 60 + minute;
+}
+
+function quietHoursActive(preferences: HubNotificationPreferences) {
+  if (!preferences.quietHoursEnabled) return false;
+  const start = minutesFromClock(preferences.quietHoursStart);
+  const end = minutesFromClock(preferences.quietHoursEnd);
+  if (start === null || end === null || start === end) return false;
+  const now = pacificMinutesNow();
+  return start < end ? now >= start && now < end : now >= start || now < end;
+}
+
 function locationMatches(staffLocations: string[], requestedLocation: string) {
   if (!requestedLocation || requestedLocation === "All Locations") return true;
   if (staffLocations.includes("All Locations")) return true;
@@ -178,7 +208,9 @@ export async function dispatchHubNotification(args: {
     await saveNotificationState(admin, user, nextInbox, preferences);
 
     const subscriptions = parsePushSubscriptions(user);
-    if (subscriptions.length) {
+    const bypassQuietHours = notification.severity === "urgent";
+    const shouldPush = !quietHoursActive(preferences) || bypassQuietHours;
+    if (subscriptions.length && shouldPush) {
       const activeSubscriptions: StoredPushSubscription[] = [];
       for (const subscription of subscriptions) {
         try {
