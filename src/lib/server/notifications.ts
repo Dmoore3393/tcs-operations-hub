@@ -1,0 +1,152 @@
+import "server-only";
+
+import {
+  categoryForEvent,
+  defaultNotificationPreferences,
+  notificationTemplate,
+  type HubNotification,
+  type HubNotificationEventType,
+  type HubNotificationPreferences,
+} from "@/lib/notifications";
+import { isLicenseeAccessRole, isOwnerAccessRole } from "@/lib/team-access";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
+
+const INBOX_KEY = "tcs_notification_inbox";
+const PREFS_KEY = "tcs_notification_preferences";
+const MAX_NOTIFICATIONS = 100;
+
+function stringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function parseInbox(user: User): HubNotification[] {
+  const raw = user.app_metadata?.[INBOX_KEY];
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is HubNotification => Boolean(item) && typeof item === "object" && typeof (item as HubNotification).id === "string")
+    .slice(0, MAX_NOTIFICATIONS);
+}
+
+function parsePreferences(user: User): HubNotificationPreferences {
+  const raw = user.app_metadata?.[PREFS_KEY];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return defaultNotificationPreferences;
+  return {
+    ...defaultNotificationPreferences,
+    ...(raw as Partial<HubNotificationPreferences>),
+  };
+}
+
+function acceptsCategory(preferences: HubNotificationPreferences, eventType: HubNotificationEventType) {
+  if (!preferences.enabled) return false;
+  const category = categoryForEvent(eventType);
+  if (category === "transportation") return preferences.transportation;
+  if (category === "emergency") return preferences.emergency;
+  if (category === "tour") return preferences.tour;
+  if (category === "schedule") return preferences.schedule;
+  return true;
+}
+
+function locationMatches(staffLocations: string[], requestedLocation: string) {
+  if (!requestedLocation || requestedLocation === "All Locations") return true;
+  if (staffLocations.includes("All Locations")) return true;
+  const normalized = requestedLocation.trim().toLowerCase();
+  return staffLocations.some((item) => item.trim().toLowerCase() === normalized);
+}
+
+function permissionMatches(role: string, permissions: string[], eventType: HubNotificationEventType) {
+  if (isOwnerAccessRole(role) || isLicenseeAccessRole(role)) return true;
+  if (eventType === "transportation_update") return permissions.includes("transportation");
+  if (eventType === "emergency_record_attention") {
+    return ["children_basic", "transportation", "health_safety"].some((permission) => permissions.includes(permission));
+  }
+  if (eventType === "schedule_update") return permissions.includes("schedules");
+  return false;
+}
+
+export async function loadNotificationState(admin: SupabaseClient, userId: string) {
+  const { data, error } = await admin.auth.admin.getUserById(userId);
+  if (error || !data.user) throw new Error(error?.message || "Could not load notification settings.");
+  return {
+    user: data.user,
+    inbox: parseInbox(data.user),
+    preferences: parsePreferences(data.user),
+  };
+}
+
+export async function saveNotificationState(
+  admin: SupabaseClient,
+  user: User,
+  inbox: HubNotification[],
+  preferences: HubNotificationPreferences,
+) {
+  const appMetadata = { ...(user.app_metadata ?? {}) };
+  appMetadata[INBOX_KEY] = inbox.slice(0, MAX_NOTIFICATIONS);
+  appMetadata[PREFS_KEY] = preferences;
+  const { error } = await admin.auth.admin.updateUserById(user.id, { app_metadata: appMetadata });
+  if (error) throw new Error(error.message);
+}
+
+export async function dispatchHubNotification(args: {
+  admin: SupabaseClient;
+  senderUserId: string;
+  organizationId: string;
+  eventType: HubNotificationEventType;
+  location?: string;
+  eventKey?: string;
+}) {
+  const { admin, senderUserId, organizationId, eventType } = args;
+  const location = args.location?.trim() || "All Locations";
+  const template = notificationTemplate(eventType);
+  const eventKey = (args.eventKey?.trim() || `${eventType}:${location}:${Date.now()}`).slice(0, 220);
+
+  const { data: rows, error } = await admin
+    .from("staff_access")
+    .select("user_id,role,locations,permissions,is_active,organization_id")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true);
+
+  if (error) throw new Error(error.message);
+
+  const recipients = (rows ?? []).filter((row) => {
+    const role = typeof row.role === "string" ? row.role : "";
+    const locations = stringArray(row.locations);
+    const permissions = stringArray(row.permissions);
+    return locationMatches(locations, location) && permissionMatches(role, permissions, eventType);
+  });
+
+  let delivered = 0;
+  for (const recipient of recipients) {
+    const userId = String(recipient.user_id || "");
+    if (!userId) continue;
+
+    const { data: userData } = await admin.auth.admin.getUserById(userId);
+    const user = userData.user;
+    if (!user) continue;
+
+    const preferences = parsePreferences(user);
+    if (!acceptsCategory(preferences, eventType)) continue;
+
+    const inbox = parseInbox(user);
+    if (inbox.some((item) => item.eventKey === eventKey)) continue;
+
+    const now = new Date().toISOString();
+    const notification: HubNotification = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      category: template.category,
+      severity: template.severity,
+      title: template.title,
+      body: template.body,
+      href: template.href,
+      location,
+      createdAt: now,
+      readAt: "",
+      eventKey,
+    };
+
+    const nextInbox = [notification, ...inbox].slice(0, MAX_NOTIFICATIONS);
+    await saveNotificationState(admin, user, nextInbox, preferences);
+    delivered += 1;
+  }
+
+  return { delivered, senderUserId };
+}
