@@ -24,6 +24,16 @@ function timeAgo(value: string) {
   return `${days}d ago`;
 }
 
+function updateAppBadge(count: number) {
+  if (typeof navigator === "undefined") return;
+  const badging = navigator as Navigator & {
+    setAppBadge?: (contents?: number) => Promise<void>;
+    clearAppBadge?: () => Promise<void>;
+  };
+  if (count > 0) void badging.setAppBadge?.(count);
+  else void badging.clearAppBadge?.();
+}
+
 export default function NotificationBell() {
   const { session } = useAuth();
   const [open, setOpen] = useState(false);
@@ -59,7 +69,9 @@ export default function NotificationBell() {
         const payload = await response.json() as NotificationPayload;
         const next = Array.isArray(payload.notifications) ? payload.notifications : [];
         setNotifications(next);
-        setUnreadCount(Number(payload.unreadCount || 0));
+        const nextUnread = Number(payload.unreadCount || 0);
+        setUnreadCount(nextUnread);
+        updateAppBadge(nextUnread);
 
         if (!initialized.current) {
           next.forEach((item) => knownIds.current.add(item.id));
@@ -119,6 +131,7 @@ export default function NotificationBell() {
       const payload = await response.json() as NotificationPayload;
       setNotifications(payload.notifications ?? []);
       setUnreadCount(payload.unreadCount ?? 0);
+      updateAppBadge(payload.unreadCount ?? 0);
     } catch {
       // Keep navigation usable if the read receipt cannot save.
     }
@@ -139,6 +152,7 @@ export default function NotificationBell() {
       const payload = await response.json() as NotificationPayload;
       setNotifications(payload.notifications ?? []);
       setUnreadCount(payload.unreadCount ?? 0);
+      updateAppBadge(payload.unreadCount ?? 0);
     } catch {
       // No-op.
     }
