@@ -144,6 +144,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const [showLocationHelp, setShowLocationHelp] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [sync, setSync] = useState<HubSyncDetail>({ state: "idle", message: "Secure shared data" });
+  const [isOnline, setIsOnline] = useState(true);
   const { location, setLocation, availableLocations, locationLocked, theme } = useHubLocation();
   const { profile, user, signOut } = useAuth();
   const meta = useMemo(() => pageMeta[pathname] ?? pageMeta["/"], [pathname]);
@@ -155,6 +156,17 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     }
     window.addEventListener(HUB_SYNC_EVENT, handleSync);
     return () => window.removeEventListener(HUB_SYNC_EVENT, handleSync);
+  }, []);
+
+  useEffect(() => {
+    const update = () => setIsOnline(window.navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
   }, []);
   const syncVisual = sync.state === "saving" || sync.state === "loading"
     ? { label: sync.state === "saving" ? "Saving" : "Loading", icon: <LoaderCircle className="h-4 w-4 animate-spin" />, className: "text-blue-700 bg-blue-50 border-blue-200" }
@@ -258,6 +270,13 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
         </header>
+
+        <div className="lg:hidden">
+          {!isOnline ? <div className="flex items-center justify-between gap-3 border-b border-red-200 bg-red-50 px-4 py-2 text-[11px] font-bold text-red-900"><span>Offline — transportation status actions are queued; other saves may need retry when service returns.</span><CloudAlert className="h-4 w-4 flex-none" /></div> :
+            sync.state === "saving" || sync.state === "loading" ? <div className="flex items-center gap-2 border-b border-blue-200 bg-blue-50 px-4 py-2 text-[11px] font-bold text-blue-900"><LoaderCircle className="h-4 w-4 animate-spin" /> Syncing changes…</div> :
+            sync.state === "error" ? <div className="flex items-center justify-between gap-3 border-b border-red-200 bg-red-50 px-4 py-2 text-[11px] font-bold text-red-900"><span>Save failed. Your latest change may need to be retried.</span><button onClick={() => window.location.reload()} className="rounded-lg bg-red-800 px-2 py-1 text-[10px] font-black text-white">Retry</button></div> :
+            sync.state === "saved" ? <div className="flex items-center gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-1.5 text-[10px] font-bold text-emerald-800"><CloudCheck className="h-3.5 w-3.5" /> Saved and synced</div> : null}
+        </div>
 
         <main className="p-4 pb-28 sm:p-6 sm:pb-28 lg:p-8">{children}</main>
       </div>
