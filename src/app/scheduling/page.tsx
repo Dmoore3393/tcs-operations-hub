@@ -1,6 +1,8 @@
 "use client";
 
 import MainLayout from "@/components/layout/MainLayout";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { sendHubNotificationEvent } from "@/lib/notification-client";
 import { DemoNotice, Modal, PageIntro, PrimaryButton, SecondaryButton, SectionCard, StatCard, StatusBadge, inputClass } from "@/components/hub/HubUI";
 import { type Shift, starterShifts } from "@/lib/hub-data";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -11,6 +13,7 @@ const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
 const blankShift: Shift = { id: 0, employee: "", role: "Teacher", location: "Halcom", day: "Monday", start: "8:00 AM", end: "5:00 PM", assignment: "Floor coverage" };
 
 export default function SchedulingPage() {
+  const { session } = useAuth();
   const [shifts, setShifts] = usePersistentState<Shift[]>("tcs-shifts", starterShifts);
   const [selectedDay, setSelectedDay] = useState("Monday");
   const [editing, setEditing] = useState<Shift | null>(null);
@@ -29,13 +32,27 @@ export default function SchedulingPage() {
   function save(event: FormEvent) {
     event.preventDefault();
     if (!editing) return;
-    setShifts((current) => current.some((item) => item.id === editing.id) ? current.map((item) => item.id === editing.id ? editing : item) : [...current, editing]);
+    const saved = editing;
+    setShifts((current) => current.some((item) => item.id === saved.id) ? current.map((item) => item.id === saved.id ? saved : item) : [...current, saved]);
+    void sendHubNotificationEvent({
+      accessToken: session?.access_token,
+      eventType: "schedule_update",
+      location: saved.location === "Transportation" ? "All Locations" : saved.location,
+      eventKey: `schedule:${saved.id}:${Date.now()}`,
+    });
     setEditing(null);
   }
 
   function removeShift() {
     if (!editing) return;
-    setShifts((current) => current.filter((item) => item.id !== editing.id));
+    const removed = editing;
+    setShifts((current) => current.filter((item) => item.id !== removed.id));
+    void sendHubNotificationEvent({
+      accessToken: session?.access_token,
+      eventType: "schedule_update",
+      location: removed.location === "Transportation" ? "All Locations" : removed.location,
+      eventKey: `schedule-removed:${removed.id}:${Date.now()}`,
+    });
     setEditing(null);
   }
 
