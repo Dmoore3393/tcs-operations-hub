@@ -10,6 +10,7 @@ import {
 } from "@/lib/notifications";
 import { isLicenseeAccessRole, isOwnerAccessRole } from "@/lib/team-access";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { createHash } from "node:crypto";
 import { sendWebPush, type StoredPushSubscription } from "@/lib/server/web-push";
 
 const INBOX_KEY = "tcs_notification_inbox";
@@ -17,6 +18,10 @@ const PREFS_KEY = "tcs_notification_preferences";
 const MAX_NOTIFICATIONS = 100;
 const PUSH_KEY = "tcs_push_subscriptions";
 const MAX_PUSH_SUBSCRIPTIONS = 8;
+
+export function pushDeviceId(endpoint: string) {
+  return createHash("sha256").update(endpoint).digest("hex").slice(0, 20);
+}
 
 function stringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
