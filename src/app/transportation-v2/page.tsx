@@ -6,6 +6,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { localIsoDate } from "@/lib/date-utils";
+import { sendHubNotificationEvent } from "@/lib/notification-client";
 import { initialChildren, type ChildRecord } from "@/lib/children";
 import { starterCareLogs, type CareLogEntry } from "@/lib/employee-care";
 import {
@@ -103,7 +104,7 @@ function isLeadership(name: string, email: string) {
 }
 
 export default function TransportationV2Page() {
-  const { profile, canManageSystem, isLocationLicensee } = useAuth();
+  const { profile, session, canManageSystem, isLocationLicensee } = useAuth();
   const { location: activeLocation } = useHubLocation();
   const [routes, setRoutes] = usePersistentState<LiveRoute[]>("tcs-routes", starterRoutes as LiveRoute[]);
   const [schools] = usePersistentState<SchoolRecord[]>("tcs-schools-v2", starterSchools);
@@ -155,6 +156,13 @@ export default function TransportationV2Page() {
   function markArrived(route: LiveRoute) {
     const now = new Date().toISOString();
     updateRoute(route, { runDate: today, runStatus: "Arrived", arrivedAt: now, arrivedBy: actor });
+    const destination = destinationLocation(route.dropoffLocation);
+    void sendHubNotificationEvent({
+      accessToken: session?.access_token,
+      eventType: "transportation_update",
+      location: destination || route.location || "All Locations",
+      eventKey: `transport-arrived:${route.id}:${today}`,
+    });
   }
 
   function checkIntoLocation(route: LiveRoute) {
