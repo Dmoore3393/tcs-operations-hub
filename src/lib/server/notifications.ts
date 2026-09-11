@@ -10,10 +10,13 @@ import {
 } from "@/lib/notifications";
 import { isLicenseeAccessRole, isOwnerAccessRole } from "@/lib/team-access";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { sendWebPush, type StoredPushSubscription } from "@/lib/server/web-push";
 
 const INBOX_KEY = "tcs_notification_inbox";
 const PREFS_KEY = "tcs_notification_preferences";
 const MAX_NOTIFICATIONS = 100;
+const PUSH_KEY = "tcs_push_subscriptions";
+const MAX_PUSH_SUBSCRIPTIONS = 8;
 
 function stringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
@@ -34,6 +37,34 @@ function parsePreferences(user: User): HubNotificationPreferences {
     ...defaultNotificationPreferences,
     ...(raw as Partial<HubNotificationPreferences>),
   };
+}
+
+export function parsePushSubscriptions(user: User): StoredPushSubscription[] {
+  const raw = user.app_metadata?.[PUSH_KEY];
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is StoredPushSubscription => {
+      if (!item || typeof item !== "object") return false;
+      const candidate = item as StoredPushSubscription;
+      return Boolean(
+        candidate.endpoint &&
+        candidate.keys?.p256dh &&
+        candidate.keys?.auth &&
+        candidate.endpoint.startsWith("https://")
+      );
+    })
+    .slice(0, MAX_PUSH_SUBSCRIPTIONS);
+}
+
+export async function savePushSubscriptions(
+  admin: SupabaseClient,
+  user: User,
+  subscriptions: StoredPushSubscription[],
+) {
+  const appMetadata = { ...(user.app_metadata ?? {}) };
+  appMetadata[PUSH_KEY] = subscriptions.slice(0, MAX_PUSH_SUBSCRIPTIONS);
+  const { error } = await admin.auth.admin.updateUserById(user.id, { app_metadata: appMetadata });
+  if (error) throw new Error(error.message);
 }
 
 function acceptsCategory(preferences: HubNotificationPreferences, eventType: HubNotificationEventType) {
@@ -145,6 +176,31 @@ export async function dispatchHubNotification(args: {
 
     const nextInbox = [notification, ...inbox].slice(0, MAX_NOTIFICATIONS);
     await saveNotificationState(admin, user, nextInbox, preferences);
+
+    const subscriptions = parsePushSubscriptions(user);
+    if (subscriptions.length) {
+      const activeSubscriptions: StoredPushSubscription[] = [];
+      for (const subscription of subscriptions) {
+        try {
+          const result = await sendWebPush(subscription, {
+            title: notification.title,
+            body: notification.body,
+            href: notification.href,
+            tag: notification.eventKey || notification.id,
+          });
+          if (!result.stale) activeSubscriptions.push(subscription);
+        } catch {
+          activeSubscriptions.push(subscription);
+        }
+      }
+      if (activeSubscriptions.length !== subscriptions.length) {
+        const refreshed = await admin.auth.admin.getUserById(user.id);
+        if (refreshed.data.user) {
+          await savePushSubscriptions(admin, refreshed.data.user, activeSubscriptions);
+        }
+      }
+    }
+
     delivered += 1;
   }
 
