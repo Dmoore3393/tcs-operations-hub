@@ -17,6 +17,7 @@ export type AuthorizedStaff = {
     role: string;
     is_active: boolean;
     permissions: string[];
+    locations: string[];
   };
   isOwner: boolean;
   isLicensee: boolean;
@@ -33,7 +34,7 @@ export async function requireStaff(request: Request): Promise<AuthorizedStaff> {
 
   const { data: profile, error: profileError } = await admin
     .from("staff_access")
-    .select("user_id,organization_id,email,full_name,role,is_active,permissions")
+    .select("user_id,organization_id,email,full_name,role,is_active,permissions,locations")
     .eq("user_id", userData.user.id)
     .maybeSingle();
 
