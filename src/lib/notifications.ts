@@ -28,6 +28,9 @@ export type HubNotificationPreferences = {
   tour: boolean;
   schedule: boolean;
   sound: boolean;
+  quietHoursEnabled: boolean;
+  quietHoursStart: string;
+  quietHoursEnd: string;
 };
 
 export const defaultNotificationPreferences: HubNotificationPreferences = {
@@ -37,6 +40,9 @@ export const defaultNotificationPreferences: HubNotificationPreferences = {
   tour: true,
   schedule: true,
   sound: true,
+  quietHoursEnabled: false,
+  quietHoursStart: "21:00",
+  quietHoursEnd: "06:00",
 };
 
 export function categoryForEvent(type: HubNotificationEventType): HubNotificationCategory {
