@@ -2,6 +2,7 @@
 
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { enableHubPushNotifications, isStandaloneHubApp } from "@/lib/push-client";
 import {
   defaultNotificationPreferences,
   type HubNotification,
@@ -50,12 +51,6 @@ function formatStamp(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-}
-
-function standalone() {
-  if (typeof window === "undefined") return false;
-  const nav = navigator as Navigator & { standalone?: boolean };
-  return window.matchMedia("(display-mode: standalone)").matches || Boolean(nav.standalone);
 }
 
 export default function NotificationsPage() {
@@ -139,13 +134,13 @@ export default function NotificationsPage() {
   }
 
   async function enableSystemAlerts() {
-    if (!("Notification" in window)) return;
-    const result = await Notification.requestPermission();
-    setPermission(result);
-    if (result === "granted") {
+    if (!session?.access_token) return;
+    const result = await enableHubPushNotifications(session.access_token);
+    setPermission(result.permission === "unsupported" ? "unsupported" : result.permission);
+    if (result.ok) {
       const registration = await navigator.serviceWorker?.ready;
       await registration?.showNotification("The Hub notifications are on", {
-        body: "Important TCS updates can now appear as device alerts while The Hub is running.",
+        body: "Important TCS updates can now reach this device even when The Hub is not open.",
         icon: "/app-icon-192.png",
         badge: "/app-icon-192.png",
         tag: "tcs-notifications-enabled",
@@ -201,7 +196,7 @@ export default function NotificationsPage() {
             <div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-100 text-emerald-700"><Smartphone className="h-5 w-5" /></span><div><h2 className="font-black text-slate-950">Device Alerts</h2><p className="text-xs text-slate-500">{permission === "granted" ? "Allowed on this device" : permission === "denied" ? "Blocked on this device" : permission === "unsupported" ? "Not supported here" : "Permission not requested"}</p></div></div>
             {permission === "default" && <button onClick={() => void enableSystemAlerts()} className="mt-4 w-full rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white">Enable Device Alerts</button>}
             {permission === "denied" && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900">Notifications were blocked in the device/browser settings. Change the permission there to turn them back on.</div>}
-            {!standalone() && <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs font-semibold leading-5 text-blue-900">On iPhone, install The Hub to the Home Screen before enabling notification permission.</div>}
+            {!isStandaloneHubApp() && <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs font-semibold leading-5 text-blue-900">On iPhone, install The Hub to the Home Screen before enabling notification permission.</div>}
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
