@@ -1,6 +1,11 @@
+import { createHash } from "node:crypto";
 import { loadNotificationState, parsePushSubscriptions, savePushSubscriptions } from "@/lib/server/notifications";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 import { getVapidPublicKey, type StoredPushSubscription } from "@/lib/server/web-push";
+
+function deviceId(endpoint: string) {
+  return createHash("sha256").update(endpoint).digest("hex").slice(0, 20);
+}
 
 type SubscriptionBody = {
   endpoint?: string;
@@ -38,7 +43,13 @@ export async function GET(request: Request) {
     return Response.json({
       publicKey: getVapidPublicKey(),
       subscriptionCount: subscriptions.length,
-      endpoints: subscriptions.map((item) => item.endpoint),
+      devices: subscriptions.map((item) => ({
+        id: deviceId(item.endpoint),
+        createdAt: item.createdAt,
+        lastSeenAt: item.lastSeenAt,
+        userAgent: item.userAgent,
+        expirationTime: item.expirationTime,
+      })),
     }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" },
     });
@@ -78,13 +89,14 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const { admin, user } = await requireStaff(request);
-    const body = await request.json() as { endpoint?: string };
+    const body = await request.json() as { endpoint?: string; deviceId?: string };
     const endpoint = typeof body.endpoint === "string" ? body.endpoint.trim() : "";
-    if (!endpoint) throw new Response("Push subscription endpoint is required.", { status: 400 });
+    const requestedDeviceId = typeof body.deviceId === "string" ? body.deviceId.trim() : "";
+    if (!endpoint && !requestedDeviceId) throw new Response("A registered device is required.", { status: 400 });
 
     const state = await loadNotificationState(admin, user.id);
     const current = parsePushSubscriptions(state.user);
-    const next = current.filter((item) => item.endpoint !== endpoint);
+    const next = current.filter((item) => endpoint ? item.endpoint !== endpoint : deviceId(item.endpoint) !== requestedDeviceId);
     await savePushSubscriptions(admin, state.user, next);
 
     return Response.json({ ok: true, subscriptionCount: next.length });
