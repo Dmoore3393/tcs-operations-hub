@@ -1,6 +1,13 @@
+export type OfflineTransportRunStatus =
+  | "Waiting"
+  | "Picked Up"
+  | "Arrived"
+  | "Checked In"
+  | "Dropped Off";
+
 export type OfflineTransportPatch = {
   runDate?: string;
-  runStatus?: string;
+  runStatus?: OfflineTransportRunStatus;
   pickedUpAt?: string;
   arrivedAt?: string;
   checkedInAt?: string;
