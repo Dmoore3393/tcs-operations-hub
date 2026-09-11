@@ -21,6 +21,7 @@ import {
   MessageSquareText,
   RefreshCw,
   Smartphone,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -29,6 +30,14 @@ type Payload = {
   notifications: HubNotification[];
   preferences: HubNotificationPreferences;
   unreadCount: number;
+};
+
+type RegisteredDevice = {
+  id: string;
+  createdAt: string;
+  lastSeenAt: string;
+  userAgent: string;
+  expirationTime: number | null;
 };
 
 const filters: Array<{ key: "all" | HubNotificationCategory; label: string }> = [
@@ -63,6 +72,7 @@ export default function NotificationsPage() {
   const [saving, setSaving] = useState("");
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [pushMessage, setPushMessage] = useState("");
+  const [devices, setDevices] = useState<RegisteredDevice[]>([]);
 
   const load = useCallback(async () => {
     if (!session?.access_token) return;
@@ -82,7 +92,22 @@ export default function NotificationsPage() {
     }
   }, [session?.access_token]);
 
-  useEffect(() => { void load(); }, [load]);
+  const loadDevices = useCallback(async () => {
+    if (!session?.access_token) return;
+    try {
+      const response = await fetch("/api/notifications/subscription", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const payload = await response.json() as { devices?: RegisteredDevice[] };
+      setDevices(Array.isArray(payload.devices) ? payload.devices : []);
+    } catch {
+      // Device management should not interrupt Notification Center.
+    }
+  }, [session?.access_token]);
+
+  useEffect(() => { void load(); void loadDevices(); }, [load, loadDevices]);
   useEffect(() => {
     if (typeof window !== "undefined") setPermission("Notification" in window ? Notification.permission : "unsupported");
   }, []);
@@ -125,7 +150,7 @@ export default function NotificationsPage() {
     }
   }
 
-  async function updatePreference(key: keyof HubNotificationPreferences, value: boolean) {
+  async function updatePreference(key: keyof HubNotificationPreferences, value: boolean | string) {
     const next = { ...preferences, [key]: value };
     setPreferences(next);
     setSaving(key);
@@ -169,6 +194,30 @@ export default function NotificationsPage() {
       }
     } catch {
       setPushMessage("The test notification could not be delivered.");
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function removeDevice(device: RegisteredDevice) {
+    if (!session?.access_token) return;
+    setSaving(`device-${device.id}`);
+    setPushMessage("");
+    try {
+      const response = await fetch("/api/notifications/subscription", {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ deviceId: device.id }),
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Could not remove this device.");
+      setPushMessage("The device was removed from background notifications.");
+      await loadDevices();
+    } catch (error) {
+      setPushMessage(error instanceof Error ? error.message : "Could not remove this device.");
     } finally {
       setSaving("");
     }
@@ -224,6 +273,13 @@ export default function NotificationsPage() {
             {pushMessage && <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-semibold leading-5 text-slate-700">{pushMessage}</div>}
             {permission === "denied" && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900">Notifications were blocked in the device/browser settings. Change the permission there to turn them back on.</div>}
             {!isStandaloneHubApp() && <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs font-semibold leading-5 text-blue-900">On iPhone, install The Hub to the Home Screen before enabling notification permission.</div>}
+
+            <div className="mt-5 border-t border-slate-100 pt-4">
+              <div className="flex items-center justify-between"><div><h3 className="text-xs font-black text-slate-900">Registered devices</h3><p className="mt-0.5 text-[10px] text-slate-500">Remove an old or lost phone here.</p></div><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">{devices.length}</span></div>
+              <div className="mt-3 space-y-2">
+                {devices.length === 0 ? <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">No background-push devices registered yet.</p> : devices.map((device) => <div key={device.id} className="flex items-start gap-3 rounded-xl border border-slate-200 p-3"><Smartphone className="mt-0.5 h-4 w-4 flex-none text-slate-500" /><div className="min-w-0 flex-1"><p className="truncate text-xs font-black text-slate-800">{device.userAgent || "Registered device"}</p><p className="mt-1 text-[10px] text-slate-500">Last seen {formatStamp(device.lastSeenAt)} • Added {formatStamp(device.createdAt)}</p></div><button disabled={saving === `device-${device.id}`} onClick={() => void removeDevice(device)} className="rounded-lg border border-red-200 bg-red-50 p-2 text-red-700 disabled:opacity-40" title="Remove device"><Trash2 className="h-4 w-4" /></button></div>)}
+              </div>
+            </div>
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -235,6 +291,8 @@ export default function NotificationsPage() {
               <PreferenceRow label="Emergency Cards" helper="Emergency records needing attention" checked={preferences.emergency} disabled={!preferences.enabled || saving === "emergency"} onChange={(value) => void updatePreference("emergency", value)} />
               <PreferenceRow label="Tour Board" helper="Lead and follow-up activity" checked={preferences.tour} disabled={!preferences.enabled || saving === "tour"} onChange={(value) => void updatePreference("tour", value)} />
               <PreferenceRow label="Staff Schedule" helper="Shift additions and changes" checked={preferences.schedule} disabled={!preferences.enabled || saving === "schedule"} onChange={(value) => void updatePreference("schedule", value)} />
+              <PreferenceRow label="Quiet hours" helper="Pause non-urgent lock-screen alerts during your selected hours" checked={preferences.quietHoursEnabled} disabled={!preferences.enabled || saving === "quietHoursEnabled"} onChange={(value) => void updatePreference("quietHoursEnabled", value)} />
+              {preferences.quietHoursEnabled && <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 p-3"><label><span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">Start</span><input type="time" value={preferences.quietHoursStart} onChange={(event) => void updatePreference("quietHoursStart", event.target.value)} className="w-full rounded-lg border border-slate-200 px-2 py-2 text-xs font-bold" /></label><label><span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">End</span><input type="time" value={preferences.quietHoursEnd} onChange={(event) => void updatePreference("quietHoursEnd", event.target.value)} className="w-full rounded-lg border border-slate-200 px-2 py-2 text-xs font-bold" /></label><p className="col-span-2 text-[10px] leading-4 text-slate-500">Emergency alerts marked urgent still come through quiet hours. Times use TCS Pacific time.</p></div>}
             </div>
           </section>
 
