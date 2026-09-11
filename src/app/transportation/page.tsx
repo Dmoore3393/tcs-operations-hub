@@ -23,6 +23,7 @@ import {
   type VehicleRecord,
 } from "@/lib/hub-data";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { sendHubNotificationEvent } from "@/lib/notification-client";
 import {
   Building2,
   Bus,
@@ -92,7 +93,7 @@ type Tab = "Routes" | "Schools" | "Vehicles";
 type ReadinessState = Record<string, Record<string, boolean>>;
 
 export default function TransportationPage() {
-  const { canManageSystem } = useAuth();
+  const { canManageSystem, session } = useAuth();
   const { location: activeLocation, availableLocations } = useHubLocation();
   const [routes, setRoutes] = usePersistentState<TransportationRoute[]>("tcs-routes", starterRoutes);
   const [schools, setSchools] = usePersistentState<SchoolRecord[]>("tcs-schools-v2", starterSchools);
@@ -127,9 +128,16 @@ export default function TransportationPage() {
   function saveRoute(event: FormEvent) {
     event.preventDefault();
     if (!editingRoute) return;
-    setRoutes((current) => current.some((item) => item.id === editingRoute.id)
-      ? current.map((item) => item.id === editingRoute.id ? editingRoute : item)
-      : [...current, editingRoute]);
+    const saved = editingRoute;
+    setRoutes((current) => current.some((item) => item.id === saved.id)
+      ? current.map((item) => item.id === saved.id ? saved : item)
+      : [...current, saved]);
+    void sendHubNotificationEvent({
+      accessToken: session?.access_token,
+      eventType: "transportation_update",
+      location: saved.location,
+      eventKey: `transport-route:${saved.id}:${Date.now()}`,
+    });
     setEditingRoute(null);
   }
 
@@ -141,11 +149,18 @@ export default function TransportationPage() {
   function saveSchool(event: FormEvent) {
     event.preventDefault();
     if (!editingSchool) return;
-    setSchools((current) => current.some((item) => item.id === editingSchool.id)
-      ? current.map((item) => item.id === editingSchool.id ? editingSchool : item)
-      : [...current, editingSchool]);
-    if (originalSchoolName && originalSchoolName !== editingSchool.school) {
-      setRoutes((current) => current.map((route) => route.school === originalSchoolName ? { ...route, school: editingSchool.school } : route));
+    const saved = editingSchool;
+    setSchools((current) => current.some((item) => item.id === saved.id)
+      ? current.map((item) => item.id === saved.id ? saved : item)
+      : [...current, saved]);
+    if (originalSchoolName && originalSchoolName !== saved.school) {
+      setRoutes((current) => current.map((route) => route.school === originalSchoolName ? { ...route, school: saved.school } : route));
+      void sendHubNotificationEvent({
+        accessToken: session?.access_token,
+        eventType: "transportation_update",
+        location: "All Locations",
+        eventKey: `transport-school:${saved.id}:${Date.now()}`,
+      });
     }
     setEditingSchool(null);
     setOriginalSchoolName(null);
@@ -159,13 +174,22 @@ export default function TransportationPage() {
   function saveVehicle(event: FormEvent) {
     event.preventDefault();
     if (!editingVehicle) return;
-    setVehicles((current) => current.some((item) => item.id === editingVehicle.id)
-      ? current.map((item) => item.id === editingVehicle.id ? editingVehicle : item)
-      : [...current, editingVehicle]);
-    if (originalVehicleName && originalVehicleName !== editingVehicle.name) {
-      setRoutes((current) => current.map((route) => route.vehicle === originalVehicleName ? { ...route, vehicle: editingVehicle.name } : route));
+    const saved = editingVehicle;
+    setVehicles((current) => current.some((item) => item.id === saved.id)
+      ? current.map((item) => item.id === saved.id ? saved : item)
+      : [...current, saved]);
+    if (originalVehicleName && originalVehicleName !== saved.name) {
+      setRoutes((current) => current.map((route) => route.vehicle === originalVehicleName ? { ...route, vehicle: saved.name } : route));
     }
-    setReadinessVehicleId(editingVehicle.id);
+    if (saved.status !== "Ready" || (originalVehicleName && originalVehicleName !== saved.name)) {
+      void sendHubNotificationEvent({
+        accessToken: session?.access_token,
+        eventType: "transportation_update",
+        location: saved.assignedLocation === "All Sites" ? "All Locations" : saved.assignedLocation,
+        eventKey: `transport-vehicle:${saved.id}:${saved.status}:${Date.now()}`,
+      });
+    }
+    setReadinessVehicleId(saved.id);
     setEditingVehicle(null);
     setOriginalVehicleName(null);
   }
