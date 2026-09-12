@@ -313,6 +313,16 @@ export default function ChildFileAuditsPage() {
       const payload = await request("POST", { action: "save", child });
       const saved = payload.child as ChildRecord;
       setChildren((current) => current.map((item) => item.id === saved.id ? saved : item));
+      void fetch("/api/child-file-audits/alerts", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ childId: saved.id }),
+      }).catch(() => {
+        // Saving the audit must not fail because an alert delivery attempt is temporarily unavailable.
+      });
       setEditor(null);
       flash(`${displayName(saved)}'s file audit was saved. Next audit: ${formatDate(audit.nextAuditDue)}.`);
     } catch (saveError) {
@@ -338,6 +348,7 @@ export default function ChildFileAuditsPage() {
           <div className="rounded-2xl border border-orange-200 bg-white/85 p-4 shadow-sm">
             <p className="text-[10px] font-black uppercase tracking-wider text-orange-700">Audit rule in The Hub</p>
             <p className="mt-1 max-w-sm text-xs font-bold leading-5 text-slate-700">The next audit date is required before an audit can be saved. Expired documents and missing required forms are automatically flagged.</p>
+            <p className="mt-2 max-w-sm text-[11px] font-black leading-5 text-[#8a2f20]">Audit attention alerts are routed to the assigned site Licensee plus TCS Owner/Admin oversight.</p>
           </div>
         </div>
       </section>
