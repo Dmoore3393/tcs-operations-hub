@@ -1,0 +1,45 @@
+name: TheHub
+
+options:
+  deploymentTarget:
+    iOS: "16.4"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: 5.10
+    IPHONEOS_DEPLOYMENT_TARGET: "16.4"
+    TARGETED_DEVICE_FAMILY: "1,2"
+
+targets:
+  TheHub:
+    type: application
+    platform: iOS
+    sources:
+      - path: TheHub
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.thomasonchildcaresolutions.thehub
+        PRODUCT_NAME: The Hub
+        MARKETING_VERSION: 1.0.0
+        CURRENT_PROJECT_VERSION: 1
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+    info:
+      path: TheHub/Info.plist
+      properties:
+        CFBundleDisplayName: The Hub
+        CFBundleName: The Hub
+        LSApplicationCategoryType: public.app-category.business
+        NSFaceIDUsageDescription: The Hub uses Face ID to help protect access to TCS staff information on this device.
+        NSCameraUsageDescription: The Hub uses the camera so authorized staff can scan approved childcare documents.
+        NSPhotoLibraryUsageDescription: The Hub can access selected photos when authorized staff upload approved childcare documents.
+        UIApplicationSupportsIndirectInputEvents: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
