@@ -23,6 +23,53 @@ function stringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean) : [];
 }
 
+const AUDIT_ITEM_STATUSES = new Set(["Not Checked", "On File", "Missing", "N/A"]);
+const AUDIT_STATUS_FLAGS = new Set([
+  "File Complete",
+  "Missing Documents",
+  "Expirations Updated",
+  "Needs Parent Follow-Up",
+  "Special Care Plan Active",
+  "Behavior Plan Active",
+  "Transportation Child",
+  "Medication on Site",
+]);
+
+function safeFileAudits(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(-50).map((entry) => {
+    const audit = object(entry);
+    const id = text(audit.id).slice(0, 120) || `audit-${Date.now()}`;
+    const items = Array.isArray(audit.items)
+      ? audit.items.slice(0, 80).map((entryItem) => {
+          const item = object(entryItem);
+          const documentId = Number(item.documentId);
+          return {
+            documentId: Number.isInteger(documentId) && documentId > 0 && documentId <= 100 ? documentId : 0,
+            status: AUDIT_ITEM_STATUSES.has(text(item.status)) ? text(item.status) : "Not Checked",
+            dateChecked: text(item.dateChecked).slice(0, 10),
+            expirationDate: text(item.expirationDate).slice(0, 10),
+            note: text(item.note).slice(0, 500),
+          };
+        }).filter((item) => item.documentId > 0)
+      : [];
+
+    return {
+      id,
+      auditDate: text(audit.auditDate).slice(0, 10),
+      nextAuditDue: text(audit.nextAuditDue).slice(0, 10),
+      dateEnrolled: text(audit.dateEnrolled).slice(0, 10),
+      auditedBy: text(audit.auditedBy).slice(0, 160),
+      teacherPrimary: text(audit.teacherPrimary).slice(0, 160),
+      notes: text(audit.notes).slice(0, 4000),
+      statusFlags: stringArray(audit.statusFlags).filter((flag) => AUDIT_STATUS_FLAGS.has(flag)).slice(0, 12),
+      items,
+      createdAt: text(audit.createdAt).slice(0, 40),
+      updatedAt: text(audit.updatedAt).slice(0, 40),
+    };
+  });
+}
+
 function locationSlug(value: unknown) {
   const source = text(value).toLowerCase();
   if (source.includes("halcom") || source.includes("moore family")) return "halcom";
@@ -90,6 +137,7 @@ function normalizeChild(row: DbRow) {
     emergencyContact2Relationship: text(record.emergencyContact2Relationship),
     transportRestraint: text(record.transportRestraint),
     emergencyInstructions: text(record.emergencyInstructions),
+    fileAudits: safeFileAudits(record.fileAudits),
     updatedAt: text(row.updated_at),
   };
 }
@@ -195,6 +243,7 @@ function safeChildRecord(child: DbRow, id: number) {
     emergencyContact2Relationship: text(child.emergencyContact2Relationship).slice(0, 100),
     transportRestraint: text(child.transportRestraint).slice(0, 160),
     emergencyInstructions: text(child.emergencyInstructions).slice(0, 4000),
+    fileAudits: safeFileAudits(child.fileAudits),
   };
 }
 
