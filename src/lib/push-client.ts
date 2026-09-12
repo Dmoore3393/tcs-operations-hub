@@ -1,5 +1,12 @@
+export function isNativeHubApp() {
+  if (typeof window === "undefined") return false;
+  const nativeWindow = window as typeof window & { __TCS_NATIVE_APP__?: { platform?: string; version?: string } };
+  return Boolean(nativeWindow.__TCS_NATIVE_APP__);
+}
+
 export function isStandaloneHubApp() {
   if (typeof window === "undefined") return false;
+  if (isNativeHubApp()) return true;
   const nav = navigator as Navigator & { standalone?: boolean };
   return window.matchMedia("(display-mode: standalone)").matches || Boolean(nav.standalone);
 }
@@ -14,6 +21,13 @@ function applicationServerKey(value: string) {
 }
 
 export async function enableHubPushNotifications(accessToken: string) {
+  if (isNativeHubApp()) {
+    return {
+      ok: false,
+      permission: "unsupported" as const,
+      reason: "Native App Store notifications will be connected through Apple Push Notification service when the TCS Apple Developer account is linked.",
+    };
+  }
   if (!("Notification" in window) || !("serviceWorker" in navigator)) {
     return { ok: false, permission: "unsupported" as const, reason: "Notifications are not supported on this device." };
   }
