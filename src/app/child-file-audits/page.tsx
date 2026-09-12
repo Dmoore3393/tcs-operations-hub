@@ -283,7 +283,7 @@ export default function ChildFileAuditsPage() {
     ]);
     const missingDocuments = childFileAuditDocuments.filter((document) => problemIds.has(document.id)).map((document) => document.name);
 
-    const statusFlags = editor.audit.statusFlags
+    const statusFlags: ChildFileAuditStatusFlag[] = editor.audit.statusFlags
       .filter((flag) => flag !== "File Complete" && flag !== "Missing Documents");
     if (missingDocuments.length === 0 && summary.checked === summary.total) statusFlags.push("File Complete");
     else statusFlags.push("Missing Documents");
