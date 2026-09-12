@@ -1,3 +1,4 @@
+import type { ChildFileAudit } from "@/lib/child-file-audits";
 export type LicensingStatus = "Complete" | "Missing Documents";
 export type EnrollmentStatus = "Active" | "Pending" | "Archived";
 export type AttendanceStatus = "Present" | "Not Scheduled" | "Absent";
@@ -61,6 +62,7 @@ export type ChildRecord = {
   emergencyContact2Relationship?: string;
   transportRestraint?: string;
   emergencyInstructions?: string;
+  fileAudits?: ChildFileAudit[];
 };
 
 export type ChildFormState = {
