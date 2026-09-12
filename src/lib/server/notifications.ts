@@ -9,6 +9,7 @@ import {
   type HubNotificationPreferences,
 } from "@/lib/notifications";
 import { isLicenseeAccessRole, isOwnerAccessRole } from "@/lib/team-access";
+import { normalizeLocation } from "@/lib/location-config";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { sendWebPush, type StoredPushSubscription } from "@/lib/server/web-push";
@@ -115,6 +116,12 @@ function quietHoursActive(preferences: HubNotificationPreferences) {
 function locationMatches(staffLocations: string[], requestedLocation: string) {
   if (!requestedLocation || requestedLocation === "All Locations") return true;
   if (staffLocations.includes("All Locations")) return true;
+
+  const requestedKey = normalizeLocation(requestedLocation);
+  if (requestedKey !== "All Locations") {
+    return staffLocations.some((item) => normalizeLocation(item) === requestedKey);
+  }
+
   const normalized = requestedLocation.trim().toLowerCase();
   return staffLocations.some((item) => item.trim().toLowerCase() === normalized);
 }
@@ -337,6 +344,103 @@ export async function dispatchManualHubNotification(args: {
         if (refreshed.data.user) await savePushSubscriptions(admin, refreshed.data.user, activeSubscriptions);
       }
     }
+    delivered += 1;
+  }
+
+  return { delivered, senderUserId: args.senderUserId };
+}
+
+
+export async function dispatchFileAuditOversightNotification(args: {
+  admin: SupabaseClient;
+  senderUserId: string;
+  organizationId: string;
+  location: string;
+  eventKey: string;
+  title: string;
+  body: string;
+  href?: string;
+  severity?: HubNotification["severity"];
+}) {
+  const targetLocation = args.location.trim() || "All Locations";
+  const eventKey = args.eventKey.slice(0, 220);
+  const href = args.href?.startsWith("/") ? args.href : "/child-file-audits";
+
+  const { data: rows, error } = await args.admin
+    .from("staff_access")
+    .select("user_id,role,locations,is_active,organization_id")
+    .eq("organization_id", args.organizationId)
+    .eq("is_active", true);
+  if (error) throw new Error(error.message);
+
+  const recipientIds = new Set<string>();
+  for (const row of rows ?? []) {
+    const role = typeof row.role === "string" ? row.role : "";
+    const userId = typeof row.user_id === "string" ? row.user_id : "";
+    if (!userId) continue;
+
+    if (isOwnerAccessRole(role)) {
+      recipientIds.add(userId);
+      continue;
+    }
+
+    if (isLicenseeAccessRole(role) && locationMatches(stringArray(row.locations), targetLocation)) {
+      recipientIds.add(userId);
+    }
+  }
+
+  let delivered = 0;
+  for (const userId of recipientIds) {
+    const state = await loadNotificationState(args.admin, userId);
+    if (!state.preferences.enabled) continue;
+    if (state.inbox.some((item) => item.eventKey === eventKey)) continue;
+
+    const notification: HubNotification = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      category: "system",
+      severity: args.severity ?? "attention",
+      title: args.title.slice(0, 90),
+      body: args.body.slice(0, 260),
+      href,
+      location: targetLocation,
+      createdAt: new Date().toISOString(),
+      readAt: "",
+      eventKey,
+    };
+
+    await saveNotificationState(
+      args.admin,
+      state.user,
+      [notification, ...state.inbox].slice(0, MAX_NOTIFICATIONS),
+      state.preferences,
+    );
+
+    const subscriptions = parsePushSubscriptions(state.user);
+    const bypassQuietHours = notification.severity === "urgent";
+    if (subscriptions.length && (!quietHoursActive(state.preferences) || bypassQuietHours)) {
+      const activeSubscriptions: StoredPushSubscription[] = [];
+      for (const subscription of subscriptions) {
+        try {
+          const result = await sendWebPush(subscription, {
+            title: notification.title,
+            body: notification.body,
+            href: notification.href,
+            tag: notification.eventKey,
+          });
+          if (!result.stale) activeSubscriptions.push(subscription);
+        } catch {
+          activeSubscriptions.push(subscription);
+        }
+      }
+
+      if (activeSubscriptions.length !== subscriptions.length) {
+        const refreshed = await args.admin.auth.admin.getUserById(state.user.id);
+        if (refreshed.data.user) {
+          await savePushSubscriptions(args.admin, refreshed.data.user, activeSubscriptions);
+        }
+      }
+    }
+
     delivered += 1;
   }
 
