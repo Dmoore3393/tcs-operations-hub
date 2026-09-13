@@ -67,7 +67,7 @@ export const starterEnrollmentLeads: EnrollmentLeadRecord[] = [
 ];
 
 export type DigitalFormStatus = "Draft" | "Ready to Send" | "Sent" | "Signed" | "Needs Correction" | "Archived";
-export type SignatureMethod = "Not Signed" | "In Person" | "Uploaded Signed Copy" | "Staff Acknowledgment" | "Parent Portal (Future)";
+export type SignatureMethod = "Not Signed" | "In Person" | "Uploaded Signed Copy" | "Staff Acknowledgment" | "Parent Portal (Future)" | "Parent Portal Acknowledgment";
 
 export type DigitalFormRecord = {
   id: number;
@@ -76,6 +76,7 @@ export type DigitalFormRecord = {
   subjectName: string;
   formName: string;
   signerName: string;
+  signerEmail?: string;
   status: DigitalFormStatus;
   signatureMethod: SignatureMethod;
   requestedAt: string;
