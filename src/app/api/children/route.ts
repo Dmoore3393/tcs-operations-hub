@@ -157,6 +157,14 @@ function normalizeChild(row: DbRow) {
     missingDocuments: stringArray(record.missingDocuments),
     enrollmentStatus: text(record.enrollmentStatus) || text(row.enrollment_status) || "Active",
     attendanceToday: text(record.attendanceToday) || text(row.attendance_status) || "Not Scheduled",
+    attendanceDate: text(record.attendanceDate),
+    checkedInAt: text(record.checkedInAt),
+    checkedInBy: text(record.checkedInBy),
+    checkedOutAt: text(record.checkedOutAt),
+    checkedOutBy: text(record.checkedOutBy),
+    pickupPerson: text(record.pickupPerson),
+    pickupVerification: ["Authorized Contact", "Licensee Override", "Not Applicable"].includes(text(record.pickupVerification)) ? text(record.pickupVerification) : "Not Applicable",
+    pickupNotes: text(record.pickupNotes),
     medicalConsentStatus: ["On File", "Missing", "Needs Update"].includes(text(record.medicalConsentStatus)) ? text(record.medicalConsentStatus) : "Missing",
     medicalConsentSignedAt: text(record.medicalConsentSignedAt),
     medicalConsentVerifiedAt: text(record.medicalConsentVerifiedAt),
@@ -238,7 +246,7 @@ function validateChild(value: unknown) {
 function safeChildRecord(child: DbRow, id: number) {
   const licensingStatus = text(child.licensingStatus) === "Missing Documents" ? "Missing Documents" : "Complete";
   const enrollmentStatus = ["Active", "Pending", "Archived"].includes(text(child.enrollmentStatus)) ? text(child.enrollmentStatus) : "Active";
-  const attendanceToday = ["Present", "Not Scheduled", "Absent"].includes(text(child.attendanceToday)) ? text(child.attendanceToday) : "Not Scheduled";
+  const attendanceToday = ["Present", "Checked Out", "Not Scheduled", "Absent"].includes(text(child.attendanceToday)) ? text(child.attendanceToday) : "Not Scheduled";
   const ageGroup = ["Infant", "Toddler", "Preschool", "School Age"].includes(text(child.ageGroup)) ? text(child.ageGroup) : "Infant";
   return {
     id,
@@ -264,6 +272,14 @@ function safeChildRecord(child: DbRow, id: number) {
     missingDocuments: licensingStatus === "Missing Documents" ? stringArray(child.missingDocuments).slice(0, 50) : [],
     enrollmentStatus,
     attendanceToday,
+    attendanceDate: text(child.attendanceDate).slice(0, 10),
+    checkedInAt: text(child.checkedInAt).slice(0, 40),
+    checkedInBy: text(child.checkedInBy).slice(0, 160),
+    checkedOutAt: text(child.checkedOutAt).slice(0, 40),
+    checkedOutBy: text(child.checkedOutBy).slice(0, 160),
+    pickupPerson: text(child.pickupPerson).slice(0, 160),
+    pickupVerification: ["Authorized Contact", "Licensee Override", "Not Applicable"].includes(text(child.pickupVerification)) ? text(child.pickupVerification) : "Not Applicable",
+    pickupNotes: text(child.pickupNotes).slice(0, 1000),
     medicalConsentStatus: ["On File", "Missing", "Needs Update"].includes(text(child.medicalConsentStatus)) ? text(child.medicalConsentStatus) : "Missing",
     medicalConsentSignedAt: text(child.medicalConsentSignedAt).slice(0, 10),
     medicalConsentVerifiedAt: text(child.medicalConsentVerifiedAt).slice(0, 10),
