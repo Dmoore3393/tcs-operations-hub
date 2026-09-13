@@ -60,6 +60,10 @@ const ownerOnlyWriteStateKeys = new Set([
 ]);
 const trainingAdminNames = new Set(["danielle moore", "jennifer thomason", "heather graham"]);
 
+function isParentPortalRoute(pathname: string) {
+  return pathname === "/parent-login" || pathname === "/parent" || pathname.startsWith("/parent/");
+}
+
 function isTrainingAdminProfile(profile: StaffAccessProfile | null) {
   if (!profile) return false;
   if (isOwnerAccessRole(profile.role)) return true;
@@ -215,6 +219,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (loading || !isSupabaseConfigured) return;
+    if (isParentPortalRoute(pathname)) return;
 
     if (!session) {
       if (pathname !== "/login") router.replace("/login");
@@ -298,7 +303,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [loadProfile, loading, profile, session, signOut]);
 
-  if (pathname === "/login") {
+  if (pathname === "/login" || isParentPortalRoute(pathname)) {
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
   }
 
