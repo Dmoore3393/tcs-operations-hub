@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   try {
     const { userClient, profile, isOwner, isLicensee } = await requireStaff(request);
     const permissions = Array.isArray(profile.permissions) ? profile.permissions : [];
-    if (!isOwner && !isLicensee && !permissions.includes("children_basic")) {
+    if (!isOwner && !isLicensee && !["children_basic", "schedules"].some((permission) => permissions.includes(permission))) {
       throw new Response("This staff account cannot check children in or out.", { status: 403 });
     }
 
