@@ -191,6 +191,8 @@ export default function RatiosPage() {
   const noCare = relevant.filter((record) => !record.days[day].blocks.some((block) => block.location === location)).map((record) => record.childName);
   const peak = timeline.reduce((max, row) => Math.max(max, row.children.length), 0);
   const flagged = timeline.filter((row) => !row.safe).length;
+  const releaseWindows = timeline.filter((row) => row.children.length > 0 && row.staff.length > row.requiredStaff);
+  const maxExtraStaff = releaseWindows.reduce((max, row) => Math.max(max, row.staff.length - row.requiredStaff), 0);
   const theme = locationThemes[location];
   const svg = useMemo(() => buildRatioSvg({ location, date, day, openingText: dailyHours.closed ? "Closed" : formatClock(dailyHours.open), closingText: dailyHours.closed ? "Closed" : formatClock(dailyHours.close), capacity: theme.capacity, timeline, contracted, noCare, schoolNote, minimumDay, variant }), [location, date, day, dailyHours, theme.capacity, timeline, contracted, noCare, schoolNote, minimumDay, variant]);
   const filename = `TCS-${location.replaceAll(" ", "-")}-daily-ratios-${date}`;
@@ -207,10 +209,11 @@ export default function RatiosPage() {
 
     <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"><strong>Planning support only:</strong> The image uses entered schedules and shifts. Always confirm live attendance, actual ages, staff qualifications, infant limits, and children moving between locations.</div>
 
-    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
       <StatCard label="Peak Children" value={peak} helper={`${theme.capacity} entered capacity`} icon={<Users className="h-5 w-5" />} />
       <StatCard label="Time Blocks" value={timeline.length} helper="Changes when a child or staff member arrives/leaves" icon={<CalendarDays className="h-5 w-5" />} tone="blue" />
       <StatCard label="Blocks to Review" value={flagged} icon={flagged ? <AlertTriangle className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />} tone={flagged ? "red" : "emerald"} />
+      <StatCard label="Potential Release" value={maxExtraStaff} helper={releaseWindows.length ? `${releaseWindows.length} coverage window${releaseWindows.length === 1 ? "" : "s"}` : "No extra coverage entered"} icon={<Users className="h-5 w-5" />} tone={maxExtraStaff ? "amber" : "emerald"} />
       <StatCard label="Daily Theme" value={dayThemeNames[(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].indexOf(day) + variant) % 7]} helper={`${location} colors`} icon={<ImageIcon className="h-5 w-5" />} tone="purple" />
     </section>
 
@@ -227,6 +230,13 @@ export default function RatiosPage() {
     <div className="grid gap-6 2xl:grid-cols-[.75fr_1.25fr]">
       <div className="space-y-6">
         <SectionCard title={`${day} Timeline`} description="Automatically created from every arrival and departure"><div className="space-y-3">{timeline.length ? timeline.map((row) => <article key={`${row.start}-${row.end}`} className={`rounded-2xl border p-4 ${row.safe ? "border-slate-200 bg-white" : "border-red-300 bg-red-50"}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-black text-slate-950">{compactTime(row.start)}–{compactTime(row.end)}</p><p className="mt-2 text-sm leading-6 text-slate-600">{row.children.join(", ") || "No children scheduled"}</p><p className="mt-2 text-xs font-bold text-slate-500">Staff: {row.staff.join(", ") || "No staff entered"}</p></div><div className="text-right"><p className="text-2xl font-black">{row.children.length}</p><StatusBadge tone={row.safe ? "green" : "red"}>{row.safe ? "In Ratio" : `Need ${row.requiredStaff} staff`}</StatusBadge></div></div></article>) : <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">This location is closed or no schedules are entered for {day}.</div>}</div></SectionCard>
+
+        <SectionCard title="Coverage Forecast" description="Potential wage-saving windows based on entered schedules and staffing. These are review prompts—not automatic send-home instructions.">
+          {releaseWindows.length === 0 ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">No overstaffed coverage windows were found from the schedules and shifts currently entered.</div> : <div className="space-y-3">{releaseWindows.map((row) => {
+            const extra = row.staff.length - row.requiredStaff;
+            return <div key={`release-${row.start}-${row.end}`} className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-black text-amber-950">{compactTime(row.start)}–{compactTime(row.end)}</p><p className="mt-1 text-xs font-semibold leading-5 text-amber-900">{row.children.length} children • {row.staff.length} staff entered • {row.requiredStaff} minimum staff from this planning model</p><p className="mt-2 text-[10px] font-semibold leading-4 text-amber-800">Review breaks, qualifications, infant limits, transportation duties, office coverage, and actual attendance before releasing anyone.</p></div><span className="rounded-full bg-amber-200 px-2.5 py-1 text-[10px] font-black text-amber-950">{extra} potential release</span></div></div>;
+          })}</div>}
+        </SectionCard>
       </div>
 
       <SectionCard title="Printable / Phone Image" description="A different daily theme is combined with the selected location’s colors.">
