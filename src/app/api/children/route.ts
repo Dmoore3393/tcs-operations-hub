@@ -29,6 +29,23 @@ function dateArray(value: unknown) {
     .slice(0, 20);
 }
 
+function safeFamilyMessages(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(-250).map((entry) => {
+    const message = object(entry);
+    const direction = text(message.direction) === "Family to TCS" ? "Family to TCS" : "TCS to Family";
+    return {
+      id: text(message.id).slice(0, 120) || `message-${Date.now()}`,
+      direction,
+      subject: text(message.subject).slice(0, 160),
+      body: text(message.body).slice(0, 5000),
+      createdAt: text(message.createdAt).slice(0, 40),
+      createdBy: text(message.createdBy).slice(0, 160),
+      readAt: text(message.readAt).slice(0, 40),
+    };
+  });
+}
+
 function safeSchoolAgeSupport(value: unknown) {
   const record = object(value);
   if (!Object.keys(record).length) return undefined;
@@ -210,6 +227,7 @@ function normalizeChild(row: DbRow) {
     fileAudits: safeFileAudits(record.fileAudits),
     immunizationRecord: safeImmunizationRecord(record.immunizationRecord),
     schoolAgeSupport: safeSchoolAgeSupport(record.schoolAgeSupport),
+    familyMessages: safeFamilyMessages(record.familyMessages),
     updatedAt: text(row.updated_at),
   };
 }
@@ -326,6 +344,7 @@ function safeChildRecord(child: DbRow, id: number) {
     fileAudits: safeFileAudits(child.fileAudits),
     immunizationRecord: safeImmunizationRecord(child.immunizationRecord),
     schoolAgeSupport: safeSchoolAgeSupport(child.schoolAgeSupport),
+    familyMessages: safeFamilyMessages(child.familyMessages),
   };
 }
 
