@@ -1,6 +1,5 @@
 import {
   auditSummary,
-  childFileAuditDocuments,
   type ChildFileAudit,
   type ChildFileAuditItem,
   type ChildFileAuditItemStatus,
@@ -11,9 +10,10 @@ import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 
 type DbRow = Record<string, unknown>;
 
-const IN_HOME_LOCATIONS = new Set<LocationKey>([
+const AUDIT_LOCATIONS = new Set<LocationKey>([
   "Halcom",
   "21st Street",
+  "Division",
   "33rd Street",
   "42nd Street",
   "Tehachapi",
@@ -85,11 +85,15 @@ function safeAudit(value: unknown): ChildFileAudit | null {
 
   return {
     id,
+    template: text(audit.template) === "School Age Center" ? "School Age Center" : "In-Home",
     auditDate: text(audit.auditDate).slice(0, 10),
     nextAuditDue: text(audit.nextAuditDue).slice(0, 10),
     dateEnrolled: text(audit.dateEnrolled).slice(0, 10),
     auditedBy: text(audit.auditedBy).slice(0, 160),
     teacherPrimary: text(audit.teacherPrimary).slice(0, 160),
+    school: text(audit.school).slice(0, 160),
+    grade: text(audit.grade).slice(0, 80),
+    signature: text(audit.signature).slice(0, 160),
     notes: text(audit.notes).slice(0, 4000),
     statusFlags: stringArray(audit.statusFlags) as ChildFileAudit["statusFlags"],
     items,
@@ -130,7 +134,7 @@ function buildAlert(row: DbRow, today: string) {
   const locationValue = text(record.location);
   const location = normalizeLocation(locationValue);
 
-  if (!legacyId || !IN_HOME_LOCATIONS.has(location)) return null;
+  if (!legacyId || !AUDIT_LOCATIONS.has(location)) return null;
 
   const audit = latestAudit(record);
   const href = `/child-file-audits?child=${encodeURIComponent(legacyId)}`;
@@ -140,7 +144,7 @@ function buildAlert(row: DbRow, today: string) {
       location,
       href,
       title: "Child file audit missing",
-      body: `An in-home child file at ${location} has not been audited yet. Open The Hub to review the secured file.`,
+      body: `A child file at ${location} has not been audited yet. Open The Hub to review the secured file.`,
       eventKey: `child-file-audit:none:${legacyId}:${weekKey(today)}`,
       severity: "attention" as const,
     };
@@ -196,7 +200,7 @@ function buildAlert(row: DbRow, today: string) {
     location,
     href,
     title,
-    body: `An in-home child file at ${location} needs attention: ${reasons.join("; ")}. Open The Hub to review the secured file.`,
+    body: `A child file at ${location} needs attention: ${reasons.join("; ")}. Open The Hub to review the secured file.`,
     eventKey: `child-file-audit:${legacyId}:${keyParts.join(":")}`,
     severity,
   };
