@@ -2,7 +2,7 @@ import type { ChildFileAudit } from "@/lib/child-file-audits";
 import type { ImmunizationRecord } from "@/lib/immunization-tracker";
 export type LicensingStatus = "Complete" | "Missing Documents";
 export type EnrollmentStatus = "Active" | "Pending" | "Archived";
-export type AttendanceStatus = "Present" | "Not Scheduled" | "Absent";
+export type AttendanceStatus = "Present" | "Checked Out" | "Not Scheduled" | "Absent";
 export type AgeGroup = "Infant" | "Toddler" | "Preschool" | "School Age";
 export type MedicalConsentStatus = "On File" | "Missing" | "Needs Update";
 
@@ -46,6 +46,14 @@ export type ChildRecord = {
   missingDocuments: string[];
   enrollmentStatus: EnrollmentStatus;
   attendanceToday: AttendanceStatus;
+  attendanceDate?: string;
+  checkedInAt?: string;
+  checkedInBy?: string;
+  checkedOutAt?: string;
+  checkedOutBy?: string;
+  pickupPerson?: string;
+  pickupVerification?: "Authorized Contact" | "Licensee Override" | "Not Applicable";
+  pickupNotes?: string;
   medicalConsentStatus?: MedicalConsentStatus;
   medicalConsentSignedAt?: string;
   medicalConsentVerifiedAt?: string;
