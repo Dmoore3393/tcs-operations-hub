@@ -16,6 +16,22 @@ function strings(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+function safeParentMessages(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(-100).map((entry) => {
+    const message = object(entry);
+    return {
+      id: text(message.id),
+      direction: text(message.direction) === "Family to TCS" ? "Family to TCS" : "TCS to Family",
+      subject: text(message.subject),
+      body: text(message.body),
+      createdAt: text(message.createdAt),
+      createdBy: text(message.createdBy),
+      readAt: text(message.readAt),
+    };
+  }).filter((message) => message.id && message.body);
+}
+
 function latestAudit(record: DbRow): ChildFileAudit | null {
   const audits = Array.isArray(record.fileAudits) ? record.fileAudits as ChildFileAudit[] : [];
   return [...audits].sort((a, b) =>
@@ -110,6 +126,7 @@ export async function GET(request: Request) {
         nextAuditDue: audit?.nextAuditDue || "",
         fileAuditComplete: Boolean(auditState?.complete),
         immunizationStatus: shotStatus,
+        messages: safeParentMessages(record.familyMessages),
       };
     });
 
