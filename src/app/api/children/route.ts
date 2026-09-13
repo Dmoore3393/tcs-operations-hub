@@ -205,7 +205,9 @@ function normalizeChild(row: DbRow) {
     checkedOutAt: text(record.checkedOutAt),
     checkedOutBy: text(record.checkedOutBy),
     pickupPerson: text(record.pickupPerson),
-    pickupVerification: ["Authorized Contact", "Licensee Override", "Not Applicable"].includes(text(record.pickupVerification)) ? text(record.pickupVerification) : "Not Applicable",
+    pickupVerification: ["Authorized Contact", "Pickup PIN", "Licensee Override", "Not Applicable"].includes(text(record.pickupVerification)) ? text(record.pickupVerification) : "Not Applicable",
+    pickupPinConfigured: Boolean(text(record.pickupPinDigest)),
+    pickupPinUpdatedAt: text(record.pickupPinUpdatedAt),
     pickupNotes: text(record.pickupNotes),
     medicalConsentStatus: ["On File", "Missing", "Needs Update"].includes(text(record.medicalConsentStatus)) ? text(record.medicalConsentStatus) : "Missing",
     medicalConsentSignedAt: text(record.medicalConsentSignedAt),
@@ -322,7 +324,9 @@ function safeChildRecord(child: DbRow, id: number) {
     checkedOutAt: text(child.checkedOutAt).slice(0, 40),
     checkedOutBy: text(child.checkedOutBy).slice(0, 160),
     pickupPerson: text(child.pickupPerson).slice(0, 160),
-    pickupVerification: ["Authorized Contact", "Licensee Override", "Not Applicable"].includes(text(child.pickupVerification)) ? text(child.pickupVerification) : "Not Applicable",
+    pickupVerification: ["Authorized Contact", "Pickup PIN", "Licensee Override", "Not Applicable"].includes(text(child.pickupVerification)) ? text(child.pickupVerification) : "Not Applicable",
+    pickupPinConfigured: Boolean(child.pickupPinConfigured),
+    pickupPinUpdatedAt: text(child.pickupPinUpdatedAt).slice(0, 40),
     pickupNotes: text(child.pickupNotes).slice(0, 1000),
     medicalConsentStatus: ["On File", "Missing", "Needs Update"].includes(text(child.medicalConsentStatus)) ? text(child.medicalConsentStatus) : "Missing",
     medicalConsentSignedAt: text(child.medicalConsentSignedAt).slice(0, 10),
@@ -392,13 +396,19 @@ export async function POST(request: Request) {
 
     const existing = await userClient
       .from("children")
-      .select("id,legacy_id,school_name")
+      .select("id,legacy_id,school_name,record_data")
       .eq("organization_id", profile.organization_id)
       .eq("legacy_id", legacyId)
       .maybeSingle();
     if (existing.error) throw existing.error;
 
     if (action === "archive") child.enrollmentStatus = child.enrollmentStatus === "Archived" ? "Active" : "Archived";
+
+    const existingRecord = object(existing.data?.record_data);
+    const protectedPickupFields = {
+      ...(text(existingRecord.pickupPinDigest) ? { pickupPinDigest: text(existingRecord.pickupPinDigest) } : {}),
+      ...(text(existingRecord.pickupPinUpdatedAt) ? { pickupPinUpdatedAt: text(existingRecord.pickupPinUpdatedAt) } : {}),
+    };
 
     const payload = {
       organization_id: profile.organization_id,
@@ -412,7 +422,7 @@ export async function POST(request: Request) {
       attendance_status: child.attendanceToday,
       guardian_name: child.primaryGuardian,
       school_name: existing.data?.school_name ?? null,
-      record_data: child,
+      record_data: { ...child, ...protectedPickupFields },
     };
 
     let saved;
