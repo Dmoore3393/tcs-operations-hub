@@ -36,6 +36,8 @@ type ParentChild = {
   checkedInAt: string;
   checkedOutAt: string;
   pickupPerson: string;
+  pickupPinConfigured: boolean;
+  pickupPinUpdatedAt: string;
   missingDocuments: string[];
   medicalConsentStatus: string;
   nextAuditDue: string;
@@ -139,6 +141,8 @@ export default function ParentPortalPage() {
   const [replyBody, setReplyBody] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [notice, setNotice] = useState("");
+  const [pickupPin, setPickupPin] = useState("");
+  const [savingPickupPin, setSavingPickupPin] = useState(false);
 
   const loadOverview = useCallback(async (activeSession: Session) => {
     const response = await fetch("/api/parent/overview", {
@@ -248,6 +252,36 @@ export default function ParentPortalPage() {
     }
   }
 
+  async function updatePickupPin(action: "set" | "clear") {
+    if (!selectedChild || !session) return;
+    setSavingPickupPin(true);
+    setError("");
+    try {
+      const response = await fetch("/api/parent/pickup-pin", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          childId: selectedChild.id,
+          action,
+          pin: action === "set" ? pickupPin : "",
+        }),
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Could not update the pickup PIN.");
+      await loadOverview(session);
+      setPickupPin("");
+      setNotice(action === "set" ? "Pickup PIN updated securely." : "Pickup PIN removed.");
+      window.setTimeout(() => setNotice(""), 3200);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Could not update the pickup PIN.");
+    } finally {
+      setSavingPickupPin(false);
+    }
+  }
+
   async function signOut() {
     await supabase?.auth.signOut();
     router.replace("/parent-login");
@@ -349,6 +383,13 @@ export default function ParentPortalPage() {
                 <StatusRow label="Immunization Record" ok={["Requirements Met", "Conditional", "Medical Exemption"].includes(selectedChild.immunizationStatus)} value={selectedChild.immunizationStatus} />
               </div>
               {selectedChild.missingDocuments.length > 0 && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900"><AlertTriangle className="mr-1 inline h-4 w-4" />TCS currently has {selectedChild.missingDocuments.length} file item{selectedChild.missingDocuments.length === 1 ? "" : "s"} marked for follow-up. Contact your location if you need the exact list.</div>}
+            </section>
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-violet-700" /><h2 className="font-black text-slate-950">Secure pickup PIN</h2></div><p className="mt-1 text-xs text-slate-500">Use a private family PIN as an extra pickup verification step.</p></div><span className={`rounded-full px-2.5 py-1 text-[9px] font-black ${selectedChild.pickupPinConfigured ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>{selectedChild.pickupPinConfigured ? "Configured" : "Not Set"}</span></div>
+              <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs font-semibold leading-5 text-violet-950">Choose a 4–6 digit code your authorized pickup person can provide at checkout. TCS cannot see the saved PIN after you set it.</div>
+              <div className="mt-3 flex gap-2"><input inputMode="numeric" maxLength={6} value={pickupPin} onChange={(event) => setPickupPin(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="4–6 digits" className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-3 text-center text-base font-black tracking-[.25em]" /><button disabled={!/^\d{4,6}$/.test(pickupPin) || savingPickupPin} onClick={() => void updatePickupPin("set")} className="rounded-xl bg-violet-700 px-4 py-3 text-xs font-black text-white disabled:opacity-40">{savingPickupPin ? "Saving…" : selectedChild.pickupPinConfigured ? "Change PIN" : "Set PIN"}</button></div>
+              {selectedChild.pickupPinConfigured && <div className="mt-3 flex items-center justify-between gap-3"><p className="text-[10px] font-semibold text-slate-500">Last updated {selectedChild.pickupPinUpdatedAt ? new Date(selectedChild.pickupPinUpdatedAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "recently"}</p><button disabled={savingPickupPin} onClick={() => void updatePickupPin("clear")} className="text-xs font-black text-red-700">Remove PIN</button></div>}
             </section>
 
             <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
