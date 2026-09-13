@@ -54,6 +54,7 @@ import AppSetupPrompt from "@/components/pwa/AppSetupPrompt";
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: Home },
+  { label: "Executive Dashboard", href: "/executive-dashboard", icon: BarChart3 },
   { label: "Employee Lounge", href: "/employee-lounge", icon: Coffee },
   { label: "Employee Bulletin Board", href: "/employee-bulletin", icon: Pin },
   { label: "Notifications", href: "/notifications", icon: HeartPulse },
@@ -100,6 +101,7 @@ const navItems = [
 
 const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Operations Dashboard", subtitle: "Today across Thomason Childcare Solutions" },
+  "/executive-dashboard": { title: "Executive Operations Dashboard", subtitle: "Company-wide enrollment, capacity, funding, compliance, tours, and operating risk" },
   "/employee-lounge": { title: "Employee Lounge", subtitle: "Connect, celebrate, recharge, and find your team tools" },
   "/employee-bulletin": { title: "Employee Bulletin Board", subtitle: "Announcements, reminders, policy updates, training, recognition, and pinned notes" },
   "/notifications": { title: "Notification Center", subtitle: "Transportation, emergency, Tour Board, and staff schedule alerts" },
