@@ -1,3 +1,4 @@
+import { scryptSync, timingSafeEqual } from "node:crypto";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 
 type DbRow = Record<string, unknown>;
@@ -31,6 +32,20 @@ function authorizedPickupNames(record: DbRow) {
 function matchesAuthorizedPickup(name: string, authorized: string[]) {
   const normalized = name.trim().toLowerCase().replace(/\s+/g, " ");
   return authorized.some((item) => item.trim().toLowerCase().replace(/\s+/g, " ") === normalized);
+}
+
+function verifyPickupPin(pin: string, digest: string) {
+  if (!pin || !digest) return false;
+  const [saltText, hashText] = digest.split(".");
+  if (!saltText || !hashText) return false;
+  try {
+    const salt = Buffer.from(saltText, "base64url");
+    const expected = Buffer.from(hashText, "base64url");
+    const actual = scryptSync(pin, salt, expected.length);
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
+  } catch {
+    return false;
+  }
 }
 
 export async function POST(request: Request) {
@@ -109,16 +124,25 @@ export async function POST(request: Request) {
     if (action === "checkout") {
       const pickupPerson = text(body.pickupPerson).slice(0, 160);
       const pickupNotes = text(body.pickupNotes).slice(0, 1000);
+      const pickupPin = text(body.pickupPin).slice(0, 12);
       if (!pickupPerson) throw new Response("Enter the person picking the child up.", { status: 400 });
 
       const authorized = authorizedPickupNames(record);
       const authorizedMatch = matchesAuthorizedPickup(pickupPerson, authorized);
+      const configuredDigest = text(record.pickupPinDigest);
+      const pinConfigured = Boolean(configuredDigest);
+      const pinValid = pinConfigured ? verifyPickupPin(pickupPin, configuredDigest) : false;
       const canOverride = isOwner || isLicensee;
 
       if (!authorizedMatch && !canOverride) {
         throw new Response("Pickup is blocked because this person is not listed in the child record. Ask the site Licensee or Owner/Admin to verify the pickup.", { status: 403 });
       }
-      if (!authorizedMatch && canOverride && pickupNotes.length < 5) {
+      if (pinConfigured && authorizedMatch && !pinValid && !canOverride) {
+        throw new Response("The pickup PIN is required and did not match this child record.", { status: 403 });
+      }
+
+      const overrideNeeded = !authorizedMatch || (pinConfigured && !pinValid);
+      if (overrideNeeded && canOverride && pickupNotes.length < 5) {
         throw new Response("Enter an override note explaining how pickup authorization was verified.", { status: 400 });
       }
 
@@ -128,11 +152,12 @@ export async function POST(request: Request) {
       next.checkedOutAt = now;
       next.checkedOutBy = profile.full_name || profile.email;
       next.pickupPerson = pickupPerson;
-      next.pickupVerification = authorizedMatch ? "Authorized Contact" : "Licensee Override";
+      next.pickupVerification = overrideNeeded ? "Licensee Override" : pinConfigured ? "Pickup PIN" : "Authorized Contact";
       next.pickupNotes = pickupNotes;
       auditAction = "UPDATE";
       auditMetadata.pickupVerification = next.pickupVerification;
-      auditMetadata.overrideUsed = !authorizedMatch;
+      auditMetadata.overrideUsed = overrideNeeded;
+      auditMetadata.pickupPinConfigured = pinConfigured;
     }
 
     const updated = await userClient
