@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     const { admin, email, children } = await requireParent(request);
     const rowIds = children.map((child) => child.rowId);
 
-    const [careResult, formsResult] = await Promise.all([
+    const [careResult, formsResult, transportationFeesResult] = await Promise.all([
       rowIds.length
         ? admin
             .from("daily_care_entries")
