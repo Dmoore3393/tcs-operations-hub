@@ -160,6 +160,8 @@ export async function GET(request: Request) {
         checkedInAt: text(record.checkedInAt),
         checkedOutAt: text(record.checkedOutAt),
         pickupPerson: text(record.pickupPerson),
+        pickupPinConfigured: Boolean(text(record.pickupPinDigest)),
+        pickupPinUpdatedAt: text(record.pickupPinUpdatedAt),
         missingDocuments: strings(record.missingDocuments),
         medicalConsentStatus: text(record.medicalConsentStatus),
         nextAuditDue: audit?.nextAuditDue || "",
