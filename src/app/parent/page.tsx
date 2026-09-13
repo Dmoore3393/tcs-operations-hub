@@ -29,6 +29,7 @@ type ParentChild = {
   classroom: string;
   weeklySchedule: string;
   transportation: string;
+  funding: string;
   enrollmentStatus: string;
   attendanceToday: string;
   attendanceDate: string;
@@ -74,11 +75,26 @@ type ParentForm = {
   signedAt: string;
 };
 
+type TransportationFee = {
+  id: string;
+  weekOf: string;
+  familyName: string;
+  location: string;
+  expectedAmount: number;
+  chargedAmount: number;
+  paymentStatus: string;
+  dateCharged: string;
+  datePaid: string;
+  children: string[];
+  schools: string[];
+};
+
 type Overview = {
   email: string;
   children: ParentChild[];
   careEntries: CareEntry[];
   forms: ParentForm[];
+  transportationFees: TransportationFee[];
 };
 
 function childName(child: ParentChild) {
@@ -186,6 +202,17 @@ export default function ParentPortalPage() {
     () => overview?.careEntries.filter((entry) => !selectedChild || entry.childId === selectedChild.id).slice(0, 20) ?? [],
     [overview, selectedChild],
   );
+
+  const transportationFees = useMemo(() => {
+    if (!overview || !selectedChild) return [];
+    const selectedName = childName(selectedChild).toLowerCase();
+    return overview.transportationFees.filter((fee) =>
+      fee.children.some((name) => name.toLowerCase() === selectedName),
+    );
+  }, [overview, selectedChild]);
+  const transportationDue = transportationFees
+    .filter((fee) => fee.paymentStatus === "Unpaid")
+    .reduce((sum, fee) => sum + Math.max(0, fee.chargedAmount || fee.expectedAmount), 0);
 
   const openForms = overview?.forms.filter((form) => !["Signed", "Archived"].includes(form.status)) ?? [];
   const signedForms = overview?.forms.filter((form) => form.status === "Signed") ?? [];
@@ -295,6 +322,7 @@ export default function ParentPortalPage() {
           <Card icon={<UserRound className="h-5 w-5" />} label="Attendance" value={selectedChild.attendanceDate === todayPacific() ? selectedChild.attendanceToday || "Not marked" : "Not marked today"} />
           <Card icon={<CalendarDays className="h-5 w-5" />} label="Schedule" value={selectedChild.weeklySchedule || "Schedule not entered"} />
           <Card icon={<Home className="h-5 w-5" />} label="Program" value={selectedChild.location || "Location not entered"} />
+          <Card icon={<ShieldCheck className="h-5 w-5" />} label="Funding" value={selectedChild.funding || "Not set"} />
           <Card icon={<ShieldCheck className="h-5 w-5" />} label="Shot Record" value={selectedChild.immunizationStatus || "Needs review"} />
         </section>
 
@@ -331,6 +359,13 @@ export default function ParentPortalPage() {
                 <textarea value={replyBody} onChange={(event) => setReplyBody(event.target.value)} maxLength={5000} placeholder="Write a message to your TCS team…" className="min-h-20 w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-semibold leading-5" />
                 <button disabled={!replySubject.trim() || !replyBody.trim() || sendingMessage} onClick={() => void sendFamilyMessage()} className="w-full rounded-xl bg-emerald-700 px-3 py-2.5 text-xs font-black text-white disabled:opacity-40">{sendingMessage ? "Sending…" : "Send Message"}</button>
               </div>
+            </section>
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><CalendarDays className="h-5 w-5 text-blue-700" /><h2 className="font-black text-slate-950">Billing & transportation fees</h2></div><p className="mt-1 text-xs text-slate-500">Funding source and transportation charges currently recorded by TCS.</p></div><span className={`rounded-full px-2.5 py-1 text-[9px] font-black ${transportationDue > 0 ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800"}`}>{transportationDue > 0 ? `Due ${transportationDue.toFixed(2)}` : "No unpaid transport fee"}</span></div>
+              <div className="mt-4 rounded-xl bg-slate-50 p-3"><p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Funding Source</p><p className="mt-1 text-sm font-black text-slate-900">{selectedChild.funding || "Not set"}</p></div>
+              <div className="mt-4 space-y-2">{transportationFees.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs font-semibold text-slate-500">No transportation fee records are currently attached to this child.</p> : transportationFees.slice(0, 8).map((fee) => <div key={fee.id || fee.weekOf} className="rounded-xl border border-slate-200 p-3"><div className="flex items-start justify-between gap-3"><div><strong className="text-xs text-slate-900">Week of {fee.weekOf ? formatDate(fee.weekOf) : "Not set"}</strong><p className="mt-1 text-[10px] text-slate-500">{fee.schools.join(", ") || fee.location}</p></div><span className={`rounded-full px-2 py-1 text-[9px] font-black ${fee.paymentStatus === "Paid" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"}`}>{fee.paymentStatus || "Recorded"}</span></div><div className="mt-2 grid grid-cols-2 gap-2"><Info label="Expected" value={`${fee.expectedAmount.toFixed(2)}`} /><Info label="Charged" value={`${fee.chargedAmount.toFixed(2)}`} /></div>{fee.datePaid && <p className="mt-2 text-[10px] font-semibold text-emerald-700">Paid {formatDate(fee.datePaid)}</p>}</div>)}</div>
+              <p className="mt-4 text-[10px] font-semibold leading-4 text-slate-500">This section currently shows TCS funding and transportation-fee records. Full tuition payments will be added only after TCS chooses a payment processor/account connection.</p>
             </section>
 
             <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
