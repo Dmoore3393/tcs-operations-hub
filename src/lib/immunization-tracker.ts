@@ -12,6 +12,7 @@ export type ImmunizationRecord = {
   verifiedBy: string;
   polioDates: string[];
   dtapDates: string[];
+  tdDates: string[];
   tdapDates: string[];
   hepBDates: string[];
   hibDates: string[];
@@ -80,6 +81,7 @@ export function createBlankImmunizationRecord(
     verifiedBy: "",
     polioDates: [],
     dtapDates: [],
+    tdDates: [],
     tdapDates: [],
     hepBDates: [],
     hibDates: [],
@@ -111,6 +113,7 @@ export function normalizeImmunizationRecord(
       : "None",
     polioDates: sortedUniqueDates(value?.polioDates),
     dtapDates: sortedUniqueDates(value?.dtapDates),
+    tdDates: sortedUniqueDates(value?.tdDates),
     tdapDates: sortedUniqueDates(value?.tdapDates),
     hepBDates: sortedUniqueDates(value?.hepBDates),
     hibDates: sortedUniqueDates(value?.hibDates),
@@ -201,8 +204,9 @@ function schoolRequirements(dateOfBirth: string, record: ImmunizationRecord): Im
 
   const fourthBirthday = birthday(dateOfBirth, 4);
   const seventhBirthday = birthday(dateOfBirth, 7);
-  const tetanusSeries = [...record.dtapDates, ...record.tdapDates].sort();
+  const tetanusSeries = [...record.dtapDates, ...record.tdDates, ...record.tdapDates].sort();
   const tetanusAfterFour = countOnOrAfter(tetanusSeries, fourthBirthday);
+  const pertussisAfterSeven = countOnOrAfter([...record.dtapDates, ...record.tdapDates], seventhBirthday);
   const tetanusAfterSeven = countOnOrAfter(tetanusSeries, seventhBirthday);
   const polioAfterFour = countOnOrAfter(record.polioDates, fourthBirthday);
   const mmrAfterOne = countOnOrAfter(record.mmrDates, birthday(dateOfBirth, 1));
@@ -219,8 +223,8 @@ function schoolRequirements(dateOfBirth: string, record: ImmunizationRecord): Im
       label: "DTaP / DTP / Tdap / Td",
       required: tetanusRequired,
       received: tetanusSeries.length,
-      met: tetanusSeries.length >= tetanusRequired && (record.grade && Number(record.grade.replace(/\D/g, "")) >= 7 ? tetanusAfterSeven >= 1 : true),
-      note: "5 doses normally; 4 are acceptable if one was given on/after the 4th birthday; 3 are acceptable if one was given on/after the 7th birthday.",
+      met: tetanusSeries.length >= tetanusRequired && (record.grade && Number(record.grade.replace(/\D/g, "")) >= 7 ? pertussisAfterSeven >= 1 : true),
+      note: "5 doses normally; 4 are acceptable if one was given on/after the 4th birthday; 3 are acceptable if one was given on/after the 7th birthday. For grades 7–12, at least one pertussis-containing dose (DTaP/DTP/Tdap) must be on/after the 7th birthday.",
     },
     {
       key: "polio-school",
