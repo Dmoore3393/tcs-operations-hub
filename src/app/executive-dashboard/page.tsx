@@ -4,6 +4,9 @@ import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import type { ChildRecord } from "@/lib/children";
+import { auditSummary } from "@/lib/child-file-audits";
+import { emergencyCardReadiness } from "@/lib/emergency-cards";
+import { defaultImmunizationProgram, immunizationStatus, normalizeImmunizationRecord } from "@/lib/immunization-tracker";
 import {
   starterFiles,
   starterRoutes,
@@ -38,6 +41,7 @@ type LeadLike = {
   location?: string;
   source?: string;
   leadSource?: string;
+  tourHistory?: Array<{ status?: string }>;
 };
 
 function money(value: number) {
@@ -89,8 +93,28 @@ export default function ExecutiveDashboardPage() {
   const urgentTasks = tasks.filter((task) => !task.completed && task.priority === "Urgent").length;
   const openLeads = leads.filter((lead) => !["Enrolled", "Declined"].includes(String(lead.stage || ""))).length;
   const scheduledTours = leads.filter((lead) => String(lead.stage || "") === "Tour Scheduled").length;
+  const enrolledLeads = leads.filter((lead) => String(lead.stage || "") === "Enrolled").length;
+  const conversionRate = leads.length ? Math.round((enrolledLeads / leads.length) * 100) : 0;
+  const noShows = leads.reduce((sum, lead) => sum + (lead.tourHistory ?? []).filter((tour) => tour.status === "No Show").length, 0);
+
+  const childReadinessScores = activeChildren.map((child) => {
+    const audits = Array.isArray(child.fileAudits) ? child.fileAudits : [];
+    const latestAudit = [...audits].sort((a, b) => (b.auditDate || b.updatedAt || "").localeCompare(a.auditDate || a.updatedAt || ""))[0];
+    const fileReady = Boolean(latestAudit && auditSummary(latestAudit).complete && child.licensingStatus === "Complete" && child.missingDocuments.length === 0);
+    const emergencyReady = emergencyCardReadiness(child).ready;
+    const shotRecord = normalizeImmunizationRecord(child.immunizationRecord, defaultImmunizationProgram(child.ageGroup, child.location));
+    const shotStatus = immunizationStatus(child.dateOfBirth, shotRecord);
+    const shotReady = ["Requirements Met", "Conditional", "Medical Exemption"].includes(shotStatus);
+    return Math.round(([fileReady, emergencyReady, shotReady].filter(Boolean).length / 3) * 100);
+  });
+  const childReadiness = childReadinessScores.length
+    ? Math.round(childReadinessScores.reduce((sum, value) => sum + value, 0) / childReadinessScores.length)
+    : 100;
+
   const totalExpectedTransport = transportFees.reduce((sum, record) => sum + record.expectedAmount, 0);
   const totalChargedTransport = transportFees.reduce((sum, record) => sum + record.chargedAmount, 0);
+  const paidTransport = transportFees.reduce((sum, record) => sum + (record.paymentStatus === "Paid" ? Math.max(record.chargedAmount, record.expectedAmount) : 0), 0);
+  const transportCollectionPct = totalChargedTransport ? Math.round((paidTransport / totalChargedTransport) * 100) : 100;
   const unpaidTransport = transportFees.filter((record) => record.paymentStatus === "Unpaid" && record.expectedAmount > 0).length;
 
   const funding = useMemo(() => {
@@ -130,6 +154,13 @@ export default function ExecutiveDashboardPage() {
       <Kpi icon={<BriefcaseBusiness className="h-5 w-5" />} label="Open Leads" value={openLeads} tone="blue" />
     </section>
 
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Kpi icon={<ShieldCheck className="h-5 w-5" />} label="Child Readiness" value={`${childReadiness}%`} tone={childReadiness >= 90 ? "green" : childReadiness >= 75 ? "amber" : "red"} />
+      <Kpi icon={<TrendingUp className="h-5 w-5" />} label="Lead Conversion" value={`${conversionRate}%`} tone={conversionRate >= 40 ? "green" : "blue"} />
+      <Kpi icon={<BriefcaseBusiness className="h-5 w-5" />} label="Tour No-Shows" value={noShows} tone={noShows ? "amber" : "green"} />
+      <Kpi icon={<CircleDollarSign className="h-5 w-5" />} label="Transport Collection" value={`${transportCollectionPct}%`} tone={transportCollectionPct >= 95 ? "green" : transportCollectionPct >= 80 ? "amber" : "red"} />
+    </section>
+
     <div className="grid gap-6 xl:grid-cols-[1.2fr_.8fr]">
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-black text-slate-950">Location capacity</h2><p className="mt-1 text-xs font-semibold text-slate-500">Current active enrollment against configured site capacity.</p></div><Link href="/locations" className="text-xs font-black text-emerald-700">Manage locations →</Link></div>
@@ -146,7 +177,7 @@ export default function ExecutiveDashboardPage() {
     <div className="grid gap-6 xl:grid-cols-3">
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center gap-3"><BriefcaseBusiness className="h-5 w-5 text-purple-700" /><h2 className="font-black text-slate-950">Enrollment pipeline</h2></div>
-        <div className="mt-4 grid grid-cols-2 gap-3"><Mini label="Open leads" value={String(openLeads)} /><Mini label="Tours scheduled" value={String(scheduledTours)} /></div>
+        <div className="mt-4 grid grid-cols-2 gap-3"><Mini label="Open leads" value={String(openLeads)} /><Mini label="Tours scheduled" value={String(scheduledTours)} /><Mini label="Enrolled leads" value={String(enrolledLeads)} /><Mini label="Conversion" value={`${conversionRate}%`} /></div>
         <Link href="/enrollment-pipeline" className="mt-4 inline-flex text-xs font-black text-purple-700">Open Tour Board →</Link>
       </section>
 
