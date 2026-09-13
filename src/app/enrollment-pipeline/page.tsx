@@ -52,7 +52,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const programs = ["Infant", "Toddler", "Preschool", "Pre-K", "School Age", "Extended Hours", "Weekend Care", "Other"];
 const ageGroups = ["Infant", "Toddler", "Preschool", "Pre-K", "School Age", "Multiple Children", "Other"];
@@ -170,6 +170,36 @@ export default function TourBoardPage() {
     scoped.forEach((lead) => map.set(lead.leadSource || "Other", (map.get(lead.leadSource || "Other") || 0) + 1));
     return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
   }, [scoped]);
+
+  const automationQueue = useMemo(() => scoped
+    .filter((lead) => !["Enrolled", "Declined"].includes(lead.stage))
+    .map((lead) => {
+      const recent = latestTour(lead);
+      const untouched = lead.stage === "New Inquiry" && !lastContactActivity(lead);
+      const overdue = isPastDue(lead.followUpDate);
+      const noShow = recent?.status === "No Show";
+      const tourToday = recent?.status === "Scheduled" && recent.scheduledAt.slice(0, 10) === todayKey();
+      const reason = noShow ? "No-show recovery" : overdue ? "Follow-up overdue" : untouched ? "New lead needs first contact" : tourToday ? "Tour today — send reminder" : "";
+      return { lead, reason };
+    })
+    .filter((item) => item.reason)
+    .sort((a, b) => {
+      const rank = (reason: string) => reason === "No-show recovery" ? 0 : reason === "Follow-up overdue" ? 1 : reason === "New lead needs first contact" ? 2 : 3;
+      return rank(a.reason) - rank(b.reason) || a.lead.createdAt.localeCompare(b.lead.createdAt);
+    }), [scoped]);
+
+  useEffect(() => {
+    if (!session?.access_token || automationQueue.length === 0) return;
+    const locationsNeedingFollowUp = [...new Set(automationQueue.map((item) => item.lead.location).filter(Boolean))];
+    locationsNeedingFollowUp.forEach((targetLocation) => {
+      void sendHubNotificationEvent({
+        accessToken: session.access_token,
+        eventType: "tour_follow_up",
+        location: targetLocation,
+        eventKey: `tour-automation:${targetLocation}:${todayKey()}`,
+      });
+    });
+  }, [automationQueue, session?.access_token]);
 
   function persistLead(updated: TourBoardLead) {
     const normalized = normalizeTourLead({ ...updated, updatedAt: new Date().toISOString() } as any);
@@ -361,6 +391,19 @@ export default function TourBoardPage() {
         <div><span className="tour-focus-icon">⚠</span><p><strong>{noShows}</strong> Tour no-shows need follow-up</p></div>
         <div><span className="tour-focus-icon">⏱</span><p><strong>{lateTours}</strong> Late tour arrivals logged</p></div>
       </section>
+
+      {automationQueue.length > 0 && <section style={{margin:"0 18px 14px",background:"#fff8ed",border:"1px solid #edcda8",borderRadius:16,padding:14}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:10}}>
+          <div><strong style={{fontSize:14,color:"#492c27"}}>Follow-Up Automation Queue</strong><p style={{fontSize:10,color:"#805f57",marginTop:3}}>The Hub automatically surfaces leads that need action and sends a private staff alert. Family contact still requires a staff-reviewed call, text, or email.</p></div>
+          <span style={{background:"#f7dfc1",color:"#6e3c26",borderRadius:999,padding:"5px 9px",fontSize:10,fontWeight:900}}>{automationQueue.length} due</span>
+        </div>
+        <div style={{display:"grid",gap:8}}>
+          {automationQueue.slice(0,6).map(({lead,reason}) => <div key={lead.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,background:"white",border:"1px solid #efddd0",borderRadius:12,padding:"10px 12px"}}>
+            <div><strong style={{fontSize:11,color:"#3e2926"}}>{lead.familyName}</strong><p style={{fontSize:9,color:"#8a6a61",marginTop:2}}>{reason} • {lead.location}</p></div>
+            <button onClick={() => openActivity(lead, reason.includes("Tour today") ? "Reminder" : "Follow-Up", reason.includes("No-show") ? "Follow up after missed tour and offer a new tour time: " : reason.includes("Tour today") ? `Tour reminder for ${formatDateTime(lead.tourDate)}: ` : "Follow up with family: ")} style={{border:0,borderRadius:9,background:"#814f42",color:"white",padding:"7px 9px",fontSize:9,fontWeight:900}}>Open Follow-Up</button>
+          </div>)}
+        </div>
+      </section>}
 
       <div className="tour-board-wrap">
         <section className="tour-board">
