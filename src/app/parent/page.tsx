@@ -40,6 +40,15 @@ type ParentChild = {
   nextAuditDue: string;
   fileAuditComplete: boolean;
   immunizationStatus: string;
+  messages: Array<{
+    id: string;
+    direction: "TCS to Family" | "Family to TCS";
+    subject: string;
+    body: string;
+    createdAt: string;
+    createdBy: string;
+    readAt: string;
+  }>;
 };
 
 type CareEntry = {
@@ -110,6 +119,9 @@ export default function ParentPortalPage() {
   const [typedName, setTypedName] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
   const [savingForm, setSavingForm] = useState(false);
+  const [replySubject, setReplySubject] = useState("");
+  const [replyBody, setReplyBody] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [notice, setNotice] = useState("");
 
   const loadOverview = useCallback(async (activeSession: Session) => {
@@ -177,6 +189,37 @@ export default function ParentPortalPage() {
 
   const openForms = overview?.forms.filter((form) => !["Signed", "Archived"].includes(form.status)) ?? [];
   const signedForms = overview?.forms.filter((form) => form.status === "Signed") ?? [];
+
+  async function sendFamilyMessage() {
+    if (!selectedChild || !session || !replySubject.trim() || !replyBody.trim()) return;
+    setSendingMessage(true);
+    setError("");
+    try {
+      const response = await fetch("/api/parent/messages", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          childId: selectedChild.id,
+          subject: replySubject,
+          body: replyBody,
+        }),
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Could not send your message.");
+      await loadOverview(session);
+      setReplySubject("");
+      setReplyBody("");
+      setNotice("Your message was sent to TCS.");
+      window.setTimeout(() => setNotice(""), 3200);
+    } catch (messageError) {
+      setError(messageError instanceof Error ? messageError.message : "Could not send your message.");
+    } finally {
+      setSendingMessage(false);
+    }
+  }
 
   async function signOut() {
     await supabase?.auth.signOut();
@@ -278,6 +321,16 @@ export default function ParentPortalPage() {
                 <StatusRow label="Immunization Record" ok={["Requirements Met", "Conditional", "Medical Exemption"].includes(selectedChild.immunizationStatus)} value={selectedChild.immunizationStatus} />
               </div>
               {selectedChild.missingDocuments.length > 0 && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900"><AlertTriangle className="mr-1 inline h-4 w-4" />TCS currently has {selectedChild.missingDocuments.length} file item{selectedChild.missingDocuments.length === 1 ? "" : "s"} marked for follow-up. Contact your location if you need the exact list.</div>}
+            </section>
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><Bell className="h-5 w-5 text-emerald-700" /><h2 className="font-black text-slate-950">Messages with TCS</h2></div><p className="mt-1 text-xs text-slate-500">Secure family thread for {selectedChild.firstName}.</p></div><span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-black text-emerald-800">{selectedChild.messages?.length || 0}</span></div>
+              <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">{!selectedChild.messages?.length ? <p className="rounded-xl bg-slate-50 p-4 text-xs font-semibold text-slate-500">No family messages yet.</p> : selectedChild.messages.slice(-12).map((message) => <div key={message.id} className={`flex ${message.direction === "Family to TCS" ? "justify-end" : "justify-start"}`}><div className={`max-w-[90%] rounded-2xl p-3 ${message.direction === "Family to TCS" ? "bg-emerald-700 text-white" : "border border-slate-200 bg-slate-50 text-slate-900"}`}><p className="text-[9px] font-black uppercase tracking-wider opacity-65">{message.direction}</p><p className="mt-1 text-xs font-black">{message.subject || "Message"}</p><p className="mt-1 whitespace-pre-wrap text-xs leading-5 opacity-90">{message.body}</p><p className="mt-2 text-[9px] font-semibold opacity-55">{message.createdAt ? new Date(message.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""}</p></div></div>)}</div>
+              <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
+                <input value={replySubject} onChange={(event) => setReplySubject(event.target.value)} maxLength={160} placeholder="Subject" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-bold" />
+                <textarea value={replyBody} onChange={(event) => setReplyBody(event.target.value)} maxLength={5000} placeholder="Write a message to your TCS team…" className="min-h-20 w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-semibold leading-5" />
+                <button disabled={!replySubject.trim() || !replyBody.trim() || sendingMessage} onClick={() => void sendFamilyMessage()} className="w-full rounded-xl bg-emerald-700 px-3 py-2.5 text-xs font-black text-white disabled:opacity-40">{sendingMessage ? "Sending…" : "Send Message"}</button>
+              </div>
             </section>
 
             <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
