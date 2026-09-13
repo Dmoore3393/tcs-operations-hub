@@ -41,6 +41,7 @@ function safeImmunizationRecord(value: unknown) {
     verifiedBy: text(record.verifiedBy).slice(0, 160),
     polioDates: dateArray(record.polioDates),
     dtapDates: dateArray(record.dtapDates),
+    tdDates: dateArray(record.tdDates),
     tdapDates: dateArray(record.tdapDates),
     hepBDates: dateArray(record.hepBDates),
     hibDates: dateArray(record.hibDates),
