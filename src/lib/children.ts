@@ -6,6 +6,24 @@ export type AttendanceStatus = "Present" | "Checked Out" | "Not Scheduled" | "Ab
 export type AgeGroup = "Infant" | "Toddler" | "Preschool" | "School Age";
 export type MedicalConsentStatus = "On File" | "Missing" | "Needs Update";
 
+export type SchoolAgeSupportRecord = {
+  schoolName: string;
+  grade: string;
+  schoolContactName: string;
+  schoolContactEmail: string;
+  schoolContactPhone: string;
+  homeworkSupport: string;
+  academicNotes: string;
+  iep504Status: "None Reported" | "IEP" | "504" | "Pending Review";
+  accommodations: string;
+  nextSchoolMeetingDate: string;
+  behaviorPlanActive: boolean;
+  behaviorReviewDate: string;
+  behaviorSupports: string;
+  familyFollowUp: string;
+  updatedAt: string;
+};
+
 export const fundingSources = [
   "Cash Pay",
   "CCRC Stage 1",
@@ -73,6 +91,7 @@ export type ChildRecord = {
   emergencyInstructions?: string;
   fileAudits?: ChildFileAudit[];
   immunizationRecord?: ImmunizationRecord;
+  schoolAgeSupport?: SchoolAgeSupportRecord;
 };
 
 export type ChildFormState = {
