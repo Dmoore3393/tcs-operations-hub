@@ -23,6 +23,38 @@ function stringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean) : [];
 }
 
+function dateArray(value: unknown) {
+  return stringArray(value)
+    .filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item))
+    .slice(0, 20);
+}
+
+function safeImmunizationRecord(value: unknown) {
+  const record = object(value);
+  if (!Object.keys(record).length) return undefined;
+  return {
+    program: text(record.program) === "TK/K-12" ? "TK/K-12" : "Child Care / Pre-K",
+    schoolCheckpoint: text(record.schoolCheckpoint) === "7th Grade Advancement" ? "7th Grade Advancement" : "TK/K-12 Admission / Transfer",
+    grade: text(record.grade).slice(0, 40),
+    recordSource: text(record.recordSource).slice(0, 160),
+    verifiedAt: text(record.verifiedAt).slice(0, 10),
+    verifiedBy: text(record.verifiedBy).slice(0, 160),
+    polioDates: dateArray(record.polioDates),
+    dtapDates: dateArray(record.dtapDates),
+    tdapDates: dateArray(record.tdapDates),
+    hepBDates: dateArray(record.hepBDates),
+    hibDates: dateArray(record.hibDates),
+    mmrDates: dateArray(record.mmrDates),
+    varicellaDates: dateArray(record.varicellaDates),
+    medicalExemptionType: ["Permanent", "Temporary"].includes(text(record.medicalExemptionType)) ? text(record.medicalExemptionType) : "None",
+    medicalExemptionExpiresAt: text(record.medicalExemptionExpiresAt).slice(0, 10),
+    conditionalAdmission: Boolean(record.conditionalAdmission),
+    conditionalReviewDue: text(record.conditionalReviewDue).slice(0, 10),
+    notes: text(record.notes).slice(0, 4000),
+    updatedAt: text(record.updatedAt).slice(0, 40) || new Date().toISOString(),
+  };
+}
+
 const AUDIT_ITEM_STATUSES = new Set(["Not Checked", "On File", "Missing", "N/A"]);
 const AUDIT_STATUS_FLAGS = new Set([
   "File Complete",
@@ -142,6 +174,7 @@ function normalizeChild(row: DbRow) {
     transportRestraint: text(record.transportRestraint),
     emergencyInstructions: text(record.emergencyInstructions),
     fileAudits: safeFileAudits(record.fileAudits),
+    immunizationRecord: safeImmunizationRecord(record.immunizationRecord),
     updatedAt: text(row.updated_at),
   };
 }
@@ -248,6 +281,7 @@ function safeChildRecord(child: DbRow, id: number) {
     transportRestraint: text(child.transportRestraint).slice(0, 160),
     emergencyInstructions: text(child.emergencyInstructions).slice(0, 4000),
     fileAudits: safeFileAudits(child.fileAudits),
+    immunizationRecord: safeImmunizationRecord(child.immunizationRecord),
   };
 }
 
