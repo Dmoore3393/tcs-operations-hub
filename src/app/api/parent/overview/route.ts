@@ -58,6 +58,11 @@ export async function GET(request: Request) {
         .from("digital_forms")
         .select("id,legacy_id,organization_id,location_id,record_data,created_at,updated_at")
         .order("updated_at", { ascending: false }),
+      admin
+        .from("transportation_fee_records")
+        .select("id,legacy_id,record_data,created_at,updated_at")
+        .order("updated_at", { ascending: false })
+        .limit(100),
     ]);
 
     if (careResult.error) throw careResult.error;
