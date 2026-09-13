@@ -1,5 +1,7 @@
 export type ChildFileAuditItemStatus = "Not Checked" | "On File" | "Missing" | "N/A";
 
+export type ChildFileAuditTemplate = "In-Home" | "School Age Center";
+
 export type ChildFileAuditItem = {
   documentId: number;
   status: ChildFileAuditItemStatus;
@@ -20,11 +22,15 @@ export type ChildFileAuditStatusFlag =
 
 export type ChildFileAudit = {
   id: string;
+  template?: ChildFileAuditTemplate;
   auditDate: string;
   nextAuditDue: string;
   dateEnrolled: string;
   auditedBy: string;
   teacherPrimary: string;
+  school?: string;
+  grade?: string;
+  signature?: string;
   notes: string;
   statusFlags: ChildFileAuditStatusFlag[];
   items: ChildFileAuditItem[];
@@ -34,7 +40,7 @@ export type ChildFileAudit = {
 
 export type ChildFileAuditDocument = {
   id: number;
-  section: 1 | 2 | 3 | 4 | 5 | 6;
+  section: 1 | 2 | 3 | 4 | 5 | 6 | 7;
   sectionTitle: string;
   sectionSubtitle: string;
   name: string;
@@ -89,6 +95,53 @@ export const childFileAuditDocuments: ChildFileAuditDocument[] = [
   { id: 40, section: 6, sectionTitle: "File History & Communication", sectionSubtitle: "", name: "Audit Tracking Sheet", requirement: "For Internal Use" },
 ];
 
+export const schoolAgeChildFileAuditDocuments: ChildFileAuditDocument[] = [
+  { id: 1, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Required by CDSS", name: "LIC 995 – Child Care Center Notification of Parent’s Rights", requirement: "Required" },
+  { id: 2, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Required by CDSS", name: "LIC 700 – Identification and Emergency Information", requirement: "Required" },
+  { id: 3, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Required by CDSS", name: "LIC 613A – Personal Rights Child Care Centers", requirement: "Required" },
+  { id: 4, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Required by CDSS", name: "LIC 702 – Child’s Preadmission Health History – Parent/Authorized Representative Report", requirement: "Required" },
+  { id: 5, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Required by CDSS", name: "LIC 627 – Consent for Emergency Medical Treatment – Child Care Centers", requirement: "Required" },
+  { id: 6, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Required by CDSS", name: "LIC 995E – Caregiver Background Check Process – California Department of Social Services", requirement: "Required" },
+  { id: 7, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Required by CDSS", name: "Immunization Record", requirement: "Required" },
+
+  { id: 8, section: 2, sectionTitle: "Other Required Center Documents", sectionSubtitle: "Not Licensing", name: "TCS Allergy Form", requirement: "Required" },
+  { id: 9, section: 2, sectionTitle: "Other Required Center Documents", sectionSubtitle: "Not Licensing", name: "TCS Illness Policy", requirement: "Required" },
+  { id: 10, section: 2, sectionTitle: "Other Required Center Documents", sectionSubtitle: "Not Licensing", name: "TCS Participation Agreement", requirement: "Required" },
+  { id: 11, section: 2, sectionTitle: "Other Required Center Documents", sectionSubtitle: "Not Licensing", name: "TCS Photo Consent", requirement: "Required" },
+  { id: 12, section: 2, sectionTitle: "Other Required Center Documents", sectionSubtitle: "Not Licensing", name: "TCS Electronic Policy", requirement: "Required" },
+  { id: 13, section: 2, sectionTitle: "Other Required Center Documents", sectionSubtitle: "Not Licensing", name: "TCS Gaming Contract", requirement: "Required" },
+  { id: 14, section: 2, sectionTitle: "Other Required Center Documents", sectionSubtitle: "Not Licensing", name: "TCS School Transportation Fee Agreement", requirement: "Required" },
+  { id: 15, section: 2, sectionTitle: "Other Required Center Documents", sectionSubtitle: "Not Licensing", name: "The School Shuttle School Transportation Consent", requirement: "Required" },
+  { id: 16, section: 2, sectionTitle: "Other Required Center Documents", sectionSubtitle: "Not Licensing", name: "Evacuation Drill Permission Form", requirement: "Required" },
+  { id: 17, section: 2, sectionTitle: "Other Required Center Documents", sectionSubtitle: "Not Licensing", name: "Equal Opportunity Statement Acknowledgement Form for TCS", requirement: "Required" },
+  { id: 18, section: 2, sectionTitle: "Other Required Center Documents", sectionSubtitle: "Not Licensing", name: "TCS School-Age Center Agreement", requirement: "Required" },
+  { id: 19, section: 2, sectionTitle: "Other Required Center Documents", sectionSubtitle: "Not Licensing", name: "Acknowledgement Form – Family Handbook", requirement: "Required" },
+  { id: 20, section: 2, sectionTitle: "Other Required Center Documents", sectionSubtitle: "Not Licensing", name: "PUB 515 – Effects of Lead Exposure Brochure", requirement: "Required" },
+
+  { id: 21, section: 3, sectionTitle: "Additional Licensing Documents", sectionSubtitle: "If Applicable", name: "LIC 9212 – Family Child Care Consumer Awareness Information", requirement: "If Applicable" },
+  { id: 22, section: 3, sectionTitle: "Additional Licensing Documents", sectionSubtitle: "If Applicable", name: "LIC 9222 – Blood Glucose Testing Consent/Verification Child Care Facilities", requirement: "If Applicable" },
+  { id: 23, section: 3, sectionTitle: "Additional Licensing Documents", sectionSubtitle: "If Applicable", name: "LIC 9224 – Acknowledgement of Receipt of Licensing Reports", requirement: "If Applicable" },
+  { id: 24, section: 3, sectionTitle: "Additional Licensing Documents", sectionSubtitle: "If Applicable", name: "LIC 9166 – Nebulizer Care Consent/Verification Child Care Facilities", requirement: "If Applicable" },
+  { id: 25, section: 3, sectionTitle: "Additional Licensing Documents", sectionSubtitle: "If Applicable", name: "LIC 624 – Unusual Incident/Injury Report", requirement: "If Applicable" },
+  { id: 26, section: 3, sectionTitle: "Additional Licensing Documents", sectionSubtitle: "If Applicable", name: "LIC 622 – Centrally Stored Medication and Destruction Record", requirement: "If Applicable" },
+  { id: 27, section: 3, sectionTitle: "Additional Licensing Documents", sectionSubtitle: "If Applicable", name: "LIC 921 – Parent Consent for Administering Medication", requirement: "If Applicable" },
+
+  { id: 28, section: 4, sectionTitle: "Request Copies of Required Documents", sectionSubtitle: "", name: "Medical Insurance Card", requirement: "Required" },
+  { id: 29, section: 4, sectionTitle: "Request Copies of Required Documents", sectionSubtitle: "", name: "Current Immunization Record", requirement: "Required" },
+  { id: 30, section: 4, sectionTitle: "Request Copies of Required Documents", sectionSubtitle: "", name: "Individualized Education Program (IEP) or 504 Plan (if applicable)", requirement: "If Applicable" },
+
+  { id: 31, section: 5, sectionTitle: "Behavior Plan", sectionSubtitle: "If Applicable", name: "Behavior Plan", requirement: "If Applicable" },
+
+  { id: 32, section: 6, sectionTitle: "Incidents & Communication", sectionSubtitle: "", name: "Parent Communication Log", requirement: "As Needed" },
+  { id: 33, section: 6, sectionTitle: "Incidents & Communication", sectionSubtitle: "", name: "Incident Reports", requirement: "As Needed" },
+  { id: 34, section: 6, sectionTitle: "Incidents & Communication", sectionSubtitle: "", name: "Behavior Documentation", requirement: "As Needed" },
+  { id: 35, section: 6, sectionTitle: "Incidents & Communication", sectionSubtitle: "", name: "Parent Meeting Notes", requirement: "As Needed" },
+  { id: 36, section: 6, sectionTitle: "Incidents & Communication", sectionSubtitle: "", name: "Suspension / Exclusion Documentation", requirement: "If Applicable" },
+
+  { id: 37, section: 7, sectionTitle: "File Audit", sectionSubtitle: "", name: "Child File Audit Sheet", requirement: "For Internal Use" },
+  { id: 38, section: 7, sectionTitle: "File Audit", sectionSubtitle: "", name: "Annual Review Checklist", requirement: "For Internal Use" },
+];
+
 export const childFileAuditStatusFlags: ChildFileAuditStatusFlag[] = [
   "File Complete",
   "Missing Documents",
@@ -100,24 +153,46 @@ export const childFileAuditStatusFlags: ChildFileAuditStatusFlag[] = [
   "Medication on Site",
 ];
 
+export function templateForChildLocation(location: string): ChildFileAuditTemplate {
+  const source = location.toLowerCase();
+  return source.includes("division") || source.includes("school age center")
+    ? "School Age Center"
+    : "In-Home";
+}
+
+export function documentsForTemplate(template: ChildFileAuditTemplate | undefined) {
+  return template === "School Age Center" ? schoolAgeChildFileAuditDocuments : childFileAuditDocuments;
+}
+
+export function documentsForAudit(audit: Pick<ChildFileAudit, "template">) {
+  return documentsForTemplate(audit.template ?? "In-Home");
+}
+
 export function todayLocalIso() {
   const now = new Date();
   const adjusted = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
   return adjusted.toISOString().slice(0, 10);
 }
 
-export function createBlankChildFileAudit(auditedBy = ""): ChildFileAudit {
+export function createBlankChildFileAudit(
+  auditedBy = "",
+  template: ChildFileAuditTemplate = "In-Home",
+): ChildFileAudit {
   const now = new Date().toISOString();
   return {
     id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    template,
     auditDate: todayLocalIso(),
     nextAuditDue: "",
     dateEnrolled: "",
     auditedBy,
     teacherPrimary: "",
+    school: "",
+    grade: "",
+    signature: "",
     notes: "",
     statusFlags: [],
-    items: childFileAuditDocuments.map((document) => ({
+    items: documentsForTemplate(template).map((document) => ({
       documentId: document.id,
       status: "Not Checked",
       dateChecked: "",
@@ -149,8 +224,9 @@ export function expirationState(value: string, asOf = todayLocalIso()) {
 }
 
 export function auditSummary(audit: ChildFileAudit) {
+  const documents = documentsForAudit(audit);
   const requiredIds = new Set(
-    childFileAuditDocuments
+    documents
       .filter((document) => document.requirement === "Required")
       .map((document) => document.id),
   );
