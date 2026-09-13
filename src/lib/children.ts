@@ -6,6 +6,16 @@ export type AttendanceStatus = "Present" | "Checked Out" | "Not Scheduled" | "Ab
 export type AgeGroup = "Infant" | "Toddler" | "Preschool" | "School Age";
 export type MedicalConsentStatus = "On File" | "Missing" | "Needs Update";
 
+export type FamilyMessage = {
+  id: string;
+  direction: "TCS to Family" | "Family to TCS";
+  subject: string;
+  body: string;
+  createdAt: string;
+  createdBy: string;
+  readAt: string;
+};
+
 export type SchoolAgeSupportRecord = {
   schoolName: string;
   grade: string;
@@ -92,6 +102,7 @@ export type ChildRecord = {
   fileAudits?: ChildFileAudit[];
   immunizationRecord?: ImmunizationRecord;
   schoolAgeSupport?: SchoolAgeSupportRecord;
+  familyMessages?: FamilyMessage[];
 };
 
 export type ChildFormState = {
