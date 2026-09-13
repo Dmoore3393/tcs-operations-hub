@@ -67,6 +67,7 @@ export async function GET(request: Request) {
 
     if (careResult.error) throw careResult.error;
     if (formsResult.error) throw formsResult.error;
+    if (transportationFeesResult.error) throw transportationFeesResult.error;
 
     const childByRow = new Map(children.map((child) => [child.rowId, child]));
     const careEntries = ((careResult.data ?? []) as unknown as DbRow[]).map((row) => {
@@ -101,6 +102,34 @@ export async function GET(request: Request) {
       })
       .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
+    const parentChildNames = new Set(
+      children.map((child) => {
+        const record = child.record;
+        return `${text(record.firstName)} ${text(record.lastName)}`.trim().toLowerCase();
+      }).filter(Boolean),
+    );
+
+    const transportationFees = ((transportationFeesResult.data ?? []) as unknown as DbRow[])
+      .map((row) => object(row.record_data))
+      .filter((record) => {
+        const names = strings(record.children).map((name) => name.trim().toLowerCase());
+        return names.some((name) => parentChildNames.has(name));
+      })
+      .map((record) => ({
+        id: String(record.id ?? ""),
+        weekOf: text(record.weekOf),
+        familyName: text(record.familyName),
+        location: text(record.location),
+        expectedAmount: Number(record.expectedAmount) || 0,
+        chargedAmount: Number(record.chargedAmount) || 0,
+        paymentStatus: text(record.paymentStatus),
+        dateCharged: text(record.dateCharged),
+        datePaid: text(record.datePaid),
+        children: strings(record.children),
+        schools: strings(record.schools),
+      }))
+      .slice(0, 30);
+
     const safeChildren = children.map((child) => {
       const record = child.record;
       const audit = latestAudit(record);
@@ -120,6 +149,7 @@ export async function GET(request: Request) {
         classroom: text(record.classroom),
         weeklySchedule: text(record.weeklySchedule),
         transportation: text(record.transportation),
+        funding: text(record.subsidy) || "Not set",
         enrollmentStatus: text(record.enrollmentStatus),
         attendanceToday: text(record.attendanceToday),
         attendanceDate: text(record.attendanceDate),
@@ -140,6 +170,7 @@ export async function GET(request: Request) {
       children: safeChildren,
       careEntries,
       forms: parentForms,
+      transportationFees,
     }, {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
