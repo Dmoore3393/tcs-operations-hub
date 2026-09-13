@@ -9,6 +9,8 @@ import {
   childFileAuditDocuments,
   childFileAuditStatusFlags,
   createBlankChildFileAudit,
+  documentsForAudit,
+  templateForChildLocation,
   expirationState,
   todayLocalIso,
   type ChildFileAudit,
@@ -58,6 +60,7 @@ const sectionTones: Record<number, string> = {
   4: "border-rose-200 bg-rose-50/50",
   5: "border-red-200 bg-red-50/40",
   6: "border-stone-200 bg-stone-50/60",
+  7: "border-emerald-200 bg-emerald-50/50",
 };
 
 function displayName(child: ChildRecord) {
@@ -67,6 +70,19 @@ function displayName(child: ChildRecord) {
 function isInHomeLocation(location: LiveLocation) {
   return /family childcare/i.test(location.programType || "") &&
     !/transportation/i.test(location.programType || "");
+}
+
+function isSchoolAgeCenterLocation(location: LiveLocation) {
+  const source = `${location.name} ${location.fullName} ${location.programType}`.toLowerCase();
+  return source.includes("school age center") || source.includes("division");
+}
+
+function isAuditedProgramLocation(location: LiveLocation) {
+  return isInHomeLocation(location) || isSchoolAgeCenterLocation(location);
+}
+
+function isSchoolAgeChild(child: ChildRecord) {
+  return templateForChildLocation(child.location) === "School Age Center";
 }
 
 function formatDate(value: string) {
@@ -101,7 +117,7 @@ export default function ChildFileAuditsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
-  const [siteFilter, setSiteFilter] = useState("All In-Home Locations");
+  const [siteFilter, setSiteFilter] = useState("All Audit Locations");
   const [editor, setEditor] = useState<AuditEditor | null>(null);
   const [historyChild, setHistoryChild] = useState<ChildRecord | null>(null);
 
@@ -139,46 +155,46 @@ export default function ChildFileAuditsPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const inHomeLocations = useMemo(() => locations.filter(isInHomeLocation), [locations]);
-  const inHomeLocationNames = useMemo(() => new Set(inHomeLocations.flatMap((item) => [item.name, item.fullName])), [inHomeLocations]);
+  const auditLocations = useMemo(() => locations.filter(isAuditedProgramLocation), [locations]);
+  const auditLocationNames = useMemo(() => new Set(auditLocations.flatMap((item) => [item.name, item.fullName])), [auditLocations]);
 
-  const inHomeChildren = useMemo(() => children.filter((child) => {
-    return [...inHomeLocationNames].some((name) =>
+  const auditChildren = useMemo(() => children.filter((child) => {
+    return [...auditLocationNames].some((name) =>
       child.location.toLowerCase().includes(name.toLowerCase()) ||
       name.toLowerCase().includes(child.location.toLowerCase()),
     );
-  }), [children, inHomeLocationNames]);
+  }), [children, auditLocationNames]);
 
   useEffect(() => {
     if (activeLocation === "All Locations") return;
-    const match = inHomeLocations.find((item) =>
+    const match = auditLocations.find((item) =>
       item.name === activeLocation || item.fullName.includes(activeLocation) || activeLocation.includes(item.name),
     );
     if (match) setSiteFilter(match.fullName || match.name);
-  }, [activeLocation, inHomeLocations]);
+  }, [activeLocation, auditLocations]);
 
   useEffect(() => {
     if (loading || typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const childId = Number(params.get("child"));
     if (!Number.isSafeInteger(childId) || childId <= 0) return;
-    const child = inHomeChildren.find((item) => item.id === childId);
+    const child = auditChildren.find((item) => item.id === childId);
     if (child) openNewAudit(child);
     window.history.replaceState({}, "", window.location.pathname);
-  }, [inHomeChildren, loading]);
+  }, [auditChildren, loading]);
 
   const filteredChildren = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return inHomeChildren
+    return auditChildren
       .filter((child) => {
         const matchesSearch = !query || `${displayName(child)} ${child.primaryGuardian} ${child.location}`.toLowerCase().includes(query);
-        const matchesSite = siteFilter === "All In-Home Locations" ||
+        const matchesSite = siteFilter === "All Audit Locations" ||
           child.location.toLowerCase().includes(siteFilter.toLowerCase()) ||
           siteFilter.toLowerCase().includes(child.location.toLowerCase());
         return matchesSearch && matchesSite && child.enrollmentStatus !== "Archived";
       })
       .sort((a, b) => displayName(a).localeCompare(displayName(b)));
-  }, [inHomeChildren, search, siteFilter]);
+  }, [auditChildren, search, siteFilter]);
 
   const stats = useMemo(() => {
     let overdue = 0;
@@ -207,7 +223,8 @@ export default function ChildFileAuditsPage() {
   }
 
   function openNewAudit(child: ChildRecord) {
-    const audit = createBlankChildFileAudit(profile?.full_name || "");
+    const template = templateForChildLocation(child.location);
+    const audit = createBlankChildFileAudit(profile?.full_name || "", template);
     setEditor({ child, audit, isNew: true });
   }
 
@@ -234,7 +251,7 @@ export default function ChildFileAuditsPage() {
   function updateItem(documentId: number, patch: Partial<ChildFileAudit["items"][number]>) {
     setEditor((current) => {
       if (!current) return current;
-      const items = childFileAuditDocuments.map((document) => {
+      const items = documentsForAudit(current.audit).map((document) => {
         const existing = auditItemFor(current.audit, document.id);
         if (document.id !== documentId) return existing;
         return { ...existing, ...patch };
@@ -276,12 +293,13 @@ export default function ChildFileAuditsPage() {
 
     const summary = auditSummary(editor.audit);
     const expiredDocumentIds = new Set(editor.audit.items.filter((item) => expirationState(item.expirationDate) === "expired").map((item) => item.documentId));
-    const requiredIds = new Set(childFileAuditDocuments.filter((document) => document.requirement === "Required").map((document) => document.id));
+    const auditDocuments = documentsForAudit(editor.audit);
+    const requiredIds = new Set(auditDocuments.filter((document) => document.requirement === "Required").map((document) => document.id));
     const problemIds = new Set([
       ...summary.missingRequired.map((item) => item.documentId),
       ...[...expiredDocumentIds].filter((id) => requiredIds.has(id)),
     ]);
-    const missingDocuments = childFileAuditDocuments.filter((document) => problemIds.has(document.id)).map((document) => document.name);
+    const missingDocuments = auditDocuments.filter((document) => problemIds.has(document.id)).map((document) => document.name);
 
     const statusFlags: ChildFileAuditStatusFlag[] = editor.audit.statusFlags
       .filter((flag) => flag !== "File Complete" && flag !== "Missing Documents");
@@ -333,7 +351,7 @@ export default function ChildFileAuditsPage() {
   }
 
   if (isEmployee) {
-    return <MainLayout><div className="mx-auto max-w-3xl rounded-3xl border border-amber-200 bg-amber-50 p-8 text-center"><ShieldCheck className="mx-auto h-10 w-10 text-amber-700" /><h1 className="mt-3 text-2xl font-black text-amber-950">Child file audits are confidential</h1><p className="mt-2 text-sm font-semibold leading-6 text-amber-900">Only Owner/Admin and assigned Licensee accounts can complete or review in-home child file audits.</p></div></MainLayout>;
+    return <MainLayout><div className="mx-auto max-w-3xl rounded-3xl border border-amber-200 bg-amber-50 p-8 text-center"><ShieldCheck className="mx-auto h-10 w-10 text-amber-700" /><h1 className="mt-3 text-2xl font-black text-amber-950">Child file audits are confidential</h1><p className="mt-2 text-sm font-semibold leading-6 text-amber-900">Only Owner/Admin and assigned Licensee accounts can complete or review child file audits.</p></div></MainLayout>;
   }
 
   return <MainLayout>
@@ -341,9 +359,9 @@ export default function ChildFileAuditsPage() {
       <section className="overflow-hidden rounded-[30px] border border-orange-200 bg-gradient-to-br from-[#fff7ed] via-white to-[#fff1e6] p-6 shadow-xl sm:p-8">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[.18em] text-orange-700">In-Home Childcare • File Compliance</p>
+            <p className="text-xs font-black uppercase tracking-[.18em] text-orange-700">TCS Childcare • File Compliance</p>
             <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Child File Audits</h1>
-            <p className="mt-3 max-w-4xl text-sm font-semibold leading-6 text-slate-600">Use the approved 40-item in-home checklist for every child file. Each document records when it was checked, its expiration date when applicable, and the next date the entire child file must be audited.</p>
+            <p className="mt-3 max-w-4xl text-sm font-semibold leading-6 text-slate-600">The Hub automatically uses the approved in-home checklist for family childcare locations and the School Age Center checklist for Division. Every document records its status, date checked, expiration date when applicable, and the next full-file audit date.</p>
           </div>
           <div className="rounded-2xl border border-orange-200 bg-white/85 p-4 shadow-sm">
             <p className="text-[10px] font-black uppercase tracking-wider text-orange-700">Audit rule in The Hub</p>
@@ -365,11 +383,11 @@ export default function ChildFileAuditsPage() {
 
       <section className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:grid-cols-[minmax(0,1fr)_300px]">
         <label className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search child, parent, or site…" className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-3 text-sm font-semibold outline-none focus:border-orange-400" /></label>
-        <label className="relative"><select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)} className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-3 pr-9 text-sm font-bold outline-none"><option>All In-Home Locations</option>{inHomeLocations.map((item) => <option key={item.id} value={item.fullName || item.name}>{item.fullName || item.name}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /></label>
+        <label className="relative"><select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)} className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-3 pr-9 text-sm font-bold outline-none"><option>All Audit Locations</option>{auditLocations.map((item) => <option key={item.id} value={item.fullName || item.name}>{item.fullName || item.name}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /></label>
       </section>
 
-      {loading ? <div className="flex min-h-72 items-center justify-center gap-3 rounded-3xl border border-slate-200 bg-white text-sm font-bold text-slate-500"><LoaderCircle className="h-5 w-5 animate-spin" /> Loading in-home child files…</div> :
-        filteredChildren.length === 0 ? <div className="grid min-h-72 place-items-center rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center"><div><FileCheck2 className="mx-auto h-10 w-10 text-slate-300" /><h2 className="mt-3 text-xl font-black text-slate-800">No in-home child files match this view</h2><p className="mt-1 text-sm text-slate-500">Change the site filter or search.</p></div></div> :
+      {loading ? <div className="flex min-h-72 items-center justify-center gap-3 rounded-3xl border border-slate-200 bg-white text-sm font-bold text-slate-500"><LoaderCircle className="h-5 w-5 animate-spin" /> Loading child file audits…</div> :
+        filteredChildren.length === 0 ? <div className="grid min-h-72 place-items-center rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center"><div><FileCheck2 className="mx-auto h-10 w-10 text-slate-300" /><h2 className="mt-3 text-xl font-black text-slate-800">No child files match this audit view</h2><p className="mt-1 text-sm text-slate-500">Change the site filter or search.</p></div></div> :
         <section className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
           {filteredChildren.map((child) => {
             const audit = latestAudit(child);
@@ -427,22 +445,29 @@ function AuditModal({
 }) {
   const { child, audit } = editor;
   const summary = auditSummary(audit);
-  const sections = [1, 2, 3, 4, 5, 6] as const;
+  const documents = documentsForAudit(audit);
+  const sections = [...new Set(documents.map((document) => document.section))].sort((a, b) => a - b);
+  const schoolAge = audit.template === "School Age Center";
 
   return <div className="fixed inset-0 z-[10000] overflow-y-auto bg-slate-950/70 p-2 backdrop-blur-sm sm:p-4">
     <div className="mx-auto my-2 w-full max-w-[1500px] overflow-hidden rounded-[28px] bg-[#fffdf9] shadow-2xl sm:my-6">
       <header className="sticky top-0 z-20 flex items-start justify-between gap-4 border-b border-red-200 bg-gradient-to-r from-[#8f241a] to-[#c94720] px-5 py-4 text-white sm:px-6">
-        <div><p className="text-[10px] font-black uppercase tracking-[.16em] text-orange-100">In-Home Child File Audit</p><h2 className="mt-1 text-2xl font-black">{displayName(child)}</h2><p className="mt-1 text-xs font-semibold text-white/80">{child.location} • DOB {formatDate(child.dateOfBirth)}</p></div>
+        <div><p className="text-[10px] font-black uppercase tracking-[.16em] text-orange-100">{schoolAge ? "School Age Center Child File Audit" : "In-Home Child File Audit"}</p><h2 className="mt-1 text-2xl font-black">{displayName(child)}</h2><p className="mt-1 text-xs font-semibold text-white/80">{child.location} • DOB {formatDate(child.dateOfBirth)}{schoolAge ? ` • Transportation ${child.transportation && child.transportation !== "No transportation" ? "Yes" : "No"}` : ""}</p></div>
         <button onClick={onClose} className="rounded-xl bg-white/10 p-2"><X className="h-5 w-5" /></button>
       </header>
 
       <div className="space-y-5 p-4 sm:p-6">
-        <section className="grid gap-3 rounded-2xl border border-orange-200 bg-orange-50/50 p-4 md:grid-cols-2 xl:grid-cols-5">
-          <DateField label="Date Enrolled" value={audit.dateEnrolled} onChange={(value) => onPatch({ dateEnrolled: value })} />
+        <section className={`grid gap-3 rounded-2xl border border-orange-200 bg-orange-50/50 p-4 md:grid-cols-2 ${schoolAge ? "xl:grid-cols-4" : "xl:grid-cols-5"}`}>
+          <DateField label={schoolAge ? "Start Date" : "Date Enrolled"} value={audit.dateEnrolled} onChange={(value) => onPatch({ dateEnrolled: value })} />
           <DateField label="File Audit Date" value={audit.auditDate} onChange={(value) => onPatch({ auditDate: value })} required />
           <DateField label="Next Audit Due" value={audit.nextAuditDue} onChange={(value) => onPatch({ nextAuditDue: value })} required />
           <TextField label="Audited By" value={audit.auditedBy} onChange={(value) => onPatch({ auditedBy: value })} />
-          <TextField label="Teacher / Primary" value={audit.teacherPrimary} onChange={(value) => onPatch({ teacherPrimary: value })} />
+          {schoolAge ? <>
+            <TextField label="School" value={audit.school || ""} onChange={(value) => onPatch({ school: value })} />
+            <TextField label="Grade" value={audit.grade || ""} onChange={(value) => onPatch({ grade: value })} />
+            <TextField label="Signature / Initials" value={audit.signature || ""} onChange={(value) => onPatch({ signature: value })} />
+            <div className="rounded-xl border border-orange-200 bg-white px-3 py-2.5"><span className="block text-[10px] font-black uppercase tracking-wider text-slate-500">Transportation</span><strong className="mt-1 block text-sm text-slate-900">{child.transportation && child.transportation !== "No transportation" ? "Yes" : "No"}</strong></div>
+          </> : <TextField label="Teacher / Primary" value={audit.teacherPrimary} onChange={(value) => onPatch({ teacherPrimary: value })} />}
         </section>
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -454,15 +479,15 @@ function AuditModal({
 
         <div className="grid gap-5 2xl:grid-cols-2">
           {sections.map((section) => {
-            const documents = childFileAuditDocuments.filter((document) => document.section === section);
-            const heading = documents[0];
+            const sectionDocuments = documents.filter((document) => document.section === section);
+            const heading = sectionDocuments[0];
             return <section key={section} className={`overflow-hidden rounded-2xl border ${sectionTones[section]}`}>
-              <header className="bg-gradient-to-r from-[#c52518] to-[#ed3b18] px-4 py-3 text-white"><p className="text-sm font-black uppercase">Section {section}: {heading.sectionTitle}</p>{heading.sectionSubtitle && <p className="text-[10px] font-bold uppercase text-white/80">({heading.sectionSubtitle})</p>}</header>
+              <header className={`px-4 py-3 text-white ${schoolAge && section % 2 === 0 ? "bg-gradient-to-r from-[#4c7f33] to-[#78a94e]" : "bg-gradient-to-r from-[#c52518] to-[#ed3b18]"}`}><p className="text-sm font-black uppercase">Section {section}: {heading.sectionTitle}</p>{heading.sectionSubtitle && <p className="text-[10px] font-bold uppercase text-white/80">({heading.sectionSubtitle})</p>}</header>
               <div className="overflow-x-auto">
                 <table className="min-w-[780px] w-full text-left">
                   <thead className="bg-white/80 text-[9px] font-black uppercase tracking-wider text-slate-500"><tr><th className="px-3 py-2">#</th><th className="px-3 py-2">Document / Requirement</th><th className="px-3 py-2">Required</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Date Checked</th><th className="px-3 py-2">Expiration Date</th><th className="px-3 py-2">Note</th></tr></thead>
                   <tbody className="divide-y divide-slate-200/80 bg-white/70">
-                    {documents.map((document) => {
+                    {sectionDocuments.map((document) => {
                       const item = auditItemFor(audit, document.id);
                       const exp = expirationState(item.expirationDate);
                       return <tr key={document.id} className={exp === "expired" ? "bg-red-50" : exp === "soon" ? "bg-amber-50" : ""}>
@@ -506,7 +531,7 @@ function HistoryModal({ child, onClose, onOpen }: { child: ChildRecord; onClose:
       <div className="max-h-[70vh] space-y-3 overflow-y-auto p-5">
         {audits.length === 0 ? <div className="py-12 text-center"><History className="mx-auto h-9 w-9 text-slate-300" /><p className="mt-3 font-black text-slate-700">No file audits saved yet.</p></div> : audits.map((audit) => {
           const summary = auditSummary(audit);
-          return <button key={audit.id} onClick={() => onOpen(audit)} className="w-full rounded-2xl border border-slate-200 p-4 text-left transition hover:border-orange-300 hover:bg-orange-50/30"><div className="flex items-start justify-between gap-3"><div><strong className="text-sm text-slate-950">{formatDate(audit.auditDate)}</strong><p className="mt-1 text-xs text-slate-500">Audited by {audit.auditedBy || "Not entered"} • Next audit {formatDate(audit.nextAuditDue)}</p></div><span className={`rounded-full px-2 py-1 text-[9px] font-black ${summary.missingRequired.length || summary.expired.length ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{summary.missingRequired.length || summary.expired.length ? "Follow-Up Needed" : "Complete"}</span></div><div className="mt-3 flex flex-wrap gap-2 text-[10px] font-bold text-slate-600"><span>{summary.checked}/{summary.total} checked</span><span>•</span><span>{summary.missingRequired.length} required missing</span><span>•</span><span>{summary.expired.length} expired</span></div></button>;
+          return <button key={audit.id} onClick={() => onOpen(audit)} className="w-full rounded-2xl border border-slate-200 p-4 text-left transition hover:border-orange-300 hover:bg-orange-50/30"><div className="flex items-start justify-between gap-3"><div><strong className="text-sm text-slate-950">{formatDate(audit.auditDate)}</strong><p className="mt-1 text-xs text-slate-500">{audit.template || "In-Home"} • Audited by {audit.auditedBy || "Not entered"} • Next audit {formatDate(audit.nextAuditDue)}</p></div><span className={`rounded-full px-2 py-1 text-[9px] font-black ${summary.missingRequired.length || summary.expired.length ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{summary.missingRequired.length || summary.expired.length ? "Follow-Up Needed" : "Complete"}</span></div><div className="mt-3 flex flex-wrap gap-2 text-[10px] font-bold text-slate-600"><span>{summary.checked}/{summary.total} checked</span><span>•</span><span>{summary.missingRequired.length} required missing</span><span>•</span><span>{summary.expired.length} expired</span></div></button>;
         })}
       </div>
     </section>
