@@ -43,6 +43,7 @@ export async function GET(request: Request) {
   try {
     const { admin, email, children } = await requireParent(request);
     const rowIds = children.map((child) => child.rowId);
+    const organizationIds = [...new Set(children.map((child) => child.organizationId).filter(Boolean))];
 
     const [careResult, formsResult, transportationFeesResult] = await Promise.all([
       rowIds.length
@@ -58,11 +59,14 @@ export async function GET(request: Request) {
         .from("digital_forms")
         .select("id,legacy_id,organization_id,location_id,record_data,created_at,updated_at")
         .order("updated_at", { ascending: false }),
-      admin
-        .from("transportation_fee_records")
-        .select("id,legacy_id,record_data,created_at,updated_at")
-        .order("updated_at", { ascending: false })
-        .limit(100),
+      organizationIds.length
+        ? admin
+            .from("transportation_fee_records")
+            .select("id,legacy_id,organization_id,record_data,created_at,updated_at")
+            .in("organization_id", organizationIds)
+            .order("updated_at", { ascending: false })
+            .limit(100)
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     if (careResult.error) throw careResult.error;
