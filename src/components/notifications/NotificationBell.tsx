@@ -80,6 +80,30 @@ export default function NotificationBell() {
   }, [isLocationLicensee, isSystemOwner, session?.access_token]);
 
   useEffect(() => {
+    if (!session?.access_token || (!isSystemOwner && !isLocationLicensee) || typeof window === "undefined") return;
+    const now = new Date();
+    const scanDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const storageKey = `tcs-tour-board-alert-scan:${scanDate}`;
+    if (window.localStorage.getItem(storageKey) === "done") return;
+
+    window.localStorage.setItem(storageKey, "running");
+    void fetch("/api/enrollment-pipeline/alerts", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+      cache: "no-store",
+    }).then((response) => {
+      if (response.ok) window.localStorage.setItem(storageKey, "done");
+      else window.localStorage.removeItem(storageKey);
+    }).catch(() => {
+      window.localStorage.removeItem(storageKey);
+    });
+  }, [isLocationLicensee, isSystemOwner, session?.access_token]);
+
+  useEffect(() => {
     if (!session?.access_token) return;
     let active = true;
 
