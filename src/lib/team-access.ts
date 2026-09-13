@@ -162,6 +162,7 @@ export const ROLE_PERMISSION_SUMMARIES: Record<AccessRole, string[]> = {
 
 const routePermissionMap: Record<string, EmployeePermission> = {
   "/children": "children_basic",
+  "/attendance": "schedules",
   "/child-schedules": "schedules",
   "/daily-care": "daily_care",
   "/meals": "meals",
@@ -171,6 +172,7 @@ const routePermissionMap: Record<string, EmployeePermission> = {
   "/transportation": "transportation",
   "/transportation-v2": "transportation",
   "/health-safety": "health_safety",
+  "/maintenance": "health_safety",
   "/student-store": "student_store",
   "/print-studio": "printables",
   "/ai-director": "ai_assistant",
@@ -228,6 +230,8 @@ export function employeeCanReadState(permissions: string[], stateKey: string) {
       return permissions.includes("transportation");
     case "tcs-health-safety-v1":
       return hasAnyPermission(permissions, ["health_safety", "shift_reports"]);
+    case "tcs-maintenance-tickets-v1":
+      return permissions.includes("health_safety");
     case "tcs-location-hours-v2":
     case "tcs-shifts":
       return permissions.includes("ratios");
@@ -268,6 +272,8 @@ export function employeeCanWriteState(permissions: string[], stateKey: string) {
     case "tcs-vehicle-readiness-v2":
       return permissions.includes("transportation");
     case "tcs-health-safety-v1":
+      return permissions.includes("health_safety");
+    case "tcs-maintenance-tickets-v1":
       return permissions.includes("health_safety");
     default:
       return false;
