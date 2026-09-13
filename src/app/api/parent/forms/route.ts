@@ -22,13 +22,25 @@ export async function POST(request: Request) {
       throw new Response("Enter your name and confirm the acknowledgment before submitting.", { status: 400 });
     }
 
-    const { data: rows, error } = await admin
+    const byLegacy = await admin
       .from("digital_forms")
       .select("id,legacy_id,organization_id,location_id,record_data")
-      .or(`legacy_id.eq.${formId},id.eq.${formId}`);
+      .eq("legacy_id", formId)
+      .maybeSingle();
 
-    if (error) throw error;
-    const row = ((rows ?? []) as unknown as DbRow[])[0];
+    if (byLegacy.error) throw byLegacy.error;
+
+    let row = byLegacy.data as unknown as DbRow | null;
+    if (!row && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(formId)) {
+      const byId = await admin
+        .from("digital_forms")
+        .select("id,legacy_id,organization_id,location_id,record_data")
+        .eq("id", formId)
+        .maybeSingle();
+      if (byId.error) throw byId.error;
+      row = byId.data as unknown as DbRow | null;
+    }
+
     if (!row) throw new Response("That form request was not found.", { status: 404 });
 
     const record = object(row.record_data);
