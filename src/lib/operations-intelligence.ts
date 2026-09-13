@@ -1,4 +1,7 @@
 import { dateToDayName, timeToMinutes, type ChildScheduleRecord } from "@/lib/child-schedules";
+import { auditSummary } from "@/lib/child-file-audits";
+import { emergencyCardReadiness } from "@/lib/emergency-cards";
+import { defaultImmunizationProgram, immunizationStatus, normalizeImmunizationRecord } from "@/lib/immunization-tracker";
 import type { ChildRecord } from "@/lib/children";
 import type { FileRecord, Shift, TransportationRoute, VehicleRecord, WorkTask } from "@/lib/hub-data";
 import { careLocations, locationThemes, type LocationHoursRecord, type LocationKey } from "@/lib/location-config";
@@ -13,7 +16,7 @@ export type SmartAlert = {
   location: string;
   href: string;
   actionLabel: string;
-  category: "Ratio" | "Schedule" | "Transportation" | "Files" | "Work Plan" | "Operations";
+  category: "Ratio" | "Schedule" | "Transportation" | "Files" | "Work Plan" | "Compliance" | "Billing" | "Operations";
 };
 
 export type CoverageWindow = {
@@ -202,6 +205,20 @@ export function buildSmartAlerts(input: OperationsIntelligenceInput) {
     });
   });
 
+  windows.filter((window) => window.childCount > 0 && window.staffCount > window.requiredStaff).forEach((window) => {
+    const extra = window.staffCount - window.requiredStaff;
+    alerts.push({
+      id: `coverage-release-${window.location}-${window.start}-${window.end}`,
+      severity: "info",
+      category: "Operations",
+      location: window.location,
+      title: `${window.location} may have extra coverage ${clock(window.start)}–${clock(window.end)}`,
+      detail: `${window.staffCount} staff are entered for ${window.childCount} children; the current planning model shows ${window.requiredStaff} minimum staff. Review breaks, qualifications, transportation, office duties, and actual attendance before releasing anyone.`,
+      href: "/ratios",
+      actionLabel: `Review ${extra} potential release${extra === 1 ? "" : "s"}`,
+    });
+  });
+
   windows.filter((window) => window.childCount > window.capacity).forEach((window) => {
     alerts.push({
       id: `capacity-${window.location}-${window.start}`,
@@ -278,6 +295,56 @@ export function buildSmartAlerts(input: OperationsIntelligenceInput) {
         detail: `${group.length} riders are assigned; vehicle capacity is ${vehicle.passengerCapacity}.`,
         href: "/transportation",
         actionLabel: "Reassign riders",
+      });
+    }
+  });
+
+  input.accessibleLocations.forEach((location) => {
+    const locationChildren = input.children.filter((child) =>
+      child.enrollmentStatus !== "Archived" &&
+      (child.location.toLowerCase().includes(location.toLowerCase()) || location.toLowerCase().includes(child.location.toLowerCase())),
+    );
+    if (!locationChildren.length) return;
+
+    let fileAttention = 0;
+    let emergencyAttention = 0;
+    let immunizationAttention = 0;
+    let fundingAttention = 0;
+
+    locationChildren.forEach((child) => {
+      const audits = Array.isArray(child.fileAudits) ? child.fileAudits : [];
+      const latest = [...audits].sort((a, b) => (b.auditDate || b.updatedAt || "").localeCompare(a.auditDate || a.updatedAt || ""))[0];
+      if (!latest || !auditSummary(latest).complete || child.licensingStatus !== "Complete" || child.missingDocuments.length > 0) fileAttention += 1;
+      if (!emergencyCardReadiness(child).ready) emergencyAttention += 1;
+      const record = normalizeImmunizationRecord(child.immunizationRecord, defaultImmunizationProgram(child.ageGroup, child.location));
+      const status = immunizationStatus(child.dateOfBirth, record);
+      if (!["Requirements Met", "Conditional", "Medical Exemption"].includes(status)) immunizationAttention += 1;
+      if (!child.subsidy) fundingAttention += 1;
+    });
+
+    const complianceTotal = fileAttention + emergencyAttention + immunizationAttention;
+    if (complianceTotal > 0) {
+      alerts.push({
+        id: `child-compliance-${location}`,
+        severity: emergencyAttention ? "warning" : "info",
+        category: "Compliance",
+        location,
+        title: `${location} has child compliance items to review`,
+        detail: `${fileAttention} file record${fileAttention === 1 ? "" : "s"}, ${emergencyAttention} emergency record${emergencyAttention === 1 ? "" : "s"}, and ${immunizationAttention} shot record${immunizationAttention === 1 ? "" : "s"} need attention.`,
+        href: "/compliance",
+        actionLabel: "Open Compliance Center",
+      });
+    }
+    if (fundingAttention > 0) {
+      alerts.push({
+        id: `funding-${location}`,
+        severity: "info",
+        category: "Billing",
+        location,
+        title: `${location} has funding records not set`,
+        detail: `${fundingAttention} active child record${fundingAttention === 1 ? " needs" : "s need"} a funding source before billing and subsidy reporting are complete.`,
+        href: "/billing-command-center",
+        actionLabel: "Review funding",
       });
     }
   });
