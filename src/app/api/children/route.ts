@@ -56,11 +56,15 @@ function safeFileAudits(value: unknown) {
 
     return {
       id,
+      template: text(audit.template) === "School Age Center" ? "School Age Center" : "In-Home",
       auditDate: text(audit.auditDate).slice(0, 10),
       nextAuditDue: text(audit.nextAuditDue).slice(0, 10),
       dateEnrolled: text(audit.dateEnrolled).slice(0, 10),
       auditedBy: text(audit.auditedBy).slice(0, 160),
       teacherPrimary: text(audit.teacherPrimary).slice(0, 160),
+      school: text(audit.school).slice(0, 160),
+      grade: text(audit.grade).slice(0, 80),
+      signature: text(audit.signature).slice(0, 160),
       notes: text(audit.notes).slice(0, 4000),
       statusFlags: stringArray(audit.statusFlags).filter((flag) => AUDIT_STATUS_FLAGS.has(flag)).slice(0, 12),
       items,
