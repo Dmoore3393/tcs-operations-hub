@@ -44,7 +44,8 @@ type EditorState = {
 
 const vaccineFields = [
   { key: "polioDates", label: "Polio" },
-  { key: "dtapDates", label: "DTaP / DTP / Td" },
+  { key: "dtapDates", label: "DTaP / DTP" },
+  { key: "tdDates", label: "Td" },
   { key: "tdapDates", label: "Tdap" },
   { key: "hepBDates", label: "Hepatitis B" },
   { key: "hibDates", label: "Hib" },
