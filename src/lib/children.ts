@@ -80,7 +80,9 @@ export type ChildRecord = {
   checkedOutAt?: string;
   checkedOutBy?: string;
   pickupPerson?: string;
-  pickupVerification?: "Authorized Contact" | "Licensee Override" | "Not Applicable";
+  pickupVerification?: "Authorized Contact" | "Pickup PIN" | "Licensee Override" | "Not Applicable";
+  pickupPinConfigured?: boolean;
+  pickupPinUpdatedAt?: string;
   pickupNotes?: string;
   medicalConsentStatus?: MedicalConsentStatus;
   medicalConsentSignedAt?: string;
