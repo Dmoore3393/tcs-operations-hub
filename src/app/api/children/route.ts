@@ -29,6 +29,31 @@ function dateArray(value: unknown) {
     .slice(0, 20);
 }
 
+function safeSchoolAgeSupport(value: unknown) {
+  const record = object(value);
+  if (!Object.keys(record).length) return undefined;
+  const iep504Status = ["None Reported", "IEP", "504", "Pending Review"].includes(text(record.iep504Status))
+    ? text(record.iep504Status)
+    : "None Reported";
+  return {
+    schoolName: text(record.schoolName).slice(0, 200),
+    grade: text(record.grade).slice(0, 60),
+    schoolContactName: text(record.schoolContactName).slice(0, 160),
+    schoolContactEmail: text(record.schoolContactEmail).slice(0, 254),
+    schoolContactPhone: text(record.schoolContactPhone).slice(0, 50),
+    homeworkSupport: text(record.homeworkSupport).slice(0, 4000),
+    academicNotes: text(record.academicNotes).slice(0, 5000),
+    iep504Status,
+    accommodations: text(record.accommodations).slice(0, 5000),
+    nextSchoolMeetingDate: text(record.nextSchoolMeetingDate).slice(0, 10),
+    behaviorPlanActive: Boolean(record.behaviorPlanActive),
+    behaviorReviewDate: text(record.behaviorReviewDate).slice(0, 10),
+    behaviorSupports: text(record.behaviorSupports).slice(0, 5000),
+    familyFollowUp: text(record.familyFollowUp).slice(0, 4000),
+    updatedAt: text(record.updatedAt).slice(0, 40) || new Date().toISOString(),
+  };
+}
+
 function safeImmunizationRecord(value: unknown) {
   const record = object(value);
   if (!Object.keys(record).length) return undefined;
@@ -184,6 +209,7 @@ function normalizeChild(row: DbRow) {
     emergencyInstructions: text(record.emergencyInstructions),
     fileAudits: safeFileAudits(record.fileAudits),
     immunizationRecord: safeImmunizationRecord(record.immunizationRecord),
+    schoolAgeSupport: safeSchoolAgeSupport(record.schoolAgeSupport),
     updatedAt: text(row.updated_at),
   };
 }
@@ -299,6 +325,7 @@ function safeChildRecord(child: DbRow, id: number) {
     emergencyInstructions: text(child.emergencyInstructions).slice(0, 4000),
     fileAudits: safeFileAudits(child.fileAudits),
     immunizationRecord: safeImmunizationRecord(child.immunizationRecord),
+    schoolAgeSupport: safeSchoolAgeSupport(child.schoolAgeSupport),
   };
 }
 
