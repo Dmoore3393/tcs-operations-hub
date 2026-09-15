@@ -107,6 +107,9 @@ export type ChildRecord = {
   schoolAgeSupport?: SchoolAgeSupportRecord;
   familyMessages?: FamilyMessage[];
   familyAccess?: FamilyAdultAccess[];
+  custodyAccessAlert?: boolean;
+  custodyDocumentationOnFile?: boolean;
+  custodyAccessNote?: string;
 };
 
 export type ChildFormState = {
