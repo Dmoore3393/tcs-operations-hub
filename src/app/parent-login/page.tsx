@@ -15,11 +15,43 @@ export default function ParentLoginPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  async function routeSignedInParent(accessToken: string) {
+    const response = await fetch("/api/parent/account-status", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    });
+    const payload = await response.json().catch(() => ({})) as {
+      hasActiveAccess?: boolean;
+      pendingApprovalCount?: number;
+      invitedCount?: number;
+      state?: string;
+      error?: string;
+    };
+    if (!response.ok) throw new Error(payload.error || "Could not verify Parent Portal access.");
+
+    if (payload.hasActiveAccess) {
+      router.replace("/parent");
+      return;
+    }
+    if ((payload.pendingApprovalCount ?? 0) > 0) {
+      router.replace("/parent/account-pending");
+      return;
+    }
+
+    throw new Error(
+      payload.state === "Invited"
+        ? "Your invitation has not been completed yet. Open your Parent Portal invitation email to create your account."
+        : "This Parent Portal account does not have approved child access yet.",
+    );
+  }
+
   useEffect(() => {
     if (!supabase) return;
     void supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.replace("/parent");
+      if (data.session) void routeSignedInParent(data.session.access_token).catch(() => undefined);
     });
+    // routeSignedInParent intentionally uses the current router only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   async function submit(event: FormEvent) {
@@ -36,14 +68,16 @@ export default function ParentLoginPage() {
     setError("");
     setMessage("");
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: normalized,
         password,
       });
       if (signInError) throw signInError;
-      router.replace("/parent");
+      if (!data.session) throw new Error("A secure Parent Portal session could not be created.");
+      await routeSignedInParent(data.session.access_token);
     } catch (caught) {
-      setError("That email/password combination could not be signed in. If you were invited but have not created your account yet, open the invitation email first.");
+      const message = caught instanceof Error ? caught.message : "";
+      setError(message || "That email/password combination could not be signed in. If you were invited but have not created your account yet, open the invitation email first.");
     } finally {
       setSigningIn(false);
     }
@@ -94,7 +128,7 @@ export default function ParentLoginPage() {
         <div className="p-7 sm:p-10">
           <p className="text-xs font-black uppercase tracking-[.18em] text-emerald-700">Parent sign in</p>
           <h2 className="mt-2 text-3xl font-black text-slate-950">Welcome back</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-600">Enter the email and password you created when you accepted your Parent Portal invitation.</p>
+          <p className="mt-3 text-sm leading-6 text-slate-600">Enter the email and password you created when you accepted your Parent Portal invitation. New accounts remain locked until TCS reviews and approves the assigned access.</p>
 
           <form onSubmit={submit} className="mt-7 space-y-4">
             <label className="block"><span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">Email</span><div className="relative"><Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-3 text-sm font-semibold outline-none focus:border-emerald-400" /></div></label>
