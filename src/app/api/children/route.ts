@@ -362,6 +362,16 @@ function safeChildRecord(child: DbRow, id: number) {
   };
 }
 
+function redactFamilyPortalSecurity<T extends DbRow>(child: T): T {
+  return {
+    ...child,
+    familyAccess: [],
+    familyMessages: [],
+    custodyAccessNote: "",
+    custodyDocumentationOnFile: false,
+  };
+}
+
 export async function GET(request: Request) {
   try {
     const { userClient, profile, isOwner, isLicensee } = await requireStaff(request);
@@ -382,8 +392,13 @@ export async function GET(request: Request) {
     ]);
     if (childrenResult.error) throw childrenResult.error;
     if (locationsResult.error) throw locationsResult.error;
+    const normalizedChildren = ((childrenResult.data ?? []) as unknown as DbRow[]).map(normalizeChild);
+    const children = isOwner || isLicensee
+      ? normalizedChildren
+      : normalizedChildren.map((child) => redactFamilyPortalSecurity(child));
+
     return Response.json({
-      children: ((childrenResult.data ?? []) as unknown as DbRow[]).map(normalizeChild),
+      children,
       locations: ((locationsResult.data ?? []) as unknown as DbRow[]).map(normalizeLocation),
     });
   } catch (error) {
