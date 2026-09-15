@@ -40,6 +40,7 @@ export async function POST(request: Request) {
 
     const child = children.find((item) => item.legacyId === childId);
     if (!child) throw new Response("That child is not linked to your Parent Portal account.", { status: 403 });
+    if (!child.access.permissions.messageStaff) throw new Response("Messaging is not enabled for your access to this child.", { status: 403 });
 
     const record = object(child.record);
     const message = {
