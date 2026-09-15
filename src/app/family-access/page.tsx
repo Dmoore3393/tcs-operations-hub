@@ -89,6 +89,11 @@ export default function FamilyAccessPage() {
   const [editing, setEditing] = useState<FamilyAdultAccess | null>(null);
   const [saving, setSaving] = useState(false);
   const [invitingAdultId, setInvitingAdultId] = useState("");
+  const [reviewingApproval, setReviewingApproval] = useState<FamilyAdultAccess | null>(null);
+  const [approvalIdentityChecked, setApprovalIdentityChecked] = useState(false);
+  const [approvalPermissionsChecked, setApprovalPermissionsChecked] = useState(false);
+  const [approvalCustodyChecked, setApprovalCustodyChecked] = useState(false);
+  const [approvingAdultId, setApprovingAdultId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -219,7 +224,54 @@ export default function FamilyAccessPage() {
     }
   }
 
-  async function removeAdult(adult: FamilyAdultAccess) {
+  function openApprovalReview(adult: FamilyAdultAccess) {
+    setReviewingApproval(adult);
+    setApprovalIdentityChecked(false);
+    setApprovalPermissionsChecked(false);
+    setApprovalCustodyChecked(false);
+    setError("");
+  }
+
+  async function approveAdult() {
+    if (!session?.access_token || !selected || !reviewingApproval) return;
+    if (!approvalIdentityChecked || !approvalPermissionsChecked || (selected.custodyAccessAlert && !approvalCustodyChecked)) {
+      setError("Complete the required approval checks before activating this Parent Portal account.");
+      return;
+    }
+
+    setApprovingAdultId(reviewingApproval.id);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/parent/approvals", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          childLegacyId: selected.legacyId || String(selected.id),
+          adultId: reviewingApproval.id,
+          confirmedIdentity: approvalIdentityChecked,
+          confirmedPermissions: approvalPermissionsChecked,
+          confirmedCustody: selected.custodyAccessAlert ? approvalCustodyChecked : true,
+        }),
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: string; message?: string };
+      if (!response.ok) throw new Error(payload.error || "Could not approve Parent Portal access.");
+
+      setReviewingApproval(null);
+      await requestChildren();
+      setNotice(payload.message || "Parent Portal access approved.");
+      window.setTimeout(() => setNotice(""), 4200);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not approve Parent Portal access.");
+    } finally {
+      setApprovingAdultId("");
+    }
+  }
+
+    async function removeAdult(adult: FamilyAdultAccess) {
     if (!selected) return;
     await saveChild(
       { ...selected, familyAccess: adults.filter((item) => item.id !== adult.id) },
@@ -331,16 +383,60 @@ export default function FamilyAccessPage() {
 
         <section className="grid gap-4 lg:grid-cols-2">
           {adults.map((adult) => <article key={adult.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-3"><div className="flex gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-100 text-emerald-800"><UserRound className="h-5 w-5" /></span><div><h3 className="font-black text-slate-950">{adult.name}</h3><p className="mt-1 text-xs font-semibold text-slate-500">{adult.relationship} • {adult.email}</p><div className="mt-2 flex flex-wrap gap-1.5"><span className={`rounded-full px-2 py-1 text-[9px] font-black ${adult.status === "Active" ? "bg-emerald-100 text-emerald-800" : adult.status === "Invited" ? "bg-amber-100 text-amber-900" : "bg-red-100 text-red-800"}`}>{adult.status === "Active" ? "Account Active" : adult.status === "Invited" ? "Invitation Pending" : "Suspended"}</span>{adult.invitedAt && <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-500">Invited {new Date(adult.invitedAt).toLocaleDateString([], { month: "short", day: "numeric" })}</span>}</div></div></div><span className={`rounded-full px-2 py-1 text-[9px] font-black ${adult.financialPrivacy === "Private" ? "bg-violet-100 text-violet-800" : "bg-blue-100 text-blue-800"}`}>{adult.financialPrivacy} Billing</span></div>
+            <div className="flex items-start justify-between gap-3"><div className="flex gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-100 text-emerald-800"><UserRound className="h-5 w-5" /></span><div><h3 className="font-black text-slate-950">{adult.name}</h3><p className="mt-1 text-xs font-semibold text-slate-500">{adult.relationship} • {adult.email}</p><div className="mt-2 flex flex-wrap gap-1.5"><span className={`rounded-full px-2 py-1 text-[9px] font-black ${adult.status === "Active" ? "bg-emerald-100 text-emerald-800" : adult.status === "Pending Approval" ? "bg-blue-100 text-blue-900" : adult.status === "Invited" ? "bg-amber-100 text-amber-900" : "bg-red-100 text-red-800"}`}>{adult.status === "Active" ? "Account Active" : adult.status === "Pending Approval" ? "Staff Approval Required" : adult.status === "Invited" ? "Invitation Pending" : "Suspended"}</span>{adult.invitedAt && <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-500">Invited {new Date(adult.invitedAt).toLocaleDateString([], { month: "short", day: "numeric" })}</span>}</div></div></div><span className={`rounded-full px-2 py-1 text-[9px] font-black ${adult.financialPrivacy === "Private" ? "bg-violet-100 text-violet-800" : "bg-blue-100 text-blue-800"}`}>{adult.financialPrivacy} Billing</span></div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2"><Detail label="Household" value={adult.householdName} /><Detail label="Billing split" value={adult.billingResponsibility.mode === "Percentage" ? `${adult.billingResponsibility.percentage ?? 0}%` : adult.billingResponsibility.mode === "Fixed" ? `$${(adult.billingResponsibility.fixedWeeklyAmount ?? 0).toFixed(2)} / week` : adult.billingResponsibility.mode} /></div>
             <div className="mt-4 flex flex-wrap gap-1.5">{familyPermissionKeys.filter((key) => adult.permissions[key]).slice(0, 7).map((key) => <span key={key} className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-600">{permissionLabels[key]}</span>)}{familyPermissionKeys.filter((key) => adult.permissions[key]).length > 7 && <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-600">+{familyPermissionKeys.filter((key) => adult.permissions[key]).length - 7} more</span>}</div>
-            <div className="mt-5 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">{adult.status === "Invited" ? adult.invitedAt ? <div className="flex items-center justify-center gap-2 rounded-xl bg-amber-50 px-3 py-2.5 text-xs font-black text-amber-900"><Mail className="h-4 w-4" />Invite Sent</div> : <button disabled={invitingAdultId === adult.id} onClick={() => void sendInvite(adult)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-3 py-2.5 text-xs font-black text-white disabled:opacity-50">{invitingAdultId === adult.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}Send Invite</button> : <div className={`flex items-center justify-center rounded-xl px-3 py-2.5 text-xs font-black ${adult.status === "Active" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}>{adult.status === "Active" ? "Parent account is active" : "Account suspended"}</div>}<button onClick={() => setEditing({ ...adult, permissions: { ...adult.permissions }, billingResponsibility: { ...adult.billingResponsibility } })} className="rounded-xl bg-slate-950 px-3 py-2.5 text-xs font-black text-white">Edit Access</button><button disabled={saving} onClick={() => void removeAdult(adult)} aria-label={`Remove ${adult.name}`} className="rounded-xl border border-red-200 px-3 py-2.5 text-red-700"><Trash2 className="h-4 w-4" /></button></div>
+            <div className="mt-5 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">{adult.status === "Invited" ? adult.invitedAt ? <div className="flex items-center justify-center gap-2 rounded-xl bg-amber-50 px-3 py-2.5 text-xs font-black text-amber-900"><Mail className="h-4 w-4" />Invite Sent</div> : <button disabled={invitingAdultId === adult.id} onClick={() => void sendInvite(adult)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-3 py-2.5 text-xs font-black text-white disabled:opacity-50">{invitingAdultId === adult.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}Send Invite</button> : adult.status === "Pending Approval" ? <button disabled={approvingAdultId === adult.id} onClick={() => openApprovalReview(adult)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-3 py-2.5 text-xs font-black text-white disabled:opacity-50"><ShieldCheck className="h-4 w-4" />Review & Approve</button> : <div className={`flex items-center justify-center rounded-xl px-3 py-2.5 text-xs font-black ${adult.status === "Active" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}>{adult.status === "Active" ? "Parent account is active" : "Account suspended"}</div>}<button onClick={() => setEditing({ ...adult, permissions: { ...adult.permissions }, billingResponsibility: { ...adult.billingResponsibility } })} className="rounded-xl bg-slate-950 px-3 py-2.5 text-xs font-black text-white">Edit Access</button><button disabled={saving} onClick={() => void removeAdult(adult)} aria-label={`Remove ${adult.name}`} className="rounded-xl border border-red-200 px-3 py-2.5 text-red-700"><Trash2 className="h-4 w-4" /></button></div>
           </article>)}
         </section>
       </div>}
     </div>
 
-    {editing && selected && <div className="fixed inset-0 z-[10000] overflow-y-auto bg-slate-950/70 p-3 backdrop-blur-sm">
+    {reviewingApproval && selected && <div className="fixed inset-0 z-[10001] overflow-y-auto bg-slate-950/75 p-3 backdrop-blur-sm">
+      <section className="mx-auto my-8 w-full max-w-4xl overflow-hidden rounded-[30px] bg-white shadow-2xl">
+        <header className="flex items-start justify-between gap-4 bg-gradient-to-r from-blue-900 to-emerald-800 px-5 py-4 text-white">
+          <div><p className="text-[10px] font-black uppercase tracking-[.16em] text-blue-100">Final Parent Portal security review</p><h2 className="mt-1 text-2xl font-black">Review & Approve {reviewingApproval.name}</h2></div>
+          <button disabled={Boolean(approvingAdultId)} onClick={() => setReviewingApproval(null)} className="rounded-xl bg-white/10 p-2"><X className="h-5 w-5" /></button>
+        </header>
+        <div className="space-y-6 p-5">
+          {selected.custodyAccessAlert && <div className="rounded-2xl border-2 border-red-300 bg-red-50 p-4"><div className="flex gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-red-700" /><div><h3 className="font-black text-red-950">Custody / access alert is active</h3><p className="mt-1 text-xs font-semibold leading-5 text-red-900">{selected.custodyAccessNote || "Review verified custody/access documentation before approving this account."}</p></div></div></div>}
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Detail label="Child" value={`${selected.firstName} ${selected.lastName}`} />
+            <Detail label="Adult" value={reviewingApproval.name} />
+            <Detail label="Relationship" value={reviewingApproval.relationship} />
+            <Detail label="Household" value={reviewingApproval.householdName} />
+          </div>
+
+          <section className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+            <h3 className="font-black text-violet-950">Financial privacy review</h3>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <Detail label="Billing privacy" value={`${reviewingApproval.financialPrivacy} Billing`} />
+              <Detail label="Responsibility" value={reviewingApproval.billingResponsibility.mode === "Percentage" ? `${reviewingApproval.billingResponsibility.percentage ?? 0}%` : reviewingApproval.billingResponsibility.mode === "Fixed" ? `${(reviewingApproval.billingResponsibility.fixedWeeklyAmount ?? 0).toFixed(2)} / week` : reviewingApproval.billingResponsibility.mode} />
+            </div>
+          </section>
+
+          <section>
+            <h3 className="font-black text-slate-950">Exactly what this account will be able to do</h3>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Green permissions will become available immediately after approval. Gray permissions remain blocked.</p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{familyPermissionKeys.map((key) => <div key={key} className={`flex items-center gap-3 rounded-xl border p-3 text-xs font-black ${reviewingApproval.permissions[key] ? "border-emerald-200 bg-emerald-50 text-emerald-950" : "border-slate-200 bg-slate-50 text-slate-400"}`}><span className={`grid h-7 w-7 flex-none place-items-center rounded-lg ${reviewingApproval.permissions[key] ? "bg-emerald-700 text-white" : "bg-slate-200 text-slate-500"}`}>{reviewingApproval.permissions[key] ? <Check className="h-4 w-4" /> : <X className="h-3.5 w-3.5" />}</span>{permissionLabels[key]}</div>)}</div>
+          </section>
+
+          <section className="space-y-3 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+            <h3 className="font-black text-blue-950">Required approval checks</h3>
+            <ApprovalCheck checked={approvalIdentityChecked} onChange={setApprovalIdentityChecked} title="I verified the adult, child, relationship, and household." helper="I confirmed this is the correct adult account for this child and household." />
+            <ApprovalCheck checked={approvalPermissionsChecked} onChange={setApprovalPermissionsChecked} title="I reviewed every permission and the billing/privacy settings." helper="I understand that enabled permissions will unlock as soon as I approve this account." />
+            {selected.custodyAccessAlert && <ApprovalCheck checked={approvalCustodyChecked} onChange={setApprovalCustodyChecked} title="I reviewed the custody/access alert and supporting documentation." helper="I confirmed approval is consistent with the verified documentation and TCS policy." />}
+          </section>
+        </div>
+        <footer className="flex flex-col-reverse gap-2 border-t border-slate-200 p-4 sm:flex-row sm:justify-end">
+          <button disabled={Boolean(approvingAdultId)} onClick={() => setReviewingApproval(null)} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-black">Not Yet</button>
+          <button disabled={Boolean(approvingAdultId) || !approvalIdentityChecked || !approvalPermissionsChecked || Boolean(selected.custodyAccessAlert && !approvalCustodyChecked)} onClick={() => void approveAdult()} className="inline-flex min-w-48 items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-40">{approvingAdultId ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Approve & Activate</button>
+        </footer>
+      </section>
+    </div>}
+
+        {editing && selected && <div className="fixed inset-0 z-[10000] overflow-y-auto bg-slate-950/70 p-3 backdrop-blur-sm">
       <section className="mx-auto my-8 w-full max-w-4xl overflow-hidden rounded-[30px] bg-white shadow-2xl">
         <header className="flex items-start justify-between gap-4 bg-gradient-to-r from-[#173d29] to-[#265b3c] px-5 py-4 text-white"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-emerald-200">Adult access for {selected.firstName}</p><h2 className="mt-1 text-2xl font-black">{adults.some((adult) => adult.id === editing.id) ? "Edit Parent / Guardian" : "Add Parent / Guardian"}</h2></div><button disabled={saving} onClick={() => setEditing(null)} className="rounded-xl bg-white/10 p-2"><X className="h-5 w-5" /></button></header>
         <div className="space-y-6 p-5">
@@ -349,7 +445,7 @@ export default function FamilyAccessPage() {
             <Field label="Email used to sign in"><input type="email" className={inputClass} value={editing.email} onChange={(event) => setEditing({ ...editing, email: event.target.value })} placeholder="parent@example.com" /></Field>
             <Field label="Relationship"><select className={inputClass} value={editing.relationship} onChange={(event) => setEditing({ ...editing, relationship: event.target.value })}><option>Mother</option><option>Father</option><option>Parent / Guardian</option><option>Stepparent</option><option>Grandmother</option><option>Grandfather</option><option>Foster Parent</option><option>Legal Guardian</option><option>Respite Provider</option><option>Case Worker</option><option>Emergency Contact</option><option>Authorized Pickup</option><option>Other</option></select></Field>
             <Field label="Household name"><input className={inputClass} value={editing.householdName} onChange={(event) => setEditing({ ...editing, householdName: event.target.value })} placeholder="Moore Household" /></Field>
-            <Field label="Account status"><select className={inputClass} value={editing.status} onChange={(event) => setEditing({ ...editing, status: event.target.value as FamilyAdultAccess["status"] })}>{editing.status === "Active" && <option>Active</option>}<option>Invited</option><option>Suspended</option></select><span className="mt-1 block text-[10px] font-semibold leading-4 text-slate-500">New accounts stay Invited until the parent creates their password. Staff cannot manually make a new invitation Active.</span></Field>
+            <Field label="Account status"><select className={inputClass} value={editing.status} onChange={(event) => setEditing({ ...editing, status: event.target.value as FamilyAdultAccess["status"] })}>{editing.status === "Active" && <option>Active</option>}{editing.status === "Pending Approval" && <option>Pending Approval</option>}<option>Invited</option><option>Suspended</option></select><span className="mt-1 block text-[10px] font-semibold leading-4 text-slate-500">New accounts stay Invited until the parent creates their password, then move to Pending Approval. Only the approval review can make them Active.</span></Field>
             <Field label="Financial privacy"><select className={inputClass} value={editing.financialPrivacy} onChange={(event) => setEditing({ ...editing, financialPrivacy: event.target.value as FamilyAdultAccess["financialPrivacy"] })}><option value="Private">Private — hide other household finances</option><option value="Shared">Shared — household sees shared balance</option></select></Field>
           </div>
 
@@ -371,6 +467,10 @@ export default function FamilyAccessPage() {
       </section>
     </div>}
   </div></MainLayout>;
+}
+
+function ApprovalCheck({ checked, onChange, title, helper }: { checked: boolean; onChange: (checked: boolean) => void; title: string; helper: string }) {
+  return <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-blue-200 bg-white p-3"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="mt-1 h-4 w-4 accent-blue-700" /><span><strong className="block text-xs text-slate-950">{title}</strong><span className="mt-1 block text-[10px] font-semibold leading-4 text-slate-500">{helper}</span></span></label>;
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
