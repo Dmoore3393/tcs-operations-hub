@@ -62,17 +62,23 @@ export async function POST(request: Request) {
     if (adult.status === "Suspended") {
       throw new Response("This account is suspended. Update the access record before sending an invitation.", { status: 400 });
     }
+    if (adult.status === "Pending Approval") {
+      throw new Response("This parent already created their account and is waiting for staff approval.", { status: 409 });
+    }
+    if (adult.status === "Active") {
+      throw new Response("This Parent Portal access is already active.", { status: 409 });
+    }
 
     const now = new Date().toISOString();
     const existingUser = await findAuthUserByEmail(admin, adult.email);
 
     let authUserId = existingUser?.id || "";
-    let status: "Active" | "Invited" = "Invited";
+    let status: "Pending Approval" | "Invited" = "Invited";
     let acceptedAt = adult.acceptedAt || "";
     let inviteSent = false;
 
     if (existingUser?.email_confirmed_at) {
-      status = "Active";
+      status = "Pending Approval";
       acceptedAt = acceptedAt || now;
     } else {
       const origin = new URL(request.url).origin;
@@ -107,6 +113,8 @@ export async function POST(request: Request) {
           invitedAt: inviteSent ? now : entry.invitedAt,
           invitedBy: inviteSent ? (profile.full_name || profile.email) : entry.invitedBy,
           acceptedAt: acceptedAt || undefined,
+          approvedAt: undefined,
+          approvedBy: undefined,
         }
       : entry);
 
@@ -131,7 +139,7 @@ export async function POST(request: Request) {
       table_name: "children",
       row_id: text(row.id),
       metadata: {
-        kind: existingUser?.email_confirmed_at ? "parent_portal_existing_account_linked" : "parent_portal_invitation_sent",
+        kind: existingUser?.email_confirmed_at ? "parent_portal_existing_account_link_pending_approval" : "parent_portal_invitation_sent",
         childLegacyId,
         adultAccessId: adult.id,
       },
@@ -143,8 +151,8 @@ export async function POST(request: Request) {
       accountAlreadyExists: Boolean(existingUser?.email_confirmed_at),
       status,
       message: existingUser?.email_confirmed_at
-        ? "This email already has a verified Parent Portal account. The child was connected to that existing account."
-        : "Parent Portal invitation sent. The parent will create their own password from the email link.",
+        ? "This email already has a verified Parent Portal account. The new child access is waiting for staff approval before it becomes visible."
+        : "Parent Portal invitation sent. After the parent creates their password, the account will wait for staff approval before child information is unlocked.",
     });
   } catch (error) {
     return staffErrorResponse(error);
