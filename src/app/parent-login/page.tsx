@@ -40,7 +40,7 @@ export default function ParentLoginPage() {
         },
       });
       if (signInError) throw signInError;
-      setMessage("Check your email for a secure Parent Portal sign-in link. The link only opens records if that email is already on an active TCS child record.");
+      setMessage("Check your email for a secure Parent Portal sign-in link. The link only opens children and features that TCS has specifically connected to your individual account.");
     } catch (signInError) {
       setError(signInError instanceof Error ? signInError.message : "Could not send the secure sign-in link.");
     } finally {
@@ -57,15 +57,15 @@ export default function ParentLoginPage() {
           <h1 className="mt-2 text-4xl font-black">The Hub Parent Portal</h1>
           <p className="mt-4 text-sm font-semibold leading-7 text-emerald-50/80">See your child’s current attendance, schedule summary, transportation arrangement, recent daily-care updates, file follow-up items, and Parent Portal acknowledgment requests.</p>
           <div className="mt-8 space-y-3 text-sm font-semibold text-emerald-50/90">
-            <p className="flex items-start gap-2"><ShieldCheck className="mt-0.5 h-5 w-5 flex-none text-emerald-200" />Access is matched to the verified guardian email already stored in your TCS family record.</p>
-            <p className="flex items-start gap-2"><LockKeyhole className="mt-0.5 h-5 w-5 flex-none text-emerald-200" />A family cannot see another family’s children, messages, forms, or records.</p>
+            <p className="flex items-start gap-2"><ShieldCheck className="mt-0.5 h-5 w-5 flex-none text-emerald-200" />Access is matched to your verified adult account and the specific child permissions TCS has assigned to you.</p>
+            <p className="flex items-start gap-2"><LockKeyhole className="mt-0.5 h-5 w-5 flex-none text-emerald-200" />Separate households can share access to one child without exposing unrelated siblings, private billing, or another adult’s account activity.</p>
           </div>
         </div>
 
         <div className="p-7 sm:p-10">
           <p className="text-xs font-black uppercase tracking-[.18em] text-emerald-700">Secure email sign-in</p>
           <h2 className="mt-2 text-3xl font-black text-slate-950">Open your family portal</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-600">Enter the same email address your TCS location has on file for your family. We’ll email you a secure sign-in link—no password to remember.</p>
+          <p className="mt-3 text-sm leading-6 text-slate-600">Enter the email address TCS connected to your Parent Portal access. We’ll email you a secure sign-in link—no password to remember.</p>
 
           <form onSubmit={submit} className="mt-7 space-y-4">
             <label className="block"><span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">Guardian email</span><div className="relative"><Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-3 text-sm font-semibold outline-none focus:border-emerald-400" /></div></label>
@@ -75,7 +75,7 @@ export default function ParentLoginPage() {
           {message && <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-900">{message}</div>}
           {error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold leading-6 text-red-900">{error}</div>}
 
-          <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600"><strong className="text-slate-900">Email not recognized?</strong> Ask your TCS location to confirm the guardian email stored in your child’s record. Creating an email login by itself does not grant access.</div>
+          <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600"><strong className="text-slate-900">Email not recognized?</strong> Ask your TCS location to confirm that your email is connected to the correct child account. Creating an email login by itself does not grant access.</div>
         </div>
       </section>
     </div>
