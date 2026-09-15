@@ -52,6 +52,34 @@ type ParentChild = {
     createdBy: string;
     readAt: string;
   }>;
+  access: {
+    relationship: string;
+    householdName: string;
+    financialPrivacy: "Shared" | "Private";
+    billingResponsibility: {
+      mode: "Shared" | "Percentage" | "Fixed" | "Custom";
+      percentage?: number;
+      fixedWeeklyAmount?: number;
+      covers?: string[];
+    };
+    permissions: {
+      viewProfile: boolean;
+      viewSchedule: boolean;
+      submitSchedule: boolean;
+      viewAttendance: boolean;
+      viewTransportation: boolean;
+      viewMedical: boolean;
+      viewDocuments: boolean;
+      viewIncidents: boolean;
+      viewMessages: boolean;
+      messageStaff: boolean;
+      managePickup: boolean;
+      editEmergencyContacts: boolean;
+      viewBilling: boolean;
+      makePayments: boolean;
+    };
+    grantedCount: number;
+  };
 };
 
 type CareEntry = {
@@ -93,6 +121,21 @@ type TransportationFee = {
 
 type Overview = {
   email: string;
+  viewer: {
+    email: string;
+    separateFinancialPrivacy: boolean;
+    adults: Array<{
+      id: string;
+      name: string;
+      email: string;
+      relationship: string;
+      householdId: string;
+      householdName: string;
+      financialPrivacy: "Shared" | "Private";
+      billingResponsibility: ParentChild["access"]["billingResponsibility"];
+      permissions: ParentChild["access"]["permissions"];
+    }>;
+  };
   children: ParentChild[];
   careEntries: CareEntry[];
   forms: ParentForm[];
@@ -115,6 +158,14 @@ function formatTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function billingResponsibilityLabel(access: ParentChild["access"]) {
+  const responsibility = access.billingResponsibility;
+  if (responsibility.mode === "Percentage") return `${responsibility.percentage ?? 0}% responsibility`;
+  if (responsibility.mode === "Fixed") return `${(responsibility.fixedWeeklyAmount ?? 0).toFixed(2)} weekly responsibility`;
+  if (responsibility.mode === "Custom") return "Custom financial responsibility";
+  return access.financialPrivacy === "Private" ? "Private account responsibility" : "Shared household responsibility";
 }
 
 function todayPacific() {
@@ -351,6 +402,22 @@ export default function ParentPortalPage() {
         {overview && overview.children.length > 1 && <div className="mt-5 flex flex-wrap gap-2">{overview.children.map((child) => <button key={child.id} onClick={() => setSelectedChildId(child.id)} className={`rounded-xl px-3 py-2 text-xs font-black ${selectedChild?.id === child.id ? "bg-white text-emerald-950" : "bg-white/10 text-white"}`}>{childName(child)}</button>)}</div>}
       </section>
 
+      {selectedChild && <section className="rounded-3xl border border-violet-200 bg-gradient-to-br from-white to-violet-50 p-5 shadow-sm">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-violet-700" /><h2 className="font-black text-slate-950">Your access to {selectedChild.firstName}</h2></div>
+            <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">You are signed in as <strong>{selectedChild.access.relationship}</strong> for <strong>{selectedChild.access.householdName}</strong>. Your portal only shows information TCS has authorized for your individual account.</p>
+          </div>
+          <span className={`w-fit rounded-full px-3 py-1.5 text-[10px] font-black ${selectedChild.access.financialPrivacy === "Private" ? "bg-violet-700 text-white" : "bg-blue-100 text-blue-800"}`}>{selectedChild.access.financialPrivacy === "Private" ? "Private Household Billing" : "Shared Household Billing"}</span>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <Info label="Household" value={selectedChild.access.householdName} />
+          <Info label="Relationship" value={selectedChild.access.relationship} />
+          <Info label="Financial Responsibility" value={billingResponsibilityLabel(selectedChild.access)} />
+        </div>
+        {selectedChild.access.financialPrivacy === "Private" && <div className="mt-4 rounded-xl border border-violet-200 bg-white p-3 text-xs font-semibold leading-5 text-violet-950">Other household balances, payments, saved payment methods, subsidy details, and unrelated children are not included in your account.</div>}
+      </section>}
+
       {selectedChild && <>
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Card icon={<UserRound className="h-5 w-5" />} label="Attendance" value={selectedChild.attendanceDate === todayPacific() ? selectedChild.attendanceToday || "Not marked" : "Not marked today"} />
@@ -406,7 +473,7 @@ export default function ParentPortalPage() {
               <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><CalendarDays className="h-5 w-5 text-blue-700" /><h2 className="font-black text-slate-950">Billing & transportation fees</h2></div><p className="mt-1 text-xs text-slate-500">Funding source and transportation charges currently recorded by TCS.</p></div><span className={`rounded-full px-2.5 py-1 text-[9px] font-black ${transportationDue > 0 ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800"}`}>{transportationDue > 0 ? `Due ${transportationDue.toFixed(2)}` : "No unpaid transport fee"}</span></div>
               <div className="mt-4 rounded-xl bg-slate-50 p-3"><p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Funding Source</p><p className="mt-1 text-sm font-black text-slate-900">{selectedChild.funding || "Not set"}</p></div>
               <div className="mt-4 space-y-2">{transportationFees.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs font-semibold text-slate-500">No transportation fee records are currently attached to this child.</p> : transportationFees.slice(0, 8).map((fee) => <div key={fee.id || fee.weekOf} className="rounded-xl border border-slate-200 p-3"><div className="flex items-start justify-between gap-3"><div><strong className="text-xs text-slate-900">Week of {fee.weekOf ? formatDate(fee.weekOf) : "Not set"}</strong><p className="mt-1 text-[10px] text-slate-500">{fee.schools.join(", ") || fee.location}</p></div><span className={`rounded-full px-2 py-1 text-[9px] font-black ${fee.paymentStatus === "Paid" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"}`}>{fee.paymentStatus || "Recorded"}</span></div><div className="mt-2 grid grid-cols-2 gap-2"><Info label="Expected" value={`${fee.expectedAmount.toFixed(2)}`} /><Info label="Charged" value={`${fee.chargedAmount.toFixed(2)}`} /></div>{fee.datePaid && <p className="mt-2 text-[10px] font-semibold text-emerald-700">Paid {formatDate(fee.datePaid)}</p>}</div>)}</div>
-              <p className="mt-4 text-[10px] font-semibold leading-4 text-slate-500">This section currently shows TCS funding and transportation-fee records. Full tuition payments will be added only after TCS chooses a payment processor/account connection.</p>
+              <p className="mt-4 text-[10px] font-semibold leading-4 text-slate-500">Financial information shown here is limited to records assigned to your Parent Portal access. If separate household billing is enabled, another adult’s balance and payment activity stay private.</p>
             </section>
 
             <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
