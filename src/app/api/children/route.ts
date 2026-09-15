@@ -1,3 +1,4 @@
+import { safeFamilyAccess } from "@/lib/family-access";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 
 export const runtime = "nodejs";
@@ -230,6 +231,7 @@ function normalizeChild(row: DbRow) {
     immunizationRecord: safeImmunizationRecord(record.immunizationRecord),
     schoolAgeSupport: safeSchoolAgeSupport(record.schoolAgeSupport),
     familyMessages: safeFamilyMessages(record.familyMessages),
+    familyAccess: safeFamilyAccess(record.familyAccess),
     updatedAt: text(row.updated_at),
   };
 }
@@ -349,6 +351,7 @@ function safeChildRecord(child: DbRow, id: number) {
     immunizationRecord: safeImmunizationRecord(child.immunizationRecord),
     schoolAgeSupport: safeSchoolAgeSupport(child.schoolAgeSupport),
     familyMessages: safeFamilyMessages(child.familyMessages),
+    familyAccess: safeFamilyAccess(child.familyAccess),
   };
 }
 
