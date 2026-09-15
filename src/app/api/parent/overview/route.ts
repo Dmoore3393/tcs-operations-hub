@@ -1,4 +1,5 @@
 import { auditSummary, type ChildFileAudit } from "@/lib/child-file-audits";
+import { familyAccessSummary } from "@/lib/family-access";
 import { defaultImmunizationProgram, immunizationStatus, normalizeImmunizationRecord } from "@/lib/immunization-tracker";
 import { parentErrorResponse, requireParent } from "@/lib/server/require-parent";
 
@@ -55,11 +56,13 @@ export async function GET(request: Request) {
             .order("entry_time", { ascending: false })
             .limit(100)
         : Promise.resolve({ data: [], error: null }),
-      admin
-        .from("digital_forms")
-        .select("id,legacy_id,organization_id,location_id,record_data,created_at,updated_at")
-        .order("updated_at", { ascending: false }),
-      organizationIds.length
+      children.some((child) => child.access.permissions.viewDocuments)
+        ? admin
+            .from("digital_forms")
+            .select("id,legacy_id,organization_id,location_id,record_data,created_at,updated_at")
+            .order("updated_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      organizationIds.length && children.some((child) => child.access.permissions.viewBilling && child.access.permissions.viewTransportation)
         ? admin
             .from("transportation_fee_records")
             .select("id,legacy_id,organization_id,record_data,created_at,updated_at")
@@ -76,9 +79,10 @@ export async function GET(request: Request) {
     const childByRow = new Map(children.map((child) => [child.rowId, child]));
     const careEntries = ((careResult.data ?? []) as unknown as DbRow[]).map((row) => {
       const child = childByRow.get(text(row.child_id));
+      if (!child?.access.permissions.viewAttendance) return null;
       return {
         id: text(row.id),
-        childId: child?.legacyId || "",
+        childId: child.legacyId || "",
         date: text(row.entry_date),
         time: text(row.entry_time),
         category: text(row.category),
@@ -86,7 +90,7 @@ export async function GET(request: Request) {
         result: text(row.result),
         notes: text(row.notes),
       };
-    }).filter((item) => item.childId);
+    }).filter((item): item is NonNullable<typeof item> => Boolean(item?.childId));
 
     const parentForms = ((formsResult.data ?? []) as unknown as DbRow[])
       .map((row) => {
@@ -106,8 +110,11 @@ export async function GET(request: Request) {
       })
       .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
+    const billingChildren = children.filter((child) =>
+      child.access.permissions.viewBilling && child.access.permissions.viewTransportation,
+    );
     const parentChildNames = new Set(
-      children.map((child) => {
+      billingChildren.map((child) => {
         const record = child.record;
         return `${text(record.firstName)} ${text(record.lastName)}`.trim().toLowerCase();
       }).filter(Boolean),
@@ -136,43 +143,69 @@ export async function GET(request: Request) {
 
     const safeChildren = children.map((child) => {
       const record = child.record;
-      const audit = latestAudit(record);
-      const immunization = normalizeImmunizationRecord(
-        object(record.immunizationRecord),
-        defaultImmunizationProgram(text(record.ageGroup), text(record.location)),
-      );
-      const shotStatus = immunizationStatus(text(record.dateOfBirth), immunization);
+      const permissions = child.access.permissions;
+      const audit = permissions.viewDocuments ? latestAudit(record) : null;
+      const immunization = permissions.viewMedical
+        ? normalizeImmunizationRecord(
+            object(record.immunizationRecord),
+            defaultImmunizationProgram(text(record.ageGroup), text(record.location)),
+          )
+        : null;
+      const shotStatus = immunization
+        ? immunizationStatus(text(record.dateOfBirth), immunization)
+        : "Private";
       const auditState = audit ? auditSummary(audit) : null;
 
       return {
         id: child.legacyId,
         firstName: text(record.firstName),
         lastName: text(record.lastName),
-        ageGroup: text(record.ageGroup),
-        location: text(record.location),
-        classroom: text(record.classroom),
-        weeklySchedule: text(record.weeklySchedule),
-        transportation: text(record.transportation),
-        funding: text(record.subsidy) || "Not set",
-        enrollmentStatus: text(record.enrollmentStatus),
-        attendanceToday: text(record.attendanceToday),
-        attendanceDate: text(record.attendanceDate),
-        checkedInAt: text(record.checkedInAt),
-        checkedOutAt: text(record.checkedOutAt),
-        pickupPerson: text(record.pickupPerson),
-        pickupPinConfigured: Boolean(text(record.pickupPinDigest)),
-        pickupPinUpdatedAt: text(record.pickupPinUpdatedAt),
-        missingDocuments: strings(record.missingDocuments),
-        medicalConsentStatus: text(record.medicalConsentStatus),
-        nextAuditDue: audit?.nextAuditDue || "",
-        fileAuditComplete: Boolean(auditState?.complete),
-        immunizationStatus: shotStatus,
-        messages: safeParentMessages(record.familyMessages),
+        ageGroup: permissions.viewProfile ? text(record.ageGroup) : "",
+        location: permissions.viewProfile ? text(record.location) : "",
+        classroom: permissions.viewProfile ? text(record.classroom) : "",
+        weeklySchedule: permissions.viewSchedule ? text(record.weeklySchedule) : "",
+        transportation: permissions.viewTransportation ? text(record.transportation) : "",
+        funding: permissions.viewBilling ? text(record.subsidy) || "Not set" : "Private",
+        enrollmentStatus: permissions.viewProfile ? text(record.enrollmentStatus) : "",
+        attendanceToday: permissions.viewAttendance ? text(record.attendanceToday) : "",
+        attendanceDate: permissions.viewAttendance ? text(record.attendanceDate) : "",
+        checkedInAt: permissions.viewAttendance ? text(record.checkedInAt) : "",
+        checkedOutAt: permissions.viewAttendance ? text(record.checkedOutAt) : "",
+        pickupPerson: permissions.viewAttendance ? text(record.pickupPerson) : "",
+        pickupPinConfigured: permissions.managePickup ? Boolean(text(record.pickupPinDigest)) : false,
+        pickupPinUpdatedAt: permissions.managePickup ? text(record.pickupPinUpdatedAt) : "",
+        missingDocuments: permissions.viewDocuments ? strings(record.missingDocuments) : [],
+        medicalConsentStatus: permissions.viewMedical ? text(record.medicalConsentStatus) : "Private",
+        nextAuditDue: permissions.viewDocuments ? audit?.nextAuditDue || "" : "",
+        fileAuditComplete: permissions.viewDocuments ? Boolean(auditState?.complete) : false,
+        immunizationStatus: permissions.viewMedical ? shotStatus : "Private",
+        messages: permissions.viewMessages ? safeParentMessages(record.familyMessages) : [],
+        access: familyAccessSummary(child.access),
       };
     });
 
+    const adults = [...new Map(children.map((child) => [
+      child.access.id,
+      {
+        id: child.access.id,
+        name: child.access.name,
+        email: child.access.email,
+        relationship: child.access.relationship,
+        householdId: child.access.householdId,
+        householdName: child.access.householdName,
+        financialPrivacy: child.access.financialPrivacy,
+        billingResponsibility: child.access.billingResponsibility,
+        permissions: child.access.permissions,
+      },
+    ])).values()];
+
     return Response.json({
       email,
+      viewer: {
+        email,
+        adults,
+        separateFinancialPrivacy: adults.some((adult) => adult.financialPrivacy === "Private"),
+      },
       children: safeChildren,
       careEntries,
       forms: parentForms,
