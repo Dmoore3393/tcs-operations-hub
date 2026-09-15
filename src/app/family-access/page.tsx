@@ -17,6 +17,7 @@ import {
   Eye,
   LoaderCircle,
   LockKeyhole,
+  Mail,
   Plus,
   Save,
   Search,
@@ -73,7 +74,7 @@ function newAdult(child: ChildRecord): FamilyAdultAccess {
     relationship: "Parent / Guardian",
     householdId: `household-${Date.now()}`,
     householdName: child.familyName || `${child.lastName || "Family"} Household`,
-    status: "Active",
+    status: "Invited",
     financialPrivacy: "Private",
     permissions: clonePermissions(fullFamilyPermissions),
     billingResponsibility: { mode: "Shared" },
@@ -87,6 +88,7 @@ export default function FamilyAccessPage() {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<FamilyAdultAccess | null>(null);
   const [saving, setSaving] = useState(false);
+  const [invitingAdultId, setInvitingAdultId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -179,7 +181,42 @@ export default function FamilyAccessPage() {
     const nextAdults = adults.some((adult) => adult.id === nextAdult.id)
       ? adults.map((adult) => adult.id === nextAdult.id ? nextAdult : adult)
       : [...adults, nextAdult];
-    await saveChild({ ...selected, familyAccess: nextAdults }, `${nextAdult.name}'s Parent Portal access was saved.`);
+    await saveChild({ ...selected, familyAccess: nextAdults }, `${nextAdult.name}'s Parent Portal access was saved. Send the invitation when you are ready.`);
+  }
+
+  async function sendInvite(adult: FamilyAdultAccess) {
+    if (!session?.access_token || !selected) return;
+    if (adult.status === "Suspended") {
+      setError("This account is suspended. Update the access record before sending an invitation.");
+      return;
+    }
+
+    setInvitingAdultId(adult.id);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/parent/invitations", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          childLegacyId: selected.legacyId || String(selected.id),
+          adultId: adult.id,
+        }),
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: string; message?: string };
+      if (!response.ok) throw new Error(payload.error || "Could not send the Parent Portal invitation.");
+
+      await requestChildren();
+      setNotice(payload.message || "Parent Portal invitation sent.");
+      window.setTimeout(() => setNotice(""), 4200);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not send the Parent Portal invitation.");
+    } finally {
+      setInvitingAdultId("");
+    }
   }
 
   async function removeAdult(adult: FamilyAdultAccess) {
@@ -294,10 +331,10 @@ export default function FamilyAccessPage() {
 
         <section className="grid gap-4 lg:grid-cols-2">
           {adults.map((adult) => <article key={adult.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-3"><div className="flex gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-100 text-emerald-800"><UserRound className="h-5 w-5" /></span><div><h3 className="font-black text-slate-950">{adult.name}</h3><p className="mt-1 text-xs font-semibold text-slate-500">{adult.relationship} • {adult.email}</p></div></div><span className={`rounded-full px-2 py-1 text-[9px] font-black ${adult.financialPrivacy === "Private" ? "bg-violet-100 text-violet-800" : "bg-blue-100 text-blue-800"}`}>{adult.financialPrivacy} Billing</span></div>
+            <div className="flex items-start justify-between gap-3"><div className="flex gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-100 text-emerald-800"><UserRound className="h-5 w-5" /></span><div><h3 className="font-black text-slate-950">{adult.name}</h3><p className="mt-1 text-xs font-semibold text-slate-500">{adult.relationship} • {adult.email}</p><div className="mt-2 flex flex-wrap gap-1.5"><span className={`rounded-full px-2 py-1 text-[9px] font-black ${adult.status === "Active" ? "bg-emerald-100 text-emerald-800" : adult.status === "Invited" ? "bg-amber-100 text-amber-900" : "bg-red-100 text-red-800"}`}>{adult.status === "Active" ? "Account Active" : adult.status === "Invited" ? "Invitation Pending" : "Suspended"}</span>{adult.invitedAt && <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-500">Invited {new Date(adult.invitedAt).toLocaleDateString([], { month: "short", day: "numeric" })}</span>}</div></div></div><span className={`rounded-full px-2 py-1 text-[9px] font-black ${adult.financialPrivacy === "Private" ? "bg-violet-100 text-violet-800" : "bg-blue-100 text-blue-800"}`}>{adult.financialPrivacy} Billing</span></div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2"><Detail label="Household" value={adult.householdName} /><Detail label="Billing split" value={adult.billingResponsibility.mode === "Percentage" ? `${adult.billingResponsibility.percentage ?? 0}%` : adult.billingResponsibility.mode === "Fixed" ? `$${(adult.billingResponsibility.fixedWeeklyAmount ?? 0).toFixed(2)} / week` : adult.billingResponsibility.mode} /></div>
             <div className="mt-4 flex flex-wrap gap-1.5">{familyPermissionKeys.filter((key) => adult.permissions[key]).slice(0, 7).map((key) => <span key={key} className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-600">{permissionLabels[key]}</span>)}{familyPermissionKeys.filter((key) => adult.permissions[key]).length > 7 && <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-600">+{familyPermissionKeys.filter((key) => adult.permissions[key]).length - 7} more</span>}</div>
-            <div className="mt-5 flex gap-2"><button onClick={() => setEditing({ ...adult, permissions: { ...adult.permissions }, billingResponsibility: { ...adult.billingResponsibility } })} className="flex-1 rounded-xl bg-slate-950 px-3 py-2.5 text-xs font-black text-white">Edit Access</button><button disabled={saving} onClick={() => void removeAdult(adult)} aria-label={`Remove ${adult.name}`} className="rounded-xl border border-red-200 px-3 py-2.5 text-red-700"><Trash2 className="h-4 w-4" /></button></div>
+            <div className="mt-5 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">{adult.status === "Invited" ? <button disabled={invitingAdultId === adult.id} onClick={() => void sendInvite(adult)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-3 py-2.5 text-xs font-black text-white disabled:opacity-50">{invitingAdultId === adult.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}{adult.invitedAt ? "Send Invite Again" : "Send Invite"}</button> : <div className={`flex items-center justify-center rounded-xl px-3 py-2.5 text-xs font-black ${adult.status === "Active" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}>{adult.status === "Active" ? "Parent account is active" : "Account suspended"}</div>}<button onClick={() => setEditing({ ...adult, permissions: { ...adult.permissions }, billingResponsibility: { ...adult.billingResponsibility } })} className="rounded-xl bg-slate-950 px-3 py-2.5 text-xs font-black text-white">Edit Access</button><button disabled={saving} onClick={() => void removeAdult(adult)} aria-label={`Remove ${adult.name}`} className="rounded-xl border border-red-200 px-3 py-2.5 text-red-700"><Trash2 className="h-4 w-4" /></button></div>
           </article>)}
         </section>
       </div>}
@@ -312,7 +349,7 @@ export default function FamilyAccessPage() {
             <Field label="Email used to sign in"><input type="email" className={inputClass} value={editing.email} onChange={(event) => setEditing({ ...editing, email: event.target.value })} placeholder="parent@example.com" /></Field>
             <Field label="Relationship"><select className={inputClass} value={editing.relationship} onChange={(event) => setEditing({ ...editing, relationship: event.target.value })}><option>Mother</option><option>Father</option><option>Parent / Guardian</option><option>Stepparent</option><option>Grandmother</option><option>Grandfather</option><option>Foster Parent</option><option>Legal Guardian</option><option>Respite Provider</option><option>Case Worker</option><option>Emergency Contact</option><option>Authorized Pickup</option><option>Other</option></select></Field>
             <Field label="Household name"><input className={inputClass} value={editing.householdName} onChange={(event) => setEditing({ ...editing, householdName: event.target.value })} placeholder="Moore Household" /></Field>
-            <Field label="Account status"><select className={inputClass} value={editing.status} onChange={(event) => setEditing({ ...editing, status: event.target.value as FamilyAdultAccess["status"] })}><option>Active</option><option>Invited</option><option>Suspended</option></select></Field>
+            <Field label="Account status"><select className={inputClass} value={editing.status} onChange={(event) => setEditing({ ...editing, status: event.target.value as FamilyAdultAccess["status"] })}>{editing.status === "Active" && <option>Active</option>}<option>Invited</option><option>Suspended</option></select><span className="mt-1 block text-[10px] font-semibold leading-4 text-slate-500">New accounts stay Invited until the parent creates their password. Staff cannot manually make a new invitation Active.</span></Field>
             <Field label="Financial privacy"><select className={inputClass} value={editing.financialPrivacy} onChange={(event) => setEditing({ ...editing, financialPrivacy: event.target.value as FamilyAdultAccess["financialPrivacy"] })}><option value="Private">Private — hide other household finances</option><option value="Shared">Shared — household sees shared balance</option></select></Field>
           </div>
 
