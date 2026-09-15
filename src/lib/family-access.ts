@@ -32,11 +32,13 @@ export type FamilyAdultAccess = {
   relationship: string;
   householdId: string;
   householdName: string;
-  status: "Active" | "Invited" | "Suspended";
+  status: "Active" | "Invited" | "Pending Approval" | "Suspended";
   authUserId?: string;
   invitedAt?: string;
   invitedBy?: string;
   acceptedAt?: string;
+  approvedAt?: string;
+  approvedBy?: string;
   financialPrivacy: "Shared" | "Private";
   permissions: FamilyAccessPermissions;
   billingResponsibility: FamilyBillingResponsibility;
@@ -131,13 +133,15 @@ export function safeFamilyAccess(value: unknown): FamilyAdultAccess[] {
       relationship: text(raw.relationship).slice(0, 100) || "Parent / Guardian",
       householdId: text(raw.householdId).slice(0, 120) || `household-${email}`,
       householdName: text(raw.householdName).slice(0, 160) || "Family Household",
-      status: ["Active", "Invited", "Suspended"].includes(text(raw.status))
+      status: ["Active", "Invited", "Pending Approval", "Suspended"].includes(text(raw.status))
         ? text(raw.status) as FamilyAdultAccess["status"]
         : "Active",
       authUserId: text(raw.authUserId).slice(0, 120) || undefined,
       invitedAt: text(raw.invitedAt).slice(0, 40) || undefined,
       invitedBy: text(raw.invitedBy).slice(0, 160) || undefined,
       acceptedAt: text(raw.acceptedAt).slice(0, 40) || undefined,
+      approvedAt: text(raw.approvedAt).slice(0, 40) || undefined,
+      approvedBy: text(raw.approvedBy).slice(0, 160) || undefined,
       financialPrivacy: text(raw.financialPrivacy) === "Private" ? "Private" : "Shared",
       permissions: normalizeFamilyPermissions(raw.permissions),
       billingResponsibility: {
