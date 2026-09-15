@@ -232,6 +232,9 @@ function normalizeChild(row: DbRow) {
     schoolAgeSupport: safeSchoolAgeSupport(record.schoolAgeSupport),
     familyMessages: safeFamilyMessages(record.familyMessages),
     familyAccess: safeFamilyAccess(record.familyAccess),
+    custodyAccessAlert: Boolean(record.custodyAccessAlert),
+    custodyDocumentationOnFile: Boolean(record.custodyDocumentationOnFile),
+    custodyAccessNote: text(record.custodyAccessNote).slice(0, 4000),
     updatedAt: text(row.updated_at),
   };
 }
@@ -352,6 +355,9 @@ function safeChildRecord(child: DbRow, id: number) {
     schoolAgeSupport: safeSchoolAgeSupport(child.schoolAgeSupport),
     familyMessages: safeFamilyMessages(child.familyMessages),
     familyAccess: safeFamilyAccess(child.familyAccess),
+    custodyAccessAlert: Boolean(child.custodyAccessAlert),
+    custodyDocumentationOnFile: Boolean(child.custodyDocumentationOnFile),
+    custodyAccessNote: text(child.custodyAccessNote).slice(0, 4000),
   };
 }
 
