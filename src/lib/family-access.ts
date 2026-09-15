@@ -33,6 +33,10 @@ export type FamilyAdultAccess = {
   householdId: string;
   householdName: string;
   status: "Active" | "Invited" | "Suspended";
+  authUserId?: string;
+  invitedAt?: string;
+  invitedBy?: string;
+  acceptedAt?: string;
   financialPrivacy: "Shared" | "Private";
   permissions: FamilyAccessPermissions;
   billingResponsibility: FamilyBillingResponsibility;
@@ -130,6 +134,10 @@ export function safeFamilyAccess(value: unknown): FamilyAdultAccess[] {
       status: ["Active", "Invited", "Suspended"].includes(text(raw.status))
         ? text(raw.status) as FamilyAdultAccess["status"]
         : "Active",
+      authUserId: text(raw.authUserId).slice(0, 120) || undefined,
+      invitedAt: text(raw.invitedAt).slice(0, 40) || undefined,
+      invitedBy: text(raw.invitedBy).slice(0, 160) || undefined,
+      acceptedAt: text(raw.acceptedAt).slice(0, 40) || undefined,
       financialPrivacy: text(raw.financialPrivacy) === "Private" ? "Private" : "Shared",
       permissions: normalizeFamilyPermissions(raw.permissions),
       billingResponsibility: {
@@ -148,7 +156,7 @@ export function familyAccessForEmail(recordValue: unknown, emailValue: string) {
   const explicit = safeFamilyAccess(record.familyAccess);
 
   if (explicit.length > 0) {
-    return explicit.find((entry) => entry.status !== "Suspended" && entry.email === email) ?? null;
+    return explicit.find((entry) => entry.status === "Active" && entry.email === email) ?? null;
   }
 
   const guardianEmail = text(record.guardianEmail).toLowerCase();
