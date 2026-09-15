@@ -82,7 +82,8 @@ function newAdult(child: ChildRecord): FamilyAdultAccess {
 }
 
 export default function FamilyAccessPage() {
-  const { session } = useAuth();
+  const { session, isSystemOwner, isLocationLicensee } = useAuth();
+  const canManageParentAccess = isSystemOwner || isLocationLicensee;
   const [children, setChildren] = useState<ChildRecord[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
@@ -317,6 +318,17 @@ export default function FamilyAccessPage() {
       ...editing,
       permissions: { ...editing.permissions, [key]: !editing.permissions[key] },
     });
+  }
+
+  if (!canManageParentAccess) {
+    return <MainLayout><div className="mx-auto max-w-3xl pb-12">
+      <section className="rounded-[30px] border border-red-200 bg-white p-8 text-center shadow-sm">
+        <LockKeyhole className="mx-auto h-12 w-12 text-red-700" />
+        <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-red-700">Restricted family security area</p>
+        <h1 className="mt-2 text-3xl font-black text-slate-950">Parent access approval is not available to regular staff</h1>
+        <p className="mx-auto mt-4 max-w-2xl text-sm font-semibold leading-6 text-slate-600">Parent Portal invitations, household privacy, custody access settings, and account approvals are limited to an Owner/Admin or assigned Location Licensee.</p>
+      </section>
+    </div></MainLayout>;
   }
 
   return <MainLayout><div className="mx-auto max-w-[1500px] space-y-6 pb-12">
