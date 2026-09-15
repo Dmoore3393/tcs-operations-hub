@@ -126,6 +126,11 @@ export default function FamilyAccessPage() {
   const adults = selected?.familyAccess ?? [];
   const legacyMode = Boolean(selected && adults.length === 0 && selected.guardianEmail);
 
+  function updateSelectedChild(patch: Partial<ChildRecord>) {
+    if (!selected) return;
+    setChildren((current) => current.map((child) => child.id === selected.id ? { ...child, ...patch } : child));
+  }
+
   async function saveChild(nextChild: ChildRecord, success: string) {
     if (!session?.access_token) return;
     setSaving(true);
@@ -267,6 +272,24 @@ export default function FamilyAccessPage() {
           </div>}
 
           {!legacyMode && adults.length === 0 && <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-900"><AlertTriangle className="mr-1 inline h-4 w-4" />No adult has Parent Portal access to this child yet.</div>}
+        </section>
+
+        <section className={`rounded-3xl border p-5 shadow-sm ${selected.custodyAccessAlert ? "border-red-200 bg-red-50" : "border-slate-200 bg-white"}`}>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex gap-3">
+              <span className={`grid h-11 w-11 flex-none place-items-center rounded-2xl ${selected.custodyAccessAlert ? "bg-red-700 text-white" : "bg-slate-100 text-slate-700"}`}><LockKeyhole className="h-5 w-5" /></span>
+              <div><h3 className="font-black text-slate-950">Internal Custody / Access Alert</h3><p className="mt-1 max-w-3xl text-xs font-semibold leading-5 text-slate-600">Staff-only safeguard. Use this when verified custody, guardianship, restraining-order, foster-placement, or other access documentation requires extra review before changing Parent Portal or pickup access.</p></div>
+            </div>
+            <span className={`w-fit rounded-full px-3 py-1.5 text-[10px] font-black ${selected.custodyAccessAlert ? "bg-red-700 text-white" : "bg-slate-100 text-slate-600"}`}>{selected.custodyAccessAlert ? "RESTRICTION / REVIEW FLAGGED" : "No alert flagged"}</span>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3"><input type="checkbox" checked={Boolean(selected.custodyAccessAlert)} onChange={(event) => updateSelectedChild({ custodyAccessAlert: event.target.checked })} className="mt-1 h-4 w-4 accent-red-700" /><span><strong className="block text-xs text-slate-900">Custody / access review required</strong><span className="mt-1 block text-[10px] font-semibold leading-4 text-slate-500">Warn authorized staff before changing adult access or pickup permissions.</span></span></label>
+            <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3"><input type="checkbox" checked={Boolean(selected.custodyDocumentationOnFile)} onChange={(event) => updateSelectedChild({ custodyDocumentationOnFile: event.target.checked })} className="mt-1 h-4 w-4 accent-emerald-700" /><span><strong className="block text-xs text-slate-900">Documentation verified / on file</strong><span className="mt-1 block text-[10px] font-semibold leading-4 text-slate-500">Use only after TCS has the supporting documentation it relies on.</span></span></label>
+          </div>
+
+          <label className="mt-4 block"><span className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-slate-500">Staff-only access note</span><textarea value={selected.custodyAccessNote || ""} onChange={(event) => updateSelectedChild({ custodyAccessNote: event.target.value.slice(0, 4000) })} placeholder="Example: Review verified custody documentation before changing pickup or Parent Portal access. Do not include unnecessary sensitive detail." className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold leading-6 text-slate-900 outline-none focus:border-red-300" /></label>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-[10px] font-semibold leading-4 text-slate-500">This alert is never returned by the Parent Portal API and does not make a legal custody determination. Staff should follow verified documentation and TCS policy.</p><button disabled={saving} onClick={() => void saveChild(selected, "Custody / access safeguards were saved for this child.")} className="inline-flex flex-none items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white disabled:opacity-50">{saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save Custody Settings</button></div>
         </section>
 
         <section className="grid gap-4 lg:grid-cols-2">
