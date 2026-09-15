@@ -160,10 +160,11 @@ export default function BillingCommandCenterPage() {
       <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead><tr className="border-b border-slate-200 bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><th className="px-4 py-3">Family</th><th className="px-4 py-3">Children</th><th className="px-4 py-3">Location</th><th className="px-4 py-3">Funding</th><th className="px-4 py-3">Status</th></tr></thead><tbody>{familyRows.map((row) => <tr key={row.key} className="border-b border-slate-100 last:border-0"><td className="px-4 py-4"><p className="font-black text-slate-950">{row.family}</p><p className="mt-1 text-xs text-slate-500">{row.guardian}</p></td><td className="px-4 py-4 font-semibold text-slate-700">{row.children.join(", ")}</td><td className="px-4 py-4 text-xs font-semibold text-slate-600">{row.location}</td><td className="px-4 py-4"><span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black text-blue-800">{row.funding}</span></td><td className="px-4 py-4">{row.funding === "Not Set" ? <span className="inline-flex items-center gap-1 text-xs font-black text-red-700"><AlertTriangle className="h-4 w-4" /> Needs correction</span> : <span className="inline-flex items-center gap-1 text-xs font-black text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Set</span>}</td></tr>)}</tbody></table></div>
     </section>
 
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <Quick href="/timesheets" title="Subsidy Timesheets" helper="CCRC Stage 1/2, CCCC, DCFS, Respite workflow" />
       <Quick href="/transportation-fees" title="Transportation Fees" helper="Route-driven weekly charge audit" />
       <Quick href="/families" title="Family Records" helper="Funding source, guardians, enrollment, transportation" />
+      <Quick href="/family-access" title="Family Access & Privacy" helper="Separate households, split responsibility, and private parent access" />
     </div>
 
     <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs font-semibold leading-5 text-blue-950"><ShieldCheck className="mr-1 inline h-4 w-4" />The Hub does not invent agency payment amounts or department email destinations. Financial totals shown here come only from records already entered in secured TCS workflows.</div>
