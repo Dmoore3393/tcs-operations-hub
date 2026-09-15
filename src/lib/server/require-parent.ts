@@ -1,5 +1,6 @@
 import "server-only";
 
+import { familyAccessForEmail, type FamilyAdultAccess } from "@/lib/family-access";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
@@ -19,6 +20,7 @@ export type ParentChildAccess = {
   locationId: string;
   legacyId: string;
   record: DbRow;
+  access: FamilyAdultAccess;
 };
 
 export type AuthorizedParent = {
@@ -50,20 +52,25 @@ export async function requireParent(request: Request): Promise<AuthorizedParent>
   const children = ((rows ?? []) as unknown as DbRow[])
     .map((row): ParentChildAccess | null => {
       const record = object(row.record_data);
-      const guardianEmail = text(record.guardianEmail).toLowerCase();
-      if (!guardianEmail || guardianEmail !== email) return null;
+      const access = familyAccessForEmail(record, email);
+      if (!access) return null;
+
       return {
         rowId: text(row.id),
         organizationId: text(row.organization_id),
         locationId: text(row.location_id),
         legacyId: text(row.legacy_id),
         record,
+        access,
       };
     })
     .filter((item): item is ParentChildAccess => Boolean(item));
 
   if (!children.length) {
-    throw new Response("This email is not linked to an active TCS family record. Contact your TCS location to verify the guardian email on file.", { status: 403 });
+    throw new Response(
+      "This email is not linked to an active TCS child account. Contact your TCS location to verify your Parent Portal access.",
+      { status: 403 },
+    );
   }
 
   return { admin, user: userData.user, email, children };
