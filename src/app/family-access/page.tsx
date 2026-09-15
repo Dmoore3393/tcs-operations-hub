@@ -14,7 +14,6 @@ import type { ChildRecord } from "@/lib/children";
 import {
   AlertTriangle,
   Check,
-  Copy,
   Eye,
   LoaderCircle,
   LockKeyhole,
