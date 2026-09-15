@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   try {
     const { admin, userClient, user, profile, isOwner, isLicensee } = await requireStaff(request);
     if (!isOwner && !isLicensee) {
-      throw new Response("Only an Owner/Admin or assigned Licensee can approve Parent Portal access.", { status: 403 });
+      throw new Response("Regular Employee accounts cannot approve Parent Portal access. Approval is limited to an Owner/Admin or assigned Location Licensee.", { status: 403 });
     }
 
     const body = object(await request.json().catch(() => ({})));
