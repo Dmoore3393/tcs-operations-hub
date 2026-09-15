@@ -53,11 +53,18 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const adult = adults.find((entry) => entry.email === email && entry.status !== "Suspended");
+      const adult = adults.find((entry) =>
+        entry.email === email
+        && entry.status !== "Suspended"
+        && (
+          entry.status === "Active"
+          || (entry.status === "Invited" && Boolean(entry.invitedAt) && entry.authUserId === user.id)
+        )
+      );
       if (!adult) continue;
       matched += 1;
 
-      if (adult.status === "Active" && adult.authUserId === user.id) continue;
+      if (adult.status === "Active" && (!adult.authUserId || adult.authUserId === user.id)) continue;
 
       const nextAdults = adults.map((entry) => entry.id === adult.id
         ? {
