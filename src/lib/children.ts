@@ -1,5 +1,6 @@
 import type { ChildFileAudit } from "@/lib/child-file-audits";
 import type { ImmunizationRecord } from "@/lib/immunization-tracker";
+import type { FamilyAdultAccess } from "@/lib/family-access";
 export type LicensingStatus = "Complete" | "Missing Documents";
 export type EnrollmentStatus = "Active" | "Pending" | "Archived";
 export type AttendanceStatus = "Present" | "Checked Out" | "Not Scheduled" | "Absent";
@@ -105,6 +106,7 @@ export type ChildRecord = {
   immunizationRecord?: ImmunizationRecord;
   schoolAgeSupport?: SchoolAgeSupportRecord;
   familyMessages?: FamilyMessage[];
+  familyAccess?: FamilyAdultAccess[];
 };
 
 export type ChildFormState = {
