@@ -1,6 +1,6 @@
 import "server-only";
 
-import { familyAccessForEmail, type FamilyAdultAccess } from "@/lib/family-access";
+import { familyAccessForEmail, safeFamilyAccess, type FamilyAdultAccess } from "@/lib/family-access";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
@@ -67,8 +67,17 @@ export async function requireParent(request: Request): Promise<AuthorizedParent>
     .filter((item): item is ParentChildAccess => Boolean(item));
 
   if (!children.length) {
+    const pendingApproval = ((rows ?? []) as unknown as DbRow[]).some((row) => {
+      const record = object(row.record_data);
+      return safeFamilyAccess(record.familyAccess).some(
+        (entry) => entry.email === email && entry.status === "Pending Approval",
+      );
+    });
+
     throw new Response(
-      "This email is not linked to an active TCS child account. Contact your TCS location to verify your Parent Portal access.",
+      pendingApproval
+        ? "Your Parent Portal account is created and waiting for TCS staff approval. Child information stays locked until approval is complete."
+        : "This email is not linked to an active TCS child account. Contact your TCS location to verify your Parent Portal access.",
       { status: 403 },
     );
   }
