@@ -178,6 +178,7 @@ function normalizeChild(row: DbRow) {
   return {
     ...record,
     id: typeof record.id === "number" ? record.id : stableNumericId(legacyId),
+    legacyId,
     firstName: text(record.firstName) || text(row.first_name),
     lastName: text(record.lastName) || text(row.last_name),
     age: text(record.age) || "Age not entered",
