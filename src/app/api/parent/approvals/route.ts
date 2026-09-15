@@ -23,6 +23,7 @@ export async function POST(request: Request) {
     const adultId = text(body.adultId);
     const confirmedIdentity = body.confirmedIdentity === true;
     const confirmedPermissions = body.confirmedPermissions === true;
+    const confirmedCustody = body.confirmedCustody === true;
 
     if (!childLegacyId || !adultId) {
       throw new Response("Choose the parent/guardian account to approve.", { status: 400 });
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
     const record = object(row.record_data);
     const adults = safeFamilyAccess(record.familyAccess);
     const adult = adults.find((entry) => entry.id === adultId);
+    const custodyAlert = record.custodyAccessAlert === true;
 
     if (!adult) throw new Response("That adult access record was not found.", { status: 404 });
     if (adult.status !== "Pending Approval") {
@@ -54,6 +56,9 @@ export async function POST(request: Request) {
     }
     if (!adult.authUserId || !adult.acceptedAt) {
       throw new Response("The parent must finish creating their account before staff can approve access.", { status: 409 });
+    }
+    if (custodyAlert && !confirmedCustody) {
+      throw new Response("This child has a custody/access alert. Review and acknowledge it before approving Parent Portal access.", { status: 400 });
     }
 
     const now = new Date().toISOString();
@@ -99,6 +104,8 @@ export async function POST(request: Request) {
         grantedPermissions,
         confirmedIdentity,
         confirmedPermissions,
+        custodyAlert,
+        confirmedCustody: custodyAlert ? confirmedCustody : null,
       },
     });
 
