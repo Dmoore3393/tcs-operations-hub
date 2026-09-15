@@ -12,7 +12,10 @@ function text(value: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const { admin, user, email } = await requireParent(request);
+    const { admin, user, email, children } = await requireParent(request);
+    if (!children.some((child) => child.access.permissions.viewDocuments)) {
+      throw new Response("Forms and documents are not enabled for this Parent Portal account.", { status: 403 });
+    }
     const body = object(await request.json().catch(() => ({})));
     const formId = text(body.formId);
     const typedName = text(body.typedName).slice(0, 160);
