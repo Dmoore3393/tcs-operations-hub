@@ -58,20 +58,26 @@ export async function POST(request: Request) {
         && entry.status !== "Suspended"
         && (
           entry.status === "Active"
+          || entry.status === "Pending Approval"
           || (entry.status === "Invited" && Boolean(entry.invitedAt) && entry.authUserId === user.id)
         )
       );
       if (!adult) continue;
       matched += 1;
 
-      if (adult.status === "Active" && (!adult.authUserId || adult.authUserId === user.id)) continue;
+      if (
+        (adult.status === "Active" || adult.status === "Pending Approval")
+        && (!adult.authUserId || adult.authUserId === user.id)
+      ) continue;
 
       const nextAdults = adults.map((entry) => entry.id === adult.id
         ? {
             ...entry,
-            status: "Active" as const,
+            status: "Pending Approval" as const,
             authUserId: user.id,
             acceptedAt: entry.acceptedAt || now,
+            approvedAt: undefined,
+            approvedBy: undefined,
           }
         : entry);
 
@@ -98,7 +104,7 @@ export async function POST(request: Request) {
         table_name: "children",
         row_id: text(rawRow.id),
         metadata: {
-          kind: "parent_portal_invitation_accepted",
+          kind: "parent_portal_account_created_pending_approval",
           childLegacyId: text(rawRow.legacy_id),
           adultAccessId: adult.id,
         },
@@ -112,7 +118,11 @@ export async function POST(request: Request) {
       );
     }
 
-    return Response.json({ ok: true, activated });
+    return Response.json({
+      ok: true,
+      pendingApproval: activated,
+      message: "Your Parent Portal account was created and is waiting for TCS staff approval.",
+    });
   } catch (error) {
     return errorResponse(error);
   }
