@@ -5,6 +5,7 @@ import {
   defaultNotificationPreferences,
   notificationTemplate,
   type HubNotification,
+  type HubNotificationContext,
   type HubNotificationEventType,
   type HubNotificationPreferences,
 } from "@/lib/notifications";
@@ -127,6 +128,18 @@ function locationMatches(staffLocations: string[], requestedLocation: string) {
 }
 
 function permissionMatches(role: string, permissions: string[], eventType: HubNotificationEventType) {
+  const ownerOnlyTransportation = eventType === "transportation_pickup"
+    || eventType === "transportation_checkin"
+    || eventType === "transportation_handoff_attention";
+  if (ownerOnlyTransportation) return isOwnerAccessRole(role);
+
+  if (eventType === "transportation_arrival") {
+    if (isOwnerAccessRole(role)) return false;
+    if (isLicenseeAccessRole(role)) return true;
+    return ["children_basic", "daily_care", "schedules", "ratios", "transportation"]
+      .some((permission) => permissions.includes(permission));
+  }
+
   if (isOwnerAccessRole(role) || isLicenseeAccessRole(role)) return true;
   if (eventType === "transportation_update") return permissions.includes("transportation");
   if (eventType === "emergency_record_attention") {
@@ -166,10 +179,11 @@ export async function dispatchHubNotification(args: {
   eventType: HubNotificationEventType;
   location?: string;
   eventKey?: string;
+  context?: HubNotificationContext;
 }) {
   const { admin, senderUserId, organizationId, eventType } = args;
   const location = args.location?.trim() || "All Locations";
-  const template = notificationTemplate(eventType);
+  const template = notificationTemplate(eventType, args.context);
   const eventKey = (args.eventKey?.trim() || `${eventType}:${location}:${Date.now()}`).slice(0, 220);
 
   const { data: rows, error } = await admin
