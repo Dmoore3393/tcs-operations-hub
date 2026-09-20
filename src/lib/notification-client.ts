@@ -1,10 +1,11 @@
-import type { HubNotificationEventType } from "@/lib/notifications";
+import type { HubNotificationContext, HubNotificationEventType } from "@/lib/notifications";
 
 export async function sendHubNotificationEvent(args: {
   accessToken?: string | null;
   eventType: HubNotificationEventType;
   location?: string;
   eventKey?: string;
+  context?: HubNotificationContext;
 }) {
   if (!args.accessToken) return false;
   try {
@@ -18,6 +19,7 @@ export async function sendHubNotificationEvent(args: {
         eventType: args.eventType,
         location: args.location || "All Locations",
         eventKey: args.eventKey || "",
+        context: args.context ?? {},
       }),
     });
     return response.ok;
