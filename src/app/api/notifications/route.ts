@@ -1,9 +1,13 @@
-import { type HubNotificationEventType, type HubNotificationPreferences } from "@/lib/notifications";
+import { type HubNotificationContext, type HubNotificationEventType, type HubNotificationPreferences } from "@/lib/notifications";
 import { dispatchHubNotification, loadNotificationState, saveNotificationState } from "@/lib/server/notifications";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 
 const allowedEvents = new Set<HubNotificationEventType>([
   "transportation_update",
+  "transportation_pickup",
+  "transportation_arrival",
+  "transportation_checkin",
+  "transportation_handoff_attention",
   "emergency_record_attention",
   "tour_board_update",
   "tour_follow_up",
@@ -17,7 +21,7 @@ function canDispatch(
   eventType: HubNotificationEventType,
 ) {
   if (roleOwner || roleLicensee) return true;
-  if (eventType === "transportation_update") return permissions.includes("transportation");
+  if (eventType.startsWith("transportation_")) return permissions.includes("transportation");
   if (eventType === "emergency_record_attention") {
     return ["children_basic", "transportation", "health_safety"].some((permission) => permissions.includes(permission));
   }
@@ -89,6 +93,7 @@ export async function POST(request: Request) {
       eventType?: HubNotificationEventType;
       location?: string;
       eventKey?: string;
+      context?: HubNotificationContext;
     };
 
     const eventType = body.eventType;
@@ -114,6 +119,7 @@ export async function POST(request: Request) {
       eventType,
       location,
       eventKey: body.eventKey,
+      context: body.context,
     });
 
     await userClient.rpc("record_audit_event", {
