@@ -502,10 +502,6 @@ export default function SchedulingPage() {
       return;
     }
     const unlinked = weekShifts.filter((shift) => !shift.user_id);
-    if (unlinked.length) {
-      setError(`${unlinked.length} shift${unlinked.length === 1 ? " is" : "s are"} not linked to a staff account. Link each employee before publishing so they can see and acknowledge the schedule.`);
-      return;
-    }
 
     setSaving(true);
     setError("");
@@ -561,7 +557,9 @@ export default function SchedulingPage() {
       location: locationKey,
       eventKey: `staffing-publish:${selectedLocation.id}:${weekStart}:r${nextRevision}`,
     });
-    showMessage(`Week published as revision ${nextRevision}. Staff can now view and acknowledge it in My Schedule.`);
+    showMessage(unlinked.length
+      ? `Week published as revision ${nextRevision}. ${unlinked.length} unlinked shift${unlinked.length === 1 ? " will" : "s will"} publish normally but cannot appear in an employee's My Schedule until linked to a staff account.`
+      : `Week published as revision ${nextRevision}. Staff can now view and acknowledge it in My Schedule.`);
     await load();
     setSaving(false);
   }
@@ -706,7 +704,7 @@ export default function SchedulingPage() {
 
     {shiftDraft && <Modal title={shiftDraft.id ? "Edit Live Shift" : "Assign Coverage"} description="Saving updates the shared staffing schedule immediately." onClose={() => setShiftDraft(null)} footer={<>{shiftDraft.id && <button disabled={saving} onClick={() => void deleteShift()} className="mr-auto rounded-xl px-4 py-2 text-sm font-black text-red-700 hover:bg-red-50">Delete</button>}<SecondaryButton onClick={() => setShiftDraft(null)}>Cancel</SecondaryButton><PrimaryButton onClick={() => document.getElementById("live-shift-save")?.click()}>{saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Save Shift</PrimaryButton></>}>
       <form onSubmit={saveShift} className="grid gap-4 sm:grid-cols-2">
-        <Field label="Employee"><select required className={inputClass} value={shiftDraft.user_id} onChange={(event) => { const option = staff.find((item) => item.user_id === event.target.value); setShiftDraft({ ...shiftDraft, user_id: event.target.value, staff_name: option?.full_name ?? shiftDraft.staff_name }); }}><option value="">Choose employee…</option>{staff.map((item) => <option key={item.user_id} value={item.user_id}>{item.full_name} • {item.role}</option>)}</select><input className={`${inputClass} mt-2`} placeholder="Or type staff name" value={shiftDraft.staff_name} onChange={(event) => setShiftDraft({ ...shiftDraft, staff_name: event.target.value, user_id: "" })} /></Field>
+        <Field label="Employee"><select className={inputClass} value={shiftDraft.user_id} onChange={(event) => { const option = staff.find((item) => item.user_id === event.target.value); setShiftDraft({ ...shiftDraft, user_id: event.target.value, staff_name: option?.full_name ?? shiftDraft.staff_name }); }}><option value="">Choose employee…</option>{staff.map((item) => <option key={item.user_id} value={item.user_id}>{item.full_name} • {item.role}</option>)}</select><input className={`${inputClass} mt-2`} placeholder="Or type staff name" value={shiftDraft.staff_name} onChange={(event) => setShiftDraft({ ...shiftDraft, staff_name: event.target.value, user_id: "" })} /></Field>
         <Field label="Location"><select className={inputClass} value={shiftDraft.location_id} onChange={(event) => setShiftDraft({ ...shiftDraft, location_id: event.target.value })}>{locations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
         <Field label="Date"><input type="date" className={inputClass} value={shiftDraft.shift_date} onChange={(event) => setShiftDraft({ ...shiftDraft, shift_date: event.target.value })} /></Field>
         <Field label="Status"><select className={inputClass} value={shiftDraft.status} onChange={(event) => setShiftDraft({ ...shiftDraft, status: event.target.value as ShiftDraft["status"] })}><option>Draft</option><option>Published</option><option>Cancelled</option></select></Field>
