@@ -530,98 +530,37 @@ export default function SchedulingPage() {
 
   async function publishSelectedWeek() {
     if (!supabase || !selectedLocation || !profile?.user_id) return;
-    const weekShifts = shifts.filter((shift) =>
-      shift.location_id === selectedLocation.id &&
-      shift.shift_date >= weekStart &&
-      shift.shift_date <= weekEnd &&
-      shift.status !== "Cancelled",
-    );
-    if (!weekShifts.length) {
-      setError("Add at least one staff shift before publishing this week.");
-      return;
-    }
-    const unlinked = weekShifts.filter((shift) => !shift.user_id);
-
     setSaving(true);
     setError("");
-    const currentPublication = publications.find((item) =>
-      item.location_id === selectedLocation.id &&
-      item.week_of === weekStart &&
-      item.status === "Published",
-    ) ?? publications.find((item) =>
-      item.location_id === selectedLocation.id &&
-      item.week_of === weekStart,
-    );
-    const nextRevision = (currentPublication?.revision ?? 0) + 1;
-    const publishedAt = new Date().toISOString();
 
-    const shiftResult = await supabase
-      .from("staff_shifts")
-      .update({ status: "Published" })
-      .eq("location_id", selectedLocation.id)
-      .gte("shift_date", weekStart)
-      .lte("shift_date", weekEnd)
-      .neq("status", "Cancelled");
+    const result = await supabase.rpc("publish_staff_schedule", {
+      p_location_id: selectedLocation.id,
+      p_week_of: weekStart,
+      p_notes: null,
+    });
 
-    if (shiftResult.error) {
-      setError(shiftResult.error.message);
+    if (result.error) {
+      setError(result.error.message);
       setSaving(false);
       return;
     }
 
-    const publicationPayload = {
-      location_id: selectedLocation.id,
-      week_of: weekStart,
-      status: "Published" as const,
-      revision: nextRevision,
-      published_at: publishedAt,
-      published_by: profile.user_id,
-      notes: `Published from Staffing Command Center • revision ${nextRevision}`,
-      needs_republish: false,
-    };
-
-    const publicationResult = currentPublication
-      ? await supabase.from("schedule_publications").update(publicationPayload).eq("id", currentPublication.id).select("id,revision").single()
-      : await supabase.from("schedule_publications").insert(publicationPayload).select("id,revision").single();
-
-    if (publicationResult.error || !publicationResult.data?.id) {
-      setError(publicationResult.error?.message || "The schedule publication could not be created.");
-      setSaving(false);
-      return;
-    }
-
-    const publicationId = publicationResult.data.id as string;
-    const snapshotRows = weekShifts.map((shift) => ({
-      publication_id: publicationId,
-      location_id: shift.location_id,
-      source_shift_id: shift.id,
-      user_id: shift.user_id || null,
-      staff_name: shift.staff_name,
-      shift_date: shift.shift_date,
-      start_time: shift.start_time,
-      end_time: shift.end_time,
-      position_label: shift.position_label,
-      notes: shift.notes,
-      revision: nextRevision,
-    }));
-    const snapshotResult = await supabase.from("staff_schedule_publication_shifts").insert(snapshotRows);
-    if (snapshotResult.error) {
-      await supabase.from("schedule_publications").update({ needs_republish: true }).eq("id", publicationId);
-      setError(`The week was marked published, but the employee schedule snapshot failed: ${snapshotResult.error.message}`);
-      setSaving(false);
-      return;
-    }
-
+    const published = Array.isArray(result.data) ? result.data[0] : result.data;
+    const nextRevision = Number(published?.revision ?? 1);
+    const unlinked = Number(published?.unlinked_shift_count ?? 0);
     const locationKey = locationKeyForDbLocation(selectedLocation) ?? "All Locations";
+
     void sendHubNotificationEvent({
       accessToken: session?.access_token,
       eventType: "schedule_published",
       location: locationKey,
       eventKey: `staffing-publish:${selectedLocation.id}:${weekStart}:r${nextRevision}`,
     });
-    showMessage(unlinked.length
-      ? `Week published as revision ${nextRevision}. ${unlinked.length} unlinked shift${unlinked.length === 1 ? " will" : "s will"} publish normally but cannot appear in an employee's My Schedule until linked to a staff account.`
+
+    showMessage(unlinked
+      ? `Week published as revision ${nextRevision}. ${unlinked} unlinked shift${unlinked === 1 ? " will" : "s will"} publish normally but cannot appear in an employee's My Schedule until linked to a staff account.`
       : `Week published as revision ${nextRevision}. Staff can now view and acknowledge it in My Schedule.`);
+
     await load();
     setSaving(false);
   }
