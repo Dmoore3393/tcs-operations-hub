@@ -8,6 +8,7 @@ import { usePersistentState } from "@/hooks/usePersistentState";
 import { initialChildren, type ChildRecord } from "@/lib/children";
 import { compactTime, starterChildSchedules, type ChildScheduleRecord } from "@/lib/child-schedules";
 import { localIsoDate } from "@/lib/date-utils";
+import { normalizeLocation } from "@/lib/location-config";
 import { sendHubNotificationEvent } from "@/lib/notification-client";
 import {
   buildCoverageWindows,
@@ -171,6 +172,15 @@ function toNullableNumber(value: string) {
   if (!value.trim()) return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function minutesFromClock(value: string) {
+  const [hour, minute] = value.slice(0, 5).split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function overlapsTime(startA: string, endA: string, startB: string, endB: string) {
+  return minutesFromClock(startA) < minutesFromClock(endB) && minutesFromClock(startB) < minutesFromClock(endA);
 }
 
 export default function SchedulingPage() {
@@ -643,6 +653,29 @@ export default function SchedulingPage() {
     : [];
   const weeklyAttention = weeklyCoverage.filter((window) => ["gap", "over-capacity", "rule-needed"].includes(window.status)).length;
   const canPublishSchedule = isSystemOwner || isLocationLicensee;
+  const scheduleAvailableStaff = shiftDraft && !shiftDraft.id
+    ? staff.filter((person) => {
+        const targetLocation = locations.find((item) => item.id === shiftDraft.location_id);
+        const targetKey = targetLocation ? locationKeyForDbLocation(targetLocation) : null;
+        const locationAllowed = !targetKey || person.locations.includes("All Locations") || person.locations.some((item) => normalizeLocation(item) === targetKey);
+        if (!locationAllowed) return false;
+
+        const shiftConflict = shifts.some((existing) =>
+          existing.status !== "Cancelled" &&
+          existing.shift_date === shiftDraft.shift_date &&
+          existing.user_id === person.user_id &&
+          overlapsTime(existing.start_time, existing.end_time, shiftDraft.start_time, shiftDraft.end_time),
+        );
+        if (shiftConflict) return false;
+
+        const activityConflict = activities.some((activity) =>
+          activity.activity_date === shiftDraft.shift_date &&
+          (activity.user_id === person.user_id || activity.staff_name.trim().toLowerCase() === person.full_name.trim().toLowerCase()) &&
+          overlapsTime(activity.start_time, activity.end_time, shiftDraft.start_time, shiftDraft.end_time),
+        );
+        return !activityConflict;
+      })
+    : [];
   const today = localIsoDate();
 
   return <MainLayout><div className="mx-auto max-w-[1700px] space-y-6 pb-12">
@@ -762,6 +795,10 @@ export default function SchedulingPage() {
 
     {shiftDraft && <Modal title={shiftDraft.id ? "Edit Live Shift" : "Assign Coverage"} description="Saving updates the shared staffing schedule immediately." onClose={() => setShiftDraft(null)} footer={<>{shiftDraft.id && <button disabled={saving} onClick={() => void deleteShift()} className="mr-auto rounded-xl px-4 py-2 text-sm font-black text-red-700 hover:bg-red-50">Delete</button>}<SecondaryButton onClick={() => setShiftDraft(null)}>Cancel</SecondaryButton><PrimaryButton onClick={() => document.getElementById("live-shift-save")?.click()}>{saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Save Shift</PrimaryButton></>}>
       <form onSubmit={saveShift} className="grid gap-4 sm:grid-cols-2">
+        {!shiftDraft.id && <div className="sm:col-span-2 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+          <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black text-blue-950">Schedule-available staff</p><p className="mt-1 text-xs font-semibold leading-5 text-blue-800">These employees have no entered shift or off-floor conflict during this time and have access to the selected location. Confirm qualifications and assignment approval before saving.</p></div><Users className="h-5 w-5 flex-none text-blue-700" /></div>
+          <div className="mt-3 flex flex-wrap gap-2">{scheduleAvailableStaff.length ? scheduleAvailableStaff.slice(0, 8).map((person) => <button key={person.user_id} type="button" onClick={() => setShiftDraft({ ...shiftDraft, user_id: person.user_id, staff_name: person.full_name })} className={`rounded-full border px-3 py-2 text-xs font-black transition ${shiftDraft.user_id === person.user_id ? "border-blue-700 bg-blue-700 text-white" : "border-blue-200 bg-white text-blue-900 hover:border-blue-400"}`}>{person.full_name}</button>) : <span className="text-xs font-black text-blue-900">No conflict-free linked staff found for this interval.</span>}</div>
+        </div>}
         <Field label="Employee"><select className={inputClass} value={shiftDraft.user_id} onChange={(event) => { const option = staff.find((item) => item.user_id === event.target.value); setShiftDraft({ ...shiftDraft, user_id: event.target.value, staff_name: option?.full_name ?? shiftDraft.staff_name }); }}><option value="">Choose employee…</option>{staff.map((item) => <option key={item.user_id} value={item.user_id}>{item.full_name} • {item.role}</option>)}</select><input className={`${inputClass} mt-2`} placeholder="Or type staff name" value={shiftDraft.staff_name} onChange={(event) => setShiftDraft({ ...shiftDraft, staff_name: event.target.value, user_id: "" })} /></Field>
         <Field label="Location"><select className={inputClass} value={shiftDraft.location_id} onChange={(event) => setShiftDraft({ ...shiftDraft, location_id: event.target.value })}>{locations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
         <Field label="Date"><input type="date" className={inputClass} value={shiftDraft.shift_date} onChange={(event) => setShiftDraft({ ...shiftDraft, shift_date: event.target.value })} /></Field>
