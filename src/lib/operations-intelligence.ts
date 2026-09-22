@@ -5,6 +5,7 @@ import { defaultImmunizationProgram, immunizationStatus, normalizeImmunizationRe
 import type { ChildRecord } from "@/lib/children";
 import type { FileRecord, Shift, TransportationRoute, VehicleRecord, WorkTask } from "@/lib/hub-data";
 import { careLocations, locationThemes, type LocationHoursRecord, type LocationKey } from "@/lib/location-config";
+import type { CoverageStatus } from "@/lib/staffing-command";
 
 export type AlertSeverity = "critical" | "warning" | "info" | "success";
 
@@ -33,6 +34,28 @@ export type CoverageWindow = {
   inRatio: boolean;
 };
 
+export type LiveOperationsCoverageWindow = {
+  location: Exclude<LocationKey, "All Locations">;
+  start: number;
+  end: number;
+  childNames: string[];
+  childCount: number;
+  staffNames: string[];
+  staffCount: number;
+  requiredStaff: number | null;
+  capacity: number;
+  status: CoverageStatus;
+  offFloorNames?: string[];
+};
+
+export type LiveOperationsShift = {
+  id: string;
+  staffName: string;
+  location: Exclude<LocationKey, "All Locations">;
+  start: string;
+  end: string;
+};
+
 export type OperationsIntelligenceInput = {
   date: string;
   accessibleLocations: Exclude<LocationKey, "All Locations">[];
@@ -44,6 +67,8 @@ export type OperationsIntelligenceInput = {
   hours: LocationHoursRecord[];
   files?: FileRecord[];
   tasks?: WorkTask[];
+  liveCoverageWindows?: LiveOperationsCoverageWindow[];
+  liveStaffShifts?: LiveOperationsShift[];
 };
 
 export type OperationsBriefingSnapshot = {
@@ -150,7 +175,23 @@ function severityRank(severity: AlertSeverity) {
 export function buildSmartAlerts(input: OperationsIntelligenceInput) {
   const alerts: SmartAlert[] = [];
   const day = dateToDayName(input.date);
-  const windows = buildCoverageWindows(input);
+  const fallbackWindows = buildCoverageWindows(input);
+  const windows: LiveOperationsCoverageWindow[] = input.liveCoverageWindows ?? fallbackWindows.map((window) => ({
+    location: window.location,
+    start: window.start,
+    end: window.end,
+    childNames: window.childNames,
+    childCount: window.childCount,
+    staffNames: window.staffNames,
+    staffCount: window.staffCount,
+    requiredStaff: window.requiredStaff,
+    capacity: window.capacity,
+    status: window.childCount > window.capacity
+      ? "over-capacity"
+      : window.inRatio
+        ? (window.staffCount === window.requiredStaff ? "tight" : "covered")
+        : "gap",
+  }));
 
   input.accessibleLocations.forEach((location) => {
     const hours = locationHoursFor(input, location);
@@ -192,34 +233,47 @@ export function buildSmartAlerts(input: OperationsIntelligenceInput) {
     }
   });
 
-  windows.filter((window) => window.childCount > 0 && !window.inRatio).forEach((window) => {
+  windows.filter((window) => window.childCount > 0 && window.status === "gap").forEach((window) => {
     alerts.push({
       id: `ratio-${window.location}-${window.start}-${window.end}`,
       severity: "critical",
       category: "Ratio",
       location: window.location,
-      title: `${window.location} needs ratio coverage ${clock(window.start)}–${clock(window.end)}`,
-      detail: `${window.childCount} children, ${window.staffCount} staff entered, and ${window.requiredStaff} required by the Hub’s current ratio rule.`,
-      href: "/ratios",
-      actionLabel: "Review coverage",
+      title: `${window.location} needs floor coverage ${clock(window.start)}–${clock(window.end)}`,
+      detail: `${window.childCount} children, ${window.staffCount} floor staff, and ${window.requiredStaff ?? "a verified number"} required. Transportation and other off-floor duties are already subtracted.`,
+      href: "/scheduling",
+      actionLabel: "Resolve coverage",
     });
   });
 
-  windows.filter((window) => window.childCount > 0 && window.staffCount > window.requiredStaff).forEach((window) => {
-    const extra = window.staffCount - window.requiredStaff;
+  windows.filter((window) => window.childCount > 0 && window.status === "rule-needed").forEach((window) => {
+    alerts.push({
+      id: `ratio-rule-${window.location}-${window.start}-${window.end}`,
+      severity: "warning",
+      category: "Ratio",
+      location: window.location,
+      title: `${window.location} needs a verified staffing rule`,
+      detail: `The Hub found ${window.childCount} scheduled children during ${clock(window.start)}–${clock(window.end)}, but it will not invent a staffing ratio.`,
+      href: "/scheduling",
+      actionLabel: "Add verified rule",
+    });
+  });
+
+  windows.filter((window) => window.childCount > 0 && window.requiredStaff !== null && window.staffCount > window.requiredStaff && window.status !== "over-capacity").forEach((window) => {
+    const extra = window.staffCount - (window.requiredStaff ?? window.staffCount);
     alerts.push({
       id: `coverage-release-${window.location}-${window.start}-${window.end}`,
       severity: "info",
       category: "Operations",
       location: window.location,
       title: `${window.location} may have extra coverage ${clock(window.start)}–${clock(window.end)}`,
-      detail: `${window.staffCount} staff are entered for ${window.childCount} children; the current planning model shows ${window.requiredStaff} minimum staff. Review breaks, qualifications, transportation, office duties, and actual attendance before releasing anyone.`,
-      href: "/ratios",
-      actionLabel: `Review ${extra} potential release${extra === 1 ? "" : "s"}`,
+      detail: `${window.staffCount} floor staff are entered for ${window.childCount} children; the verified staffing rule shows ${window.requiredStaff} required. Review qualifications, breaks, transportation, admin duties, and actual attendance before changing coverage.`,
+      href: "/scheduling",
+      actionLabel: `Review ${extra} potential extra`,
     });
   });
 
-  windows.filter((window) => window.childCount > window.capacity).forEach((window) => {
+  windows.filter((window) => window.childCount > window.capacity || window.status === "over-capacity").forEach((window) => {
     alerts.push({
       id: `capacity-${window.location}-${window.start}`,
       severity: "critical",
@@ -232,10 +286,12 @@ export function buildSmartAlerts(input: OperationsIntelligenceInput) {
     });
   });
 
-  const dayShifts = input.shifts.filter((shift) => shift.day === day);
-  const employees = [...new Set(dayShifts.map((shift) => shift.employee))];
+  const conflictShifts = input.liveStaffShifts ?? input.shifts
+    .filter((shift) => shift.day === day)
+    .map((shift) => ({ id: String(shift.id), staffName: shift.employee, location: shift.location as Exclude<LocationKey, "All Locations">, start: shift.start, end: shift.end }));
+  const employees = [...new Set(conflictShifts.map((shift) => shift.staffName))];
   employees.forEach((employee) => {
-    const employeeShifts = dayShifts.filter((shift) => shift.employee === employee);
+    const employeeShifts = conflictShifts.filter((shift) => shift.staffName === employee);
     for (let a = 0; a < employeeShifts.length; a += 1) {
       for (let b = a + 1; b < employeeShifts.length; b += 1) {
         const first = employeeShifts[a];
@@ -400,7 +456,11 @@ export function buildBriefingSnapshot(input: OperationsIntelligenceInput, alerts
   input.schedules.forEach((schedule) => {
     if ((schedule.days[day]?.blocks ?? []).some((block) => accessible.has(block.location))) scheduledChildIds.add(schedule.childId);
   });
-  const scheduledStaff = new Set(input.shifts.filter((shift) => shift.day === day && accessible.has(shift.location as Exclude<LocationKey, "All Locations">)).map((shift) => shift.employee));
+  const scheduledStaff = new Set(
+    input.liveStaffShifts
+      ? input.liveStaffShifts.filter((shift) => accessible.has(shift.location)).map((shift) => shift.staffName)
+      : input.shifts.filter((shift) => shift.day === day && accessible.has(shift.location as Exclude<LocationKey, "All Locations">)).map((shift) => shift.employee),
+  );
   return {
     date: input.date,
     weekday: day,
