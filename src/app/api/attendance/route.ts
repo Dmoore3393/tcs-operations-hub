@@ -200,7 +200,7 @@ export async function POST(request: Request) {
       check_in_at: action === "checkin"
         ? now
         : action === "checkout"
-          ? (existingSession.data?.check_in_at ?? text(record.checkedInAt) || null)
+          ? (existingSession.data?.check_in_at ?? (text(record.checkedInAt) || null))
           : null,
       check_out_at: action === "checkout" ? now : null,
       status: sessionStatus,
