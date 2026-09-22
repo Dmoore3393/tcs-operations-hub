@@ -224,6 +224,29 @@ export default function TrainingCenterPage() {
     { icon: "🔥", name: "Learning Streak", note: "Keep learning", earned: streak >= 2 || verifiedMine.length >= 5 },
   ];
 
+  async function recordTrainingPerformance(completion: TeamTrainingCompletion, training: TeamTraining) {
+    if (!session?.access_token) return;
+    try {
+      await fetch("/api/staff-performance", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recordType: "training_verified",
+          completionId: completion.id,
+          staffUserId: completion.userId,
+          locationName: completion.location || trainingLocation(training),
+          trainingTitle: training.title,
+          completedAt: completion.completedAt,
+        }),
+      });
+    } catch {
+      // Training completion and XP remain authoritative even if recognition sync is temporarily unavailable.
+    }
+  }
+
   function addTrainingXp(completion: TeamTrainingCompletion, training: TeamTraining) {
     if (ledger.some((entry) => entry.referenceId === completion.id && entry.amount > 0)) return;
     const entries: TeamXpLedgerEntry[] = [];
@@ -277,7 +300,10 @@ export default function TrainingCenterPage() {
       const now = new Date().toISOString();
       const completion: TeamTrainingCompletion = { id: makeId("training-completion"), trainingId: selectedTraining.id, userId: staffUserId, staffEmail, staffName, location: trainingLocation(selectedTraining), status: selectedTraining.verificationRequired ? "Submitted" : "Verified", completedAt: now, proofName, proofUrl: proofId, note: completionNote.trim() || undefined, reviewedAt: selectedTraining.verificationRequired ? undefined : now, reviewedBy: selectedTraining.verificationRequired ? undefined : "Auto-verified", xpAwarded: 0 };
       setCompletions((current) => [...current, completion]);
-      if (!selectedTraining.verificationRequired) addTrainingXp(completion, selectedTraining);
+      if (!selectedTraining.verificationRequired) {
+        addTrainingXp(completion, selectedTraining);
+        void recordTrainingPerformance(completion, selectedTraining);
+      }
       setSelectedTraining(null); setCertificate(null); setCompletionNote("");
       setNotice(selectedTraining.verificationRequired ? "Completion submitted for verification." : "Training completed and XP awarded!");
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not submit training completion."); }
@@ -298,8 +324,11 @@ export default function TrainingCenterPage() {
     const training = trainings.find((item) => item.id === completion.trainingId); if (!training) return;
     const updated: TeamTrainingCompletion = { ...completion, status: approved ? "Verified" : "Rejected", reviewedAt: new Date().toISOString(), reviewedBy: staffName };
     setCompletions((current) => current.map((item) => item.id === completion.id ? updated : item));
-    if (approved) addTrainingXp(updated, training);
-    setNotice(approved ? `${completion.staffName}'s completion was verified and XP was awarded.` : `${completion.staffName}'s completion was rejected.`);
+    if (approved) {
+      addTrainingXp(updated, training);
+      void recordTrainingPerformance(updated, training);
+    }
+    setNotice(approved ? `${completion.staffName}'s completion was verified, XP was awarded, and the recognition record was synced.` : `${completion.staffName}'s completion was rejected.`);
   }
 
   function resetCreate(mode: TeamTrainingDelivery = "In-House") {
