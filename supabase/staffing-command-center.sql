@@ -101,6 +101,7 @@ create table if not exists public.schedule_publications (
   week_of date not null,
   status text not null default 'Draft' check (status in ('Draft','Published','Superseded')),
   revision integer not null default 1,
+  needs_republish boolean not null default false,
   published_at timestamptz,
   published_by uuid references auth.users(id) on delete set null,
   notes text,
@@ -125,11 +126,41 @@ create unique index if not exists child_attendance_one_session_per_day_idx
 create index if not exists staffing_rules_location_effective_idx on public.staffing_rules(location_id, effective_from, effective_to) where is_active;
 create index if not exists schedule_publications_location_week_idx on public.schedule_publications(location_id, week_of);
 
+create table if not exists public.staff_schedule_publication_shifts (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null default public.current_staff_organization_id()
+    references public.organizations(id) on delete cascade,
+  publication_id uuid not null references public.schedule_publications(id) on delete cascade,
+  location_id uuid not null references public.locations(id) on delete cascade,
+  source_shift_id uuid references public.staff_shifts(id) on delete set null,
+  user_id uuid references public.staff_access(user_id) on delete set null,
+  staff_name text not null,
+  shift_date date not null,
+  start_time time not null,
+  end_time time not null,
+  position_label text,
+  notes text,
+  revision integer not null,
+  created_at timestamptz not null default now(),
+  check (end_time > start_time)
+);
+
+create unique index if not exists staff_schedule_snapshot_source_uidx
+  on public.staff_schedule_publication_shifts(publication_id, revision, source_shift_id)
+  where source_shift_id is not null;
+create index if not exists staff_schedule_snapshot_user_week_idx
+  on public.staff_schedule_publication_shifts(user_id, shift_date, revision);
+create index if not exists staff_schedule_snapshot_publication_idx
+  on public.staff_schedule_publication_shifts(publication_id, revision);
+create index if not exists staff_schedule_snapshot_location_idx
+  on public.staff_schedule_publication_shifts(location_id, shift_date);
+
 alter table public.staff_shifts enable row level security;
 alter table public.staff_activity_intervals enable row level security;
 alter table public.child_attendance_sessions enable row level security;
 alter table public.staffing_rules enable row level security;
 alter table public.schedule_publications enable row level security;
+alter table public.staff_schedule_publication_shifts enable row level security;
 
 create policy "staff shifts read" on public.staff_shifts for select to authenticated
 using (
@@ -256,6 +287,30 @@ create index if not exists staff_schedule_ack_location_idx
 
 alter table public.staff_schedule_acknowledgements enable row level security;
 
+create policy "published shift snapshots read" on public.staff_schedule_publication_shifts
+for select to authenticated
+using (
+  organization_id = public.current_staff_organization_id()
+  and (
+    user_id = auth.uid()
+    or public.can_read_location_module(location_id, 'schedules')
+  )
+);
+
+create policy "published shift snapshots insert" on public.staff_schedule_publication_shifts
+for insert to authenticated
+with check (
+  organization_id = public.current_staff_organization_id()
+  and public.can_write_location_module(location_id, 'schedules')
+);
+
+create policy "published shift snapshots delete" on public.staff_schedule_publication_shifts
+for delete to authenticated
+using (
+  organization_id = public.current_staff_organization_id()
+  and public.can_write_location_module(location_id, 'schedules')
+);
+
 create policy "schedule acknowledgements read" on public.staff_schedule_acknowledgements
 for select to authenticated
 using (
@@ -287,6 +342,8 @@ using (
 grant select, insert, update, delete on public.staff_shifts, public.staff_activity_intervals, public.child_attendance_sessions, public.staffing_rules, public.schedule_publications to authenticated;
 grant select, insert, delete on public.staff_schedule_acknowledgements to authenticated;
 grant all on public.staff_schedule_acknowledgements to service_role;
+grant select, insert, delete on public.staff_schedule_publication_shifts to authenticated;
+grant all on public.staff_schedule_publication_shifts to service_role;
 grant all on public.staff_shifts, public.staff_activity_intervals, public.child_attendance_sessions, public.staffing_rules, public.schedule_publications to service_role;
 
 create trigger set_staff_shifts_updated_at before update on public.staff_shifts for each row execute function public.set_updated_at();
@@ -301,3 +358,37 @@ create trigger audit_child_attendance_sessions after insert or update or delete 
 create trigger audit_staffing_rules after insert or update or delete on public.staffing_rules for each row execute function public.audit_location_row_change();
 create trigger audit_schedule_publications after insert or update or delete on public.schedule_publications for each row execute function public.audit_location_row_change();
 create trigger audit_staff_schedule_acknowledgements after insert or delete on public.staff_schedule_acknowledgements for each row execute function public.audit_location_row_change();
+create trigger audit_staff_schedule_publication_shifts after insert or delete on public.staff_schedule_publication_shifts for each row execute function public.audit_location_row_change();
+
+create or replace function public.mark_staff_schedule_publication_dirty()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  v_location_id uuid;
+  v_shift_date date;
+  v_org_id uuid;
+  v_week_of date;
+begin
+  v_location_id := coalesce(new.location_id, old.location_id);
+  v_shift_date := coalesce(new.shift_date, old.shift_date);
+  v_org_id := coalesce(new.organization_id, old.organization_id);
+  v_week_of := date_trunc('week', v_shift_date::timestamp)::date;
+
+  update public.schedule_publications
+  set needs_republish = true,
+      updated_at = now()
+  where organization_id = v_org_id
+    and location_id = v_location_id
+    and week_of = v_week_of
+    and status = 'Published';
+
+  return coalesce(new, old);
+end;
+$;
+
+create trigger mark_staff_schedule_publication_dirty
+after insert or update or delete on public.staff_shifts
+for each row execute function public.mark_staff_schedule_publication_dirty();
