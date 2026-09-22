@@ -114,6 +114,9 @@ create index if not exists staff_shifts_user_date_idx on public.staff_shifts(use
 create index if not exists staff_activity_location_date_idx on public.staff_activity_intervals(location_id, activity_date, start_time, end_time);
 create index if not exists staff_activity_user_date_idx on public.staff_activity_intervals(user_id, activity_date);
 create index if not exists child_attendance_location_date_idx on public.child_attendance_sessions(location_id, attendance_date, status);
+create unique index if not exists child_attendance_one_session_per_day_idx
+  on public.child_attendance_sessions(organization_id, child_id, attendance_date)
+  where child_id is not null;
 create index if not exists staffing_rules_location_effective_idx on public.staffing_rules(location_id, effective_from, effective_to) where is_active;
 create index if not exists schedule_publications_location_week_idx on public.schedule_publications(location_id, week_of);
 
@@ -149,12 +152,24 @@ using (
   and (public.can_read_location_module(location_id, 'daily_care') or public.can_read_location_module(location_id, 'schedules'))
 );
 create policy "child attendance insert" on public.child_attendance_sessions for insert to authenticated
-with check (organization_id = public.current_staff_organization_id() and public.can_write_location_module(location_id, 'daily_care'));
+with check (
+  organization_id = public.current_staff_organization_id()
+  and (public.can_write_location_module(location_id, 'daily_care') or public.can_write_location_module(location_id, 'schedules'))
+);
 create policy "child attendance update" on public.child_attendance_sessions for update to authenticated
-using (organization_id = public.current_staff_organization_id() and public.can_write_location_module(location_id, 'daily_care'))
-with check (organization_id = public.current_staff_organization_id() and public.can_write_location_module(location_id, 'daily_care'));
+using (
+  organization_id = public.current_staff_organization_id()
+  and (public.can_write_location_module(location_id, 'daily_care') or public.can_write_location_module(location_id, 'schedules'))
+)
+with check (
+  organization_id = public.current_staff_organization_id()
+  and (public.can_write_location_module(location_id, 'daily_care') or public.can_write_location_module(location_id, 'schedules'))
+);
 create policy "child attendance delete" on public.child_attendance_sessions for delete to authenticated
-using (organization_id = public.current_staff_organization_id() and public.can_write_location_module(location_id, 'daily_care'));
+using (
+  organization_id = public.current_staff_organization_id()
+  and (public.can_write_location_module(location_id, 'daily_care') or public.can_write_location_module(location_id, 'schedules'))
+);
 
 create policy "staffing rules read" on public.staffing_rules for select to authenticated
 using (organization_id = public.current_staff_organization_id() and public.can_read_location_module(location_id, 'schedules'));
