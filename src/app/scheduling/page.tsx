@@ -642,7 +642,6 @@ export default function SchedulingPage() {
           </div>
         </div>
       </SectionCard>}
-    {loading ? <div className="flex min-h-72 items-center justify-center gap-3 rounded-3xl border border-slate-200 bg-white text-sm font-black text-slate-500"><LoaderCircle className="h-5 w-5 animate-spin" /> Loading live staffing data…</div> : <>
       <SectionCard title={view === "Day" ? `${shortDate(selectedDate)} • All Locations` : `Week of ${shortDate(weekStart)}`} description="Status is calculated from live child schedules, staff shifts, off-floor blocks, site capacity, and the staffing rules you configure.">
         {view === "Day" ? <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{locations.map((location) => {
           const windows = buildCoverageWindows({ date: selectedDate, location, schedules, shifts, activities, rules });
