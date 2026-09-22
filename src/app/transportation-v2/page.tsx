@@ -18,7 +18,10 @@ import {
   type TransportationRoute,
   type VehicleRecord,
 } from "@/lib/hub-data";
-import type { LocationKey } from "@/lib/location-config";
+import { normalizeLocation, type LocationKey } from "@/lib/location-config";
+import { locationKeyForDbLocation, type StaffActivityRow, type StaffingLocation } from "@/lib/staffing-command";
+import { finishTransportationDuty, startTransportationDuty, transportationDutyKey } from "@/lib/transportation-staffing";
+import { supabase } from "@/lib/supabase/client";
 import { HUB_SYNC_EVENT, type HubSyncDetail } from "@/lib/sync-events";
 import { clearOfflineTransportActions, queueOfflineTransportAction, readOfflineTransportActions } from "@/lib/transport-offline";
 import {
@@ -120,6 +123,9 @@ export default function TransportationV2Page() {
   const [pendingOffline, setPendingOffline] = useState(0);
   const [replayingOffline, setReplayingOffline] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState("");
+  const [staffingLocations, setStaffingLocations] = useState<StaffingLocation[]>([]);
+  const [transportCoverage, setTransportCoverage] = useState<StaffActivityRow[]>([]);
+  const [coverageMessage, setCoverageMessage] = useState("");
   const today = localIsoDate();
   const actor = profile?.full_name?.trim() || profile?.email || "TCS Staff";
   const leader = isLeadership(profile?.full_name || "", profile?.email || "");
@@ -158,6 +164,32 @@ export default function TransportationV2Page() {
     window.addEventListener(HUB_SYNC_EVENT, syncListener);
     return () => window.removeEventListener(HUB_SYNC_EVENT, syncListener);
   }, []);
+
+  useEffect(() => {
+    if (!supabase) return;
+    let active = true;
+
+    async function loadCoverageLink() {
+      const [locationResult, activityResult] = await Promise.all([
+        supabase!.from("locations").select("id,slug,name,full_name,capacity,program_type").eq("is_active", true).order("name"),
+        supabase!.from("staff_activity_intervals").select("id,location_id,shift_id,user_id,staff_name,activity_date,start_time,end_time,activity_type,counts_toward_floor,reason,source_key").eq("activity_date", today).eq("activity_type", "Transportation").order("start_time"),
+      ]);
+      if (!active) return;
+      if (!locationResult.error) setStaffingLocations((locationResult.data ?? []) as StaffingLocation[]);
+      if (!activityResult.error) setTransportCoverage((activityResult.data ?? []) as StaffActivityRow[]);
+    }
+
+    void loadCoverageLink();
+    const channel = supabase
+      .channel(`transport-staffing-${today}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "staff_activity_intervals" }, () => void loadCoverageLink())
+      .subscribe();
+
+    return () => {
+      active = false;
+      void supabase?.removeChannel(channel);
+    };
+  }, [today]);
 
   useEffect(() => {
     if (!routesHydrated || !isOnline || replayingOffline) return;
@@ -208,6 +240,54 @@ export default function TransportationV2Page() {
     return status === "Picked Up" || status === "Arrived";
   });
 
+  function routeDriver(route: LiveRoute) {
+    return route.coveringDate === today && route.coveringDriver?.trim()
+      ? route.coveringDriver.trim()
+      : route.driver?.trim() || actor;
+  }
+
+  function staffingLocationForRoute(route: LiveRoute) {
+    const candidates = [route.location, route.dropoffLocation, activeLocation].filter(Boolean).join(" ");
+    const key = normalizeLocation(candidates);
+    if (key === "All Locations") return null;
+    return staffingLocations.find((item) => locationKeyForDbLocation(item) === key) ?? null;
+  }
+
+  function isFinalHandoffForRoute(route: LiveRoute) {
+    const key = routeKey(route);
+    return todayRoutes
+      .filter((item) => routeKey(item) === key)
+      .every((item) => item.id === route.id || statusFor(item, today) === "Checked In");
+  }
+
+  async function beginTransportationCoverage(route: LiveRoute) {
+    const location = staffingLocationForRoute(route);
+    const staffName = routeDriver(route);
+    if (!location || !staffName) return;
+    const result = await startTransportationDuty({
+      locationId: location.id,
+      staffName,
+      date: today,
+      routeName: routeKey(route),
+    });
+    if (!result.ok && result.error) setCoverageMessage(`Transportation saved, but staffing coverage could not be updated: ${result.error}`);
+    else setCoverageMessage(`${staffName} is now marked off floor for transportation. Coverage recalculated.`);
+  }
+
+  async function finishTransportationCoverage(route: LiveRoute) {
+    const location = staffingLocationForRoute(route);
+    const staffName = routeDriver(route);
+    if (!location || !staffName) return;
+    const result = await finishTransportationDuty({
+      locationId: location.id,
+      staffName,
+      date: today,
+      routeName: routeKey(route),
+    });
+    if (!result.ok && result.error) setCoverageMessage(`Transportation handoff saved, but staffing coverage could not close: ${result.error}`);
+    else setCoverageMessage(`${staffName} returned from transportation. Floor coverage recalculated.`);
+  }
+
   function updateRoute(route: LiveRoute, patch: Partial<LiveRoute>) {
     const offlinePatch = {
       runDate: patch.runDate,
@@ -229,6 +309,7 @@ export default function TransportationV2Page() {
     if (!child || !emergencyCardReadiness(child).ready) return;
     const now = new Date().toISOString();
     updateRoute(route, { runDate: today, runStatus: "Picked Up", pickedUpAt: now, pickedUpBy: actor, arrivedAt: undefined, checkedInAt: undefined });
+    void beginTransportationCoverage(route);
   }
 
   function markArrived(route: LiveRoute) {
@@ -252,8 +333,10 @@ export default function TransportationV2Page() {
 
     updateRoute(route, { runDate: today, runStatus: "Checked In", checkedInAt: iso, checkedInBy: actor, droppedOffAt: iso, droppedOffBy: actor });
 
+    if (isFinalHandoffForRoute(route)) void finishTransportationCoverage(route);
+
     if (child) {
-      setChildren((current) => current.map((item) => item.id === child.id ? { ...item, attendanceToday: "Present" } : item));
+      setChildren((current) => current.map((item) => item.id === child.id ? { ...item, attendanceToday: "Present", attendanceDate: today, checkedInAt: iso, checkedInBy: actor } : item));
       const alreadyLogged = careLogs.some((entry) => entry.childId === child.id && entry.location === location && entry.date === today && entry.action === "Transportation Check-In");
       if (!alreadyLogged) {
         const initials = actor.split(/\s+/).map((part) => part[0]).join("").replace(/[^A-Za-z]/g, "").slice(0, 4).toUpperCase() || "TCS";
@@ -278,6 +361,7 @@ export default function TransportationV2Page() {
   function confirmExternalDropoff(route: LiveRoute) {
     const now = new Date().toISOString();
     updateRoute(route, { runDate: today, runStatus: "Checked In", checkedInAt: now, checkedInBy: actor, droppedOffAt: now, droppedOffBy: actor });
+    if (isFinalHandoffForRoute(route)) void finishTransportationCoverage(route);
   }
 
   return (
@@ -291,6 +375,8 @@ export default function TransportationV2Page() {
             <div className="relative z-10 text-center lg:text-left"><p className="text-xs font-black uppercase tracking-[0.24em] text-[#1769d2]">TCS Operations Hub • School Shuttle</p><h1 className="mt-2 text-4xl font-black tracking-tight text-[#102a56] sm:text-6xl">The School Shuttle</h1><p className="mt-2 text-lg font-black text-[#1769d2]">Safe and Reliable Transportation</p><p className="mx-auto mt-4 max-w-3xl text-sm font-semibold leading-7 text-slate-600 lg:mx-0">Every child follows a clear custody chain: school pickup → in transit → arrival → location check-in. Staff confirm each step one child at a time.</p><div className="mt-5 flex flex-wrap justify-center gap-2 lg:justify-start"><Pill>📍 Exact pickup areas</Pill><Pill>✅ Required pickup confirmation</Pill><Pill>🏫 Required location check-in</Pill></div></div>
           </div>
         </section>
+
+        {coverageMessage && <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-black text-blue-950 shadow-sm">{coverageMessage}</section>}
 
         <section className={`rounded-2xl border p-4 shadow-sm ${isOnline ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-red-300 bg-red-50 text-red-950"}`}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -321,7 +407,7 @@ export default function TransportationV2Page() {
         </section>
 
         {effectiveRoute && <section className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3"><Summary label="Route" value={effectiveRoute} /><Summary label="Driver" value={myRoute.find((route) => route.coveringDate === today && route.coveringDriver)?.coveringDriver || myRoute[0]?.driver || "Not assigned"} /><Summary label="Vehicle" value={myRoute[0]?.vehicle || "Not assigned"} /></div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><Summary label="Route" value={effectiveRoute} /><Summary label="Driver" value={myRoute.find((route) => route.coveringDate === today && route.coveringDriver)?.coveringDriver || myRoute[0]?.driver || "Not assigned"} /><Summary label="Vehicle" value={myRoute[0]?.vehicle || "Not assigned"} /><Summary label="Floor Coverage" value={(() => { const driver = myRoute[0] ? routeDriver(myRoute[0]) : ""; const key = driver ? transportationDutyKey(today, effectiveRoute, driver) : ""; const block = transportCoverage.find((item) => item.source_key === key); if (!block) return "On floor / route not started"; return block.end_time.startsWith("23:59") ? `Off floor since ${timeLabel(block.start_time)}` : `Returned ${timeLabel(block.end_time)}`; })()} /></div>
           <div className={`rounded-3xl border p-5 ${currentRouteNeedsAttention.length ? "border-red-300 bg-red-50" : "border-emerald-300 bg-emerald-50"}`}>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-start gap-3">{currentRouteNeedsAttention.length ? <AlertTriangle className="mt-0.5 h-6 w-6 flex-none text-red-700" /> : <ShieldCheck className="mt-0.5 h-6 w-6 flex-none text-emerald-700" />}<div><p className={`text-xs font-black uppercase tracking-[.14em] ${currentRouteNeedsAttention.length ? "text-red-700" : "text-emerald-700"}`}>Route emergency readiness</p><h3 className={`mt-1 text-xl font-black ${currentRouteNeedsAttention.length ? "text-red-950" : "text-emerald-950"}`}>{currentRouteReadyCount}/{myRoute.length} children Emergency Ready</h3><p className="mt-1 text-sm font-semibold text-slate-700">{currentRouteNeedsAttention.length ? "Pickup is blocked for children whose emergency record is not ready. Review the missing information before departure." : "Emergency contacts, consent status, provider information, and allergy status are ready for this route."}</p></div></div>
