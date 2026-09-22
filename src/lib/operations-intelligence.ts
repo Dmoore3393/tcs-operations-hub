@@ -172,6 +172,29 @@ function severityRank(severity: AlertSeverity) {
   return { critical: 0, warning: 1, info: 2, success: 3 }[severity];
 }
 
+function familyScheduleDeadlinePassed(inputDate: string) {
+  const now = new Date();
+  const dateParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  if (inputDate !== dateParts) return false;
+
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    weekday: "long",
+  }).format(now);
+  const hour = Number(new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    hour: "2-digit",
+    hour12: false,
+  }).format(now));
+
+  return weekday === "Saturday" || weekday === "Sunday" || (weekday === "Friday" && hour >= 18);
+}
+
 export function buildSmartAlerts(input: OperationsIntelligenceInput) {
   const alerts: SmartAlert[] = [];
   const day = dateToDayName(input.date);
@@ -285,6 +308,19 @@ export function buildSmartAlerts(input: OperationsIntelligenceInput) {
       actionLabel: "Review enrollment times",
     });
   });
+
+  if (familyScheduleDeadlinePassed(input.date)) {
+    alerts.push({
+      id: "next-week-staffing-review",
+      severity: "warning",
+      category: "Schedule",
+      location: "Accessible locations",
+      title: "Next week is ready for staffing review",
+      detail: "The Friday 6 PM family schedule deadline has passed. Review next week’s child demand, transportation windows, verified staffing rules, and unresolved coverage gaps before the week begins.",
+      href: "/scheduling",
+      actionLabel: "Review next week",
+    });
+  }
 
   const conflictShifts = input.liveStaffShifts ?? input.shifts
     .filter((shift) => shift.day === day)
