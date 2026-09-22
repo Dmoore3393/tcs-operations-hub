@@ -553,7 +553,7 @@ export default function SchedulingPage() {
     const locationKey = locationKeyForDbLocation(selectedLocation) ?? "All Locations";
     void sendHubNotificationEvent({
       accessToken: session?.access_token,
-      eventType: "schedule_update",
+      eventType: "schedule_published",
       location: locationKey,
       eventKey: `staffing-publish:${selectedLocation.id}:${weekStart}:r${nextRevision}`,
     });
