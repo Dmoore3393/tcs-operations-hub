@@ -392,3 +392,121 @@ $;
 create trigger mark_staff_schedule_publication_dirty
 after insert or update or delete on public.staff_shifts
 for each row execute function public.mark_staff_schedule_publication_dirty();
+
+create or replace function public.publish_staff_schedule(
+  p_location_id uuid,
+  p_week_of date,
+  p_notes text default null
+)
+returns table (
+  publication_id uuid,
+  revision integer,
+  shift_count integer,
+  unlinked_shift_count integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  v_org_id uuid;
+  v_publication_id uuid;
+  v_revision integer;
+  v_shift_count integer;
+  v_unlinked_count integer;
+  v_existing public.schedule_publications%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+
+  v_org_id := public.current_staff_organization_id();
+  if v_org_id is null then
+    raise exception 'No active TCS staff organization';
+  end if;
+
+  if not public.can_write_location_module(p_location_id, 'schedules') then
+    raise exception 'You do not have permission to publish this location schedule';
+  end if;
+
+  select count(*)::integer,
+         count(*) filter (where user_id is null)::integer
+    into v_shift_count, v_unlinked_count
+  from public.staff_shifts
+  where organization_id = v_org_id
+    and location_id = p_location_id
+    and shift_date between p_week_of and p_week_of + 6
+    and status <> 'Cancelled';
+
+  if v_shift_count = 0 then
+    raise exception 'Add at least one staff shift before publishing this week';
+  end if;
+
+  select *
+    into v_existing
+  from public.schedule_publications
+  where organization_id = v_org_id
+    and location_id = p_location_id
+    and week_of = p_week_of
+  order by case when status = 'Published' then 0 else 1 end, updated_at desc
+  limit 1
+  for update;
+
+  v_revision := coalesce(v_existing.revision, 0) + 1;
+
+  update public.staff_shifts
+  set status = 'Published',
+      updated_by = auth.uid(),
+      updated_at = now()
+  where organization_id = v_org_id
+    and location_id = p_location_id
+    and shift_date between p_week_of and p_week_of + 6
+    and status <> 'Cancelled';
+
+  if v_existing.id is null then
+    insert into public.schedule_publications (
+      organization_id, location_id, week_of, status, revision,
+      needs_republish, published_at, published_by, notes,
+      created_by, updated_by
+    )
+    values (
+      v_org_id, p_location_id, p_week_of, 'Published', v_revision,
+      false, now(), auth.uid(),
+      coalesce(p_notes, 'Published from Staffing Command Center • revision ' || v_revision),
+      auth.uid(), auth.uid()
+    )
+    returning id into v_publication_id;
+  else
+    update public.schedule_publications
+    set status = 'Published',
+        revision = v_revision,
+        needs_republish = false,
+        published_at = now(),
+        published_by = auth.uid(),
+        notes = coalesce(p_notes, 'Published from Staffing Command Center • revision ' || v_revision),
+        updated_by = auth.uid(),
+        updated_at = now()
+    where id = v_existing.id
+    returning id into v_publication_id;
+  end if;
+
+  insert into public.staff_schedule_publication_shifts (
+    organization_id, publication_id, location_id, source_shift_id, user_id,
+    staff_name, shift_date, start_time, end_time, position_label, notes, revision
+  )
+  select
+    v_org_id, v_publication_id, s.location_id, s.id, s.user_id,
+    s.staff_name, s.shift_date, s.start_time, s.end_time, s.position_label, s.notes, v_revision
+  from public.staff_shifts s
+  where s.organization_id = v_org_id
+    and s.location_id = p_location_id
+    and s.shift_date between p_week_of and p_week_of + 6
+    and s.status = 'Published';
+
+  return query
+  select v_publication_id, v_revision, v_shift_count, v_unlinked_count;
+end;
+$;
+
+grant execute on function public.publish_staff_schedule(uuid, date, text) to authenticated;
+revoke execute on function public.publish_staff_schedule(uuid, date, text) from anon;
