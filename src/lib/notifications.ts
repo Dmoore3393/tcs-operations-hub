@@ -149,8 +149,8 @@ export function notificationTemplate(type: HubNotificationEventType, context: Hu
       return {
         category: "schedule" as const,
         severity: "attention" as const,
-        title: "Your schedule is ready",
-        body: "A staff schedule was published or revised for your location. Open My Schedule to review and acknowledge the current revision.",
+        title: "Location schedule published",
+        body: "A staff schedule was published or revised for your location. Open My Schedule to see your assigned shifts and acknowledge the current revision if you are scheduled.",
         href: "/my-schedule",
       };
   }
