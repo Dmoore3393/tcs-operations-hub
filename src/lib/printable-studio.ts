@@ -99,13 +99,26 @@ function ratioBody(input: PrintableStudioInput) {
   const rows = windows.map((window, index) => {
     const y = 280 + index * 84;
     const childLines = wrap(window.childNames.join(", ") || "No children entered", 66, 2);
+    const verified = window.requiredStaff !== null;
+    const safe = window.status === "covered" || window.status === "tight";
+    const needsRule = window.status === "rule-needed";
+    const fill = safe ? (index % 2 ? "#ffffff" : theme.primarySoft) : needsRule ? "#faf5ff" : "#fff1f2";
+    const stroke = safe ? theme.primaryLight : needsRule ? "#c084fc" : "#fb7185";
+    const statusColor = safe ? theme.primaryDark : needsRule ? "#7e22ce" : "#be123c";
+    const statusText = needsRule
+      ? "VERIFIED RULE NEEDED"
+      : window.status === "over-capacity"
+        ? "OVER CAPACITY"
+        : verified
+          ? `NEED ${window.requiredStaff} STAFF`
+          : "REVIEW COVERAGE";
     return `<g>
-      <rect x="55" y="${y}" width="970" height="72" rx="18" fill="${window.inRatio ? (index % 2 ? "#ffffff" : theme.primarySoft) : "#fff1f2"}" stroke="${window.inRatio ? theme.primaryLight : "#fb7185"}"/>
+      <rect x="55" y="${y}" width="970" height="72" rx="18" fill="${fill}" stroke="${stroke}"/>
       <text x="78" y="${y + 29}" font-family="Arial, sans-serif" font-size="18" font-weight="900" fill="#0f172a">${escapeXml(`${clock(window.start)}–${clock(window.end)}`)}</text>
       ${textLines(childLines, 275, y + 25, 18, 'font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#334155"')}
       <text x="275" y="${y + 59}" font-family="Arial, sans-serif" font-size="11" font-weight="700" fill="#64748b">Staff: ${escapeXml(window.staffNames.join(", ") || "No staff entered")}</text>
       <text x="918" y="${y + 28}" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="900" fill="#0f172a">${window.childCount}</text>
-      <text x="918" y="${y + 49}" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="900" fill="${window.inRatio ? theme.primaryDark : "#be123c"}">${window.inRatio ? "IN RATIO" : `NEED ${window.requiredStaff} STAFF`}</text>
+      <text x="918" y="${y + 49}" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="900" fill="${statusColor}">${statusText}</text>
     </g>`;
   }).join("");
   if (!rows) return `<rect x="55" y="285" width="970" height="220" rx="28" fill="white" stroke="#cbd5e1"/><text x="540" y="385" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="900" fill="#334155">No schedule windows entered for this date.</text>`;
