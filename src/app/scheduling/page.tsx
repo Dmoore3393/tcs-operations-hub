@@ -85,6 +85,27 @@ type RuleDraft = {
   source_note: string;
 };
 
+type SchedulePublication = {
+  id: string;
+  location_id: string;
+  week_of: string;
+  status: "Draft" | "Published" | "Superseded";
+  revision: number;
+  published_at: string | null;
+  published_by: string | null;
+  notes: string | null;
+};
+
+type ScheduleAcknowledgement = {
+  id: string;
+  publication_id: string;
+  location_id: string;
+  user_id: string;
+  revision: number;
+  acknowledged_at: string;
+  notes: string | null;
+};
+
 const statusOrder: CoverageStatus[] = ["over-capacity", "gap", "rule-needed", "tight", "covered"];
 
 function datePlus(date: string, days: number) {
@@ -146,6 +167,8 @@ export default function SchedulingPage() {
   const [activities, setActivities] = useState<StaffActivityRow[]>([]);
   const [rules, setRules] = useState<StaffingRuleRow[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
+  const [publications, setPublications] = useState<SchedulePublication[]>([]);
+  const [acknowledgements, setAcknowledgements] = useState<ScheduleAcknowledgement[]>([]);
   const [selectedDate, setSelectedDate] = useState(() => localIsoDate());
   const [selectedLocationId, setSelectedLocationId] = useState("");
   const [view, setView] = useState<"Day" | "Week">("Day");
@@ -164,23 +187,41 @@ export default function SchedulingPage() {
   const load = useCallback(async () => {
     if (!supabase || !session?.access_token) return;
     setLoading(true);
-    const [locationResult, shiftResult, activityResult, ruleResult, staffResult] = await Promise.all([
+    const [locationResult, shiftResult, activityResult, ruleResult, staffResult, publicationResult] = await Promise.all([
       supabase.from("locations").select("id,slug,name,full_name,capacity,program_type").eq("is_active", true).order("name"),
       supabase.from("staff_shifts").select("id,location_id,user_id,staff_name,shift_date,start_time,end_time,status,position_label,notes").gte("shift_date", weekStart).lte("shift_date", weekEnd).order("shift_date").order("start_time"),
-      supabase.from("staff_activity_intervals").select("id,location_id,shift_id,user_id,staff_name,activity_date,start_time,end_time,activity_type,counts_toward_floor,reason").gte("activity_date", weekStart).lte("activity_date", weekEnd).order("activity_date").order("start_time"),
+      supabase.from("staff_activity_intervals").select("id,location_id,shift_id,user_id,staff_name,activity_date,start_time,end_time,activity_type,counts_toward_floor,reason,source_key").gte("activity_date", weekStart).lte("activity_date", weekEnd).order("activity_date").order("start_time"),
       supabase.from("staffing_rules").select("id,location_id,rule_name,age_group,children_per_staff,minimum_staff,maximum_group_size,effective_from,effective_to,source_type,source_note,is_active").eq("is_active", true).order("effective_from", { ascending: false }),
       supabase.from("staff_access").select("user_id,full_name,role,locations").eq("is_active", true).order("full_name"),
+      supabase.from("schedule_publications").select("id,location_id,week_of,status,revision,published_at,published_by,notes").eq("week_of", weekStart).order("updated_at", { ascending: false }),
     ]);
 
-    const requiredError = locationResult.error || shiftResult.error || activityResult.error || ruleResult.error;
+    const requiredError = locationResult.error || shiftResult.error || activityResult.error || ruleResult.error || publicationResult.error;
     if (requiredError) {
       setError(requiredError.message);
     } else {
+      const nextPublications = (publicationResult.data ?? []) as SchedulePublication[];
+      let nextAcknowledgements: ScheduleAcknowledgement[] = [];
+      const publicationIds = nextPublications.map((item) => item.id);
+      if (publicationIds.length) {
+        const acknowledgementResult = await supabase
+          .from("staff_schedule_acknowledgements")
+          .select("id,publication_id,location_id,user_id,revision,acknowledged_at,notes")
+          .in("publication_id", publicationIds);
+        if (acknowledgementResult.error) {
+          setError(acknowledgementResult.error.message);
+          setLoading(false);
+          return;
+        }
+        nextAcknowledgements = (acknowledgementResult.data ?? []) as ScheduleAcknowledgement[];
+      }
       setError("");
       setLocations((locationResult.data ?? []) as StaffingLocation[]);
       setShifts((shiftResult.data ?? []) as StaffShiftRow[]);
       setActivities((activityResult.data ?? []) as StaffActivityRow[]);
       setRules((ruleResult.data ?? []) as StaffingRuleRow[]);
+      setPublications(nextPublications);
+      setAcknowledgements(nextAcknowledgements);
     }
 
     const staffRows = staffResult.error ? [] : (staffResult.data ?? []) as StaffOption[];
@@ -198,6 +239,8 @@ export default function SchedulingPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "staff_shifts" }, () => void load())
       .on("postgres_changes", { event: "*", schema: "public", table: "staff_activity_intervals" }, () => void load())
       .on("postgres_changes", { event: "*", schema: "public", table: "staffing_rules" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_publications" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "staff_schedule_acknowledgements" }, () => void load())
       .subscribe();
     return () => { void supabase?.removeChannel(channel); };
   }, [load, profile?.user_id, session?.access_token]);
