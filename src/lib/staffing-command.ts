@@ -37,6 +37,7 @@ export type StaffActivityRow = {
   activity_type: "Floor" | "Transportation" | "Break" | "Admin" | "Training" | "Offsite" | "Other";
   counts_toward_floor: boolean;
   reason: string | null;
+  source_key?: string | null;
 };
 
 export type StaffingRuleRow = {
