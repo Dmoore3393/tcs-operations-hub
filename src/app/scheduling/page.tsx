@@ -147,6 +147,14 @@ function shortDate(date: string) {
   return new Intl.DateTimeFormat("en-US", { weekday: "short", month: "numeric", day: "numeric" }).format(new Date(`${date}T12:00:00`));
 }
 
+function staffingDeadlineReviewState() {
+  const now = new Date();
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", weekday: "long" }).format(now);
+  const hourText = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "2-digit", hour12: false }).format(now);
+  const hour = Number(hourText);
+  return weekday === "Saturday" || weekday === "Sunday" || (weekday === "Friday" && hour >= 18);
+}
+
 function timeLabel(value: string) {
   const [hourText, minuteText] = value.slice(0, 5).split(":");
   const hour = Number(hourText);
@@ -597,6 +605,9 @@ export default function SchedulingPage() {
     : [];
   const weeklyAttention = weeklyCoverage.filter((window) => ["gap", "over-capacity", "rule-needed"].includes(window.status)).length;
   const canPublishSchedule = isSystemOwner || isLocationLicensee;
+  const today = localIsoDate();
+  const nextWeekStart = datePlus(mondayFor(today), 7);
+  const nextWeekReviewDue = staffingDeadlineReviewState();
   const scheduleAvailableStaff = shiftDraft && !shiftDraft.id
     ? staff.filter((person) => {
         const targetLocation = locations.find((item) => item.id === shiftDraft.location_id);
@@ -620,7 +631,6 @@ export default function SchedulingPage() {
         return !activityConflict;
       })
     : [];
-  const today = localIsoDate();
 
   return <MainLayout><div className="mx-auto max-w-[1700px] space-y-6 pb-12">
     <section className="overflow-hidden rounded-[32px] bg-gradient-to-br from-[#0b2f23] via-[#155b3b] to-[#0b3153] p-6 text-white shadow-xl sm:p-8">
@@ -630,9 +640,10 @@ export default function SchedulingPage() {
           <h1 className="mt-4 text-3xl font-black sm:text-5xl">Staffing Command Center</h1>
           <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-white/75">Child schedules create the demand. Staff shifts create planned coverage. Transportation, breaks, training, admin, and off-site work automatically remove staff from floor coverage during those times.</p>
         </div>
-        <div className="grid gap-2 sm:grid-cols-[180px_auto_auto]">
+        <div className="grid gap-2 sm:grid-cols-[180px_auto_auto_auto]">
           <input type="date" className="rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-sm font-black text-white outline-none [color-scheme:dark]" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
           <div className="flex rounded-xl bg-white/10 p-1"><button onClick={() => setView("Day")} className={`rounded-lg px-4 py-2 text-sm font-black ${view === "Day" ? "bg-white text-slate-950" : "text-white/70"}`}>Day</button><button onClick={() => setView("Week")} className={`rounded-lg px-4 py-2 text-sm font-black ${view === "Week" ? "bg-white text-slate-950" : "text-white/70"}`}>Week</button></div>
+          <button onClick={() => { setSelectedDate(nextWeekStart); setView("Week"); }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-black hover:bg-white/20"><CalendarDays className="h-4 w-4" /> Next Week</button>
           <button onClick={() => window.print()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-black hover:bg-white/20"><Printer className="h-4 w-4" /> Print</button>
         </div>
       </div>
@@ -647,6 +658,8 @@ export default function SchedulingPage() {
       <StatCard label="Off-Floor Blocks" value={offFloorToday} helper="Transportation, breaks, admin & more" icon={<Bus className="h-5 w-5" />} tone="purple" />
       <StatCard label="Needs Attention" value={actionWindows} helper="Gaps, capacity, or missing rule" icon={actionWindows ? <ShieldAlert className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />} tone={actionWindows ? "red" : "emerald"} />
     </section>
+
+    {nextWeekReviewDue && <section className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 shadow-sm sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-black">Friday 6 PM family schedule deadline has passed.</p><p className="mt-1 text-xs font-semibold leading-5">Next week is ready for staffing review. Check child demand, transportation windows, coverage rules, and unresolved gaps before the week begins.</p></div><button onClick={() => { setSelectedDate(nextWeekStart); setView("Week"); }} className="whitespace-nowrap rounded-xl bg-amber-900 px-4 py-2.5 text-xs font-black text-white">Review Next Week</button></section>}
 
     {loading ? <div className="flex min-h-72 items-center justify-center gap-3 rounded-3xl border border-slate-200 bg-white text-sm font-black text-slate-500"><LoaderCircle className="h-5 w-5 animate-spin" /> Loading live staffing data…</div> : <>
       {selectedLocation && <SectionCard
