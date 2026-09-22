@@ -1,3 +1,4 @@
+import { normalizeLocation } from "@/lib/location-config";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 
 export const runtime = "nodejs";
@@ -149,6 +150,83 @@ export async function POST(request: Request) {
     if (!auth.isOwner && !auth.isLicensee) throw new Response("Leadership access is required.", { status: 403 });
     const body = (await request.json().catch(() => ({}))) as JsonObject;
     const recordType = text(body.recordType);
+
+    if (recordType === "training_verified") {
+      const staffUserId = text(body.staffUserId);
+      const locationName = text(body.locationName);
+      const completionId = text(body.completionId);
+      const trainingTitle = text(body.trainingTitle);
+      const completedAt = text(body.completedAt);
+      if (!staffUserId || !locationName || !completionId || !trainingTitle) {
+        return Response.json({ error: "Training completion details are incomplete." }, { status: 400 });
+      }
+      const canRecordForStaff = auth.user.id === staffUserId || auth.isOwner || auth.isLicensee;
+      if (!canRecordForStaff) throw new Response("You cannot record performance for another employee.", { status: 403 });
+
+      const locations = await auth.admin
+        .from("locations")
+        .select("id,slug,name,full_name")
+        .eq("organization_id", auth.profile.organization_id)
+        .eq("is_active", true);
+      if (locations.error) throw locations.error;
+      const normalized = normalizeLocation(locationName);
+      const location = (locations.data ?? []).find((row) =>
+        normalizeLocation(`${row.slug || ""} ${row.name || ""} ${row.full_name || ""}`) === normalized,
+      );
+      if (!location) return Response.json({ error: "Training location was not found." }, { status: 400 });
+
+      await assertStaffAtLocation(auth, staffUserId, String(location.id));
+      if (auth.isLicensee && auth.user.id !== staffUserId) await assertLocationAccess(auth, String(location.id));
+
+      const typeResult = await auth.admin
+        .from("staff_performance_event_types")
+        .select("id,suggested_points")
+        .eq("organization_id", auth.profile.organization_id)
+        .eq("code", "training_completed")
+        .eq("is_active", true)
+        .maybeSingle();
+      if (typeResult.error) throw typeResult.error;
+      if (!typeResult.data) return Response.json({ error: "Training recognition rule is not configured." }, { status: 400 });
+
+      const existing = await auth.admin
+        .from("staff_performance_events")
+        .select("id")
+        .eq("organization_id", auth.profile.organization_id)
+        .eq("staff_user_id", staffUserId)
+        .eq("source_system", "Training Center")
+        .eq("source_reference", completionId)
+        .maybeSingle();
+      if (existing.error) throw existing.error;
+      if (existing.data?.id) return Response.json({ ok: true, id: existing.data.id, duplicate: true });
+
+      const completedDate = completedAt && !Number.isNaN(new Date(completedAt).getTime())
+        ? new Date(completedAt).toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10);
+      const result = await auth.admin
+        .from("staff_performance_events")
+        .insert({
+          organization_id: auth.profile.organization_id,
+          staff_user_id: staffUserId,
+          location_id: location.id,
+          event_type_id: typeResult.data.id,
+          event_date: completedDate,
+          summary: `Completed verified training: ${trainingTitle}`,
+          notes: "Created automatically when the Training Center completion became verified.",
+          recognition_points: Math.max(0, Number(typeResult.data.suggested_points || 0)),
+          status: "Confirmed",
+          source_system: "Training Center",
+          source_reference: completionId,
+          created_by: auth.user.id,
+          reviewed_by: auth.user.id,
+          reviewed_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+      if (result.error) throw result.error;
+      return Response.json({ ok: true, id: result.data.id });
+    }
+
+    if (!auth.isOwner && !auth.isLicensee) throw new Response("Leadership access is required.", { status: 403 });
 
     if (recordType === "event") {
       const staffUserId = text(body.staffUserId);
