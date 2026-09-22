@@ -242,7 +242,7 @@ export default function MySchedulePage() {
       </SectionCard>
 
       {!shifts.length && <SectionCard title="Nothing published for this week" description="Your manager may still be building the schedule. Draft shifts do not appear here.">
-        <div className="rounded-2xl bg-slate-50 p-6 text-center"><CalendarDays className="mx-auto h-7 w-7 text-slate-400" /><p className="mt-3 font-black text-slate-800">No published shifts are assigned to your account.</p><p className="mt-1 text-sm font-semibold text-slate-500">If you expected a shift, contact your location lead so they can confirm your assignment is linked to your staff account and publish the week.</p><SecondaryButton onClick={() => setAnchorDate(today)} className="mt-4">Back to Current Week</SecondaryButton></div>
+        <div className="rounded-2xl bg-slate-50 p-6 text-center"><CalendarDays className="mx-auto h-7 w-7 text-slate-400" /><p className="mt-3 font-black text-slate-800">No published shifts are assigned to your account.</p><p className="mt-1 text-sm font-semibold text-slate-500">If you expected a shift, contact your location lead so they can confirm your assignment is linked to your staff account and publish the week.</p><div className="mt-4"><SecondaryButton onClick={() => setAnchorDate(today)}>Back to Current Week</SecondaryButton></div></div>
       </SectionCard>}
     </>}
   </div></MainLayout>;
