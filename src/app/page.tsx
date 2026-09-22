@@ -8,10 +8,11 @@ import SmartAlertsPanel from "@/components/dashboard/SmartAlertsPanel";
 import TodayAtTCS from "@/components/dashboard/TodayAtTCS";
 import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { useLiveStaffingSnapshot } from "@/hooks/useLiveStaffingSnapshot";
 import { initialChildren, type ChildRecord } from "@/lib/children";
 import { childAttendsLocation, starterChildSchedules, type ChildScheduleRecord } from "@/lib/child-schedules";
 import { starterKidKareEnrollments, starterTimesheets, type KidKareEnrollment, type TimesheetRecord } from "@/lib/compliance-ops";
-import { starterFiles, starterRoutes, starterShifts, starterTasks, starterVehicles, type FileRecord, type Shift, type TransportationRoute, type VehicleRecord, type WorkTask } from "@/lib/hub-data";
+import { starterFiles, starterRoutes, starterTasks, starterVehicles, type FileRecord, type Shift, type TransportationRoute, type VehicleRecord, type WorkTask } from "@/lib/hub-data";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { careLocations, locationThemes, starterLocationHours, summarizeHours, type LocationHoursRecord } from "@/lib/location-config";
 import { buildBriefingSnapshot, buildSmartAlerts } from "@/lib/operations-intelligence";
@@ -52,12 +53,48 @@ export default function Home() {
   const [kidKareRecords] = usePersistentState<KidKareEnrollment[]>("tcs-kidkare-enrollments-v1", canUseKidKare ? starterKidKareEnrollments : []);
   const [timesheets] = usePersistentState<TimesheetRecord[]>("tcs-timesheets-v1", canUseTimesheets ? starterTimesheets : []);
   const [files] = usePersistentState<FileRecord[]>("tcs-files", canUseFiles ? starterFiles : []);
-  const [shifts] = usePersistentState<Shift[]>("tcs-shifts", (canUseScheduling || canUseRatios) ? starterShifts : []);
   const [hours] = usePersistentState<LocationHoursRecord[]>("tcs-location-hours-v2", canUseRatios ? starterLocationHours : []);
   const [vehicles] = usePersistentState<VehicleRecord[]>("tcs-vehicles-v2", canUseTransportation ? starterVehicles : []);
   const [enrollmentLeads] = usePersistentState<EnrollmentLeadRecord[]>("tcs-enrollment-pipeline-v1", canUseEnrollment ? starterEnrollmentLeads : []);
   const [digitalForms] = usePersistentState<DigitalFormRecord[]>("tcs-digital-forms-v1", canUseDigitalForms ? starterDigitalForms : []);
   const [transportationFees] = usePersistentState<TransportationFeeRecord[]>("tcs-transportation-fees-v1", canUseTransportationFees ? starterTransportationFees : []);
+  const todayDate = localIsoDate();
+  const liveStaffing = useLiveStaffingSnapshot({
+    date: todayDate,
+    schedules: childSchedules,
+    accessibleLocations: visibleCareLocations,
+    enabled: canUseScheduling || canUseRatios || canUseAIDirector,
+  });
+  const operationalShifts: Shift[] = liveStaffing.shiftViews.map((shift, index) => ({
+    id: index + 1,
+    employee: shift.staffName,
+    role: "",
+    location: shift.location,
+    day: new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(new Date(`${todayDate}T12:00:00`)),
+    start: shift.start,
+    end: shift.end,
+    assignment: shift.assignment,
+  }));
+  const liveCoverageWindows = liveStaffing.coverageWindows.map((window) => ({
+    location: window.location,
+    start: window.start,
+    end: window.end,
+    childNames: window.children.map((child) => child.childName),
+    childCount: window.childCount,
+    staffNames: window.staffNames,
+    staffCount: window.staffCount,
+    requiredStaff: window.requiredStaff,
+    capacity: window.capacity,
+    status: window.status,
+    offFloorNames: window.offFloorNames,
+  }));
+  const liveStaffShifts = liveStaffing.shiftViews.map((shift) => ({
+    id: shift.id,
+    staffName: shift.staffName,
+    location: shift.location,
+    start: shift.start,
+    end: shift.end,
+  }));
 
   const activeChildren = children.filter((child) => child.enrollmentStatus === "Active");
   const totalEnrolled = activeChildren.length;
@@ -77,18 +114,20 @@ export default function Home() {
   const missingFeeGroups = feeExpectations.filter((item) => !feeRecordKeys.has(`${item.location}|${item.familyKey}`)).length;
   const transportationBillingNeedsAttention = missingFeeGroups + currentFeeRecords.filter((item) => !["Correct", "Resolved"].includes(transportationChargeStatus(item))).length;
   const todayName = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(new Date());
-  const todayShifts = shifts.filter((shift) => shift.day === todayName);
+  const todayShifts = operationalShifts.filter((shift) => shift.day === todayName);
   const intelligenceInput = {
-    date: localIsoDate(),
+    date: todayDate,
     accessibleLocations: visibleCareLocations,
     children,
     schedules: childSchedules,
-    shifts,
+    shifts: operationalShifts,
     routes,
     vehicles,
     hours,
     files,
     tasks,
+    liveCoverageWindows,
+    liveStaffShifts,
   };
   const smartAlerts = buildSmartAlerts(intelligenceInput).filter((alert) => canAccessRoute(profile, alert.href));
   const briefingSnapshot = buildBriefingSnapshot(intelligenceInput, smartAlerts);
@@ -136,8 +175,8 @@ export default function Home() {
         <div className="hidden lg:block"><DashboardHero /></div>
         <div className="hidden lg:block"><MorningBriefing snapshot={briefingSnapshot} /></div>
         <TodayAtTCS
-          date={localIsoDate()}
-          shifts={shifts}
+          date={todayDate}
+          shifts={operationalShifts}
           routes={routes}
           tasks={tasks}
           leads={enrollmentLeads}
