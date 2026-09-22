@@ -94,6 +94,22 @@ type SchedulePublication = {
   published_at: string | null;
   published_by: string | null;
   notes: string | null;
+  needs_republish: boolean;
+};
+
+type PublishedShiftSnapshot = {
+  id: string;
+  publication_id: string;
+  location_id: string;
+  source_shift_id: string | null;
+  user_id: string | null;
+  staff_name: string;
+  shift_date: string;
+  start_time: string;
+  end_time: string;
+  position_label: string | null;
+  notes: string | null;
+  revision: number;
 };
 
 type ScheduleAcknowledgement = {
@@ -168,6 +184,7 @@ export default function SchedulingPage() {
   const [rules, setRules] = useState<StaffingRuleRow[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [publications, setPublications] = useState<SchedulePublication[]>([]);
+  const [publishedSnapshots, setPublishedSnapshots] = useState<PublishedShiftSnapshot[]>([]);
   const [acknowledgements, setAcknowledgements] = useState<ScheduleAcknowledgement[]>([]);
   const [selectedDate, setSelectedDate] = useState(() => localIsoDate());
   const [selectedLocationId, setSelectedLocationId] = useState("");
@@ -193,7 +210,7 @@ export default function SchedulingPage() {
       supabase.from("staff_activity_intervals").select("id,location_id,shift_id,user_id,staff_name,activity_date,start_time,end_time,activity_type,counts_toward_floor,reason,source_key").gte("activity_date", weekStart).lte("activity_date", weekEnd).order("activity_date").order("start_time"),
       supabase.from("staffing_rules").select("id,location_id,rule_name,age_group,children_per_staff,minimum_staff,maximum_group_size,effective_from,effective_to,source_type,source_note,is_active").eq("is_active", true).order("effective_from", { ascending: false }),
       supabase.from("staff_access").select("user_id,full_name,role,locations").eq("is_active", true).order("full_name"),
-      supabase.from("schedule_publications").select("id,location_id,week_of,status,revision,published_at,published_by,notes").eq("week_of", weekStart).order("updated_at", { ascending: false }),
+      supabase.from("schedule_publications").select("id,location_id,week_of,status,revision,published_at,published_by,notes,needs_republish").eq("week_of", weekStart).order("updated_at", { ascending: false }),
     ]);
 
     const requiredError = locationResult.error || shiftResult.error || activityResult.error || ruleResult.error || publicationResult.error;
@@ -202,18 +219,28 @@ export default function SchedulingPage() {
     } else {
       const nextPublications = (publicationResult.data ?? []) as SchedulePublication[];
       let nextAcknowledgements: ScheduleAcknowledgement[] = [];
+      let nextSnapshots: PublishedShiftSnapshot[] = [];
       const publicationIds = nextPublications.map((item) => item.id);
       if (publicationIds.length) {
-        const acknowledgementResult = await supabase
-          .from("staff_schedule_acknowledgements")
-          .select("id,publication_id,location_id,user_id,revision,acknowledged_at,notes")
-          .in("publication_id", publicationIds);
-        if (acknowledgementResult.error) {
-          setError(acknowledgementResult.error.message);
+        const [acknowledgementResult, snapshotResult] = await Promise.all([
+          supabase
+            .from("staff_schedule_acknowledgements")
+            .select("id,publication_id,location_id,user_id,revision,acknowledged_at,notes")
+            .in("publication_id", publicationIds),
+          supabase
+            .from("staff_schedule_publication_shifts")
+            .select("id,publication_id,location_id,source_shift_id,user_id,staff_name,shift_date,start_time,end_time,position_label,notes,revision")
+            .in("publication_id", publicationIds)
+            .gte("shift_date", weekStart)
+            .lte("shift_date", weekEnd),
+        ]);
+        if (acknowledgementResult.error || snapshotResult.error) {
+          setError(acknowledgementResult.error?.message || snapshotResult.error?.message || "Could not load published schedule details.");
           setLoading(false);
           return;
         }
         nextAcknowledgements = (acknowledgementResult.data ?? []) as ScheduleAcknowledgement[];
+        nextSnapshots = (snapshotResult.data ?? []) as PublishedShiftSnapshot[];
       }
       setError("");
       setLocations((locationResult.data ?? []) as StaffingLocation[]);
@@ -221,6 +248,7 @@ export default function SchedulingPage() {
       setActivities((activityResult.data ?? []) as StaffActivityRow[]);
       setRules((ruleResult.data ?? []) as StaffingRuleRow[]);
       setPublications(nextPublications);
+      setPublishedSnapshots(nextSnapshots);
       setAcknowledgements(nextAcknowledgements);
     }
 
@@ -241,6 +269,7 @@ export default function SchedulingPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "staffing_rules" }, () => void load())
       .on("postgres_changes", { event: "*", schema: "public", table: "schedule_publications" }, () => void load())
       .on("postgres_changes", { event: "*", schema: "public", table: "staff_schedule_acknowledgements" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "staff_schedule_publication_shifts" }, () => void load())
       .subscribe();
     return () => { void supabase?.removeChannel(channel); };
   }, [load, profile?.user_id, session?.access_token]);
