@@ -100,6 +100,7 @@ create table if not exists public.schedule_publications (
   location_id uuid not null references public.locations(id) on delete cascade,
   week_of date not null,
   status text not null default 'Draft' check (status in ('Draft','Published','Superseded')),
+  revision integer not null default 1,
   published_at timestamptz,
   published_by uuid references auth.users(id) on delete set null,
   notes text,
@@ -131,7 +132,13 @@ alter table public.staffing_rules enable row level security;
 alter table public.schedule_publications enable row level security;
 
 create policy "staff shifts read" on public.staff_shifts for select to authenticated
-using (organization_id = public.current_staff_organization_id() and public.can_read_location_module(location_id, 'schedules'));
+using (
+  organization_id = public.current_staff_organization_id()
+  and (
+    public.can_read_location_module(location_id, 'schedules')
+    or (user_id = auth.uid() and public.can_access_location(location_id))
+  )
+);
 create policy "staff shifts insert" on public.staff_shifts for insert to authenticated
 with check (organization_id = public.current_staff_organization_id() and public.can_write_location_module(location_id, 'schedules'));
 create policy "staff shifts update" on public.staff_shifts for update to authenticated
@@ -216,7 +223,10 @@ create policy "staffing rules delete" on public.staffing_rules for delete to aut
 using (organization_id = public.current_staff_organization_id() and public.can_access_location(location_id) and (public.is_tcs_owner() or public.is_tcs_licensee()));
 
 create policy "schedule publications read" on public.schedule_publications for select to authenticated
-using (organization_id = public.current_staff_organization_id() and public.can_read_location_module(location_id, 'schedules'));
+using (
+  organization_id = public.current_staff_organization_id()
+  and public.can_access_location(location_id)
+);
 create policy "schedule publications insert" on public.schedule_publications for insert to authenticated
 with check (organization_id = public.current_staff_organization_id() and public.can_write_location_module(location_id, 'schedules'));
 create policy "schedule publications update" on public.schedule_publications for update to authenticated
@@ -225,7 +235,58 @@ with check (organization_id = public.current_staff_organization_id() and public.
 create policy "schedule publications delete" on public.schedule_publications for delete to authenticated
 using (organization_id = public.current_staff_organization_id() and public.can_write_location_module(location_id, 'schedules'));
 
+create table if not exists public.staff_schedule_acknowledgements (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null default public.current_staff_organization_id()
+    references public.organizations(id) on delete cascade,
+  publication_id uuid not null references public.schedule_publications(id) on delete cascade,
+  location_id uuid not null references public.locations(id) on delete cascade,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  revision integer not null,
+  acknowledged_at timestamptz not null default now(),
+  notes text,
+  created_at timestamptz not null default now(),
+  unique (publication_id, user_id, revision)
+);
+
+create index if not exists staff_schedule_ack_user_idx
+  on public.staff_schedule_acknowledgements(user_id, acknowledged_at desc);
+create index if not exists staff_schedule_ack_location_idx
+  on public.staff_schedule_acknowledgements(location_id, acknowledged_at desc);
+
+alter table public.staff_schedule_acknowledgements enable row level security;
+
+create policy "schedule acknowledgements read" on public.staff_schedule_acknowledgements
+for select to authenticated
+using (
+  organization_id = public.current_staff_organization_id()
+  and (
+    user_id = auth.uid()
+    or public.can_read_location_module(location_id, 'schedules')
+  )
+);
+
+create policy "schedule acknowledgements insert" on public.staff_schedule_acknowledgements
+for insert to authenticated
+with check (
+  organization_id = public.current_staff_organization_id()
+  and user_id = auth.uid()
+  and public.can_access_location(location_id)
+);
+
+create policy "schedule acknowledgements delete" on public.staff_schedule_acknowledgements
+for delete to authenticated
+using (
+  organization_id = public.current_staff_organization_id()
+  and (
+    user_id = auth.uid()
+    or public.can_write_location_module(location_id, 'schedules')
+  )
+);
+
 grant select, insert, update, delete on public.staff_shifts, public.staff_activity_intervals, public.child_attendance_sessions, public.staffing_rules, public.schedule_publications to authenticated;
+grant select, insert, delete on public.staff_schedule_acknowledgements to authenticated;
+grant all on public.staff_schedule_acknowledgements to service_role;
 grant all on public.staff_shifts, public.staff_activity_intervals, public.child_attendance_sessions, public.staffing_rules, public.schedule_publications to service_role;
 
 create trigger set_staff_shifts_updated_at before update on public.staff_shifts for each row execute function public.set_updated_at();
@@ -239,3 +300,4 @@ create trigger audit_staff_activity_intervals after insert or update or delete o
 create trigger audit_child_attendance_sessions after insert or update or delete on public.child_attendance_sessions for each row execute function public.audit_location_row_change();
 create trigger audit_staffing_rules after insert or update or delete on public.staffing_rules for each row execute function public.audit_location_row_change();
 create trigger audit_schedule_publications after insert or update or delete on public.schedule_publications for each row execute function public.audit_location_row_change();
+create trigger audit_staff_schedule_acknowledgements after insert or delete on public.staff_schedule_acknowledgements for each row execute function public.audit_location_row_change();
