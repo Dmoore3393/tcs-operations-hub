@@ -508,5 +508,6 @@ begin
 end;
 $;
 
+revoke execute on function public.publish_staff_schedule(uuid, date, text) from public, anon;
 grant execute on function public.publish_staff_schedule(uuid, date, text) to authenticated;
-revoke execute on function public.publish_staff_schedule(uuid, date, text) from anon;
+revoke execute on function public.mark_staff_schedule_publication_dirty() from public, anon, authenticated;
