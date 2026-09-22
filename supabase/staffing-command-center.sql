@@ -42,6 +42,7 @@ create table if not exists public.staff_activity_intervals (
   counts_toward_floor boolean not null default true,
   transportation_route_id uuid references public.transportation_routes(id) on delete set null,
   reason text,
+  source_key text,
   created_by uuid default auth.uid() references auth.users(id) on delete set null,
   updated_by uuid default auth.uid() references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
@@ -113,6 +114,9 @@ create index if not exists staff_shifts_location_date_idx on public.staff_shifts
 create index if not exists staff_shifts_user_date_idx on public.staff_shifts(user_id, shift_date);
 create index if not exists staff_activity_location_date_idx on public.staff_activity_intervals(location_id, activity_date, start_time, end_time);
 create index if not exists staff_activity_user_date_idx on public.staff_activity_intervals(user_id, activity_date);
+create unique index if not exists staff_activity_source_key_uidx
+  on public.staff_activity_intervals(organization_id, source_key)
+  where source_key is not null;
 create index if not exists child_attendance_location_date_idx on public.child_attendance_sessions(location_id, attendance_date, status);
 create unique index if not exists child_attendance_one_session_per_day_idx
   on public.child_attendance_sessions(organization_id, child_id, attendance_date)
@@ -137,14 +141,44 @@ create policy "staff shifts delete" on public.staff_shifts for delete to authent
 using (organization_id = public.current_staff_organization_id() and public.can_write_location_module(location_id, 'schedules'));
 
 create policy "staff activity read" on public.staff_activity_intervals for select to authenticated
-using (organization_id = public.current_staff_organization_id() and public.can_read_location_module(location_id, 'schedules'));
+using (
+  organization_id = public.current_staff_organization_id()
+  and (
+    public.can_read_location_module(location_id, 'schedules')
+    or public.can_read_location_module(location_id, 'transportation')
+  )
+);
 create policy "staff activity insert" on public.staff_activity_intervals for insert to authenticated
-with check (organization_id = public.current_staff_organization_id() and public.can_write_location_module(location_id, 'schedules'));
+with check (
+  organization_id = public.current_staff_organization_id()
+  and (
+    public.can_write_location_module(location_id, 'schedules')
+    or (activity_type = 'Transportation' and public.can_write_location_module(location_id, 'transportation'))
+  )
+);
 create policy "staff activity update" on public.staff_activity_intervals for update to authenticated
-using (organization_id = public.current_staff_organization_id() and public.can_write_location_module(location_id, 'schedules'))
-with check (organization_id = public.current_staff_organization_id() and public.can_write_location_module(location_id, 'schedules'));
+using (
+  organization_id = public.current_staff_organization_id()
+  and (
+    public.can_write_location_module(location_id, 'schedules')
+    or (activity_type = 'Transportation' and public.can_write_location_module(location_id, 'transportation'))
+  )
+)
+with check (
+  organization_id = public.current_staff_organization_id()
+  and (
+    public.can_write_location_module(location_id, 'schedules')
+    or (activity_type = 'Transportation' and public.can_write_location_module(location_id, 'transportation'))
+  )
+);
 create policy "staff activity delete" on public.staff_activity_intervals for delete to authenticated
-using (organization_id = public.current_staff_organization_id() and public.can_write_location_module(location_id, 'schedules'));
+using (
+  organization_id = public.current_staff_organization_id()
+  and (
+    public.can_write_location_module(location_id, 'schedules')
+    or (activity_type = 'Transportation' and public.can_write_location_module(location_id, 'transportation'))
+  )
+);
 
 create policy "child attendance read" on public.child_attendance_sessions for select to authenticated
 using (
