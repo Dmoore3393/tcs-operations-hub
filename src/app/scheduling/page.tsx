@@ -8,7 +8,6 @@ import { usePersistentState } from "@/hooks/usePersistentState";
 import { initialChildren, type ChildRecord } from "@/lib/children";
 import { compactTime, starterChildSchedules, type ChildScheduleRecord } from "@/lib/child-schedules";
 import { localIsoDate } from "@/lib/date-utils";
-import { careLocations, normalizeLocation, type LocationKey } from "@/lib/location-config";
 import { sendHubNotificationEvent } from "@/lib/notification-client";
 import {
   buildCoverageWindows,
@@ -304,7 +303,7 @@ export default function SchedulingPage() {
       void sendHubNotificationEvent({
         accessToken: session?.access_token,
         eventType: "schedule_update",
-        location: locationKeyForDbLocation(location ?? locations[0]) ?? "All Locations",
+        location: location ? (locationKeyForDbLocation(location) ?? "All Locations") : "All Locations",
         eventKey: `staffing:${shiftDraft.id ?? "new"}:${Date.now()}`,
       });
       setShiftDraft(null);
