@@ -29,9 +29,9 @@ export type CoverageWindow = {
   infantCount: number;
   staffNames: string[];
   staffCount: number;
-  requiredStaff: number;
+  requiredStaff: number | null;
   capacity: number;
-  inRatio: boolean;
+  status: CoverageStatus;
 };
 
 export type LiveOperationsCoverageWindow = {
@@ -85,13 +85,6 @@ export type OperationsBriefingSnapshot = {
   topAlerts: Array<Pick<SmartAlert, "severity" | "title" | "detail" | "location" | "category">>;
 };
 
-export function requiredStaffFor(location: Exclude<LocationKey, "All Locations">, childCount: number, infantCount: number) {
-  if (childCount <= 0) return 0;
-  if (location === "Division") return Math.ceil(childCount / 14);
-  if (infantCount > 0) return Math.ceil(childCount / 6);
-  return Math.ceil(childCount / 8);
-}
-
 function locationHoursFor(input: OperationsIntelligenceInput, location: Exclude<LocationKey, "All Locations">) {
   const day = dateToDayName(input.date);
   return input.hours.find((record) => record.location === location)?.days[day];
@@ -140,7 +133,7 @@ export function buildCoverageWindows(input: OperationsIntelligenceInput) {
       const staff = locationShifts.filter((shift) => shift.start <= midpoint && shift.end > midpoint).map((shift) => shift.shift);
       if (!present.length && !staff.length) continue;
       const infantCount = present.filter((record) => record.ageGroup === "Infant").length;
-      const requiredStaff = requiredStaffFor(location, present.length, infantCount);
+      const capacity = locationThemes[location].capacity;
       windows.push({
         location,
         start,
@@ -150,9 +143,9 @@ export function buildCoverageWindows(input: OperationsIntelligenceInput) {
         infantCount,
         staffNames: staff.map((record) => record.employee),
         staffCount: staff.length,
-        requiredStaff,
-        capacity: locationThemes[location].capacity,
-        inRatio: staff.length >= requiredStaff,
+        requiredStaff: present.length ? null : 0,
+        capacity,
+        status: present.length > capacity ? "over-capacity" : present.length ? "rule-needed" : "covered",
       });
     }
   });
@@ -209,11 +202,7 @@ export function buildSmartAlerts(input: OperationsIntelligenceInput) {
     staffCount: window.staffCount,
     requiredStaff: window.requiredStaff,
     capacity: window.capacity,
-    status: window.childCount > window.capacity
-      ? "over-capacity"
-      : window.inRatio
-        ? (window.staffCount === window.requiredStaff ? "tight" : "covered")
-        : "gap",
+    status: window.status,
   }));
 
   input.accessibleLocations.forEach((location) => {
