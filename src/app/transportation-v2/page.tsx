@@ -324,38 +324,69 @@ export default function TransportationV2Page() {
     });
   }
 
-  function checkIntoLocation(route: LiveRoute) {
+  async function checkIntoLocation(route: LiveRoute) {
     const location = destinationLocation(route.dropoffLocation);
     if (!location) return;
+    const child = children.find((item) => `${item.firstName} ${item.lastName}`.trim().toLowerCase() === route.child.trim().toLowerCase());
+    if (!child) {
+      setCoverageMessage(`Could not check ${route.child} into care because the child record was not found.`);
+      return;
+    }
+    if (!child.legacyId || !session?.access_token) {
+      setCoverageMessage(`Could not complete ${route.child}'s location check-in because the secured child ID or staff session is unavailable.`);
+      return;
+    }
+
+    const attendanceResponse = await fetch("/api/attendance", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ childId: child.legacyId, action: "checkin" }),
+      cache: "no-store",
+    });
+    const attendancePayload = await attendanceResponse.json().catch(() => ({})) as { error?: string; child?: { record?: Partial<ChildRecord> } };
+    if (!attendanceResponse.ok) {
+      setCoverageMessage(attendancePayload.error || `Could not check ${route.child} into care.`);
+      return;
+    }
+
     const now = new Date();
     const iso = now.toISOString();
-    const child = children.find((item) => `${item.firstName} ${item.lastName}`.toLowerCase() === route.child.toLowerCase());
-
     updateRoute(route, { runDate: today, runStatus: "Checked In", checkedInAt: iso, checkedInBy: actor, droppedOffAt: iso, droppedOffBy: actor });
 
     if (isFinalHandoffForRoute(route)) void finishTransportationCoverage(route);
 
-    if (child) {
-      setChildren((current) => current.map((item) => item.id === child.id ? { ...item, attendanceToday: "Present", attendanceDate: today, checkedInAt: iso, checkedInBy: actor } : item));
-      const alreadyLogged = careLogs.some((entry) => entry.childId === child.id && entry.location === location && entry.date === today && entry.action === "Transportation Check-In");
-      if (!alreadyLogged) {
-        const initials = actor.split(/\s+/).map((part) => part[0]).join("").replace(/[^A-Za-z]/g, "").slice(0, 4).toUpperCase() || "TCS";
-        setCareLogs((current) => [...current, {
-          id: `transport-checkin-${route.id}-${Date.now()}`,
-          childId: child.id,
-          childName: `${child.firstName} ${child.lastName}`,
-          location,
-          date: today,
-          time: now.toTimeString().slice(0, 5),
-          category: "Daily Note",
-          action: "Transportation Check-In",
-          result: "Arrived at location",
-          notes: `Arrived from ${route.school || "transportation route"} via ${routeKey(route)}.`,
-          initials,
-          createdAt: iso,
-        }]);
-      }
+    setChildren((current) => current.map((item) => item.id === child.id ? {
+      ...item,
+      ...(attendancePayload.child?.record ?? {}),
+      attendanceToday: "Present",
+      attendanceDate: today,
+      checkedInAt: iso,
+      checkedInBy: actor,
+    } : item));
+
+    const alreadyLogged = careLogs.some((entry) => entry.childId === child.id && entry.location === location && entry.date === today && entry.action === "Transportation Check-In");
+    if (!alreadyLogged) {
+      const initials = actor.split(/\s+/).map((part) => part[0]).join("").replace(/[^A-Za-z]/g, "").slice(0, 4).toUpperCase() || "TCS";
+      setCareLogs((current) => [...current, {
+        id: `transport-checkin-${route.id}-${Date.now()}`,
+        childId: child.id,
+        childName: `${child.firstName} ${child.lastName}`,
+        location,
+        date: today,
+        time: now.toTimeString().slice(0, 5),
+        category: "Daily Note",
+        action: "Transportation Check-In",
+        result: "Arrived at location",
+        notes: `Arrived from ${route.school || "transportation route"} via ${routeKey(route)}.`,
+        initials,
+        createdAt: iso,
+      }]);
     }
+
+    setCoverageMessage(`${route.child} is checked into ${location}. Attendance and staffing are synced.`);
   }
 
   function confirmExternalDropoff(route: LiveRoute) {
