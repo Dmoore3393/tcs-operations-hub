@@ -567,14 +567,37 @@ export default function SchedulingPage() {
       published_at: publishedAt,
       published_by: profile.user_id,
       notes: `Published from Staffing Command Center • revision ${nextRevision}`,
+      needs_republish: false,
     };
 
     const publicationResult = currentPublication
-      ? await supabase.from("schedule_publications").update(publicationPayload).eq("id", currentPublication.id)
-      : await supabase.from("schedule_publications").insert(publicationPayload);
+      ? await supabase.from("schedule_publications").update(publicationPayload).eq("id", currentPublication.id).select("id,revision").single()
+      : await supabase.from("schedule_publications").insert(publicationPayload).select("id,revision").single();
 
-    if (publicationResult.error) {
-      setError(publicationResult.error.message);
+    if (publicationResult.error || !publicationResult.data?.id) {
+      setError(publicationResult.error?.message || "The schedule publication could not be created.");
+      setSaving(false);
+      return;
+    }
+
+    const publicationId = publicationResult.data.id as string;
+    const snapshotRows = weekShifts.map((shift) => ({
+      publication_id: publicationId,
+      location_id: shift.location_id,
+      source_shift_id: shift.id,
+      user_id: shift.user_id || null,
+      staff_name: shift.staff_name,
+      shift_date: shift.shift_date,
+      start_time: shift.start_time,
+      end_time: shift.end_time,
+      position_label: shift.position_label,
+      notes: shift.notes,
+      revision: nextRevision,
+    }));
+    const snapshotResult = await supabase.from("staff_schedule_publication_shifts").insert(snapshotRows);
+    if (snapshotResult.error) {
+      await supabase.from("schedule_publications").update({ needs_republish: true }).eq("id", publicationId);
+      setError(`The week was marked published, but the employee schedule snapshot failed: ${snapshotResult.error.message}`);
       setSaving(false);
       return;
     }
@@ -604,7 +627,12 @@ export default function SchedulingPage() {
       ?? publications.find((item) => item.location_id === selectedLocation.id && item.week_of === weekStart)
       ?? null)
     : null;
-  const scheduledUserIds = new Set(selectedWeekShifts.map((shift) => shift.user_id).filter((value): value is string => Boolean(value)));
+  const currentPublishedSnapshots = selectedPublication
+    ? publishedSnapshots.filter((item) => item.publication_id === selectedPublication.id && item.revision === selectedPublication.revision)
+    : [];
+  const draftLinkedUserIds = new Set(selectedWeekShifts.map((shift) => shift.user_id).filter((value): value is string => Boolean(value)));
+  const publishedUserIds = new Set(currentPublishedSnapshots.map((shift) => shift.user_id).filter((value): value is string => Boolean(value)));
+  const scheduledUserIds = selectedPublication?.status === "Published" ? publishedUserIds : draftLinkedUserIds;
   const currentAcknowledgements = selectedPublication
     ? acknowledgements.filter((item) => item.publication_id === selectedPublication.id && item.revision === selectedPublication.revision)
     : [];
@@ -659,11 +687,12 @@ export default function SchedulingPage() {
         <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
           <div className={`rounded-2xl border p-4 text-sm font-semibold ${selectedPublication?.status === "Published" ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
             {selectedPublication?.status === "Published"
-              ? <><strong>Published revision {selectedPublication.revision}.</strong> {selectedPublication.published_at ? `Last published ${new Date(selectedPublication.published_at).toLocaleString()}.` : ""} Republishing creates a new revision, so employees must acknowledge the updated schedule again.</>
+              ? <><strong>Published revision {selectedPublication.revision}.</strong> {selectedPublication.published_at ? `Last published ${new Date(selectedPublication.published_at).toLocaleString()}.` : ""} {selectedPublication.needs_republish ? "The working schedule has changed since that publication; employees still see the last published snapshot until you republish." : "Employees are viewing this exact published snapshot."}</>
               : <><strong>Not published yet.</strong> Draft shifts are not shown in My Schedule until this week is published.</>}
           </div>
           <div className="flex flex-wrap gap-2">
             {unlinkedShiftCount > 0 && <span className="rounded-full border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-800">{unlinkedShiftCount} unlinked shift{unlinkedShiftCount === 1 ? "" : "s"}</span>}
+            {selectedPublication?.needs_republish && <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-black text-orange-900">Schedule changed • republish needed</span>}
             {weeklyAttention > 0 && <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-900">{weeklyAttention} coverage flag{weeklyAttention === 1 ? "" : "s"} to review</span>}
             {selectedPublication?.status === "Published" && scheduledUserIds.size > acknowledgedUserIds.size && <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800">{scheduledUserIds.size - acknowledgedUserIds.size} acknowledgement{scheduledUserIds.size - acknowledgedUserIds.size === 1 ? "" : "s"} pending</span>}
           </div>
