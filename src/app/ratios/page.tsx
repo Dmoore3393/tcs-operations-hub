@@ -4,64 +4,25 @@ import MainLayout from "@/components/layout/MainLayout";
 import { PageIntro, PrimaryButton, SecondaryButton, SectionCard, StatCard, StatusBadge, inputClass } from "@/components/hub/HubUI";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { starterShifts, type Shift } from "@/lib/hub-data";
-import { dateToDayName, starterChildSchedules, timeToMinutes, compactTime, type ChildScheduleRecord } from "@/lib/child-schedules";
-import { careLocations, formatClock, locationThemes, starterLocationHours, type LocationHoursRecord, type LocationKey } from "@/lib/location-config";
-import { downloadSvg, downloadSvgAsPng, escapeXml, printSvg } from "@/lib/visual-export";
-import { recordAuditEvent } from "@/lib/audit";
-import { AlertTriangle, CalendarDays, Download, Image as ImageIcon, Palette, Printer, RefreshCw, ShieldCheck, Smartphone, Users } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { initialChildren, type ChildRecord } from "@/lib/children";
+import { compactTime, starterChildSchedules, type ChildScheduleRecord } from "@/lib/child-schedules";
 import { localIsoDate } from "@/lib/date-utils";
-
-type TimelineRow = {
-  start: number;
-  end: number;
-  children: string[];
-  staff: string[];
-  infants: number;
-  requiredStaff: number;
-  safe: boolean;
-};
-
-const dayThemeNames = ["Fresh Start", "Creative Shapes", "Wellness Waves", "Think Big", "Fun Friday", "Weekend Adventure", "Calm Sunday"];
-
-function requiredStaffFor(location: Exclude<LocationKey, "All Locations">, children: number, infants: number) {
-  if (!children) return 0;
-  if (location === "Division") return Math.ceil(children / 14);
-  if (infants > 0) return Math.ceil(children / 6);
-  return Math.ceil(children / 8);
-}
-
-function buildTimeline(records: ChildScheduleRecord[], shifts: Shift[], location: Exclude<LocationKey, "All Locations">, day: ReturnType<typeof dateToDayName>, opening: number, closing: number) {
-  if (closing <= opening) return [] as TimelineRow[];
-  const boundaries = new Set<number>([opening, closing]);
-  records.forEach((record) => record.days[day].blocks.filter((block) => block.location === location).forEach((block) => {
-    boundaries.add(Math.max(opening, timeToMinutes(block.start)));
-    boundaries.add(Math.min(closing, timeToMinutes(block.end)));
-  }));
-  shifts.filter((shift) => shift.day === day && shift.location === location).forEach((shift) => {
-    boundaries.add(Math.max(opening, timeToMinutes(shift.start)));
-    boundaries.add(Math.min(closing, timeToMinutes(shift.end)));
-  });
-
-  const sorted = [...boundaries].filter((value) => value >= opening && value <= closing).sort((a, b) => a - b);
-  const rows: TimelineRow[] = [];
-  for (let index = 0; index < sorted.length - 1; index += 1) {
-    const start = sorted[index];
-    const end = sorted[index + 1];
-    if (end <= start) continue;
-    const midpoint = start + (end - start) / 2;
-    const present = records.filter((record) => record.days[day].blocks.some((block) => block.location === location && timeToMinutes(block.start) <= midpoint && timeToMinutes(block.end) > midpoint));
-    const staff = shifts.filter((shift) => shift.day === day && shift.location === location && timeToMinutes(shift.start) <= midpoint && timeToMinutes(shift.end) > midpoint).map((shift) => shift.employee);
-    const infants = present.filter((record) => record.ageGroup === "Infant").length;
-    const requiredStaff = requiredStaffFor(location, present.length, infants);
-    const row: TimelineRow = { start, end, children: present.map((record) => record.childName), staff, infants, requiredStaff, safe: staff.length >= requiredStaff };
-    const prior = rows.at(-1);
-    if (prior && prior.end === row.start && prior.children.join("|") === row.children.join("|") && prior.staff.join("|") === row.staff.join("|") && prior.safe === row.safe) prior.end = row.end;
-    else rows.push(row);
-  }
-  return rows.filter((row) => row.children.length > 0 || row.staff.length > 0);
-}
+import { formatClock, locationThemes, normalizeLocation, starterLocationHours, type LocationHoursRecord, type LocationKey } from "@/lib/location-config";
+import {
+  buildCoverageWindows,
+  checkedInAtLocation,
+  locationKeyForDbLocation,
+  type CoverageWindow,
+  type StaffActivityRow,
+  type StaffShiftRow,
+  type StaffingLocation,
+  type StaffingRuleRow,
+} from "@/lib/staffing-command";
+import { supabase } from "@/lib/supabase/client";
+import { recordAuditEvent } from "@/lib/audit";
+import { downloadSvg, downloadSvgAsPng, escapeXml, printSvg } from "@/lib/visual-export";
+import { AlertTriangle, CheckCircle2, Download, Image as ImageIcon, LoaderCircle, Palette, Printer, RefreshCw, ShieldAlert, ShieldCheck, Smartphone, Users } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 function wrapText(value: string, maxChars: number) {
   const words = value.split(/\s+/).filter(Boolean);
@@ -82,144 +43,220 @@ function svgTextLines(lines: string[], x: number, y: number, lineHeight: number,
   return lines.map((line, index) => `<text x="${x}" y="${y + index * lineHeight}" ${attrs}>${escapeXml(line)}</text>`).join("");
 }
 
-function buildRatioSvg(args: {
-  location: Exclude<LocationKey, "All Locations">;
+function ruleLabel(window: CoverageWindow) {
+  if (window.status === "rule-needed") return "RULE NEEDED";
+  if (window.status === "over-capacity") return "OVER CAPACITY";
+  if (window.status === "gap") return `NEED ${window.requiredStaff ?? "?"} STAFF`;
+  if (window.status === "tight") return "AT MINIMUM";
+  return "COVERED";
+}
+
+function buildCoverageSvg(args: {
+  location: StaffingLocation;
+  locationKey: Exclude<LocationKey, "All Locations">;
   date: string;
-  day: ReturnType<typeof dateToDayName>;
   openingText: string;
   closingText: string;
-  capacity: number;
-  timeline: TimelineRow[];
-  contracted: { name: string; time: string }[];
-  noCare: string[];
+  windows: CoverageWindow[];
   schoolNote: string;
   minimumDay: string;
   variant: number;
 }) {
-  const { location, date, day, openingText, closingText, capacity, timeline, contracted, noCare, schoolNote, minimumDay, variant } = args;
-  const theme = locationThemes[location];
-  const displayDate = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(new Date(`${date}T12:00:00`));
-  const headerHeight = 220;
-  const tableX = 320;
-  const tableWidth = 710;
-  const maxRows = Math.min(timeline.length, 11);
-  const rowHeight = Math.max(72, Math.min(96, Math.floor((1050 - headerHeight) / Math.max(maxRows, 1))));
-  const svgHeight = 1350;
-  const themedTitle = `${dayThemeNames[(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].indexOf(day) + variant) % 7]} • ${location}`;
-
-  const decorations = [
-    `<circle cx="1010" cy="72" r="86" fill="${theme.accent}" opacity=".18"/><circle cx="955" cy="130" r="35" fill="white" opacity=".16"/>`,
-    `<path d="M840 0 L1080 0 L1080 170 Z" fill="${theme.accent}" opacity=".18"/><path d="M905 24 l18 38 42 6-30 29 7 41-37-20-37 20 7-41-30-29 42-6z" fill="white" opacity=".18"/>`,
-    `<path d="M780 150 Q860 80 940 150 T1100 150 V0 H780 Z" fill="${theme.accent}" opacity=".18"/><circle cx="920" cy="62" r="28" fill="white" opacity=".15"/>`,
-    `<g opacity=".22" fill="${theme.accent}"><circle cx="875" cy="48" r="10"/><circle cx="930" cy="105" r="16"/><rect x="985" y="35" width="25" height="25" rx="5"/><path d="M1040 105 l14 25 28 4-20 20 5 28-27-13-25 13 5-28-20-20 28-4z"/></g>`,
-  ][variant % 4];
-
-  const contractedLines = contracted.slice(0, 14).flatMap((item) => [item.name, `  ${item.time}`]);
-  const noCareLines = noCare.length ? noCare.slice(0, 10) : ["None"];
-  const timelineRows = timeline.slice(0, maxRows).map((row, index) => {
-    const y = headerHeight + index * rowHeight;
-    const names = wrapText(row.children.join(", ") || "No children scheduled", 55).slice(0, 3);
-    const staff = row.staff.length ? row.staff.join(", ") : "No staff entered";
-    const fill = row.safe ? (index % 2 ? "#ffffff" : theme.primarySoft) : "#fff1f2";
+  const { location, locationKey, date, openingText, closingText, windows, schoolNote, minimumDay, variant } = args;
+  const theme = locationThemes[locationKey];
+  const displayDate = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(new Date(`${date}T12:00:00`));
+  const rowHeight = Math.max(76, Math.min(104, Math.floor(850 / Math.max(1, Math.min(windows.length, 10)))));
+  const rows = windows.slice(0, 10).map((window, index) => {
+    const y = 300 + index * rowHeight;
+    const statusColor = window.status === "covered" ? theme.primary : window.status === "tight" ? "#d97706" : window.status === "rule-needed" ? "#7c3aed" : "#be123c";
+    const fill = index % 2 ? "#ffffff" : theme.primarySoft;
+    const children = wrapText(window.children.map((child) => child.childName).join(", ") || "No children scheduled", 58).slice(0, 2);
+    const staff = wrapText(window.staffNames.join(", ") || "No floor staff", 42).slice(0, 2);
+    const offFloor = wrapText(window.offFloorNames.length ? `Off floor: ${window.offFloorNames.join(", ")}` : "", 42).slice(0, 1);
     return `<g>
-      <rect x="${tableX}" y="${y}" width="${tableWidth}" height="${rowHeight - 6}" rx="15" fill="${fill}" stroke="${row.safe ? theme.primaryLight : "#fb7185"}" stroke-width="1.5"/>
-      <text x="${tableX + 18}" y="${y + 30}" font-family="Arial, sans-serif" font-size="18" font-weight="800" fill="#0f172a">${escapeXml(`${compactTime(row.start)}–${compactTime(row.end)}`)}</text>
-      ${svgTextLines(names, tableX + 175, y + 25, 19, 'font-family="Arial, sans-serif" font-size="14" font-weight="650" fill="#334155"')}
-      <text x="${tableX + 175}" y="${y + rowHeight - 18}" font-family="Arial, sans-serif" font-size="11" font-weight="700" fill="#64748b">Staff: ${escapeXml(staff)}</text>
-      <text x="${tableX + 625}" y="${y + 30}" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="900" fill="#0f172a">${row.children.length}</text>
-      <text x="${tableX + 625}" y="${y + 52}" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="800" fill="#64748b">CHILDREN</text>
-      <text x="${tableX + 625}" y="${y + rowHeight - 15}" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="900" fill="${row.safe ? theme.primaryDark : "#be123c"}">${row.safe ? "IN RATIO" : `REVIEW • NEED ${row.requiredStaff}`}</text>
+      <rect x="46" y="${y}" width="988" height="${rowHeight - 8}" rx="18" fill="${fill}" stroke="${statusColor}" stroke-width="1.5"/>
+      <text x="68" y="${y + 30}" font-family="Arial,sans-serif" font-size="18" font-weight="900" fill="#0f172a">${escapeXml(`${compactTime(window.start)}–${compactTime(window.end)}`)}</text>
+      ${svgTextLines(children, 250, y + 26, 20, 'font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#334155"')}
+      <text x="620" y="${y + 28}" font-family="Arial,sans-serif" font-size="22" font-weight="900" fill="#0f172a">${window.childCount}</text>
+      <text x="620" y="${y + 49}" font-family="Arial,sans-serif" font-size="10" font-weight="900" fill="#64748b">CHILDREN</text>
+      <text x="735" y="${y + 28}" font-family="Arial,sans-serif" font-size="22" font-weight="900" fill="#0f172a">${window.staffCount}</text>
+      <text x="735" y="${y + 49}" font-family="Arial,sans-serif" font-size="10" font-weight="900" fill="#64748b">FLOOR STAFF</text>
+      <text x="842" y="${y + 28}" font-family="Arial,sans-serif" font-size="22" font-weight="900" fill="#0f172a">${window.requiredStaff ?? "—"}</text>
+      <text x="842" y="${y + 49}" font-family="Arial,sans-serif" font-size="10" font-weight="900" fill="#64748b">REQUIRED</text>
+      <text x="1002" y="${y + 29}" text-anchor="end" font-family="Arial,sans-serif" font-size="12" font-weight="900" fill="${statusColor}">${escapeXml(ruleLabel(window))}</text>
+      ${svgTextLines(staff, 250, y + rowHeight - 31, 17, 'font-family="Arial,sans-serif" font-size="11" font-weight="700" fill="#64748b"')}
+      ${offFloor.length ? svgTextLines(offFloor, 620, y + rowHeight - 23, 16, 'font-family="Arial,sans-serif" font-size="10" font-weight="800" fill="#b45309"') : ""}
     </g>`;
   }).join("");
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block" width="1080" height="${svgHeight}" viewBox="0 0 1080 ${svgHeight}">
-    <defs>
-      <linearGradient id="header" x1="0" x2="1"><stop offset="0" stop-color="${theme.primaryDark}"/><stop offset="1" stop-color="${theme.primary}"/></linearGradient>
-      <filter id="shadow"><feDropShadow dx="0" dy="7" stdDeviation="10" flood-opacity=".12"/></filter>
-      <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="4" cy="4" r="2" fill="${theme.primary}" opacity=".08"/></pattern>
-    </defs>
-    <rect width="1080" height="${svgHeight}" fill="#f8fafc"/>
-    <rect width="1080" height="${svgHeight}" fill="url(#dots)"/>
-    <rect x="28" y="24" width="1024" height="176" rx="34" fill="url(#header)" filter="url(#shadow)"/>
-    ${decorations}
-    <text x="66" y="66" font-family="Arial, sans-serif" font-size="15" font-weight="900" letter-spacing="2" fill="${theme.textOnPrimary}" opacity=".82">TCS DAILY RATIO PLAN</text>
-    <text x="66" y="116" font-family="Arial, sans-serif" font-size="38" font-weight="900" fill="${theme.textOnPrimary}">${escapeXml(location)}</text>
-    <text x="66" y="148" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="${theme.textOnPrimary}" opacity=".92">${escapeXml(`${day}, ${displayDate} • ${openingText}–${closingText} • Capacity ${capacity}`)}</text>
-    <text x="66" y="177" font-family="Arial, sans-serif" font-size="13" font-weight="800" fill="${theme.accent}">${escapeXml(themedTitle)}</text>
+  const decoration = [
+    `<circle cx="940" cy="94" r="100" fill="${theme.accent}" opacity=".18"/><circle cx="1000" cy="45" r="35" fill="white" opacity=".14"/>`,
+    `<path d="M800 0h280v190z" fill="${theme.accent}" opacity=".2"/><circle cx="944" cy="72" r="48" fill="white" opacity=".11"/>`,
+    `<path d="M770 175q95-120 190 0t190 0V0H770z" fill="${theme.accent}" opacity=".18"/>`,
+  ][variant % 3];
 
-    <rect x="28" y="220" width="266" height="1098" rx="26" fill="white" stroke="${theme.primaryLight}" stroke-width="2" filter="url(#shadow)"/>
-    <rect x="45" y="240" width="232" height="44" rx="13" fill="${theme.primary}"/>
-    <text x="61" y="268" font-family="Arial, sans-serif" font-size="15" font-weight="900" fill="${theme.textOnPrimary}">CONTRACTED TIMES</text>
-    ${svgTextLines(contractedLines, 58, 312, 24, 'font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#0f172a"')}
-    <line x1="52" y1="${Math.min(760, 320 + contractedLines.length * 24)}" x2="270" y2="${Math.min(760, 320 + contractedLines.length * 24)}" stroke="#e2e8f0"/>
-    <text x="58" y="${Math.min(800, 356 + contractedLines.length * 24)}" font-family="Arial, sans-serif" font-size="15" font-weight="900" fill="${theme.primaryDark}">NO CARE</text>
-    ${svgTextLines(noCareLines, 58, Math.min(830, 386 + contractedLines.length * 24), 23, 'font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#475569"')}
-    <rect x="45" y="1162" width="232" height="136" rx="18" fill="${theme.primarySoft}"/>
-    <text x="60" y="1190" font-family="Arial, sans-serif" font-size="12" font-weight="900" fill="${theme.primaryDark}">DAY NOTES</text>
-    <text x="60" y="1217" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#334155">School: ${escapeXml(schoolNote || "Regular schedule")}</text>
-    <text x="60" y="1243" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#334155">Minimum day: ${escapeXml(minimumDay || "N/A")}</text>
-    <text x="60" y="1274" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#64748b">Verify live attendance and ages.</text>
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1400" viewBox="0 0 1080 1400">
+    <defs><linearGradient id="header" x1="0" x2="1"><stop offset="0" stop-color="${theme.primaryDark}"/><stop offset="1" stop-color="${theme.primary}"/></linearGradient><filter id="shadow"><feDropShadow dx="0" dy="7" stdDeviation="12" flood-opacity=".13"/></filter></defs>
+    <rect width="1080" height="1400" fill="#f8fafc"/>
+    <rect x="28" y="24" width="1024" height="220" rx="34" fill="url(#header)" filter="url(#shadow)"/>
+    ${decoration}
+    <text x="64" y="68" font-family="Arial,sans-serif" font-size="14" font-weight="900" letter-spacing="2" fill="${theme.textOnPrimary}" opacity=".8">TCS LIVE STAFFING + RATIO PLAN</text>
+    <text x="64" y="122" font-family="Arial,sans-serif" font-size="40" font-weight="900" fill="${theme.textOnPrimary}">${escapeXml(location.name)}</text>
+    <text x="64" y="157" font-family="Arial,sans-serif" font-size="17" font-weight="800" fill="${theme.textOnPrimary}">${escapeXml(displayDate)}</text>
+    <text x="64" y="188" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="${theme.textOnPrimary}" opacity=".9">${escapeXml(`${openingText}–${closingText} • Licensed/entered capacity ${location.capacity}`)}</text>
+    <text x="64" y="217" font-family="Arial,sans-serif" font-size="12" font-weight="900" fill="${theme.accent}">Uses verified TCS staffing rules only • Transportation and other off-floor duties are subtracted</text>
 
-    <text x="${tableX + 12}" y="214" font-family="Arial, sans-serif" font-size="13" font-weight="900" fill="#475569">TIME</text>
-    <text x="${tableX + 175}" y="214" font-family="Arial, sans-serif" font-size="13" font-weight="900" fill="#475569">WHO IS IN CARE DURING THIS TIME</text>
-    <text x="${tableX + 625}" y="214" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="900" fill="#475569">RATIO</text>
-    ${timelineRows}
-    <text x="1030" y="1328" text-anchor="end" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#94a3b8">Generated in TCS Operations Hub • ${escapeXml(location)}</text>
+    <text x="68" y="282" font-family="Arial,sans-serif" font-size="11" font-weight="900" fill="#64748b">TIME</text>
+    <text x="250" y="282" font-family="Arial,sans-serif" font-size="11" font-weight="900" fill="#64748b">CHILDREN + FLOOR STAFF</text>
+    <text x="620" y="282" font-family="Arial,sans-serif" font-size="11" font-weight="900" fill="#64748b">COUNTS</text>
+    <text x="1002" y="282" text-anchor="end" font-family="Arial,sans-serif" font-size="11" font-weight="900" fill="#64748b">STATUS</text>
+    ${rows}
+
+    <rect x="46" y="1220" width="988" height="130" rx="22" fill="white" stroke="#e2e8f0"/>
+    <text x="68" y="1252" font-family="Arial,sans-serif" font-size="12" font-weight="900" fill="${theme.primaryDark}">DAY NOTES</text>
+    <text x="68" y="1282" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#475569">School status: ${escapeXml(schoolNote || "Regular schedule")}</text>
+    <text x="68" y="1308" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#475569">Minimum day: ${escapeXml(minimumDay || "N/A")}</text>
+    <text x="68" y="1334" font-family="Arial,sans-serif" font-size="10" font-weight="700" fill="#64748b">Live attendance must still be checked against the plan. “Rule Needed” means no verified staffing rule is configured for that interval.</text>
+    <text x="1030" y="1380" text-anchor="end" font-family="Arial,sans-serif" font-size="10" font-weight="700" fill="#94a3b8">Generated in TCS Operations Hub</text>
   </svg>`;
 }
 
 export default function RatiosPage() {
   const { location: activeLocation, setLocation: setActiveLocation } = useHubLocation();
   const [schedules] = usePersistentState<ChildScheduleRecord[]>("tcs-child-schedules-v2", starterChildSchedules);
+  const [children] = usePersistentState<ChildRecord[]>("tcs-children-v1", initialChildren);
   const [hours] = usePersistentState<LocationHoursRecord[]>("tcs-location-hours-v2", starterLocationHours);
-  const [shifts] = usePersistentState<Shift[]>("tcs-shifts", starterShifts);
-  const [location, setLocation] = useState<Exclude<LocationKey, "All Locations">>(activeLocation === "All Locations" ? "Halcom" : activeLocation);
+  const [locations, setLocations] = useState<StaffingLocation[]>([]);
+  const [shifts, setShifts] = useState<StaffShiftRow[]>([]);
+  const [activities, setActivities] = useState<StaffActivityRow[]>([]);
+  const [rules, setRules] = useState<StaffingRuleRow[]>([]);
   const [date, setDate] = useState(() => localIsoDate());
-  const [schoolNote, setSchoolNote] = useState("No School • Summer Break");
+  const [selectedLocationId, setSelectedLocationId] = useState("");
+  const [schoolNote, setSchoolNote] = useState("Regular school schedule");
   const [minimumDay, setMinimumDay] = useState("N/A");
   const [variant, setVariant] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  useEffect(() => { const timeoutId = window.setTimeout(() => { if (activeLocation !== "All Locations") setLocation(activeLocation); }, 0); return () => window.clearTimeout(timeoutId); }, [activeLocation]);
-  const day = dateToDayName(date);
-  const hoursRecord = hours.find((record) => record.location === location) ?? starterLocationHours[0];
-  const dailyHours = hoursRecord.days[day];
-  const opening = dailyHours.closed ? 0 : timeToMinutes(dailyHours.open);
-  const closing = dailyHours.closed ? 0 : timeToMinutes(dailyHours.close);
-  const timeline = useMemo(() => buildTimeline(schedules, shifts, location, day, opening, closing), [schedules, shifts, location, day, opening, closing]);
-  const relevant = schedules.filter((record) => record.defaultLocation === location || record.days[day].blocks.some((block) => block.location === location));
-  const contracted = relevant.filter((record) => record.days[day].blocks.some((block) => block.location === location)).map((record) => ({ name: record.childName, time: record.days[day].blocks.filter((block) => block.location === location).map((block) => `${compactTime(timeToMinutes(block.start))}–${compactTime(timeToMinutes(block.end))}`).join(" + ") }));
-  const noCare = relevant.filter((record) => !record.days[day].blocks.some((block) => block.location === location)).map((record) => record.childName);
-  const peak = timeline.reduce((max, row) => Math.max(max, row.children.length), 0);
-  const flagged = timeline.filter((row) => !row.safe).length;
-  const releaseWindows = timeline.filter((row) => row.children.length > 0 && row.staff.length > row.requiredStaff);
-  const maxExtraStaff = releaseWindows.reduce((max, row) => Math.max(max, row.staff.length - row.requiredStaff), 0);
-  const theme = locationThemes[location];
-  const svg = useMemo(() => buildRatioSvg({ location, date, day, openingText: dailyHours.closed ? "Closed" : formatClock(dailyHours.open), closingText: dailyHours.closed ? "Closed" : formatClock(dailyHours.close), capacity: theme.capacity, timeline, contracted, noCare, schoolNote, minimumDay, variant }), [location, date, day, dailyHours, theme.capacity, timeline, contracted, noCare, schoolNote, minimumDay, variant]);
-  const filename = `TCS-${location.replaceAll(" ", "-")}-daily-ratios-${date}`;
+  const load = useCallback(async () => {
+    if (!supabase) return;
+    setLoading(true);
+    const [locationResult, shiftResult, activityResult, ruleResult] = await Promise.all([
+      supabase.from("locations").select("id,slug,name,full_name,capacity,program_type").eq("is_active", true).order("name"),
+      supabase.from("staff_shifts").select("id,location_id,user_id,staff_name,shift_date,start_time,end_time,status,position_label,notes").eq("shift_date", date).order("start_time"),
+      supabase.from("staff_activity_intervals").select("id,location_id,shift_id,user_id,staff_name,activity_date,start_time,end_time,activity_type,counts_toward_floor,reason,source_key").eq("activity_date", date).order("start_time"),
+      supabase.from("staffing_rules").select("id,location_id,rule_name,age_group,children_per_staff,minimum_staff,maximum_group_size,effective_from,effective_to,source_type,source_note,is_active").eq("is_active", true).order("effective_from", { ascending: false }),
+    ]);
+    const failure = locationResult.error || shiftResult.error || activityResult.error || ruleResult.error;
+    if (failure) setError(failure.message);
+    else {
+      setError("");
+      setLocations((locationResult.data ?? []) as StaffingLocation[]);
+      setShifts((shiftResult.data ?? []) as StaffShiftRow[]);
+      setActivities((activityResult.data ?? []) as StaffActivityRow[]);
+      setRules((ruleResult.data ?? []) as StaffingRuleRow[]);
+    }
+    setLoading(false);
+  }, [date]);
 
-  async function exportRatio(format: "PNG" | "SVG" | "PRINT") {
-    await recordAuditEvent({ action: "EXPORT", tableName: "ratio_plans", location, metadata: { date, day, format, peakChildren: peak, timeBlocks: timeline.length } });
+  useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    const channel = supabase
+      .channel("ratio-live-coverage")
+      .on("postgres_changes", { event: "*", schema: "public", table: "staff_shifts" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "staff_activity_intervals" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "staffing_rules" }, () => void load())
+      .subscribe();
+    return () => { void supabase?.removeChannel(channel); };
+  }, [load]);
+
+  useEffect(() => {
+    if (!locations.length) return;
+    const preferred = activeLocation === "All Locations"
+      ? locations[0]
+      : locations.find((item) => locationKeyForDbLocation(item) === activeLocation);
+    if (preferred && preferred.id !== selectedLocationId) setSelectedLocationId(preferred.id);
+  }, [activeLocation, locations, selectedLocationId]);
+
+  const selectedLocation = locations.find((item) => item.id === selectedLocationId) ?? locations[0] ?? null;
+  const locationKey = selectedLocation ? locationKeyForDbLocation(selectedLocation) : null;
+  const hoursRecord = locationKey ? hours.find((record) => record.location === locationKey) : null;
+  const day = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(new Date(`${date}T12:00:00`)) as keyof LocationHoursRecord["days"];
+  const dailyHours = hoursRecord?.days[day] ?? { closed: false, open: "06:00", close: "18:00" };
+  const windows = useMemo(() => selectedLocation ? buildCoverageWindows({
+    date,
+    location: selectedLocation,
+    schedules,
+    shifts,
+    activities,
+    rules,
+  }) : [], [activities, date, rules, schedules, selectedLocation, shifts]);
+
+  const peak = windows.reduce((max, window) => Math.max(max, window.childCount), 0);
+  const flagged = windows.filter((window) => ["gap", "over-capacity", "rule-needed"].includes(window.status));
+  const releaseWindows = windows.filter((window) => window.requiredStaff !== null && window.staffCount > window.requiredStaff);
+  const maxExtraStaff = releaseWindows.reduce((max, window) => Math.max(max, window.staffCount - (window.requiredStaff ?? window.staffCount)), 0);
+  const today = localIsoDate();
+  const liveCheckedIn = selectedLocation && date === today ? checkedInAtLocation(children, selectedLocation, date).length : null;
+  const currentMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+  const currentWindow = date === today ? windows.find((window) => window.start <= currentMinutes && window.end > currentMinutes) : null;
+
+  const svg = useMemo(() => {
+    if (!selectedLocation || !locationKey) return "";
+    return buildCoverageSvg({
+      location: selectedLocation,
+      locationKey,
+      date,
+      openingText: dailyHours.closed ? "Closed" : formatClock(dailyHours.open),
+      closingText: dailyHours.closed ? "Closed" : formatClock(dailyHours.close),
+      windows,
+      schoolNote,
+      minimumDay,
+      variant,
+    });
+  }, [dailyHours, date, locationKey, minimumDay, schoolNote, selectedLocation, variant, windows]);
+
+  const filename = selectedLocation ? `TCS-${selectedLocation.name.replaceAll(" ", "-")}-live-staffing-${date}` : `TCS-live-staffing-${date}`;
+
+  async function exportPlan(format: "PNG" | "SVG" | "PRINT") {
+    if (!selectedLocation || !locationKey || !svg) return;
+    await recordAuditEvent({
+      action: "EXPORT",
+      tableName: "staffing_coverage",
+      location: locationKey,
+      metadata: { date, format, peakChildren: peak, coverageWindows: windows.length, flaggedWindows: flagged.length },
+    });
     if (format === "PNG") await downloadSvgAsPng(svg, filename);
     else if (format === "SVG") downloadSvg(svg, filename);
-    else printSvg(svg, `${location} Daily Ratio Plan`);
+    else printSvg(svg, `${selectedLocation.name} Live Staffing Plan`);
   }
 
-  return <MainLayout><div className="mx-auto max-w-[1600px] space-y-6">
-    <PageIntro eyebrow="Printable daily operations" title="Daily Ratio Plan" description="This version uses the exact child schedules and staff shifts to show who is in care during every time block—not just the total headcount." actions={<div className="flex flex-wrap gap-2"><SecondaryButton onClick={() => setVariant((current) => current + 1)}><Palette className="h-4 w-4" /> Switch Theme</SecondaryButton><PrimaryButton onClick={() => void exportRatio("PNG")}><Smartphone className="h-4 w-4" /> Save PNG</PrimaryButton></div>} />
+  function chooseLocation(id: string) {
+    setSelectedLocationId(id);
+    const match = locations.find((item) => item.id === id);
+    const key = match ? locationKeyForDbLocation(match) : null;
+    if (key) setActiveLocation(key);
+  }
 
-    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"><strong>Planning support only:</strong> The image uses entered schedules and shifts. Always confirm live attendance, actual ages, staff qualifications, infant limits, and children moving between locations.</div>
+  return <MainLayout><div className="mx-auto max-w-[1600px] space-y-6 pb-12">
+    <PageIntro eyebrow="One staffing truth across the Hub" title="Live Ratio + Coverage Plan" description="This page now uses the same staffing engine as the Staffing Command Center. Child schedules create demand, verified rules calculate required staffing, and transportation/break/admin blocks remove staff from floor coverage." actions={<div className="flex flex-wrap gap-2"><SecondaryButton onClick={() => setVariant((current) => current + 1)}><Palette className="h-4 w-4" /> New Look</SecondaryButton><PrimaryButton onClick={() => void exportPlan("PNG")}><Smartphone className="h-4 w-4" /> Save PNG</PrimaryButton></div>} />
+
+    <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm font-semibold leading-6 text-violet-950"><strong>No guessed ratios:</strong> if a verified staffing rule is not configured for a location/age group, the Hub shows <strong>Rule Needed</strong> instead of making up a number.</div>
+    {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-900">{error}</div>}
 
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-      <StatCard label="Peak Children" value={peak} helper={`${theme.capacity} entered capacity`} icon={<Users className="h-5 w-5" />} />
-      <StatCard label="Time Blocks" value={timeline.length} helper="Changes when a child or staff member arrives/leaves" icon={<CalendarDays className="h-5 w-5" />} tone="blue" />
-      <StatCard label="Blocks to Review" value={flagged} icon={flagged ? <AlertTriangle className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />} tone={flagged ? "red" : "emerald"} />
-      <StatCard label="Potential Release" value={maxExtraStaff} helper={releaseWindows.length ? `${releaseWindows.length} coverage window${releaseWindows.length === 1 ? "" : "s"}` : "No extra coverage entered"} icon={<Users className="h-5 w-5" />} tone={maxExtraStaff ? "amber" : "emerald"} />
-      <StatCard label="Daily Theme" value={dayThemeNames[(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].indexOf(day) + variant) % 7]} helper={`${location} colors`} icon={<ImageIcon className="h-5 w-5" />} tone="purple" />
+      <StatCard label="Peak Scheduled" value={peak} helper={selectedLocation ? `Capacity ${selectedLocation.capacity}` : "Loading location"} icon={<Users className="h-5 w-5" />} />
+      <StatCard label="Checked In Now" value={liveCheckedIn ?? "—"} helper={date === today ? "Live Check-In / Check-Out" : "Select today for live count"} icon={<CheckCircle2 className="h-5 w-5" />} tone="emerald" />
+      <StatCard label="Coverage Windows" value={windows.length} helper="Arrival, departure, shift, or duty changes" icon={<ShieldCheck className="h-5 w-5" />} tone="blue" />
+      <StatCard label="Needs Attention" value={flagged.length} helper="Gap, capacity, or missing verified rule" icon={flagged.length ? <ShieldAlert className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />} tone={flagged.length ? "red" : "emerald"} />
+      <StatCard label="Potential Extra Staff" value={maxExtraStaff} helper={releaseWindows.length ? `${releaseWindows.length} review window${releaseWindows.length === 1 ? "" : "s"}` : "No excess coverage calculated"} icon={<Users className="h-5 w-5" />} tone={maxExtraStaff ? "amber" : "emerald"} />
     </section>
 
-    <SectionCard title="Build the Day" description="The selected location at the top changes the Hub colors. These controls change the ratio image itself.">
+    <SectionCard title="Build the Day" description="Location, date, school notes, and minimum-day information feed the daily printable view.">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <label><span className="mb-1.5 block text-sm font-bold">Location</span><select className={inputClass} value={location} onChange={(event) => { const next = event.target.value as Exclude<LocationKey, "All Locations">; setLocation(next); setActiveLocation(next); }}>{careLocations.map((item) => <option key={item}>{item}</option>)}</select></label>
+        <label><span className="mb-1.5 block text-sm font-bold">Location</span><select className={inputClass} value={selectedLocationId} onChange={(event) => chooseLocation(event.target.value)}>{locations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label><span className="mb-1.5 block text-sm font-bold">Date</span><input type="date" className={inputClass} value={date} onChange={(event) => setDate(event.target.value)} /></label>
         <label><span className="mb-1.5 block text-sm font-bold">School status</span><input className={inputClass} value={schoolNote} onChange={(event) => setSchoolNote(event.target.value)} /></label>
         <label><span className="mb-1.5 block text-sm font-bold">Minimum day</span><input className={inputClass} value={minimumDay} onChange={(event) => setMinimumDay(event.target.value)} /></label>
@@ -227,22 +264,30 @@ export default function RatiosPage() {
       </div>
     </SectionCard>
 
-    <div className="grid gap-6 2xl:grid-cols-[.75fr_1.25fr]">
+    {loading ? <div className="flex min-h-72 items-center justify-center gap-3 rounded-3xl border border-slate-200 bg-white text-sm font-black text-slate-500"><LoaderCircle className="h-5 w-5 animate-spin" /> Loading live coverage…</div> : <div className="grid gap-6 2xl:grid-cols-[.78fr_1.22fr]">
       <div className="space-y-6">
-        <SectionCard title={`${day} Timeline`} description="Automatically created from every arrival and departure"><div className="space-y-3">{timeline.length ? timeline.map((row) => <article key={`${row.start}-${row.end}`} className={`rounded-2xl border p-4 ${row.safe ? "border-slate-200 bg-white" : "border-red-300 bg-red-50"}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-black text-slate-950">{compactTime(row.start)}–{compactTime(row.end)}</p><p className="mt-2 text-sm leading-6 text-slate-600">{row.children.join(", ") || "No children scheduled"}</p><p className="mt-2 text-xs font-bold text-slate-500">Staff: {row.staff.join(", ") || "No staff entered"}</p></div><div className="text-right"><p className="text-2xl font-black">{row.children.length}</p><StatusBadge tone={row.safe ? "green" : "red"}>{row.safe ? "In Ratio" : `Need ${row.requiredStaff} staff`}</StatusBadge></div></div></article>) : <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">This location is closed or no schedules are entered for {day}.</div>}</div></SectionCard>
+        <SectionCard title="Live Coverage Timeline" description="The same intervals and rules used by the Staffing Command Center.">
+          <div className="space-y-3">{windows.length ? windows.map((window) => {
+            const tone = window.status === "covered" ? "green" : window.status === "tight" ? "amber" : "red";
+            const rowClass = window.status === "covered" ? "border-emerald-200 bg-emerald-50/50" : window.status === "tight" ? "border-amber-200 bg-amber-50" : window.status === "rule-needed" ? "border-violet-200 bg-violet-50" : "border-red-200 bg-red-50";
+            return <article key={`${window.start}-${window.end}`} className={`rounded-2xl border p-4 ${rowClass}`}>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div><p className="font-black text-slate-950">{compactTime(window.start)}–{compactTime(window.end)}</p><p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{window.children.map((child) => child.childName).join(", ") || "No children scheduled"}</p><p className="mt-2 text-xs font-bold text-slate-500">Floor staff: {window.staffNames.join(", ") || "None"}</p>{window.offFloorNames.length > 0 && <p className="mt-1 text-xs font-black text-amber-700">Off floor: {window.offFloorNames.join(", ")}</p>}</div>
+                <div className="min-w-40 text-right"><p className="text-2xl font-black">{window.childCount} kids • {window.staffCount} staff</p><StatusBadge tone={tone}>{window.status === "rule-needed" ? "Rule Needed" : window.status === "over-capacity" ? "Over Capacity" : window.status === "gap" ? `Need ${window.requiredStaff ?? "?"} Staff` : window.status === "tight" ? "At Minimum" : "Covered"}</StatusBadge></div>
+              </div>
+            </article>;
+          }) : <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm font-semibold text-slate-500">No child schedules or staff shifts are entered for this location on this date.</div>}</div>
+        </SectionCard>
 
-        <SectionCard title="Coverage Forecast" description="Potential wage-saving windows based on entered schedules and staffing. These are review prompts—not automatic send-home instructions.">
-          {releaseWindows.length === 0 ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">No overstaffed coverage windows were found from the schedules and shifts currently entered.</div> : <div className="space-y-3">{releaseWindows.map((row) => {
-            const extra = row.staff.length - row.requiredStaff;
-            return <div key={`release-${row.start}-${row.end}`} className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-black text-amber-950">{compactTime(row.start)}–{compactTime(row.end)}</p><p className="mt-1 text-xs font-semibold leading-5 text-amber-900">{row.children.length} children • {row.staff.length} staff entered • {row.requiredStaff} minimum staff from this planning model</p><p className="mt-2 text-[10px] font-semibold leading-4 text-amber-800">Review breaks, qualifications, infant limits, transportation duties, office coverage, and actual attendance before releasing anyone.</p></div><span className="rounded-full bg-amber-200 px-2.5 py-1 text-[10px] font-black text-amber-950">{extra} potential release</span></div></div>;
-          })}</div>}
+        <SectionCard title="Right Now" description="Live operations view for today.">
+          {date !== today ? <div className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">Select today to see the current coverage interval.</div> : currentWindow ? <div className={`rounded-2xl border p-5 ${currentWindow.status === "covered" ? "border-emerald-200 bg-emerald-50" : currentWindow.status === "tight" ? "border-amber-200 bg-amber-50" : "border-red-200 bg-red-50"}`}><div className="flex items-start gap-3">{["covered","tight"].includes(currentWindow.status) ? <ShieldCheck className="mt-0.5 h-6 w-6 text-emerald-700" /> : <AlertTriangle className="mt-0.5 h-6 w-6 text-red-700" />}<div><p className="font-black text-slate-950">{compactTime(currentWindow.start)}–{compactTime(currentWindow.end)}</p><p className="mt-1 text-sm font-bold text-slate-700">{currentWindow.childCount} scheduled • {liveCheckedIn ?? 0} checked in • {currentWindow.staffCount} floor staff • {currentWindow.requiredStaff ?? "No verified requirement"} required</p></div></div></div> : <div className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">No active schedule window right now.</div>}
         </SectionCard>
       </div>
 
-      <SectionCard title="Printable / Phone Image" description="A different daily theme is combined with the selected location’s colors.">
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-inner"><div className="mx-auto max-w-[720px]" dangerouslySetInnerHTML={{ __html: svg }} /></div>
-        <div className="mt-4 flex flex-wrap gap-3"><PrimaryButton onClick={() => void exportRatio("PNG")}><Download className="h-4 w-4" /> Save PNG for Phone</PrimaryButton><SecondaryButton onClick={() => void exportRatio("SVG")}><ImageIcon className="h-4 w-4" /> Save SVG</SecondaryButton><SecondaryButton onClick={() => void exportRatio("PRINT")}><Printer className="h-4 w-4" /> Print</SecondaryButton><SecondaryButton onClick={() => setVariant((current) => current + 1)}><RefreshCw className="h-4 w-4" /> New Look</SecondaryButton></div>
+      <SectionCard title="Printable / Phone Coverage Plan" description="This export is built from the exact same live coverage windows—not a separate spreadsheet calculation.">
+        {svg ? <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-inner"><div className="mx-auto max-w-[760px]" dangerouslySetInnerHTML={{ __html: svg }} /></div> : <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-slate-300 text-sm font-bold text-slate-500">Choose a location to generate the plan.</div>}
+        <div className="mt-4 flex flex-wrap gap-3"><PrimaryButton onClick={() => void exportPlan("PNG")}><Download className="h-4 w-4" /> Save PNG for Phone</PrimaryButton><SecondaryButton onClick={() => void exportPlan("SVG")}><ImageIcon className="h-4 w-4" /> Save SVG</SecondaryButton><SecondaryButton onClick={() => void exportPlan("PRINT")}><Printer className="h-4 w-4" /> Print</SecondaryButton><SecondaryButton onClick={() => setVariant((current) => current + 1)}><RefreshCw className="h-4 w-4" /> New Look</SecondaryButton></div>
       </SectionCard>
-    </div>
+    </div>}
   </div></MainLayout>;
 }

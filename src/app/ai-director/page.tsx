@@ -6,9 +6,10 @@ import { PageIntro, PrimaryButton, SectionCard, StatusBadge, inputClass } from "
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { useLiveStaffingSnapshot } from "@/hooks/useLiveStaffingSnapshot";
 import { initialChildren, type ChildRecord } from "@/lib/children";
 import { starterChildSchedules, type ChildScheduleRecord } from "@/lib/child-schedules";
-import { starterFiles, starterRoutes, starterShifts, starterTasks, starterVehicles, type FileRecord, type Shift, type TransportationRoute, type VehicleRecord, type WorkTask } from "@/lib/hub-data";
+import { starterFiles, starterRoutes, starterTasks, starterVehicles, type FileRecord, type TransportationRoute, type VehicleRecord, type WorkTask } from "@/lib/hub-data";
 import { careLocations, starterLocationHours, type LocationHoursRecord } from "@/lib/location-config";
 import { buildBriefingSnapshot, buildSmartAlerts } from "@/lib/operations-intelligence";
 import { localIsoDate } from "@/lib/date-utils";
@@ -37,16 +38,55 @@ export default function AIDirectorPage() {
   const [tasks] = usePersistentState<WorkTask[]>("tcs-work-tasks", starterTasks);
   const [routes] = usePersistentState<TransportationRoute[]>("tcs-routes", starterRoutes);
   const [files] = usePersistentState<FileRecord[]>("tcs-files", starterFiles);
-  const [shifts] = usePersistentState<Shift[]>("tcs-shifts", starterShifts);
   const [hours] = usePersistentState<LocationHoursRecord[]>("tcs-location-hours-v2", starterLocationHours);
   const [vehicles] = usePersistentState<VehicleRecord[]>("tcs-vehicles-v2", starterVehicles);
 
   const accessibleCareLocations = careLocations.filter((item) => availableLocations.includes(item) && (location === "All Locations" || item === location));
+  const todayDate = localIsoDate();
+  const liveStaffing = useLiveStaffingSnapshot({
+    date: todayDate,
+    schedules,
+    accessibleLocations: accessibleCareLocations,
+    enabled: true,
+  });
   const intelligence = useMemo(() => {
-    const input = { date: localIsoDate(), accessibleLocations: accessibleCareLocations, children, schedules, shifts, routes, vehicles, hours, files, tasks };
+    const liveCoverageWindows = liveStaffing.coverageWindows.map((window) => ({
+      location: window.location,
+      start: window.start,
+      end: window.end,
+      childNames: window.children.map((child) => child.childName),
+      childCount: window.childCount,
+      staffNames: window.staffNames,
+      staffCount: window.staffCount,
+      requiredStaff: window.requiredStaff,
+      capacity: window.capacity,
+      status: window.status,
+      offFloorNames: window.offFloorNames,
+    }));
+    const liveStaffShifts = liveStaffing.shiftViews.map((shift) => ({
+      id: shift.id,
+      staffName: shift.staffName,
+      location: shift.location,
+      start: shift.start,
+      end: shift.end,
+    }));
+    const input = {
+      date: todayDate,
+      accessibleLocations: accessibleCareLocations,
+      children,
+      schedules,
+      shifts: [],
+      routes,
+      vehicles,
+      hours,
+      files,
+      tasks,
+      liveCoverageWindows,
+      liveStaffShifts,
+    };
     const alerts = buildSmartAlerts(input);
     return { snapshot: buildBriefingSnapshot(input, alerts), alerts };
-  }, [accessibleCareLocations, children, files, hours, routes, schedules, shifts, tasks, vehicles]);
+  }, [accessibleCareLocations, children, files, hours, liveStaffing.coverageWindows, liveStaffing.shiftViews, routes, schedules, tasks, todayDate, vehicles]);
 
   async function submit(event?: FormEvent) {
     event?.preventDefault();

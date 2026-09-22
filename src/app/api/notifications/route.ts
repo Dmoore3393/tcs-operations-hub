@@ -12,6 +12,7 @@ const allowedEvents = new Set<HubNotificationEventType>([
   "tour_board_update",
   "tour_follow_up",
   "schedule_update",
+  "schedule_published",
 ]);
 
 function canDispatch(
@@ -25,7 +26,7 @@ function canDispatch(
   if (eventType === "emergency_record_attention") {
     return ["children_basic", "transportation", "health_safety"].some((permission) => permissions.includes(permission));
   }
-  if (eventType === "schedule_update") return permissions.includes("schedules");
+  if (eventType === "schedule_update" || eventType === "schedule_published") return permissions.includes("schedules");
   return false;
 }
 

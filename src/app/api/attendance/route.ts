@@ -65,7 +65,7 @@ export async function POST(request: Request) {
 
     const current = await userClient
       .from("children")
-      .select("id,legacy_id,record_data,attendance_status,location_id")
+      .select("id,legacy_id,first_name,last_name,record_data,attendance_status,location_id")
       .eq("organization_id", profile.organization_id)
       .eq("legacy_id", childId)
       .maybeSingle();
@@ -172,6 +172,47 @@ export async function POST(request: Request) {
 
     if (updated.error) throw updated.error;
     if (!updated.data) throw new Error("The attendance update was not returned.");
+
+    const childName = [text(current.data.first_name), text(current.data.last_name)].filter(Boolean).join(" ") || text(record.firstName) || text(record.childName) || "Child";
+    const sessionStatus = action === "checkin"
+      ? "Checked In"
+      : action === "checkout"
+        ? "Checked Out"
+        : action === "absent"
+          ? "Absent"
+          : "Expected";
+    const existingSession = await userClient
+      .from("child_attendance_sessions")
+      .select("id,check_in_at")
+      .eq("organization_id", profile.organization_id)
+      .eq("child_id", current.data.id)
+      .eq("attendance_date", date)
+      .maybeSingle();
+
+    if (existingSession.error) throw existingSession.error;
+
+    const attendanceSessionPayload = {
+      organization_id: profile.organization_id,
+      location_id: current.data.location_id,
+      child_id: current.data.id,
+      child_name: childName,
+      attendance_date: date,
+      check_in_at: action === "checkin"
+        ? now
+        : action === "checkout"
+          ? (existingSession.data?.check_in_at ?? (text(record.checkedInAt) || null))
+          : null,
+      check_out_at: action === "checkout" ? now : null,
+      status: sessionStatus,
+      source: "Hub",
+      notes: action === "checkout" ? text(next.pickupVerification) : null,
+    };
+
+    const attendanceSessionResult = existingSession.data?.id
+      ? await userClient.from("child_attendance_sessions").update(attendanceSessionPayload).eq("id", existingSession.data.id)
+      : await userClient.from("child_attendance_sessions").insert(attendanceSessionPayload);
+
+    if (attendanceSessionResult.error) throw attendanceSessionResult.error;
 
     await userClient.rpc("record_audit_event", {
       p_action: auditAction,

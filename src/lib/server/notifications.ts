@@ -128,6 +128,7 @@ function locationMatches(staffLocations: string[], requestedLocation: string) {
 }
 
 function permissionMatches(role: string, permissions: string[], eventType: HubNotificationEventType) {
+  if (eventType === "schedule_published") return true;
   const ownerOnlyTransportation = eventType === "transportation_pickup"
     || eventType === "transportation_checkin"
     || eventType === "transportation_handoff_attention";

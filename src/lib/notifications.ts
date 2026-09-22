@@ -23,7 +23,8 @@ export type HubNotificationEventType =
   | "emergency_record_attention"
   | "tour_board_update"
   | "tour_follow_up"
-  | "schedule_update";
+  | "schedule_update"
+  | "schedule_published";
 
 export type HubNotificationContext = {
   childName?: string;
@@ -143,6 +144,14 @@ export function notificationTemplate(type: HubNotificationEventType, context: Hu
         title: "Staff schedule updated",
         body: "A staff schedule was added or changed. Open The Hub to review the current schedule.",
         href: "/scheduling",
+      };
+    case "schedule_published":
+      return {
+        category: "schedule" as const,
+        severity: "attention" as const,
+        title: "Location schedule published",
+        body: "A staff schedule was published or revised for your location. Open My Schedule to see your assigned shifts and acknowledge the current revision if you are scheduled.",
+        href: "/my-schedule",
       };
   }
 }
