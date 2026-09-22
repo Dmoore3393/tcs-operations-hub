@@ -489,9 +489,105 @@ export default function SchedulingPage() {
     setSaving(false);
   }
 
+  async function publishSelectedWeek() {
+    if (!supabase || !selectedLocation || !profile?.user_id) return;
+    const weekShifts = shifts.filter((shift) =>
+      shift.location_id === selectedLocation.id &&
+      shift.shift_date >= weekStart &&
+      shift.shift_date <= weekEnd &&
+      shift.status !== "Cancelled",
+    );
+    if (!weekShifts.length) {
+      setError("Add at least one staff shift before publishing this week.");
+      return;
+    }
+    const unlinked = weekShifts.filter((shift) => !shift.user_id);
+    if (unlinked.length) {
+      setError(`${unlinked.length} shift${unlinked.length === 1 ? " is" : "s are"} not linked to a staff account. Link each employee before publishing so they can see and acknowledge the schedule.`);
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    const currentPublication = publications.find((item) =>
+      item.location_id === selectedLocation.id &&
+      item.week_of === weekStart &&
+      item.status === "Published",
+    ) ?? publications.find((item) =>
+      item.location_id === selectedLocation.id &&
+      item.week_of === weekStart,
+    );
+    const nextRevision = (currentPublication?.revision ?? 0) + 1;
+    const publishedAt = new Date().toISOString();
+
+    const shiftResult = await supabase
+      .from("staff_shifts")
+      .update({ status: "Published" })
+      .eq("location_id", selectedLocation.id)
+      .gte("shift_date", weekStart)
+      .lte("shift_date", weekEnd)
+      .neq("status", "Cancelled");
+
+    if (shiftResult.error) {
+      setError(shiftResult.error.message);
+      setSaving(false);
+      return;
+    }
+
+    const publicationPayload = {
+      location_id: selectedLocation.id,
+      week_of: weekStart,
+      status: "Published" as const,
+      revision: nextRevision,
+      published_at: publishedAt,
+      published_by: profile.user_id,
+      notes: `Published from Staffing Command Center • revision ${nextRevision}`,
+    };
+
+    const publicationResult = currentPublication
+      ? await supabase.from("schedule_publications").update(publicationPayload).eq("id", currentPublication.id)
+      : await supabase.from("schedule_publications").insert(publicationPayload);
+
+    if (publicationResult.error) {
+      setError(publicationResult.error.message);
+      setSaving(false);
+      return;
+    }
+
+    const locationKey = locationKeyForDbLocation(selectedLocation) ?? "All Locations";
+    void sendHubNotificationEvent({
+      accessToken: session?.access_token,
+      eventType: "schedule_update",
+      location: locationKey,
+      eventKey: `staffing-publish:${selectedLocation.id}:${weekStart}:r${nextRevision}`,
+    });
+    showMessage(`Week published as revision ${nextRevision}. Staff can now view and acknowledge it in My Schedule.`);
+    await load();
+    setSaving(false);
+  }
+
   const selectedShifts = dayShiftRows.filter((shift) => !selectedLocation || shift.location_id === selectedLocation.id);
   const selectedActivities = activities.filter((item) => item.activity_date === selectedDate && (!selectedLocation || item.location_id === selectedLocation.id) && !item.counts_toward_floor);
   const selectedRules = rules.filter((rule) => !selectedLocation || rule.location_id === selectedLocation.id);
+  const selectedWeekShifts = shifts.filter((shift) =>
+    !selectedLocation ? false : shift.location_id === selectedLocation.id && shift.shift_date >= weekStart && shift.shift_date <= weekEnd && shift.status !== "Cancelled",
+  );
+  const selectedPublication = selectedLocation
+    ? (publications.find((item) => item.location_id === selectedLocation.id && item.week_of === weekStart && item.status === "Published")
+      ?? publications.find((item) => item.location_id === selectedLocation.id && item.week_of === weekStart)
+      ?? null)
+    : null;
+  const scheduledUserIds = new Set(selectedWeekShifts.map((shift) => shift.user_id).filter((value): value is string => Boolean(value)));
+  const currentAcknowledgements = selectedPublication
+    ? acknowledgements.filter((item) => item.publication_id === selectedPublication.id && item.revision === selectedPublication.revision)
+    : [];
+  const acknowledgedUserIds = new Set(currentAcknowledgements.map((item) => item.user_id));
+  const unlinkedShiftCount = selectedWeekShifts.filter((shift) => !shift.user_id).length;
+  const weeklyCoverage = selectedLocation
+    ? dates.flatMap((date) => buildCoverageWindows({ date, location: selectedLocation, schedules, shifts, activities, rules }))
+    : [];
+  const weeklyAttention = weeklyCoverage.filter((window) => ["gap", "over-capacity", "rule-needed"].includes(window.status)).length;
+  const canPublishSchedule = isSystemOwner || isLocationLicensee;
   const today = localIsoDate();
 
   return <MainLayout><div className="mx-auto max-w-[1700px] space-y-6 pb-12">
@@ -520,6 +616,32 @@ export default function SchedulingPage() {
       <StatCard label="Needs Attention" value={actionWindows} helper="Gaps, capacity, or missing rule" icon={actionWindows ? <ShieldAlert className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />} tone={actionWindows ? "red" : "emerald"} />
     </section>
 
+    {loading ? <div className="flex min-h-72 items-center justify-center gap-3 rounded-3xl border border-slate-200 bg-white text-sm font-black text-slate-500"><LoaderCircle className="h-5 w-5 animate-spin" /> Loading live staffing data…</div> : <>
+      {selectedLocation && <SectionCard
+        title={`Publish Staff Schedule • ${selectedLocation.name}`}
+        description={`Week of ${shortDate(weekStart)} • Publishing makes linked employee shifts visible in My Schedule and starts a new acknowledgement revision.`}
+        action={canPublishSchedule ? <PrimaryButton disabled={saving || !selectedWeekShifts.length} onClick={() => void publishSelectedWeek()}>{saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} {selectedPublication?.status === "Published" ? "Republish Week" : "Publish Week"}</PrimaryButton> : undefined}
+      >
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <MiniMetric label="Week Shifts" value={selectedWeekShifts.length} />
+          <MiniMetric label="Linked Staff" value={scheduledUserIds.size} />
+          <MiniMetric label="Unlinked Shifts" value={unlinkedShiftCount} />
+          <MiniMetric label="Acknowledged" value={selectedPublication?.status === "Published" ? `${acknowledgedUserIds.size}/${scheduledUserIds.size}` : "—"} />
+          <MiniMetric label="Coverage Flags" value={weeklyAttention} />
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div className={`rounded-2xl border p-4 text-sm font-semibold ${selectedPublication?.status === "Published" ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+            {selectedPublication?.status === "Published"
+              ? <><strong>Published revision {selectedPublication.revision}.</strong> {selectedPublication.published_at ? `Last published ${new Date(selectedPublication.published_at).toLocaleString()}.` : ""} Republishing creates a new revision, so employees must acknowledge the updated schedule again.</>
+              : <><strong>Not published yet.</strong> Draft shifts are not shown in My Schedule until this week is published.</>}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {unlinkedShiftCount > 0 && <span className="rounded-full border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-800">{unlinkedShiftCount} unlinked shift{unlinkedShiftCount === 1 ? "" : "s"}</span>}
+            {weeklyAttention > 0 && <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-900">{weeklyAttention} coverage flag{weeklyAttention === 1 ? "" : "s"} to review</span>}
+            {selectedPublication?.status === "Published" && scheduledUserIds.size > acknowledgedUserIds.size && <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800">{scheduledUserIds.size - acknowledgedUserIds.size} acknowledgement{scheduledUserIds.size - acknowledgedUserIds.size === 1 ? "" : "s"} pending</span>}
+          </div>
+        </div>
+      </SectionCard>}
     {loading ? <div className="flex min-h-72 items-center justify-center gap-3 rounded-3xl border border-slate-200 bg-white text-sm font-black text-slate-500"><LoaderCircle className="h-5 w-5 animate-spin" /> Loading live staffing data…</div> : <>
       <SectionCard title={view === "Day" ? `${shortDate(selectedDate)} • All Locations` : `Week of ${shortDate(weekStart)}`} description="Status is calculated from live child schedules, staff shifts, off-floor blocks, site capacity, and the staffing rules you configure.">
         {view === "Day" ? <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{locations.map((location) => {
