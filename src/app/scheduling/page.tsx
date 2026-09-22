@@ -586,7 +586,12 @@ export default function SchedulingPage() {
     ? acknowledgements.filter((item) => item.publication_id === selectedPublication.id && item.revision === selectedPublication.revision)
     : [];
   const acknowledgedUserIds = new Set(currentAcknowledgements.map((item) => item.user_id));
+  const staffNameById = new Map(staff.map((person) => [person.user_id, person.full_name]));
+  const pendingAcknowledgementNames = [...scheduledUserIds]
+    .filter((userId) => !acknowledgedUserIds.has(userId))
+    .map((userId) => staffNameById.get(userId) || currentPublishedSnapshots.find((item) => item.user_id === userId)?.staff_name || "Linked staff");
   const unlinkedShiftCount = selectedWeekShifts.filter((shift) => !shift.user_id).length;
+  const unlinkedShiftNames = [...new Set(selectedWeekShifts.filter((shift) => !shift.user_id).map((shift) => shift.staff_name))];
   const weeklyCoverage = selectedLocation
     ? dates.flatMap((date) => buildCoverageWindows({ date, location: selectedLocation, schedules, shifts, activities, rules }))
     : [];
@@ -669,6 +674,8 @@ export default function SchedulingPage() {
             {selectedPublication?.status === "Published" && scheduledUserIds.size > acknowledgedUserIds.size && <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800">{scheduledUserIds.size - acknowledgedUserIds.size} acknowledgement{scheduledUserIds.size - acknowledgedUserIds.size === 1 ? "" : "s"} pending</span>}
           </div>
         </div>
+        {selectedPublication?.status === "Published" && pendingAcknowledgementNames.length > 0 && <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-3 text-xs font-semibold text-blue-950"><strong>Waiting for:</strong> {pendingAcknowledgementNames.join(", ")}</div>}
+        {unlinkedShiftNames.length > 0 && <div className="mt-3 rounded-2xl border border-red-100 bg-red-50/70 p-3 text-xs font-semibold text-red-950"><strong>Not linked to a Hub account:</strong> {unlinkedShiftNames.join(", ")}. Their shifts can publish, but they cannot receive My Schedule or acknowledge the revision until their staff account is linked.</div>}
       </SectionCard>}
       <SectionCard title={view === "Day" ? `${shortDate(selectedDate)} • All Locations` : `Week of ${shortDate(weekStart)}`} description="Status is calculated from live child schedules, staff shifts, off-floor blocks, site capacity, and the staffing rules you configure.">
         {view === "Day" ? <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{locations.map((location) => {
