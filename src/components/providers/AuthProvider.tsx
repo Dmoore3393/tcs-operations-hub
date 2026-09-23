@@ -52,7 +52,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const ownerOnlyRoutes = new Set(["/settings", "/team-access", "/locations", "/audit-log", "/marketing", "/executive-dashboard", "/payroll-ops"]);
+const ownerOnlyRoutes = new Set(["/settings", "/team-access", "/locations", "/audit-log", "/app-readiness", "/marketing", "/executive-dashboard", "/payroll-ops"]);
 const ownerOnlyReadStateKeys = new Set(["tcs-settings"]);
 const ownerOnlyWriteStateKeys = new Set([
   "tcs-settings",
@@ -68,6 +68,10 @@ const trainingAdminNames = new Set(["danielle moore", "jennifer thomason", "heat
 
 function isParentPortalRoute(pathname: string) {
   return pathname === "/parent-login" || pathname === "/parent" || pathname.startsWith("/parent/");
+}
+
+function isPublicInfoRoute(pathname: string) {
+  return pathname === "/privacy" || pathname === "/support";
 }
 
 function isTrainingAdminProfile(profile: StaffAccessProfile | null) {
@@ -245,7 +249,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (loading || !isSupabaseConfigured) return;
-    if (isParentPortalRoute(pathname)) return;
+    if (isParentPortalRoute(pathname) || isPublicInfoRoute(pathname)) return;
 
     if (!session) {
       if (pathname !== "/login") router.replace("/login");
