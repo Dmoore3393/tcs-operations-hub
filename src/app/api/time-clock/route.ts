@@ -429,11 +429,12 @@ export async function POST(request: Request) {
           const end = minutesFromTime(text(shift.end_time));
           return sum + Math.max(0, end - start);
         }, 0);
-        const overage = actualWorked - scheduledWorked;
+        const allowedClockWindowMinutes = earlyWindow + lateWindow;
+        const overageBeyondWindow = actualWorked - (scheduledWorked + allowedClockWindowMinutes);
         const beyondClockWindow = nowMinutes > shiftEnd + lateWindow;
 
-        if ((overage > 0 || beyondClockWindow) && !approvedEnd && !approvedAny) {
-          const amount = Math.max(overage, Math.max(0, nowMinutes - shiftEnd));
+        if ((overageBeyondWindow > 0 || beyondClockWindow) && !approvedEnd && !approvedAny) {
+          const amount = Math.max(overageBeyondWindow, Math.max(0, nowMinutes - (shiftEnd + lateWindow)));
           await createPendingPerformanceEvent({
             admin,
             organizationId: profile.organization_id,
@@ -442,10 +443,10 @@ export async function POST(request: Request) {
             eventDate: today,
             typeCode: "unapproved_shift_overage",
             sourceReference: `unapproved_shift_overage:${today}:${currentLocationId}`,
-            summary: `Possible unapproved shift overage: ${amount} minute${amount === 1 ? "" : "s"} beyond the published scheduled hours.`,
+            summary: `Possible unapproved shift overage: ${amount} minute${amount === 1 ? "" : "s"} beyond the permitted clock window.`,
             notes: beyondClockWindow
               ? `Clock-out occurred more than ${lateWindow} minutes after the published shift end. Actual clock time was preserved. Leadership must verify whether the additional work was approved.`
-              : "Actual clocked work time exceeded the published scheduled duration. The punch was preserved and leadership must verify whether the additional work was approved.",
+              : `Total worked time exceeded the published scheduled duration plus the normal ${earlyWindow}-minute early and ${lateWindow}-minute late clock windows. Leadership must verify whether the additional work was approved.`,
             createdBy: user.id,
           });
           needsLeadershipReview = true;
