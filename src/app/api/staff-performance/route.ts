@@ -57,6 +57,137 @@ async function assertStaffAtLocation(auth: Awaited<ReturnType<typeof requireStaf
   if (error) throw error;
   if (!data) throw new Response("That employee is not assigned to the selected location.", { status: 400 });
 }
+function pacificDate(value: string | Date = new Date()) {
+  const date = typeof value === "string" ? new Date(value) : value;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+function pacificMinutes(value: Date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(value);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0) % 24;
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? 0);
+  return hour * 60 + minute;
+}
+function timeMinutes(value: unknown) {
+  const [hourText, minuteText] = text(value).slice(0, 5).split(":");
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  return Number.isFinite(hour) && Number.isFinite(minute) ? hour * 60 + minute : 0;
+}
+function auditClockEvent(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return "";
+  const value = text((metadata as Record<string, unknown>).event);
+  return value;
+}
+async function syncPossibleNoShows(auth: Awaited<ReturnType<typeof requireStaff>>, visibleLocationIds: string[]) {
+  if (!visibleLocationIds.length) return;
+
+  const settings = await auth.admin
+    .from("staff_attendance_settings")
+    .select("no_show_tracking_enabled,no_show_after_minutes")
+    .eq("organization_id", auth.profile.organization_id)
+    .maybeSingle();
+  if (settings.error) throw settings.error;
+  if (!settings.data?.no_show_tracking_enabled || settings.data.no_show_after_minutes === null) return;
+
+  const today = pacificDate();
+  const threshold = Math.max(0, Number(settings.data.no_show_after_minutes || 0));
+  const nowMinutes = pacificMinutes();
+
+  const [shiftResult, clockResult, timeOffResult, eventTypeResult] = await Promise.all([
+    auth.admin
+      .from("staff_shifts")
+      .select("id,user_id,location_id,start_time,end_time,status")
+      .eq("organization_id", auth.profile.organization_id)
+      .eq("shift_date", today)
+      .eq("status", "Published")
+      .in("location_id", visibleLocationIds),
+    auth.admin
+      .from("audit_log")
+      .select("actor_user_id,location_id,metadata,occurred_at")
+      .eq("organization_id", auth.profile.organization_id)
+      .eq("table_name", "time_clock")
+      .gte("occurred_at", new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString()),
+    auth.admin
+      .from("time_off_requests")
+      .select("staff_user_id,location_id,request_scope,start_date,end_date,status")
+      .eq("organization_id", auth.profile.organization_id)
+      .eq("status", "Approved")
+      .lte("start_date", today)
+      .gte("end_date", today),
+    auth.admin
+      .from("staff_performance_event_types")
+      .select("id")
+      .eq("organization_id", auth.profile.organization_id)
+      .eq("code", "no_call_no_show")
+      .eq("is_active", true)
+      .maybeSingle(),
+  ]);
+  const firstError = shiftResult.error || clockResult.error || timeOffResult.error || eventTypeResult.error;
+  if (firstError) throw firstError;
+  if (!eventTypeResult.data?.id) return;
+
+  const clockedIn = new Set(
+    (clockResult.data ?? [])
+      .filter((row) => pacificDate(String(row.occurred_at)) === today)
+      .filter((row) => auditClockEvent(row.metadata) === "clock_in")
+      .map((row) => `${row.actor_user_id}:${row.location_id}`),
+  );
+
+  for (const shift of shiftResult.data ?? []) {
+    if (!shift.user_id) continue;
+    const scheduledStart = timeMinutes(shift.start_time);
+    if (nowMinutes <= scheduledStart + threshold) continue;
+    if (clockedIn.has(`${shift.user_id}:${shift.location_id}`)) continue;
+
+    const hasApprovedTimeOff = (timeOffResult.data ?? []).some((request) =>
+      String(request.staff_user_id) === String(shift.user_id)
+      && (
+        request.request_scope === "All Assigned Locations"
+        || String(request.location_id || "") === String(shift.location_id)
+      )
+    );
+    if (hasApprovedTimeOff) continue;
+
+    const sourceReference = `no_show:${shift.id}:${today}`;
+    const existing = await auth.admin
+      .from("staff_performance_events")
+      .select("id")
+      .eq("organization_id", auth.profile.organization_id)
+      .eq("staff_user_id", shift.user_id)
+      .eq("source_system", "Attendance Automation")
+      .eq("source_reference", sourceReference)
+      .maybeSingle();
+    if (existing.error) throw existing.error;
+    if (existing.data) continue;
+
+    const minutesLate = Math.max(0, nowMinutes - scheduledStart);
+    const created = await auth.admin.from("staff_performance_events").insert({
+      organization_id: auth.profile.organization_id,
+      staff_user_id: shift.user_id,
+      location_id: shift.location_id,
+      event_type_id: eventTypeResult.data.id,
+      event_date: today,
+      summary: `Possible no-call/no-show: no clock-in recorded ${minutesLate} minutes after the published shift start.`,
+      notes: "Created automatically from the published staff schedule and Hub Time Clock. Leadership must verify whether the employee communicated before confirming this event.",
+      recognition_points: 0,
+      status: "Pending Review",
+      source_system: "Attendance Automation",
+      source_reference: sourceReference,
+      created_by: auth.user.id,
+    });
+    if (created.error) throw created.error;
+  }
+}
 
 export async function GET(request: Request) {
   try {
@@ -71,6 +202,8 @@ export async function GET(request: Request) {
     const ids = await accessibleLocationIds(auth);
     const visibleIds = requestedLocationId && ids.includes(requestedLocationId) ? [requestedLocationId] : ids;
     if (requestedLocationId && !ids.includes(requestedLocationId)) throw new Response("You do not have access to that location.", { status: 403 });
+
+    await syncPossibleNoShows(auth, visibleIds);
 
     const [locationsResult, assignmentsResult, typesResult, eventsResult, coachingResult] = await Promise.all([
       auth.admin
