@@ -57,6 +57,7 @@ type AttendanceSettings = {
 };
 type Payload = {
   canManageBlackouts: boolean;
+  canCreateCompanyWideBlackout: boolean;
   canReviewRequests: boolean;
   canConfigureAttendance: boolean;
   currentUserId: string;
@@ -358,7 +359,7 @@ export default function TimeOffPage() {
     {blackoutOpen && payload && <Modal title="Block Time-Off Dates" description="Use this for mandatory trainings, staff meetings, major events, or any period when leadership cannot approve time off." onClose={() => setBlackoutOpen(false)} footer={<><SecondaryButton onClick={() => setBlackoutOpen(false)}>Cancel</SecondaryButton><PrimaryButton onClick={() => document.getElementById("blackout-save")?.click()}>{working ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Block Dates</PrimaryButton></>}>
       <form onSubmit={submitBlackout} className="grid gap-4 sm:grid-cols-2">
         <Field label="Title" wide><input required className={inputClass} placeholder="Example: Mandatory Staff Training" value={blackoutDraft.title} onChange={(event) => setBlackoutDraft({ ...blackoutDraft, title: event.target.value })} /></Field>
-        <Field label="Scope" wide><select className={inputClass} value={blackoutDraft.locationId} onChange={(event) => setBlackoutDraft({ ...blackoutDraft, locationId: event.target.value })}><option value="">All TCS Locations</option>{payload.locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></Field>
+        <Field label="Scope" wide><select className={inputClass} value={blackoutDraft.locationId} onChange={(event) => setBlackoutDraft({ ...blackoutDraft, locationId: event.target.value })}>{payload.canCreateCompanyWideBlackout && <option value="">All TCS Locations</option>}{!payload.canCreateCompanyWideBlackout && <option value="">Choose location…</option>}{payload.locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></Field>
         <Field label="Start Date"><input type="date" required className={inputClass} value={blackoutDraft.startDate} onChange={(event) => setBlackoutDraft({ ...blackoutDraft, startDate: event.target.value, endDate: blackoutDraft.endDate || event.target.value })} /></Field>
         <Field label="End Date"><input type="date" required className={inputClass} value={blackoutDraft.endDate} min={blackoutDraft.startDate || undefined} onChange={(event) => setBlackoutDraft({ ...blackoutDraft, endDate: event.target.value })} /></Field>
         <Field label="Reason" wide><input className={inputClass} placeholder="Mandatory training, all-hands meeting, licensing visit…" value={blackoutDraft.reason} onChange={(event) => setBlackoutDraft({ ...blackoutDraft, reason: event.target.value })} /></Field>
