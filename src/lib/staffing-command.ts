@@ -40,6 +40,16 @@ export type StaffActivityRow = {
   source_key?: string | null;
 };
 
+export type ApprovedTimeOffRow = {
+  id: string;
+  staff_user_id: string;
+  location_id: string | null;
+  request_scope: "All Assigned Locations" | "Specific Location";
+  start_date: string;
+  end_date: string;
+  status: "Approved";
+};
+
 export type StaffingRuleRow = {
   id: string;
   location_id: string;
@@ -126,8 +136,9 @@ export function buildCoverageWindows(args: {
   shifts: StaffShiftRow[];
   activities: StaffActivityRow[];
   rules: StaffingRuleRow[];
+  timeOff?: ApprovedTimeOffRow[];
 }) {
-  const { date, location, schedules, shifts, activities, rules } = args;
+  const { date, location, schedules, shifts, activities, rules, timeOff = [] } = args;
   const locationKey = locationKeyForDbLocation(location);
   if (!locationKey) return [] as CoverageWindow[];
   const day = dateToDayName(date);
@@ -171,7 +182,22 @@ export function buildCoverageWindows(args: {
     if (end <= start) continue;
     const midpoint = start + (end - start) / 2;
     const present = scheduleBlocks.filter((block) => block.start <= midpoint && block.end > midpoint).map((block) => block.record);
-    const activeShifts = locationShifts.filter((item) => item.start <= midpoint && item.end > midpoint).map((item) => item.shift);
+    const activeShifts = locationShifts
+      .filter((item) => item.start <= midpoint && item.end > midpoint)
+      .map((item) => item.shift)
+      .filter((shift) => {
+        if (!shift.user_id) return true;
+        return !timeOff.some((request) =>
+          request.status === "Approved"
+          && request.staff_user_id === shift.user_id
+          && date >= request.start_date
+          && date <= request.end_date
+          && (
+            request.request_scope === "All Assigned Locations"
+            || request.location_id === location.id
+          )
+        );
+      });
     const offFloor = locationActivities
       .filter((item) => !item.activity.counts_toward_floor && item.start <= midpoint && item.end > midpoint)
       .map((item) => item.activity);
