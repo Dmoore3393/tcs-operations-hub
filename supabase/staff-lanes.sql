@@ -41,7 +41,7 @@ create policy "staff lanes read same organization"
 on public.staff_lane_profiles
 for select
 to authenticated
-using (organization_id = public.current_staff_organization_id());
+using (organization_id = (select public.current_staff_organization_id()));
 
 revoke insert, update, delete on public.staff_lane_profiles from authenticated;
 grant select on public.staff_lane_profiles to authenticated;
