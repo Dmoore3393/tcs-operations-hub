@@ -46,6 +46,7 @@ async function accessibleLocationIds(auth: Awaited<ReturnType<typeof requireStaf
 }
 
 async function approvalScopes(auth: Awaited<ReturnType<typeof requireStaff>>) {
+  if (auth.isOwner) return new Set(["General", "Maintenance"]);
   const result = await auth.admin
     .from("staff_clock_exception_approvers")
     .select("approval_scope")
@@ -133,9 +134,9 @@ export async function GET(request: Request) {
       canCreateCompanyWideBlackout: isOwner,
       canReviewRequests: isOwner || isLicensee,
       canConfigureAttendance: isOwner,
-      canApproveGeneralClockExceptions: scopes.has("General"),
-      canApproveMaintenanceClockExceptions: scopes.has("General") || scopes.has("Maintenance"),
-      canSetMaintenanceApprover: scopes.has("General"),
+      canApproveGeneralClockExceptions: isOwner || scopes.has("General"),
+      canApproveMaintenanceClockExceptions: isOwner || scopes.has("General") || scopes.has("Maintenance"),
+      canSetMaintenanceApprover: isOwner || scopes.has("General"),
       currentUserId: user.id,
       locations,
       assignments,
