@@ -10,9 +10,6 @@ function object(value: unknown): DbRow {
 function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
-function stringArray(value: unknown) {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
 function pacificDate(value: string | Date = new Date()) {
   const date = typeof value === "string" ? new Date(value) : value;
   return new Intl.DateTimeFormat("en-CA", {
@@ -43,6 +40,13 @@ function minutesFromTime(value: string) {
   const minute = Number(minuteText);
   return Number.isFinite(hour) && Number.isFinite(minute) ? hour * 60 + minute : 0;
 }
+function clockLabel(minutes: number) {
+  const normalized = ((minutes % 1440) + 1440) % 1440;
+  const hour = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+  const suffix = hour >= 12 ? "PM" : "AM";
+  return `${hour % 12 || 12}:${String(minute).padStart(2, "0")} ${suffix}`;
+}
 function pacificClockMinutes(value: Date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Los_Angeles",
@@ -54,6 +58,102 @@ function pacificClockMinutes(value: Date = new Date()) {
   const minute = Number(parts.find((part) => part.type === "minute")?.value ?? 0);
   return hour * 60 + minute;
 }
+function exceptionCovers(
+  row: DbRow,
+  nowMinutes: number,
+  shiftId: string | null,
+  direction: "start" | "end" | "any",
+) {
+  if (text(row.status) !== "Approved") return false;
+  const rowShiftId = text(row.shift_id);
+  if (rowShiftId && shiftId && rowShiftId !== shiftId) return false;
+  if (rowShiftId && !shiftId) return false;
+  const start = text(row.approved_start_time) ? minutesFromTime(text(row.approved_start_time)) : null;
+  const end = text(row.approved_end_time) ? minutesFromTime(text(row.approved_end_time)) : null;
+  if (direction === "start") return start !== null && nowMinutes >= start && (end === null || nowMinutes <= end);
+  if (direction === "end") return end !== null && nowMinutes <= end && (start === null || nowMinutes >= start);
+  return (start === null || nowMinutes >= start) && (end === null || nowMinutes <= end);
+}
+function workedMinutes(events: DbRow[], currentLocationId: string, through: Date) {
+  const rows = events
+    .filter((row) => text(row.location_id) === currentLocationId)
+    .map((row) => ({ event: eventFromMetadata(row.metadata), occurredAt: text(row.occurred_at) }))
+    .filter((row) => row.event && row.occurredAt)
+    .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
+
+  let workingFrom: number | null = null;
+  let breakFrom: number | null = null;
+  let total = 0;
+  let breaks = 0;
+  for (const row of rows) {
+    const stamp = new Date(row.occurredAt).getTime();
+    if (!Number.isFinite(stamp)) continue;
+    if (row.event === "clock_in") workingFrom = stamp;
+    if (row.event === "break_start" && workingFrom !== null) breakFrom = stamp;
+    if (row.event === "break_end" && breakFrom !== null) {
+      breaks += Math.max(0, stamp - breakFrom);
+      breakFrom = null;
+    }
+    if (row.event === "clock_out" && workingFrom !== null) {
+      total += Math.max(0, stamp - workingFrom);
+      workingFrom = null;
+      breakFrom = null;
+    }
+  }
+  if (workingFrom !== null) total += Math.max(0, through.getTime() - workingFrom);
+  if (breakFrom !== null) breaks += Math.max(0, through.getTime() - breakFrom);
+  return Math.max(0, Math.round((total - breaks) / 60000));
+}
+async function createPendingPerformanceEvent(args: {
+  admin: Awaited<ReturnType<typeof requireStaff>>["admin"];
+  organizationId: string;
+  staffUserId: string;
+  locationId: string;
+  eventDate: string;
+  typeCode: string;
+  sourceReference: string;
+  summary: string;
+  notes: string;
+  createdBy: string;
+}) {
+  const { admin, organizationId, staffUserId, locationId, eventDate, typeCode, sourceReference, summary, notes, createdBy } = args;
+  const eventType = await admin
+    .from("staff_performance_event_types")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("code", typeCode)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (eventType.error) throw eventType.error;
+  if (!eventType.data?.id) return;
+
+  const existing = await admin
+    .from("staff_performance_events")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("staff_user_id", staffUserId)
+    .eq("source_system", "Time Clock")
+    .eq("source_reference", sourceReference)
+    .maybeSingle();
+  if (existing.error) throw existing.error;
+  if (existing.data) return;
+
+  const result = await admin.from("staff_performance_events").insert({
+    organization_id: organizationId,
+    staff_user_id: staffUserId,
+    location_id: locationId,
+    event_type_id: eventType.data.id,
+    event_date: eventDate,
+    summary,
+    notes,
+    recognition_points: 0,
+    status: "Pending Review",
+    source_system: "Time Clock",
+    source_reference: sourceReference,
+    created_by: createdBy,
+  });
+  if (result.error) throw result.error;
+}
 
 export async function GET(request: Request) {
   try {
@@ -62,6 +162,7 @@ export async function GET(request: Request) {
     const requestedDays = Number(url.searchParams.get("days") || 14);
     const days = Math.max(1, Math.min(isOwner || isLicensee ? requestedDays : 14, 60));
     const since = new Date(Date.now() - days * 86400000).toISOString();
+    const today = pacificDate();
 
     let query = admin
       .from("audit_log")
@@ -73,14 +174,35 @@ export async function GET(request: Request) {
 
     if (!isOwner && !isLicensee) query = query.eq("actor_user_id", user.id);
 
-    const [eventsResult, staffResult, locationResult] = await Promise.all([
+    const [eventsResult, staffResult, locationResult, settingsResult, shiftResult, exceptionResult] = await Promise.all([
       query,
       admin.from("staff_access").select("user_id,full_name,email,role,locations").eq("organization_id", profile.organization_id).eq("is_active", true),
       admin.from("locations").select("id,slug,name,full_name").eq("organization_id", profile.organization_id),
+      admin.from("staff_attendance_settings")
+        .select("enforce_schedule_clocking,early_clock_in_window_minutes,late_clock_out_window_minutes,flag_scheduled_hours_overage")
+        .eq("organization_id", profile.organization_id)
+        .maybeSingle(),
+      admin.from("staff_shifts")
+        .select("id,location_id,user_id,shift_date,start_time,end_time,status,position_label")
+        .eq("organization_id", profile.organization_id)
+        .eq("user_id", user.id)
+        .eq("shift_date", today)
+        .eq("status", "Published")
+        .order("start_time"),
+      admin.from("staff_clock_exceptions")
+        .select("id,location_id,shift_id,work_date,approval_scope,approved_start_time,approved_end_time,reason,status,approved_at")
+        .eq("organization_id", profile.organization_id)
+        .eq("staff_user_id", user.id)
+        .eq("work_date", today)
+        .eq("status", "Approved")
+        .order("approved_at", { ascending: false }),
     ]);
     if (eventsResult.error) throw eventsResult.error;
     if (staffResult.error) throw staffResult.error;
     if (locationResult.error) throw locationResult.error;
+    if (settingsResult.error) throw settingsResult.error;
+    if (shiftResult.error) throw shiftResult.error;
+    if (exceptionResult.error) throw exceptionResult.error;
 
     const staffMap = new Map((staffResult.data ?? []).map((row) => [String(row.user_id), row]));
     const locationMap = new Map((locationResult.data ?? []).map((row) => [String(row.id), row]));
@@ -109,7 +231,15 @@ export async function GET(request: Request) {
     return Response.json({
       events,
       currentUserId: user.id,
-      today: pacificDate(),
+      today,
+      clockPolicy: settingsResult.data ?? {
+        enforce_schedule_clocking: true,
+        early_clock_in_window_minutes: 4,
+        late_clock_out_window_minutes: 4,
+        flag_scheduled_hours_overage: true,
+      },
+      myPublishedShifts: shiftResult.data ?? [],
+      myApprovedExceptions: exceptionResult.data ?? [],
     }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" } });
   } catch (error) {
     return staffErrorResponse(error);
@@ -143,17 +273,47 @@ export async function POST(request: Request) {
     );
     if (!location) throw new Response("The selected work location was not found.", { status: 400 });
 
-    const recent = await admin
-      .from("audit_log")
-      .select("metadata,occurred_at")
-      .eq("organization_id", profile.organization_id)
-      .eq("table_name", "time_clock")
-      .eq("actor_user_id", user.id)
-      .order("occurred_at", { ascending: false })
-      .limit(20);
-    if (recent.error) throw recent.error;
+    const occurredAt = new Date();
+    const today = pacificDate(occurredAt);
+    const nowMinutes = pacificClockMinutes(occurredAt);
 
-    const today = pacificDate();
+    const [recent, settingsResult, shiftsResult, exceptionsResult] = await Promise.all([
+      admin
+        .from("audit_log")
+        .select("location_id,metadata,occurred_at")
+        .eq("organization_id", profile.organization_id)
+        .eq("table_name", "time_clock")
+        .eq("actor_user_id", user.id)
+        .order("occurred_at", { ascending: false })
+        .limit(60),
+      admin
+        .from("staff_attendance_settings")
+        .select("late_tracking_enabled,late_grace_minutes,early_departure_tracking_enabled,early_departure_grace_minutes,enforce_schedule_clocking,early_clock_in_window_minutes,late_clock_out_window_minutes,flag_scheduled_hours_overage")
+        .eq("organization_id", profile.organization_id)
+        .maybeSingle(),
+      admin
+        .from("staff_shifts")
+        .select("id,start_time,end_time,status")
+        .eq("organization_id", profile.organization_id)
+        .eq("user_id", user.id)
+        .eq("location_id", location.id)
+        .eq("shift_date", today)
+        .eq("status", "Published")
+        .order("start_time", { ascending: true }),
+      admin
+        .from("staff_clock_exceptions")
+        .select("id,shift_id,approved_start_time,approved_end_time,approval_scope,reason,status")
+        .eq("organization_id", profile.organization_id)
+        .eq("staff_user_id", user.id)
+        .eq("location_id", location.id)
+        .eq("work_date", today)
+        .eq("status", "Approved"),
+    ]);
+    if (recent.error) throw recent.error;
+    if (settingsResult.error) throw settingsResult.error;
+    if (shiftsResult.error) throw shiftsResult.error;
+    if (exceptionsResult.error) throw exceptionsResult.error;
+
     const todays = ((recent.data ?? []) as unknown as DbRow[])
       .filter((row) => pacificDate(text(row.occurred_at)) === today);
     const last = todays.length ? eventFromMetadata(todays[0].metadata) : "";
@@ -168,7 +328,37 @@ export async function POST(request: Request) {
       throw new Response(`You cannot ${labels[event]} after the current time-clock state. Refresh the page and review today’s last action.`, { status: 400 });
     }
 
-    const occurredAt = new Date();
+    const settings = settingsResult.data ?? {};
+    const shifts = (shiftsResult.data ?? []) as unknown as DbRow[];
+    const exceptions = (exceptionsResult.data ?? []) as unknown as DbRow[];
+    const earlyWindow = Math.max(0, Number(settings.early_clock_in_window_minutes ?? 4));
+    const lateWindow = Math.max(0, Number(settings.late_clock_out_window_minutes ?? 4));
+    const enforceSchedule = settings.enforce_schedule_clocking !== false;
+
+    const relevantShift = shifts.find((shift) => nowMinutes <= minutesFromTime(text(shift.end_time)) + lateWindow) ?? shifts.at(-1) ?? null;
+    const relevantShiftId = relevantShift ? text(relevantShift.id) : null;
+    const approvedStart = exceptions.some((row) => exceptionCovers(row, nowMinutes, relevantShiftId, "start"));
+    const approvedEnd = exceptions.some((row) => exceptionCovers(row, nowMinutes, relevantShiftId, "end"));
+    const approvedAny = exceptions.some((row) => exceptionCovers(row, nowMinutes, relevantShiftId, "any"));
+
+    if (event === "clock_in" && enforceSchedule && !isOwner) {
+      if (!relevantShift) {
+        if (!approvedAny) {
+          throw new Response("You do not have a published shift at this location today. A shift exception must be approved before you can clock in.", { status: 409 });
+        }
+      } else {
+        const startMinutes = minutesFromTime(text(relevantShift.start_time));
+        const endMinutes = minutesFromTime(text(relevantShift.end_time));
+        const earliestAllowed = startMinutes - earlyWindow;
+        if (nowMinutes < earliestAllowed && !approvedStart) {
+          throw new Response(`Your shift starts at ${clockLabel(startMinutes)}. You may clock in up to ${earlyWindow} minutes early, beginning at ${clockLabel(earliestAllowed)}. Earlier work requires an approved shift exception.`, { status: 409 });
+        }
+        if (nowMinutes > endMinutes + lateWindow && !approvedAny) {
+          throw new Response("This shift has already ended. An approved shift exception is required before starting additional work.", { status: 409 });
+        }
+      }
+    }
+
     const { error } = await userClient.rpc("record_audit_event", {
       p_action: "CREATE",
       p_table_name: "time_clock",
@@ -179,101 +369,80 @@ export async function POST(request: Request) {
         event,
         location: requested,
         clientTimestamp: text(body.clientTimestamp).slice(0, 40),
+        scheduleExceptionApproved: approvedAny,
       },
     });
     if (error) throw error;
 
-    if (event === "clock_in" || event === "clock_out") {
-      const settings = await admin
-        .from("staff_attendance_settings")
-        .select("late_tracking_enabled,late_grace_minutes,early_departure_tracking_enabled,early_departure_grace_minutes")
-        .eq("organization_id", profile.organization_id)
-        .maybeSingle();
-      if (settings.error) throw settings.error;
+    let needsLeadershipReview = false;
 
-      const shifts = await admin
-        .from("staff_shifts")
-        .select("id,start_time,end_time,status")
-        .eq("organization_id", profile.organization_id)
-        .eq("user_id", user.id)
-        .eq("location_id", location.id)
-        .eq("shift_date", today)
-        .neq("status", "Cancelled")
-        .order("start_time", { ascending: true });
-      if (shifts.error) throw shifts.error;
-
-      const shiftRows = shifts.data ?? [];
-      const nowMinutes = pacificClockMinutes(occurredAt);
-      const shift = event === "clock_in" ? shiftRows[0] : shiftRows.at(-1);
-      const lateGrace = Number(settings.data?.late_grace_minutes ?? 0);
-      const earlyGrace = Number(settings.data?.early_departure_grace_minutes ?? 0);
-      const scheduledMinutes = shift
-        ? event === "clock_in"
-          ? minutesFromTime(String(shift.start_time))
-          : minutesFromTime(String(shift.end_time))
-        : null;
+    if ((event === "clock_in" || event === "clock_out") && relevantShift) {
+      const shiftStart = minutesFromTime(text(relevantShift.start_time));
+      const shiftEnd = minutesFromTime(text(relevantShift.end_time));
+      const lateGrace = Number(settings.late_grace_minutes ?? 0);
+      const earlyGrace = Number(settings.early_departure_grace_minutes ?? 0);
 
       const shouldFlagLate = Boolean(
-        shift &&
         event === "clock_in" &&
-        settings.data?.late_tracking_enabled &&
-        settings.data?.late_grace_minutes !== null &&
-        scheduledMinutes !== null &&
-        nowMinutes > scheduledMinutes + lateGrace
+        settings.late_tracking_enabled &&
+        settings.late_grace_minutes !== null &&
+        nowMinutes > shiftStart + lateGrace
       );
       const shouldFlagEarly = Boolean(
-        shift &&
         event === "clock_out" &&
-        settings.data?.early_departure_tracking_enabled &&
-        settings.data?.early_departure_grace_minutes !== null &&
-        scheduledMinutes !== null &&
-        nowMinutes < scheduledMinutes - earlyGrace
+        settings.early_departure_tracking_enabled &&
+        settings.early_departure_grace_minutes !== null &&
+        nowMinutes < shiftEnd - earlyGrace
       );
 
-      if (shift && (shouldFlagLate || shouldFlagEarly)) {
+      if (shouldFlagLate || shouldFlagEarly) {
         const typeCode = shouldFlagLate ? "late_arrival" : "early_departure";
-        const eventType = await admin
-          .from("staff_performance_event_types")
-          .select("id")
-          .eq("organization_id", profile.organization_id)
-          .eq("code", typeCode)
-          .eq("is_active", true)
-          .maybeSingle();
-        if (eventType.error) throw eventType.error;
+        const difference = shouldFlagLate ? nowMinutes - shiftStart : shiftEnd - nowMinutes;
+        await createPendingPerformanceEvent({
+          admin,
+          organizationId: profile.organization_id,
+          staffUserId: user.id,
+          locationId: String(location.id),
+          eventDate: today,
+          typeCode,
+          sourceReference: `${typeCode}:${relevantShiftId}:${today}`,
+          summary: shouldFlagLate
+            ? `Possible late arrival: clocked in ${difference} minute${difference === 1 ? "" : "s"} after the scheduled start.`
+            : `Possible early departure: clocked out ${difference} minute${difference === 1 ? "" : "s"} before the scheduled end.`,
+          notes: "Created automatically from the Hub Time Clock and published staff schedule. Leadership review is required before confirmation.",
+          createdBy: user.id,
+        });
+        needsLeadershipReview = true;
+      }
 
-        if (eventType.data?.id) {
-          const sourceReference = `${typeCode}:${shift.id}:${today}`;
-          const existingFlag = await admin
-            .from("staff_performance_events")
-            .select("id")
-            .eq("organization_id", profile.organization_id)
-            .eq("staff_user_id", user.id)
-            .eq("source_system", "Time Clock")
-            .eq("source_reference", sourceReference)
-            .maybeSingle();
-          if (existingFlag.error) throw existingFlag.error;
+      if (event === "clock_out" && settings.flag_scheduled_hours_overage !== false) {
+        const currentLocationId = String(location.id);
+        const actualWorked = workedMinutes(todays, currentLocationId, occurredAt);
+        const scheduledWorked = shifts.reduce((sum, shift) => {
+          const start = minutesFromTime(text(shift.start_time));
+          const end = minutesFromTime(text(shift.end_time));
+          return sum + Math.max(0, end - start);
+        }, 0);
+        const overage = actualWorked - scheduledWorked;
+        const beyondClockWindow = nowMinutes > shiftEnd + lateWindow;
 
-          if (!existingFlag.data) {
-            const difference = Math.abs(nowMinutes - (scheduledMinutes ?? nowMinutes));
-            const summary = shouldFlagLate
-              ? `Possible late arrival: clocked in ${difference} minute${difference === 1 ? "" : "s"} after the scheduled start.`
-              : `Possible early departure: clocked out ${difference} minute${difference === 1 ? "" : "s"} before the scheduled end.`;
-            const flagResult = await admin.from("staff_performance_events").insert({
-              organization_id: profile.organization_id,
-              staff_user_id: user.id,
-              location_id: location.id,
-              event_type_id: eventType.data.id,
-              event_date: today,
-              summary,
-              notes: "Created automatically from the Hub Time Clock and staff schedule. Leadership review is required before confirmation.",
-              recognition_points: 0,
-              status: "Pending Review",
-              source_system: "Time Clock",
-              source_reference: sourceReference,
-              created_by: user.id,
-            });
-            if (flagResult.error) throw flagResult.error;
-          }
+        if ((overage > 0 || beyondClockWindow) && !approvedEnd && !approvedAny) {
+          const amount = Math.max(overage, Math.max(0, nowMinutes - shiftEnd));
+          await createPendingPerformanceEvent({
+            admin,
+            organizationId: profile.organization_id,
+            staffUserId: user.id,
+            locationId: currentLocationId,
+            eventDate: today,
+            typeCode: "unapproved_shift_overage",
+            sourceReference: `unapproved_shift_overage:${today}:${currentLocationId}`,
+            summary: `Possible unapproved shift overage: ${amount} minute${amount === 1 ? "" : "s"} beyond the published scheduled hours.`,
+            notes: beyondClockWindow
+              ? `Clock-out occurred more than ${lateWindow} minutes after the published shift end. Actual clock time was preserved. Leadership must verify whether the additional work was approved.`
+              : "Actual clocked work time exceeded the published scheduled duration. The punch was preserved and leadership must verify whether the additional work was approved.",
+            createdBy: user.id,
+          });
+          needsLeadershipReview = true;
         }
       }
     }
@@ -283,6 +452,11 @@ export async function POST(request: Request) {
       event,
       occurredAt: occurredAt.toISOString(),
       location: requested,
+      needsLeadershipReview,
+      policy: {
+        earlyClockInWindowMinutes: earlyWindow,
+        lateClockOutWindowMinutes: lateWindow,
+      },
     });
   } catch (error) {
     return staffErrorResponse(error);
