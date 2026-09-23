@@ -37,6 +37,23 @@ function transitionAllowed(last: ClockEventType | "", next: ClockEventType) {
   if (next === "break_end") return last === "break_start";
   return last === "clock_in" || last === "break_end";
 }
+function minutesFromTime(value: string) {
+  const [hourText, minuteText] = value.slice(0, 5).split(":");
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  return Number.isFinite(hour) && Number.isFinite(minute) ? hour * 60 + minute : 0;
+}
+function pacificClockMinutes(value: Date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(value);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0) % 24;
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? 0);
+  return hour * 60 + minute;
+}
 
 export async function GET(request: Request) {
   try {
@@ -151,6 +168,7 @@ export async function POST(request: Request) {
       throw new Response(`You cannot ${labels[event]} after the current time-clock state. Refresh the page and review today’s last action.`, { status: 400 });
     }
 
+    const occurredAt = new Date();
     const { error } = await userClient.rpc("record_audit_event", {
       p_action: "CREATE",
       p_table_name: "time_clock",
@@ -165,10 +183,105 @@ export async function POST(request: Request) {
     });
     if (error) throw error;
 
+    if (event === "clock_in" || event === "clock_out") {
+      const settings = await admin
+        .from("staff_attendance_settings")
+        .select("late_tracking_enabled,late_grace_minutes,early_departure_tracking_enabled,early_departure_grace_minutes")
+        .eq("organization_id", profile.organization_id)
+        .maybeSingle();
+      if (settings.error) throw settings.error;
+
+      const shifts = await admin
+        .from("staff_shifts")
+        .select("id,start_time,end_time,status")
+        .eq("organization_id", profile.organization_id)
+        .eq("user_id", user.id)
+        .eq("location_id", location.id)
+        .eq("shift_date", today)
+        .neq("status", "Cancelled")
+        .order("start_time", { ascending: true });
+      if (shifts.error) throw shifts.error;
+
+      const shiftRows = shifts.data ?? [];
+      const nowMinutes = pacificClockMinutes(occurredAt);
+      const shift = event === "clock_in" ? shiftRows[0] : shiftRows.at(-1);
+      const lateGrace = Number(settings.data?.late_grace_minutes ?? 0);
+      const earlyGrace = Number(settings.data?.early_departure_grace_minutes ?? 0);
+      const scheduledMinutes = shift
+        ? event === "clock_in"
+          ? minutesFromTime(String(shift.start_time))
+          : minutesFromTime(String(shift.end_time))
+        : null;
+
+      const shouldFlagLate = Boolean(
+        shift &&
+        event === "clock_in" &&
+        settings.data?.late_tracking_enabled &&
+        settings.data?.late_grace_minutes !== null &&
+        scheduledMinutes !== null &&
+        nowMinutes > scheduledMinutes + lateGrace
+      );
+      const shouldFlagEarly = Boolean(
+        shift &&
+        event === "clock_out" &&
+        settings.data?.early_departure_tracking_enabled &&
+        settings.data?.early_departure_grace_minutes !== null &&
+        scheduledMinutes !== null &&
+        nowMinutes < scheduledMinutes - earlyGrace
+      );
+
+      if (shift && (shouldFlagLate || shouldFlagEarly)) {
+        const typeCode = shouldFlagLate ? "late_arrival" : "early_departure";
+        const eventType = await admin
+          .from("staff_performance_event_types")
+          .select("id")
+          .eq("organization_id", profile.organization_id)
+          .eq("code", typeCode)
+          .eq("is_active", true)
+          .maybeSingle();
+        if (eventType.error) throw eventType.error;
+
+        if (eventType.data?.id) {
+          const sourceReference = `${typeCode}:${shift.id}:${today}`;
+          const existingFlag = await admin
+            .from("staff_performance_events")
+            .select("id")
+            .eq("organization_id", profile.organization_id)
+            .eq("staff_user_id", user.id)
+            .eq("source_system", "Time Clock")
+            .eq("source_reference", sourceReference)
+            .maybeSingle();
+          if (existingFlag.error) throw existingFlag.error;
+
+          if (!existingFlag.data) {
+            const difference = Math.abs(nowMinutes - (scheduledMinutes ?? nowMinutes));
+            const summary = shouldFlagLate
+              ? `Possible late arrival: clocked in ${difference} minute${difference === 1 ? "" : "s"} after the scheduled start.`
+              : `Possible early departure: clocked out ${difference} minute${difference === 1 ? "" : "s"} before the scheduled end.`;
+            const flagResult = await admin.from("staff_performance_events").insert({
+              organization_id: profile.organization_id,
+              staff_user_id: user.id,
+              location_id: location.id,
+              event_type_id: eventType.data.id,
+              event_date: today,
+              summary,
+              notes: "Created automatically from the Hub Time Clock and staff schedule. Leadership review is required before confirmation.",
+              recognition_points: 0,
+              status: "Pending Review",
+              source_system: "Time Clock",
+              source_reference: sourceReference,
+              created_by: user.id,
+            });
+            if (flagResult.error) throw flagResult.error;
+          }
+        }
+      }
+    }
+
     return Response.json({
       ok: true,
       event,
-      occurredAt: new Date().toISOString(),
+      occurredAt: occurredAt.toISOString(),
       location: requested,
     });
   } catch (error) {
