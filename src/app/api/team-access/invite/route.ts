@@ -118,7 +118,7 @@ export async function POST(request: Request) {
         .eq("organization_id", profile.organization_id)
         .eq("id", selectedLane.id);
       if (laneLink.error) {
-        await admin.from("staff_access").delete().eq("user_id", invitedUser.id).catch(() => undefined);
+        await admin.from("staff_access").delete().eq("user_id", invitedUser.id);
         await admin.auth.admin.deleteUser(invitedUser.id).catch(() => undefined);
         throw laneLink.error;
       }
