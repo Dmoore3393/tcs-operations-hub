@@ -29,6 +29,32 @@ type Payload = {
   events: ClockEvent[];
   currentUserId: string;
   today: string;
+  clockPolicy: {
+    enforce_schedule_clocking: boolean;
+    early_clock_in_window_minutes: number;
+    late_clock_out_window_minutes: number;
+    flag_scheduled_hours_overage: boolean;
+  };
+  myPublishedShifts: Array<{
+    id: string;
+    location_id: string;
+    location: string;
+    shift_date: string;
+    start_time: string;
+    end_time: string;
+    position_label: string | null;
+  }>;
+  myApprovedExceptions: Array<{
+    id: string;
+    location_id: string;
+    shift_id: string | null;
+    work_date: string;
+    approval_scope: "General" | "Maintenance";
+    approved_start_time: string | null;
+    approved_end_time: string | null;
+    reason: string;
+    status: "Approved";
+  }>;
 };
 
 const labels: Record<ClockEventType, string> = {
@@ -123,6 +149,8 @@ export default function TimeClockPage() {
   const lastEvent = todayMine.at(-1)?.event ?? "";
   const state = !lastEvent || lastEvent === "clock_out" ? "Off Clock" : lastEvent === "break_start" ? "On Break" : "Working";
   const todayMinutes = durationMinutes(todayMine);
+  const selectedShift = payload?.myPublishedShifts.find((shift) => shift.location === workLocation);
+  const selectedException = payload?.myApprovedExceptions.find((item) => item.location_id === selectedShift?.location_id || (!selectedShift && item.work_date === payload.today));
 
   async function act(event: ClockEventType) {
     if (!session?.access_token) return;
@@ -142,10 +170,10 @@ export default function TimeClockPage() {
           clientTimestamp: new Date().toISOString(),
         }),
       });
-      const result = await response.json() as { error?: string };
+      const result = await response.json() as { error?: string; needsLeadershipReview?: boolean };
       if (!response.ok) throw new Error(result.error || "Time clock update failed.");
       await load();
-      setNotice(labels[event]);
+      setNotice(result.needsLeadershipReview ? `${labels[event]} • sent to leadership review` : labels[event]);
       window.setTimeout(() => setNotice(""), 2200);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Time clock update failed.");
@@ -181,6 +209,13 @@ export default function TimeClockPage() {
 
     {notice && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-900">{notice}</div>}
     {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-900">{error}</div>}
+
+    {payload && <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+      <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
+        <div><p className="text-xs font-black uppercase tracking-[.14em] text-emerald-800">TCS scheduled-hours rule</p><h2 className="mt-1 text-xl font-black text-slate-950">Clock in no more than {payload.clockPolicy.early_clock_in_window_minutes} minutes early.</h2><p className="mt-2 text-sm font-semibold leading-6 text-slate-700">Staff should not work beyond scheduled hours without approval. The normal clock-out window ends {payload.clockPolicy.late_clock_out_window_minutes} minutes after the published shift. If someone works beyond the schedule, the Hub still records the actual clock-out and sends unapproved extra time to leadership review instead of deleting worked time.</p></div>
+        <div className="rounded-2xl border border-white bg-white/80 p-4 text-right"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Today • {workLocation}</p><p className="mt-1 text-lg font-black text-slate-950">{selectedShift ? `${selectedShift.start_time.slice(0,5)}–${selectedShift.end_time.slice(0,5)}` : "No published shift"}</p>{selectedException && <p className="mt-1 text-xs font-black text-amber-700">Approved exception on file</p>}</div>
+      </div>
+    </section>}
 
     <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
