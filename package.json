@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run security:check && next build",
+    "build": "npm run security:check && npm run app:check && next build",
     "start": "next start",
     "lint": "eslint",
-    "validate": "tsc --noEmit && eslint . && npm run security:check",
-    "security:check": "node scripts/verify-production-security.mjs"
+    "validate": "tsc --noEmit && eslint . && npm run security:check && npm run app:check",
+    "security:check": "node scripts/verify-production-security.mjs",
+    "app:check": "node scripts/verify-app-readiness.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.111.0",

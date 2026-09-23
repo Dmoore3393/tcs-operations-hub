@@ -24,5 +24,7 @@ jobs:
         run: npm ci
       - name: Verify no bundled child/family data and production protections
         run: npm run security:check
+      - name: Verify native app readiness foundation
+        run: npm run app:check
       - name: Typecheck application
         run: npx tsc --noEmit

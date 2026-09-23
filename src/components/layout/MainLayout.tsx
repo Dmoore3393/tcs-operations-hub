@@ -33,6 +33,7 @@ import {
   Megaphone,
   Menu,
   Pin,
+  PackageCheck,
   Printer,
   Settings,
   ScrollText,
@@ -107,6 +108,7 @@ const navItems = [
   { label: "AI Director", href: "/ai-director", icon: Bot },
   { label: "Locations", href: "/locations", icon: Building2 },
   { label: "Audit Log", href: "/audit-log", icon: ScrollText },
+  { label: "App Readiness", href: "/app-readiness", icon: PackageCheck },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
@@ -165,6 +167,7 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/locations": { title: "Locations", subtitle: "Daily open/closed times, capacity, licensing, and colors" },
   "/locations/tehachapi": { title: "Thomason Family Childcare", subtitle: "Tehachapi location overview, staffing, roster, daily operations, and files" },
   "/audit-log": { title: "Audit Log", subtitle: "Immutable create, update, review, export, and deletion history" },
+  "/app-readiness": { title: "App Readiness Command Center", subtitle: "Security, role testing, device QA, and v1 freeze status" },
   "/settings": { title: "Hub Settings", subtitle: "Policies, defaults, notifications, and system setup" },
 };
 

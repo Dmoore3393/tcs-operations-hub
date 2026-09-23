@@ -3,7 +3,7 @@
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
-import { DemoNotice, Modal, PageIntro, PrimaryButton, SecondaryButton, SectionCard, StatCard, StatusBadge, inputClass } from "@/components/hub/HubUI";
+import { Modal, PageIntro, PrimaryButton, SecondaryButton, SectionCard, StatCard, StatusBadge, inputClass } from "@/components/hub/HubUI";
 import { type FileRecord, starterFiles } from "@/lib/hub-data";
 import { initialChildren, type ChildRecord } from "@/lib/children";
 import { childAttendsLocation, starterChildSchedules, type ChildScheduleRecord } from "@/lib/child-schedules";
@@ -208,8 +208,7 @@ export default function FilesPage() {
   }
 
   return <MainLayout><div className="mx-auto max-w-[1500px] space-y-6">
-    <PageIntro eyebrow="Licensing and compliance" title="Files" description="Track missing forms and use the encrypted private vault for uploaded forms and medical cards." actions={<PrimaryButton onClick={() => setEditing({ ...blankFile, id: Date.now(), location: activeLocation === "All Locations" ? (availableLocations.find((item) => item !== "All Locations") ?? "Halcom") : activeLocation })}><Plus className="h-4 w-4" /> Add File Item</PrimaryButton>} />
-    <DemoNotice />
+    <PageIntro eyebrow="Licensing and compliance" title="Files" description="Track live compliance items and securely store uploaded forms, medical cards, staff records, and other protected documents in the encrypted private vault." actions={<PrimaryButton onClick={() => setEditing({ ...blankFile, id: Date.now(), location: activeLocation === "All Locations" ? (availableLocations.find((item) => item !== "All Locations") ?? "Halcom") : activeLocation })}><Plus className="h-4 w-4" /> Add File Item</PrimaryButton>} />
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard label="Open File Items" value={files.filter((file) => file.status !== "Complete").length} icon={<FileWarning className="h-5 w-5" />} tone="amber" />
       <StatCard label="Missing" value={files.filter((file) => file.status === "Missing").length} icon={<FileWarning className="h-5 w-5" />} tone="red" />

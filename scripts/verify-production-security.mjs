@@ -12,6 +12,9 @@ const schedulesSource = readFileSync(new URL("../src/lib/child-schedules.ts", im
 const complianceSource = readFileSync(new URL("../src/lib/compliance-ops.ts", import.meta.url), "utf8");
 const careSource = readFileSync(new URL("../src/lib/employee-care.ts", import.meta.url), "utf8");
 const hubDataSource = readFileSync(new URL("../src/lib/hub-data.ts", import.meta.url), "utf8");
+const adminOpsSource = readFileSync(new URL("../src/lib/admin-ops.ts", import.meta.url), "utf8");
+const preAppHardening = readFileSync(new URL("../supabase/pre-app-security-hardening.sql", import.meta.url), "utf8");
+const formFoundation = readFileSync(new URL("../supabase/official-form-and-staff-document-foundation.sql", import.meta.url), "utf8");
 
 const failures = [];
 function assert(condition, message) {
@@ -78,6 +81,10 @@ assert(documentCrypto.includes('createCipheriv("aes-256-gcm"'), "AES-256-GCM doc
 assert(documentCrypto.includes("getAuthTag"), "Authenticated encryption tag handling is missing");
 assert(sql.includes("not legal_hold and retention_until <= current_date"), "Retention/legal-hold purge protection is missing");
 assert(setup.includes("TCS Operations Hub production hardening"), "Combined setup.sql does not include production hardening");
+assert(preAppHardening.includes("revoke execute on function public.record_audit_event"), "Pre-app anonymous RPC hardening is missing");
+assert(preAppHardening.includes('create policy "organizations server only"'), "Explicit server-only organization RLS policy is missing");
+assert(formFoundation.includes("create table if not exists public.official_form_templates"), "Official form template foundation is missing");
+assert(formFoundation.includes("Staff Self + Owner"), "Staff document confidentiality foundation is missing");
 
 // Live people data must never be shipped as application defaults.
 assert(/export const initialChildren:\s*ChildRecord\[\]\s*=\s*\[\s*\];/s.test(childrenSource), "initialChildren must stay empty; child records belong in Supabase");
@@ -88,6 +95,8 @@ assert(/export const starterHealthSafety:\s*HealthSafetyRecord\[\]\s*=\s*\[\s*\]
 assert(/export const starterFamilies:\s*FamilyRecord\[\]\s*=\s*\[\s*\];/s.test(hubDataSource), "starterFamilies must stay empty");
 assert(/export const starterRoutes:\s*TransportationRoute\[\]\s*=\s*\[\s*\];/s.test(hubDataSource), "starterRoutes must stay empty");
 assert(/export const starterFiles:\s*FileRecord\[\]\s*=\s*\[\s*\];/s.test(hubDataSource), "starterFiles must stay empty");
+assert(/export const starterEnrollmentLeads:\s*EnrollmentLeadRecord\[\]\s*=\s*\[\s*\];/s.test(adminOpsSource), "starterEnrollmentLeads must stay empty");
+assert(/export const starterDigitalForms:\s*DigitalFormRecord\[\]\s*=\s*\[\s*\];/s.test(adminOpsSource), "starterDigitalForms must stay empty");
 
 // Scan shipped application text for accidentally committed server secrets.
 // Person-specific deny lists are intentionally NOT stored in this repository:
