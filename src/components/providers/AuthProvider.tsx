@@ -27,6 +27,12 @@ export type StaffAccessProfile = {
   organization_id: string;
   invited_at: string | null;
   accepted_at: string | null;
+  lane_profile_id: string | null;
+  job_title: string | null;
+  secondary_title: string | null;
+  lane_level: number | null;
+  lane_group: string | null;
+  reports_to_label: string | null;
 };
 
 type AuthContextValue = {
@@ -181,11 +187,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    const laneResult = await supabase
+      .from("staff_lane_profiles")
+      .select("id,job_title,secondary_title,lane_level,lane_group,reports_to_label")
+      .eq("organization_id", data.organization_id)
+      .eq("staff_user_id", data.user_id)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (laneResult.error) {
+      setAccessError(`Could not verify staff lane: ${laneResult.error.message}`);
+      setProfile(null);
+      return;
+    }
+
     setAccessError("");
     setProfile({
       ...(data as StaffAccessProfile),
       permissions: Array.isArray(data.permissions) ? data.permissions : [],
       locations: Array.isArray(data.locations) ? data.locations : [],
+      lane_profile_id: laneResult.data?.id ?? null,
+      job_title: laneResult.data?.job_title ?? null,
+      secondary_title: laneResult.data?.secondary_title ?? null,
+      lane_level: laneResult.data?.lane_level ?? null,
+      lane_group: laneResult.data?.lane_group ?? null,
+      reports_to_label: laneResult.data?.reports_to_label ?? null,
     });
   }, []);
 
