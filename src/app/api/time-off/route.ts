@@ -16,12 +16,15 @@ function intOrNull(value: unknown) {
 function validDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
+function validTime(value: string) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
 function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string) {
   return aStart <= bEnd && aEnd >= bStart;
 }
 
 async function accessibleLocationIds(auth: Awaited<ReturnType<typeof requireStaff>>) {
-  const { admin, profile, isOwner, isLicensee } = auth;
+  const { admin, profile, isOwner } = auth;
   const locations = await admin
     .from("locations")
     .select("id,name,full_name,slug,is_active")
@@ -31,16 +34,6 @@ async function accessibleLocationIds(auth: Awaited<ReturnType<typeof requireStaf
   if (locations.error) throw locations.error;
 
   if (isOwner) return { locations: locations.data ?? [], ids: new Set((locations.data ?? []).map((row) => String(row.id))) };
-  if (!isLicensee) {
-    const mine = await admin
-      .from("staff_location_assignments")
-      .select("location_id")
-      .eq("organization_id", profile.organization_id)
-      .eq("user_id", auth.user.id);
-    if (mine.error) throw mine.error;
-    const ids = new Set((mine.data ?? []).map((row) => String(row.location_id)));
-    return { locations: (locations.data ?? []).filter((row) => ids.has(String(row.id))), ids };
-  }
 
   const mine = await admin
     .from("staff_location_assignments")
@@ -52,24 +45,60 @@ async function accessibleLocationIds(auth: Awaited<ReturnType<typeof requireStaf
   return { locations: (locations.data ?? []).filter((row) => ids.has(String(row.id))), ids };
 }
 
+async function approvalScopes(auth: Awaited<ReturnType<typeof requireStaff>>) {
+  const result = await auth.admin
+    .from("staff_clock_exception_approvers")
+    .select("approval_scope")
+    .eq("organization_id", auth.profile.organization_id)
+    .eq("user_id", auth.user.id)
+    .eq("is_active", true);
+  if (result.error) throw result.error;
+  return new Set((result.data ?? []).map((row) => String(row.approval_scope)));
+}
+
+async function assertStaffAtLocation(auth: Awaited<ReturnType<typeof requireStaff>>, staffUserId: string, locationId: string) {
+  const result = await auth.admin
+    .from("staff_location_assignments")
+    .select("user_id")
+    .eq("organization_id", auth.profile.organization_id)
+    .eq("user_id", staffUserId)
+    .eq("location_id", locationId)
+    .maybeSingle();
+  if (result.error) throw result.error;
+  if (!result.data) throw new Response("That employee is not assigned to the selected location.", { status: 400 });
+}
+
 export async function GET(request: Request) {
   try {
     const auth = await requireStaff(request);
     const { admin, profile, user, isOwner, isLicensee } = auth;
     const { locations, ids } = await accessibleLocationIds(auth);
+    const scopes = await approvalScopes(auth);
 
-    const [assignmentResult, requestResult, blackoutResult, settingsResult, staffResult] = await Promise.all([
+    const [assignmentResult, requestResult, blackoutResult, settingsResult, staffResult, approverResult, exceptionResult] = await Promise.all([
       admin.from("staff_location_assignments").select("user_id,location_id").eq("organization_id", profile.organization_id),
       admin.from("time_off_requests").select("*").eq("organization_id", profile.organization_id).order("submitted_at", { ascending: false }),
       admin.from("time_off_blackouts").select("*").eq("organization_id", profile.organization_id).eq("is_active", true).order("start_date"),
       admin.from("staff_attendance_settings").select("*").eq("organization_id", profile.organization_id).maybeSingle(),
       admin.from("staff_access").select("user_id,full_name,role,is_active").eq("organization_id", profile.organization_id).eq("is_active", true).order("full_name"),
+      admin.from("staff_clock_exception_approvers")
+        .select("user_id,approval_scope,is_active")
+        .eq("organization_id", profile.organization_id)
+        .eq("is_active", true),
+      admin.from("staff_clock_exceptions")
+        .select("id,staff_user_id,location_id,shift_id,work_date,approval_scope,approved_start_time,approved_end_time,reason,status,approved_by,approved_at,revoked_by,revoked_at")
+        .eq("organization_id", profile.organization_id)
+        .order("work_date", { ascending: false })
+        .order("approved_at", { ascending: false })
+        .limit(250),
     ]);
     if (assignmentResult.error) throw assignmentResult.error;
     if (requestResult.error) throw requestResult.error;
     if (blackoutResult.error) throw blackoutResult.error;
     if (settingsResult.error) throw settingsResult.error;
     if (staffResult.error) throw staffResult.error;
+    if (approverResult.error) throw approverResult.error;
+    if (exceptionResult.error) throw exceptionResult.error;
 
     const assignments = assignmentResult.data ?? [];
     const staffIdsForAccessibleLocations = new Set(
@@ -89,9 +118,14 @@ export async function GET(request: Request) {
     });
 
     const staff = (staffResult.data ?? []).filter((row) => {
-      if (isOwner) return true;
+      if (isOwner || scopes.has("General") || scopes.has("Maintenance")) return true;
       if (isLicensee) return staffIdsForAccessibleLocations.has(String(row.user_id));
       return String(row.user_id) === user.id;
+    });
+
+    const exceptions = (exceptionResult.data ?? []).filter((row) => {
+      if (isOwner || scopes.has("General") || scopes.has("Maintenance")) return true;
+      return String(row.staff_user_id) === user.id;
     });
 
     return Response.json({
@@ -99,12 +133,17 @@ export async function GET(request: Request) {
       canCreateCompanyWideBlackout: isOwner,
       canReviewRequests: isOwner || isLicensee,
       canConfigureAttendance: isOwner,
+      canApproveGeneralClockExceptions: scopes.has("General"),
+      canApproveMaintenanceClockExceptions: scopes.has("General") || scopes.has("Maintenance"),
+      canSetMaintenanceApprover: scopes.has("General"),
       currentUserId: user.id,
       locations,
       assignments,
       staff,
       requests,
       blackouts,
+      clockApprovers: approverResult.data ?? [],
+      clockExceptions: exceptions,
       attendanceSettings: settingsResult.data ?? {
         late_tracking_enabled: false,
         late_grace_minutes: null,
@@ -112,6 +151,10 @@ export async function GET(request: Request) {
         early_departure_grace_minutes: null,
         no_show_tracking_enabled: false,
         no_show_after_minutes: null,
+        enforce_schedule_clocking: true,
+        early_clock_in_window_minutes: 4,
+        late_clock_out_window_minutes: 4,
+        flag_scheduled_hours_overage: true,
       },
     }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" } });
   } catch (error) {
@@ -235,6 +278,52 @@ export async function POST(request: Request) {
       return Response.json({ ok: true, request: result.data });
     }
 
+    if (action === "create_clock_exception") {
+      const scopes = await approvalScopes(auth);
+      const approvalScope = text(body.approvalScope) === "Maintenance" ? "Maintenance" : "General";
+      const allowed = approvalScope === "General" ? scopes.has("General") : scopes.has("General") || scopes.has("Maintenance");
+      if (!allowed) throw new Response("You are not authorized to approve that type of shift exception.", { status: 403 });
+
+      const staffUserId = text(body.staffUserId);
+      const locationId = text(body.locationId);
+      const workDate = text(body.workDate);
+      const approvedStartTime = text(body.approvedStartTime);
+      const approvedEndTime = text(body.approvedEndTime);
+      const reason = text(body.reason);
+      if (!staffUserId || !locationId || !validDate(workDate) || !reason) {
+        return Response.json({ error: "Employee, location, date, and approval reason are required." }, { status: 400 });
+      }
+      if (staffUserId === user.id) {
+        return Response.json({ error: "Shift exceptions must be approved by another authorized person." }, { status: 400 });
+      }
+      if (!approvedStartTime && !approvedEndTime) {
+        return Response.json({ error: "Enter an approved start time, approved end time, or both." }, { status: 400 });
+      }
+      if (approvedStartTime && !validTime(approvedStartTime)) return Response.json({ error: "Enter a valid approved start time." }, { status: 400 });
+      if (approvedEndTime && !validTime(approvedEndTime)) return Response.json({ error: "Enter a valid approved end time." }, { status: 400 });
+      if (approvedStartTime && approvedEndTime && approvedEndTime <= approvedStartTime) {
+        return Response.json({ error: "Approved end time must be after the approved start time." }, { status: 400 });
+      }
+
+      await assertStaffAtLocation(auth, staffUserId, locationId);
+
+      const result = await admin.from("staff_clock_exceptions").insert({
+        organization_id: profile.organization_id,
+        staff_user_id: staffUserId,
+        location_id: locationId,
+        work_date: workDate,
+        approval_scope: approvalScope,
+        approved_start_time: approvedStartTime || null,
+        approved_end_time: approvedEndTime || null,
+        reason,
+        status: "Approved",
+        approved_by: user.id,
+        approved_at: new Date().toISOString(),
+      }).select("*").single();
+      if (result.error) throw result.error;
+      return Response.json({ ok: true, exception: result.data });
+    }
+
     return Response.json({ error: "Choose a valid time-off action." }, { status: 400 });
   } catch (error) {
     return staffErrorResponse(error);
@@ -312,6 +401,10 @@ export async function PATCH(request: Request) {
         early_departure_grace_minutes: intOrNull(body.earlyDepartureGraceMinutes),
         no_show_tracking_enabled: bool(body.noShowTrackingEnabled),
         no_show_after_minutes: intOrNull(body.noShowAfterMinutes),
+        enforce_schedule_clocking: body.enforceScheduleClocking !== false,
+        early_clock_in_window_minutes: Math.max(0, intOrNull(body.earlyClockInWindowMinutes) ?? 4),
+        late_clock_out_window_minutes: Math.max(0, intOrNull(body.lateClockOutWindowMinutes) ?? 4),
+        flag_scheduled_hours_overage: body.flagScheduledHoursOverage !== false,
         updated_by: user.id,
         updated_at: new Date().toISOString(),
       };
@@ -329,6 +422,63 @@ export async function PATCH(request: Request) {
       if (!isOwner && (!current.data.location_id || !ids.has(String(current.data.location_id)))) throw new Response("You cannot change that blackout.", { status: 403 });
       const result = await admin.from("time_off_blackouts").update({ is_active: false, updated_by: user.id }).eq("id", id).select("id").single();
       if (result.error) throw result.error;
+      return Response.json({ ok: true });
+    }
+
+    if (action === "revoke_clock_exception") {
+      const scopes = await approvalScopes(auth);
+      if (!scopes.has("General") && !scopes.has("Maintenance")) throw new Response("Shift-exception approval access is required.", { status: 403 });
+      const id = text(body.id);
+      const current = await admin.from("staff_clock_exceptions")
+        .select("id,approval_scope,status")
+        .eq("organization_id", profile.organization_id)
+        .eq("id", id)
+        .maybeSingle();
+      if (current.error) throw current.error;
+      if (!current.data) return Response.json({ error: "Shift exception not found." }, { status: 404 });
+      if (String(current.data.approval_scope) === "General" && !scopes.has("General")) {
+        throw new Response("Only a general shift-exception approver can revoke this approval.", { status: 403 });
+      }
+      const result = await admin.from("staff_clock_exceptions").update({
+        status: "Revoked",
+        revoked_by: user.id,
+        revoked_at: new Date().toISOString(),
+      }).eq("id", id).select("id").single();
+      if (result.error) throw result.error;
+      return Response.json({ ok: true });
+    }
+
+    if (action === "set_maintenance_approver") {
+      const scopes = await approvalScopes(auth);
+      if (!scopes.has("General")) throw new Response("General shift-exception approval access is required.", { status: 403 });
+      const staffUserId = text(body.staffUserId);
+
+      const deactivate = await admin.from("staff_clock_exception_approvers")
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq("organization_id", profile.organization_id)
+        .eq("approval_scope", "Maintenance");
+      if (deactivate.error) throw deactivate.error;
+
+      if (staffUserId) {
+        const target = await admin.from("staff_access")
+          .select("user_id,is_active")
+          .eq("organization_id", profile.organization_id)
+          .eq("user_id", staffUserId)
+          .eq("is_active", true)
+          .maybeSingle();
+        if (target.error) throw target.error;
+        if (!target.data) return Response.json({ error: "Choose an active staff account." }, { status: 400 });
+
+        const result = await admin.from("staff_clock_exception_approvers").upsert({
+          organization_id: profile.organization_id,
+          user_id: staffUserId,
+          approval_scope: "Maintenance",
+          is_active: true,
+          created_by: user.id,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "organization_id,user_id,approval_scope" });
+        if (result.error) throw result.error;
+      }
       return Response.json({ ok: true });
     }
 
