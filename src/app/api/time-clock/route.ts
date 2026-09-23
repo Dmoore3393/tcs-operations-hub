@@ -238,7 +238,13 @@ export async function GET(request: Request) {
         late_clock_out_window_minutes: 4,
         flag_scheduled_hours_overage: true,
       },
-      myPublishedShifts: shiftResult.data ?? [],
+      myPublishedShifts: (shiftResult.data ?? []).map((shift) => {
+        const location = locationMap.get(String(shift.location_id)) as DbRow | undefined;
+        return {
+          ...shift,
+          location: normalizeLocation(`${text(location?.slug)} ${text(location?.name)} ${text(location?.full_name)}`),
+        };
+      }),
       myApprovedExceptions: exceptionResult.data ?? [],
     }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" } });
   } catch (error) {
