@@ -96,6 +96,7 @@ export async function GET(request: Request) {
 
     return Response.json({
       canManageBlackouts: isOwner || isLicensee,
+      canCreateCompanyWideBlackout: isOwner,
       canReviewRequests: isOwner || isLicensee,
       canConfigureAttendance: isOwner,
       currentUserId: user.id,
