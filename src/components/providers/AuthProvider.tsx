@@ -170,13 +170,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (!data || !data.is_active) {
-      setAccessError("This login does not have active TCS staff access. Ask Danielle or Jennifer to add or reactivate the account.");
+      setAccessError("This login does not have active TCS staff access. Ask a TCS Owner/Admin to add or reactivate the account.");
       setProfile(null);
       return;
     }
 
     if (!isApprovedPilotRole(data.role)) {
-      setAccessError("This account has an unsupported role. Ask Danielle or Jennifer to update the role in Team Access.");
+      setAccessError("This account has an unsupported role. Ask a TCS Owner/Admin to update the role in Team Access.");
       setProfile(null);
       return;
     }
