@@ -3,6 +3,16 @@ import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 
 type DbRow = Record<string, unknown>;
 type ClockEventType = "clock_in" | "clock_out" | "break_start" | "break_end";
+type AttendanceSettingsRow = {
+  late_tracking_enabled: boolean;
+  late_grace_minutes: number | null;
+  early_departure_tracking_enabled: boolean;
+  early_departure_grace_minutes: number | null;
+  enforce_schedule_clocking: boolean;
+  early_clock_in_window_minutes: number;
+  late_clock_out_window_minutes: number;
+  flag_scheduled_hours_overage: boolean;
+};
 
 function object(value: unknown): DbRow {
   return value && typeof value === "object" && !Array.isArray(value) ? value as DbRow : {};
@@ -334,7 +344,16 @@ export async function POST(request: Request) {
       throw new Response(`You cannot ${labels[event]} after the current time-clock state. Refresh the page and review today’s last action.`, { status: 400 });
     }
 
-    const settings = settingsResult.data ?? {};
+    const settings = (settingsResult.data ?? {
+      late_tracking_enabled: false,
+      late_grace_minutes: null,
+      early_departure_tracking_enabled: false,
+      early_departure_grace_minutes: null,
+      enforce_schedule_clocking: true,
+      early_clock_in_window_minutes: 4,
+      late_clock_out_window_minutes: 4,
+      flag_scheduled_hours_overage: true,
+    }) as AttendanceSettingsRow;
     const shifts = (shiftsResult.data ?? []) as unknown as DbRow[];
     const exceptions = (exceptionsResult.data ?? []) as unknown as DbRow[];
     const earlyWindow = Math.max(0, Number(settings.early_clock_in_window_minutes ?? 4));
