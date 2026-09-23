@@ -178,7 +178,7 @@ const routePermissionMap: Record<string, EmployeePermission> = {
   "/ai-director": "ai_assistant",
 };
 
-const employeeAlwaysAllowedRoutes = new Set(["/", "/employee-lounge", "/employee-bulletin", "/team-store", "/training-center", "/notifications", "/time-clock", "/my-schedule", "/login", "/accept-invite"]);
+const employeeAlwaysAllowedRoutes = new Set(["/", "/employee-lounge", "/employee-bulletin", "/team-store", "/training-center", "/notifications", "/time-clock", "/my-schedule", "/organization", "/login", "/accept-invite"]);
 
 export function employeeCanAccessRoute(permissions: string[], pathname: string) {
   if (employeeAlwaysAllowedRoutes.has(pathname)) return true;
@@ -285,6 +285,12 @@ export type TeamAccessAccount = {
   email: string;
   full_name: string;
   role: string;
+  lane_profile_id: string | null;
+  job_title: string | null;
+  secondary_title: string | null;
+  lane_level: number | null;
+  lane_group: string | null;
+  reports_to_label: string | null;
   locations: string[];
   permissions: string[];
   is_active: boolean;

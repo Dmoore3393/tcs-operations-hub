@@ -5,6 +5,11 @@ export type PerformanceStaff = {
   full_name: string;
   email: string;
   role: string;
+  job_title: string | null;
+  secondary_title: string | null;
+  lane_level: number | null;
+  lane_group: string | null;
+  reports_to_label: string | null;
   is_active: boolean;
 };
 

@@ -167,7 +167,7 @@ export default function StaffPerformancePage() {
   const visibleStaff = useMemo(() => summaries.filter((item) => {
     const term = search.trim().toLowerCase();
     if (!term) return true;
-    return [item.staff.full_name, item.staff.role, ...item.locations].join(" ").toLowerCase().includes(term);
+    return [item.staff.full_name, item.staff.job_title, item.staff.secondary_title, item.staff.lane_group, item.staff.role, ...item.locations].filter(Boolean).join(" ").toLowerCase().includes(term);
   }), [search, summaries]);
 
   const pendingEvents = payload.events.filter((event) => event.status === "Pending Review");
@@ -380,7 +380,7 @@ export default function StaffPerformancePage() {
             const status = leadershipStatus(summary);
             return <button key={staff.user_id} onClick={() => setSelectedStaffId(staff.user_id)} className="rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md">
               <div className="flex items-start justify-between gap-3"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-sm font-black text-emerald-900">{performanceInitials(staff.full_name)}</span><StatusBadge tone={status.tone}>{status.label}</StatusBadge></div>
-              <h3 className="mt-4 text-lg font-black text-slate-950">{staff.full_name}</h3><p className="text-xs font-bold text-emerald-700">{staff.role}</p><p className="mt-1 truncate text-xs font-semibold text-slate-500">{locations.join(" • ") || "No location assignment"}</p>
+              <h3 className="mt-4 text-lg font-black text-slate-950">{staff.full_name}</h3><p className="text-xs font-black text-emerald-700">{staff.job_title || "Lane not linked"}</p>{staff.secondary_title && <p className="mt-1 text-[11px] font-bold text-amber-700">{staff.secondary_title}</p>}<p className="mt-1 truncate text-xs font-semibold text-slate-500">{locations.join(" • ") || "No location assignment"}</p><p className="mt-2 text-[9px] font-black uppercase tracking-wider text-slate-400">Hub access: {staff.role}</p>
               <div className="mt-4 grid grid-cols-4 gap-2"><Mini label="Points" value={summary.recognitionPoints} /><Mini label="Positive" value={summary.recognitionCount} /><Mini label="Account." value={summary.accountabilityCount} /><Mini label="Pending" value={summary.pendingCount} /></div>
               <div className="mt-4 flex items-center justify-between text-xs font-black text-slate-500"><span>{summary.openCoachingCount ? `${summary.openCoachingCount} open coaching` : "No open coaching"}</span><ChevronRight className="h-4 w-4" /></div>
             </button>;
@@ -416,7 +416,7 @@ export default function StaffPerformancePage() {
       </form>
     </Modal>}
 
-    {selectedStaff && selectedSummary && <Modal title={selectedStaff.full_name} description="Documented recognition, accountability, and coaching history for the selected period." onClose={() => setSelectedStaffId("")} footer={<><SecondaryButton onClick={() => openCoachingRecord(selectedStaff.user_id)}>Add Coaching</SecondaryButton><PrimaryButton onClick={() => openEvent(selectedStaff.user_id)}><Plus className="h-4 w-4" /> Add Event</PrimaryButton></>}>
+    {selectedStaff && selectedSummary && <Modal title={selectedStaff.full_name} description={`${selectedStaff.job_title || "TCS staff lane"}${selectedStaff.secondary_title ? ` • ${selectedStaff.secondary_title}` : ""} • Documented recognition, accountability, and coaching history for the selected period.`} onClose={() => setSelectedStaffId("")} footer={<><SecondaryButton onClick={() => openCoachingRecord(selectedStaff.user_id)}>Add Coaching</SecondaryButton><PrimaryButton onClick={() => openEvent(selectedStaff.user_id)}><Plus className="h-4 w-4" /> Add Event</PrimaryButton></>}>
       <div className="space-y-5">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5"><Mini label="Points" value={selectedSummary.recognitionPoints} /><Mini label="Positive" value={selectedSummary.recognitionCount} /><Mini label="Account." value={selectedSummary.accountabilityCount} /><Mini label="Pending" value={selectedSummary.pendingCount} /><Mini label="Open Coaching" value={selectedSummary.openCoachingCount} /></div>
         <div>

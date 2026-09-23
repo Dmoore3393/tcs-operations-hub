@@ -17,6 +17,7 @@ type UpdateBody = {
   locations?: string[];
   permissions?: string[];
   is_active?: boolean;
+  lane_profile_id?: string | null;
 };
 
 function normalizeLocations(role: AccessRole, values: string[] | undefined) {
@@ -35,13 +36,23 @@ function normalizeLocations(role: AccessRole, values: string[] | undefined) {
 export async function GET(request: Request) {
   try {
     const { admin, profile } = await requireOwner(request);
-    const { data: staff, error: staffError } = await admin
+    const [{ data: staff, error: staffError }, { data: lanes, error: lanesError }] = await Promise.all([
+      admin
       .from("staff_access")
       .select("user_id,email,full_name,role,locations,permissions,is_active,organization_id,invited_at,accepted_at,created_at")
       .eq("organization_id", profile.organization_id)
-      .order("full_name");
+      .order("full_name"),
+      admin
+        .from("staff_lane_profiles")
+        .select("id,staff_user_id,full_name,preferred_name,lane_level,lane_group,job_title,secondary_title,reports_to_label,primary_location,sort_order,is_active")
+        .eq("organization_id", profile.organization_id)
+        .eq("is_active", true)
+        .order("sort_order")
+        .order("full_name"),
+    ]);
 
     if (staffError) throw staffError;
+    if (lanesError) throw lanesError;
 
     const authUsers = new Map<string, { last_sign_in_at: string | null; created_at: string | null }>();
     let page = 1;
@@ -58,8 +69,11 @@ export async function GET(request: Request) {
       page += 1;
     }
 
+    const laneMap = new Map((lanes ?? []).filter((lane) => lane.staff_user_id).map((lane) => [String(lane.staff_user_id), lane]));
+
     const accounts: TeamAccessAccount[] = (staff ?? []).map((row) => {
       const auth = authUsers.get(row.user_id);
+      const lane = laneMap.get(String(row.user_id));
       const isActive = Boolean(row.is_active);
       const accepted = Boolean(row.accepted_at);
       return {
@@ -67,6 +81,12 @@ export async function GET(request: Request) {
         email: row.email,
         full_name: row.full_name,
         role: canonicalAccessRole(row.role),
+        lane_profile_id: lane?.id ?? null,
+        job_title: lane?.job_title ?? null,
+        secondary_title: lane?.secondary_title ?? null,
+        lane_level: lane?.lane_level ?? null,
+        lane_group: lane?.lane_group ?? null,
+        reports_to_label: lane?.reports_to_label ?? null,
         locations: Array.isArray(row.locations) ? row.locations : [],
         permissions: Array.isArray(row.permissions) ? row.permissions : [],
         is_active: isActive,
@@ -79,7 +99,7 @@ export async function GET(request: Request) {
       };
     });
 
-    return Response.json({ accounts });
+    return Response.json({ accounts, lanes: lanes ?? [] });
   } catch (error) {
     return responseFromThrown(error);
   }
@@ -124,6 +144,22 @@ export async function PATCH(request: Request) {
 
     const locations = normalizeLocations(role, body.locations);
     const permissions = role === "Employee" ? sanitizeEmployeePermissions(body.permissions) : [];
+    const laneProfileId = body.lane_profile_id?.trim() || null;
+
+    if (laneProfileId) {
+      const { data: lane, error: laneError } = await admin
+        .from("staff_lane_profiles")
+        .select("id,staff_user_id")
+        .eq("organization_id", profile.organization_id)
+        .eq("id", laneProfileId)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (laneError) throw laneError;
+      if (!lane) return Response.json({ error: "The selected TCS lane was not found." }, { status: 400 });
+      if (lane.staff_user_id && String(lane.staff_user_id) !== userId) {
+        return Response.json({ error: "That TCS lane is already linked to another Hub account." }, { status: 409 });
+      }
+    }
 
     const { error: updateError } = await admin
       .from("staff_access")
@@ -138,6 +174,25 @@ export async function PATCH(request: Request) {
       .eq("organization_id", profile.organization_id);
 
     if (updateError) throw updateError;
+
+    if (Object.prototype.hasOwnProperty.call(body, "lane_profile_id")) {
+      const unlink = await admin
+        .from("staff_lane_profiles")
+        .update({ staff_user_id: null })
+        .eq("organization_id", profile.organization_id)
+        .eq("staff_user_id", userId)
+        .neq("id", laneProfileId || "00000000-0000-0000-0000-000000000000");
+      if (unlink.error) throw unlink.error;
+
+      if (laneProfileId) {
+        const link = await admin
+          .from("staff_lane_profiles")
+          .update({ staff_user_id: userId, full_name: fullName })
+          .eq("organization_id", profile.organization_id)
+          .eq("id", laneProfileId);
+        if (link.error) throw link.error;
+      }
+    }
 
     await admin.auth.admin.updateUserById(userId, {
       user_metadata: {

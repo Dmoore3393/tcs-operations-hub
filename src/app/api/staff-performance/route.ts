@@ -261,13 +261,36 @@ export async function GET(request: Request) {
 
     if (staffResult.error) throw staffResult.error;
 
+    const laneResult = staffIds.length
+      ? await auth.admin
+          .from("staff_lane_profiles")
+          .select("staff_user_id,job_title,secondary_title,lane_level,lane_group,reports_to_label")
+          .eq("organization_id", auth.profile.organization_id)
+          .eq("is_active", true)
+          .in("staff_user_id", staffIds)
+      : { data: [], error: null };
+
+    if (laneResult.error) throw laneResult.error;
+    const laneMap = new Map((laneResult.data ?? []).map((lane) => [String(lane.staff_user_id), lane]));
+    const staff = (staffResult.data ?? []).map((member) => {
+      const lane = laneMap.get(String(member.user_id));
+      return {
+        ...member,
+        job_title: lane?.job_title ?? null,
+        secondary_title: lane?.secondary_title ?? null,
+        lane_level: lane?.lane_level ?? null,
+        lane_group: lane?.lane_group ?? null,
+        reports_to_label: lane?.reports_to_label ?? null,
+      };
+    });
+
     return Response.json({
       from,
       to,
       canConfigurePoints: auth.isOwner,
       locations: locationsResult.data ?? [],
       assignments: assignmentsResult.data ?? [],
-      staff: staffResult.data ?? [],
+      staff,
       eventTypes: typesResult.data ?? [],
       events: eventsResult.data ?? [],
       coachingRecords: coachingResult.data ?? [],

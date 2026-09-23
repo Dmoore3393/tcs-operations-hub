@@ -14,6 +14,7 @@ type InviteBody = {
   role?: AccessRole;
   locations?: string[];
   permissions?: string[];
+  lane_profile_id?: string | null;
 };
 
 function locationsForRole(role: AccessRole, values: string[] | undefined) {
@@ -42,6 +43,22 @@ export async function POST(request: Request) {
 
     const locations = locationsForRole(role, body.locations);
     const permissions = role === "Employee" ? sanitizeEmployeePermissions(body.permissions) : [];
+    const requestedLaneId = body.lane_profile_id?.trim() || null;
+
+    let selectedLane: { id: string; staff_user_id: string | null; job_title: string; secondary_title: string | null } | null = null;
+    if (requestedLaneId) {
+      const laneResult = await admin
+        .from("staff_lane_profiles")
+        .select("id,staff_user_id,job_title,secondary_title")
+        .eq("organization_id", profile.organization_id)
+        .eq("id", requestedLaneId)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (laneResult.error) throw laneResult.error;
+      if (!laneResult.data) return Response.json({ error: "The selected TCS lane was not found." }, { status: 400 });
+      if (laneResult.data.staff_user_id) return Response.json({ error: "That TCS lane is already linked to another Hub account." }, { status: 409 });
+      selectedLane = laneResult.data;
+    }
 
     const { data: existing } = await admin
       .from("staff_access")
@@ -94,6 +111,19 @@ export async function POST(request: Request) {
       throw accessError;
     }
 
+    if (selectedLane) {
+      const laneLink = await admin
+        .from("staff_lane_profiles")
+        .update({ staff_user_id: invitedUser.id, full_name: fullName })
+        .eq("organization_id", profile.organization_id)
+        .eq("id", selectedLane.id);
+      if (laneLink.error) {
+        await admin.from("staff_access").delete().eq("user_id", invitedUser.id);
+        await admin.auth.admin.deleteUser(invitedUser.id).catch(() => undefined);
+        throw laneLink.error;
+      }
+    }
+
     const { error: invitationError } = await admin.from("staff_invitations").upsert({
       organization_id: profile.organization_id,
       auth_user_id: invitedUser.id,
@@ -119,6 +149,9 @@ export async function POST(request: Request) {
         role,
         locations,
         permissions,
+        lane_profile_id: selectedLane?.id ?? null,
+        job_title: selectedLane?.job_title ?? null,
+        secondary_title: selectedLane?.secondary_title ?? null,
         invited_at: invitedAt,
       },
     });

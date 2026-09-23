@@ -4,6 +4,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import { PageIntro, PrimaryButton, SectionCard, StatCard, StatusBadge, inputClass } from "@/components/hub/HubUI";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { careLocations } from "@/lib/location-config";
+import type { StaffLaneProfile } from "@/lib/staff-lanes";
 import {
   ACCESS_ROLES,
   DEFAULT_EMPLOYEE_PERMISSIONS,
@@ -36,6 +37,7 @@ type InviteForm = {
   role: AccessRole;
   locations: string[];
   permissions: string[];
+  lane_profile_id: string;
 };
 
 const blankInvite: InviteForm = {
@@ -44,6 +46,7 @@ const blankInvite: InviteForm = {
   role: "Employee",
   locations: ["Halcom"],
   permissions: [...DEFAULT_EMPLOYEE_PERMISSIONS],
+  lane_profile_id: "",
 };
 
 function formatWhen(value: string | null) {
@@ -56,6 +59,7 @@ function formatWhen(value: string | null) {
 export default function TeamAccessPage() {
   const { session, refreshProfile } = useAuth();
   const [accounts, setAccounts] = useState<TeamAccessAccount[]>([]);
+  const [lanes, setLanes] = useState<StaffLaneProfile[]>([]);
   const [editing, setEditing] = useState<TeamAccessAccount | null>(null);
   const [invite, setInvite] = useState<InviteForm>(blankInvite);
   const [loading, setLoading] = useState(true);
@@ -88,6 +92,7 @@ export default function TeamAccessPage() {
       const payload = await apiRequest("/api/team-access", { method: "GET" });
       const next = (payload.accounts ?? []) as TeamAccessAccount[];
       setAccounts(next);
+      setLanes((payload.lanes ?? []) as StaffLaneProfile[]);
       const selected = next.find((account) => account.user_id === preferredId) ?? next[0] ?? null;
       setEditing(selected ? { ...selected, locations: [...selected.locations], permissions: [...selected.permissions] } : null);
     } catch (loadError) {
@@ -165,6 +170,7 @@ export default function TeamAccessPage() {
           locations: editing.locations,
           permissions: editing.permissions,
           is_active: editing.is_active,
+          lane_profile_id: editing.lane_profile_id,
         }),
       });
       if (payload.selfUpdated) await refreshProfile();
@@ -203,7 +209,7 @@ export default function TeamAccessPage() {
   const selectedRole = (editing?.role ?? "Employee") as AccessRole;
 
   return <MainLayout><div className="mx-auto max-w-[1480px] space-y-6">
-    <PageIntro eyebrow="Owner/Admin controls" title="Team Access & Email Invitations" description="Danielle and Jennifer can invite every account by email, choose the role and location access, and pause or update access without creating users manually in Supabase." actions={<div className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-900"><ShieldCheck className="h-4 w-4" /> Owner/Admin Only</div>} />
+    <PageIntro eyebrow="Owner/Admin controls" title="Team Access & Email Invitations" description="Owner/Admins invite staff by email, link the person to the correct TCS lane, then choose the separate Hub access role, locations, and permissions." actions={<div className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-900"><ShieldCheck className="h-4 w-4" /> Owner/Admin Only</div>} />
 
     {error && <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
     {notice && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-900">{notice}</div>}
@@ -216,10 +222,11 @@ export default function TeamAccessPage() {
     </section>
 
     <SectionCard title="Invite a New Staff Member" description="They receive an email, click the secure link, create their own password, and enter the Hub with the access chosen here." action={<div className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white"><MailPlus className="h-4 w-4" /> Email Invite</div>}>
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Field label="Full name"><input className={inputClass} value={invite.full_name} onChange={(event) => setInvite({ ...invite, full_name: event.target.value })} placeholder="Staff member’s name" /></Field>
         <Field label="Email address"><input type="email" className={inputClass} value={invite.email} onChange={(event) => setInvite({ ...invite, email: event.target.value })} placeholder="name@example.com" /></Field>
-        <Field label="Account role"><select className={inputClass} value={invite.role} onChange={(event) => setInvite(applyRole(invite, event.target.value as AccessRole))}>{ACCESS_ROLES.map((role) => <option key={role}>{role}</option>)}</select></Field>
+        <Field label="TCS lane / job title"><select className={inputClass} value={invite.lane_profile_id} onChange={(event) => { const lane = lanes.find((item) => item.id === event.target.value); setInvite({ ...invite, lane_profile_id: event.target.value, full_name: invite.full_name || lane?.full_name || "" }); }}><option value="">Choose approved lane…</option>{lanes.filter((lane) => !lane.staff_user_id).map((lane) => <option key={lane.id} value={lane.id}>{lane.full_name} — {lane.job_title}</option>)}</select><span className="mt-1.5 block text-[11px] font-semibold leading-5 text-slate-500">This is the person’s real TCS position from the lane sheet.</span></Field>
+        <Field label="Hub access role"><select className={inputClass} value={invite.role} onChange={(event) => setInvite(applyRole(invite, event.target.value as AccessRole))}>{ACCESS_ROLES.map((role) => <option key={role}>{role}</option>)}</select><span className="mt-1.5 block text-[11px] font-semibold leading-5 text-slate-500">Access controls software permissions only. It does not replace the TCS job title.</span></Field>
       </div>
 
       <LocationSelector role={invite.role} locations={invite.locations} onToggle={(location) => setInvite(toggleLocation(invite, location))} />
@@ -227,7 +234,7 @@ export default function TeamAccessPage() {
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <PrimaryButton onClick={() => void sendInvitation()} disabled={inviting}>{inviting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{inviting ? "Sending Invitation…" : "Send Invitation"}</PrimaryButton>
-        <p className="text-xs leading-5 text-slate-500">Only the first Owner account is created during initial setup. Jennifer, future admins, Licensees, and Employees are invited here.</p>
+        <p className="text-xs leading-5 text-slate-500">Pick the approved TCS lane first, then assign the Hub access needed for that person’s work.</p>
       </div>
     </SectionCard>
 
@@ -236,7 +243,7 @@ export default function TeamAccessPage() {
         <div className="space-y-3">
           {accounts.map((account) => <button key={account.user_id} onClick={() => setEditing({ ...account, locations: [...account.locations], permissions: [...account.permissions] })} className={`w-full rounded-2xl border p-4 text-left transition ${editing?.user_id === account.user_id ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:border-emerald-300"}`}>
             <div className="flex items-start justify-between gap-3"><div><p className="font-black text-slate-950">{account.full_name}</p><p className="mt-1 text-xs font-semibold text-slate-500">{account.email}</p></div><StatusBadge tone={account.status === "Active" ? "green" : account.status === "Invite Pending" ? "amber" : "red"}>{account.status}</StatusBadge></div>
-            <p className="mt-3 text-sm font-black text-emerald-800">{account.role}</p>
+            <p className="mt-3 text-sm font-black text-emerald-800">{account.job_title || "Lane not linked"}</p>{account.secondary_title && <p className="mt-1 text-[11px] font-bold text-amber-700">{account.secondary_title}</p>}<p className="mt-2 text-[10px] font-black uppercase tracking-wider text-slate-400">Hub access: {account.role}</p>
             <p className="mt-1 text-xs text-slate-500">{account.locations.join(", ")}</p>
             <p className="mt-2 text-[11px] font-semibold text-slate-400">Last sign-in: {formatWhen(account.last_sign_in_at)}</p>
           </button>)}
@@ -249,8 +256,10 @@ export default function TeamAccessPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Staff name"><input className={inputClass} value={editing.full_name} onChange={(event) => setEditing({ ...editing, full_name: event.target.value })} /></Field>
             <Field label="Login email"><input className={inputClass} value={editing.email} readOnly /></Field>
+            <Field label="TCS lane / job title"><select className={inputClass} value={editing.lane_profile_id || ""} onChange={(event) => setEditing({ ...editing, lane_profile_id: event.target.value || null })}><option value="">Lane not linked</option>{lanes.filter((lane) => !lane.staff_user_id || lane.staff_user_id === editing.user_id).map((lane) => <option key={lane.id} value={lane.id}>{lane.full_name} — {lane.job_title}</option>)}</select></Field>
+            <Field label="Hub access role"><select className={inputClass} value={selectedRole} onChange={(event) => setEditing(applyRole(editing, event.target.value as AccessRole))}>{ACCESS_ROLES.map((role) => <option key={role}>{role}</option>)}</select></Field>
             <Field label="Account status"><select className={inputClass} value={editing.is_active ? "Active" : "Paused"} onChange={(event) => setEditing({ ...editing, is_active: event.target.value === "Active" })}><option>Active</option><option>Paused</option></select></Field>
-            <Field label="Role"><select className={inputClass} value={selectedRole} onChange={(event) => setEditing(applyRole(editing, event.target.value as AccessRole))}>{ACCESS_ROLES.map((role) => <option key={role}>{role}</option>)}</select></Field>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold leading-5 text-emerald-950"><strong className="block font-black">Lane identity</strong>{editing.job_title || "Link this account to the approved lane sheet."}{editing.reports_to_label ? ` • Reports to ${editing.reports_to_label}` : ""}</div>
           </div>
 
           <LocationSelector role={selectedRole} locations={editing.locations} onToggle={(location) => setEditing(toggleLocation(editing, location))} />
@@ -275,7 +284,7 @@ export default function TeamAccessPage() {
 
     <SectionCard title="Account Security" description="Invitations and administrative actions are protected on the server.">
       <div className="grid gap-4 md:grid-cols-3">
-        <SecurityItem icon={<Send className="h-5 w-5" />} title="Email invitation" text="The invited person creates their own password. Danielle and Jennifer never need to know it." />
+        <SecurityItem icon={<Send className="h-5 w-5" />} title="Email invitation" text="The invited person creates their own password. TCS Owner/Admins never need to know it." />
         <SecurityItem icon={<UserCog className="h-5 w-5" />} title="Role-controlled access" text="Owner/Admin, Licensee, and Employee access is assigned before the invitation is sent." />
         <SecurityItem icon={<Lock className="h-5 w-5" />} title="Server-only secret" text="The Supabase secret key stays on the server and is never included in the employee’s browser." />
       </div>

@@ -86,6 +86,7 @@ const navItems = [
   { label: "Health & Safety", href: "/health-safety", icon: HeartPulse },
   { label: "Emergency Cards", href: "/emergency-cards", icon: HeartPulse },
   { label: "Employees", href: "/employees", icon: BriefcaseBusiness },
+  { label: "Organization & Lanes", href: "/organization", icon: Users },
   { label: "Staff Performance", href: "/staff-performance", icon: Trophy },
   { label: "Team Access", href: "/team-access", icon: Lock },
   { label: "Staffing Command Center", href: "/scheduling", icon: CalendarDays },
@@ -140,7 +141,8 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/shift-reports": { title: "Opening & Closing Reports", subtitle: "Private staff handoffs and pickup reminders" },
   "/health-safety": { title: "Health & Safety", subtitle: "Incidents, illness, medication, and follow-up" },
   "/emergency-cards": { title: "Emergency Medical Cards", subtitle: "Emergency contacts, medical consent, alerts, and vehicle backup packets" },
-  "/employees": { title: "Employees", subtitle: "Staff records, qualifications, and assignments" },
+  "/employees": { title: "Employees", subtitle: "Live staff directory, TCS lanes, qualifications, and assignments" },
+  "/organization": { title: "Organization & TCS Lanes", subtitle: "Approved lane sheets, job titles, reporting lines, and chain of command" },
   "/staff-performance": { title: "Staff Performance Command Center", subtitle: "Recognition, accountability, coaching, trends, and leadership follow-up" },
   "/team-access": { title: "Team Access", subtitle: "Email invitations, staff roles, locations, and employee permissions" },
   "/scheduling": { title: "Staffing Command Center", subtitle: "Live child demand, floor coverage, transportation adjustments, and staffing gaps" },
@@ -236,7 +238,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         <section className="w-full max-w-xl rounded-3xl bg-white p-8 text-center shadow-2xl">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-100 text-red-700"><Lock className="h-7 w-7" /></div>
           <h1 className="mt-5 text-2xl font-black text-slate-950">This tool is not included in your access</h1>
-          <p className="mt-3 leading-7 text-slate-600">Your role, assigned locations, and individual permissions control which parts of the Hub you can open. Ask Danielle or Jennifer if your work assignment requires this tool.</p>
+          <p className="mt-3 leading-7 text-slate-600">Your role, assigned locations, and individual permissions control which parts of the Hub you can open. Ask a TCS Owner/Admin if your work assignment requires this tool.</p>
           <Link href="/" className="mt-6 inline-flex rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white">Return to Dashboard</Link>
         </section>
       </main>
@@ -307,7 +309,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               </div>
               <button onClick={() => setShowUserMenu((current) => !current)} className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-black" style={{ background: theme.primarySoft, color: theme.ink }} aria-label="Open user menu">{staffInitials(profile, user?.email)}</button>
               {showLocationHelp && <div className="absolute right-12 top-14 z-40 w-80 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600 shadow-xl"><p className="font-black text-slate-950">Active location selector</p><p className="mt-1">It changes the Hub’s colors and tells location-aware pages—such as Child Schedules, Meals, Ratios, Work Plans, Student Store, Team Store, Training Center, and Marketing—which site you are working on. {locationLocked ? "Your login is limited to the location access assigned by Danielle or Jennifer. You cannot switch to another site or the company-wide view." : "Choose All Locations for company-wide information."}</p></div>}
-              {showUserMenu && <div className="absolute right-0 top-14 z-40 w-72 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-xl"><p className="font-black text-slate-950">{profile?.full_name || "TCS Staff"}</p><p className="mt-1 truncate text-xs text-slate-500">{profile?.email || user?.email}</p><p className="mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{profile?.role}</p><button onClick={() => { window.localStorage.removeItem("tcs-hub-app-setup-v1"); window.location.reload(); }} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700"><Settings className="h-4 w-4" /> App Setup</button><button onClick={() => void signOut()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button></div>}
+              {showUserMenu && <div className="absolute right-0 top-14 z-40 w-72 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-xl"><p className="font-black text-slate-950">{profile?.full_name || "TCS Staff"}</p><p className="mt-1 truncate text-xs text-slate-500">{profile?.email || user?.email}</p>{profile?.job_title && <p className="mt-3 text-sm font-black text-emerald-800">{profile.job_title}</p>}{profile?.secondary_title && <p className="mt-1 text-xs font-bold text-amber-700">{profile.secondary_title}</p>}<div className="mt-2 flex flex-wrap gap-2">{profile?.lane_level && <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-800">Level {profile.lane_level}</span>}<span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-700">Hub access: {profile?.role}</span></div><button onClick={() => { window.localStorage.removeItem("tcs-hub-app-setup-v1"); window.location.reload(); }} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700"><Settings className="h-4 w-4" /> App Setup</button><button onClick={() => void signOut()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button></div>}
             </div>
           </div>
         </header>
