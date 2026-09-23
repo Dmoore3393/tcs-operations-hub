@@ -231,7 +231,7 @@ export default function SchedulingPage() {
       supabase.from("staffing_rules").select("id,location_id,rule_name,age_group,children_per_staff,minimum_staff,maximum_group_size,effective_from,effective_to,source_type,source_note,is_active").eq("is_active", true).order("effective_from", { ascending: false }),
       supabase.from("staff_access").select("user_id,full_name,role,locations").eq("is_active", true).order("full_name"),
       supabase.from("schedule_publications").select("id,location_id,week_of,status,revision,published_at,published_by,notes,needs_republish").eq("week_of", weekStart).order("updated_at", { ascending: false }),
-      supabase.from("time_off_requests").select("id,staff_user_id,location_id,request_scope,start_date,end_date,status").eq("status", "Approved").lte("start_date", weekEnd).gte("end_date", weekStart),
+      supabase.from("time_off_requests").select("id,staff_user_id,location_id,request_scope,start_date,end_date,all_day,start_time,end_time,status").eq("status", "Approved").lte("start_date", weekEnd).gte("end_date", weekStart),
     ]);
 
     const requiredError = locationResult.error || shiftResult.error || activityResult.error || ruleResult.error || publicationResult.error || timeOffResult.error;
