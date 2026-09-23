@@ -44,27 +44,7 @@ export const enrollmentStages: EnrollmentStage[] = [
   "Declined",
 ];
 
-export const starterEnrollmentLeads: EnrollmentLeadRecord[] = [
-  {
-    id: 1,
-    location: "Division",
-    familyName: "Sample Family",
-    parentName: "Sample Parent",
-    phone: "",
-    email: "",
-    childName: "Sample Child",
-    childAge: "School age",
-    requestedCare: "After-school care",
-    transportationNeeded: true,
-    subsidy: "CCRC Stage 1",
-    stage: "Tour Scheduled",
-    tourDate: "2026-08-10T13:00",
-    followUpDate: "2026-08-11",
-    assignedTo: "Danielle",
-    notes: "Starter record only — replace with live inquiry information after setup testing.",
-    createdAt: "2026-08-07",
-  },
-];
+export const starterEnrollmentLeads: EnrollmentLeadRecord[] = [];
 
 export type DigitalFormStatus = "Draft" | "Ready to Send" | "Sent" | "Signed" | "Needs Correction" | "Archived";
 export type SignatureMethod = "Not Signed" | "In Person" | "Uploaded Signed Copy" | "Staff Acknowledgment" | "Parent Portal (Future)" | "Parent Portal Acknowledgment";
@@ -86,23 +66,7 @@ export type DigitalFormRecord = {
   notes: string;
 };
 
-export const starterDigitalForms: DigitalFormRecord[] = [
-  {
-    id: 1,
-    location: "Division",
-    subjectType: "Transportation",
-    subjectName: "Sample Child",
-    formName: "Transportation Consent",
-    signerName: "Sample Parent",
-    status: "Ready to Send",
-    signatureMethod: "Not Signed",
-    requestedAt: "2026-08-07",
-    dueDate: "2026-08-11",
-    signedAt: "",
-    verifiedBy: "",
-    notes: "Starter workflow record. Parent portal e-signing is not active yet.",
-  },
-];
+export const starterDigitalForms: DigitalFormRecord[] = [];
 
 export type TransportationPaymentStatus = "Unpaid" | "Paid" | "Waived" | "Not Required";
 
