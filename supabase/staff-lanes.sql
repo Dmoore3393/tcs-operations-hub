@@ -52,6 +52,62 @@ create trigger set_staff_lane_profiles_updated_at
 before update on public.staff_lane_profiles
 for each row execute function public.set_updated_at();
 
--- Approved lane roster is seeded in production from the TCS lane-sheet set.
--- Future lane changes should update this table without changing staff_access.role,
+-- Approved TCS lane roster.
+insert into public.staff_lane_profiles
+(organization_id, full_name, preferred_name, lane_level, lane_group, job_title, secondary_title, department, primary_location, reports_to_label, lane_summary, sort_order)
+select id, x.full_name, x.preferred_name, x.lane_level, x.lane_group, x.job_title, x.secondary_title, x.department, x.primary_location, x.reports_to_label, x.lane_summary, x.sort_order
+from public.organizations o
+cross join (values
+  ('Jennifer Thomason', null, 1, 'Executive', 'Director of Operations', null, 'Executive', null, null, 'Company operations and final organizational decisions.', 10),
+  ('Anthony Thomason', 'Tony', 1, 'Executive', 'Owner • Director of Maintenance', null, 'Maintenance', null, null, 'Co-owner leadership, maintenance department, facilities, and ownership support.', 20),
+  ('Danielle Moore', null, 2, 'Regional Leadership', 'Regional Director', 'Program Director — The School Age Center', 'Regional Operations', 'The School Age Center', 'Jennifer Thomason', 'Ensures childcare locations are safe, compliant, properly staffed, professionally operated, and following the Director of Operations expectations.', 30),
+  ('Heather Graham', null, 2, 'Regional Leadership', 'Assistant Regional Director', 'Program Director — Our Little Village Childcare', 'Regional Operations', 'Our Little Village Childcare', 'Danielle Moore', 'Owns the safe, compliant, professional daily operation of Our Little Village Childcare while serving in a regional support role at other assigned locations.', 40),
+  ('Noah Halstead', null, 3, 'Site Directors', 'Site Director', null, 'Childcare Operations', 'Tehachapi', 'Danielle Moore', 'Owns the safe, compliant, professional daily operation of Thomason Family Childcare in Tehachapi.', 50),
+  ('Nathaly Cornejo', null, 3, 'Site Directors', 'Site Director', null, 'Childcare Operations', 'Cornejo Family Childcare • 33rd Street', 'Danielle Moore', 'Owns the safe, compliant, professional daily operation of Cornejo Family Childcare and is accountable for staff, families, documentation, and follow-through.', 60),
+  ('Dynasty Lara', null, 3, 'Site Directors', 'Site Director', null, 'Childcare Operations', 'Lara Family Childcare • 42nd Street', 'Danielle Moore', 'Owns the safe, compliant, professional daily operation of Lara Family Childcare and is accountable for staff, families, documentation, and follow-through.', 70),
+  ('Latrice Moore', null, 3, 'Site Directors', 'Site Director', null, 'Childcare Operations', 'Moore Family Childcare • Halcom', 'Danielle Moore', 'Owns the safe, compliant, professional daily operation of Moore Family Childcare across regular, extended, overnight, and weekend hours.', 80),
+  ('Norma Valera', null, 4, 'Classroom Leadership', 'Lead Teacher', null, 'Classroom', 'Cornejo Family Childcare • 33rd Street', 'Nathaly Cornejo', 'Owns the safe, organized, engaging daily operation of her classroom and staff follow-through.', 90),
+  ('Jacqueline Obregon', null, 4, 'Classroom Leadership', 'Lead Teacher', null, 'Classroom', 'Lara Family Childcare • 42nd Street', 'Dynasty Lara', 'Owns the safe, organized, engaging daily operation of her classroom and staff follow-through.', 100),
+  ('Valeria Villalvazo', null, 5, 'Classroom Team', 'Teacher Assistant', null, 'Classroom', 'Lara Family Childcare • 42nd Street', 'Jacqueline Obregon', null, 110),
+  ('Emily Olivares', null, 5, 'Classroom Team', 'Floater Teacher Assistant', null, 'Classroom', null, 'Heather Graham', null, 120),
+  ('Jordan Molina', null, 5, 'Classroom Team', 'Floater Teacher Assistant', null, 'Classroom', null, 'Heather Graham', null, 130),
+  ('Akeyla Tulbert-Moore', null, 6, 'Substitute Team', 'Substitute Teacher', null, 'Classroom / Transportation / Program Events', null, 'Assigned Location Director', null, 140),
+  ('Alison Escobar', null, 6, 'Substitute Team', 'Substitute Teacher', null, 'Classroom', null, 'Assigned Location Director', null, 150),
+  ('Francisco Escobar', null, 6, 'Substitute Team', 'Substitute Teacher', null, 'Classroom', null, 'Assigned Location Director', null, 160),
+  ('Willman Zapeta', null, null, 'Maintenance Department', 'Maintenance Supervisor', null, 'Maintenance', null, 'Anthony Thomason', null, 170),
+  ('Edvin Obregon', null, null, 'Maintenance Department', 'Maintenance Assistant', null, 'Maintenance', null, 'Willman Zapeta', null, 180),
+  ('Philip Salias', null, null, 'Maintenance Department', 'Maintenance Assistant', null, 'Maintenance', null, 'Willman Zapeta', null, 190)
+) as x(full_name, preferred_name, lane_level, lane_group, job_title, secondary_title, department, primary_location, reports_to_label, lane_summary, sort_order)
+on conflict (organization_id, lower(full_name)) do update set
+  preferred_name = excluded.preferred_name,
+  lane_level = excluded.lane_level,
+  lane_group = excluded.lane_group,
+  job_title = excluded.job_title,
+  secondary_title = excluded.secondary_title,
+  department = excluded.department,
+  primary_location = excluded.primary_location,
+  reports_to_label = excluded.reports_to_label,
+  lane_summary = excluded.lane_summary,
+  sort_order = excluded.sort_order,
+  is_active = true,
+  updated_at = now();
+
+update public.staff_lane_profiles slp
+set staff_user_id = sa.user_id,
+    updated_at = now()
+from public.staff_access sa
+where sa.organization_id = slp.organization_id
+  and lower(sa.full_name) = lower(slp.full_name)
+  and slp.staff_user_id is distinct from sa.user_id;
+
+update public.staff_lane_profiles child
+set reports_to_lane_id = parent.id,
+    updated_at = now()
+from public.staff_lane_profiles parent
+where parent.organization_id = child.organization_id
+  and child.reports_to_label is not null
+  and lower(parent.full_name) = lower(child.reports_to_label)
+  and child.reports_to_lane_id is distinct from parent.id;
+
+-- Future lane changes update staff_lane_profiles without changing staff_access.role,
 -- unless the person's actual software access also changes.
