@@ -14,6 +14,7 @@ import {
   buildCoverageWindows,
   checkedInAtLocation,
   locationKeyForDbLocation,
+  type ApprovedTimeOffRow,
   type CoverageStatus,
   type StaffActivityRow,
   type StaffShiftRow,
@@ -204,6 +205,7 @@ export default function SchedulingPage() {
   const [publications, setPublications] = useState<SchedulePublication[]>([]);
   const [publishedSnapshots, setPublishedSnapshots] = useState<PublishedShiftSnapshot[]>([]);
   const [acknowledgements, setAcknowledgements] = useState<ScheduleAcknowledgement[]>([]);
+  const [approvedTimeOff, setApprovedTimeOff] = useState<ApprovedTimeOffRow[]>([]);
   const [selectedDate, setSelectedDate] = useState(() => localIsoDate());
   const [selectedLocationId, setSelectedLocationId] = useState("");
   const [view, setView] = useState<"Day" | "Week">("Day");
@@ -222,16 +224,17 @@ export default function SchedulingPage() {
   const load = useCallback(async () => {
     if (!supabase || !session?.access_token) return;
     setLoading(true);
-    const [locationResult, shiftResult, activityResult, ruleResult, staffResult, publicationResult] = await Promise.all([
+    const [locationResult, shiftResult, activityResult, ruleResult, staffResult, publicationResult, timeOffResult] = await Promise.all([
       supabase.from("locations").select("id,slug,name,full_name,capacity,program_type").eq("is_active", true).order("name"),
       supabase.from("staff_shifts").select("id,location_id,user_id,staff_name,shift_date,start_time,end_time,status,position_label,notes").gte("shift_date", weekStart).lte("shift_date", weekEnd).order("shift_date").order("start_time"),
       supabase.from("staff_activity_intervals").select("id,location_id,shift_id,user_id,staff_name,activity_date,start_time,end_time,activity_type,counts_toward_floor,reason,source_key").gte("activity_date", weekStart).lte("activity_date", weekEnd).order("activity_date").order("start_time"),
       supabase.from("staffing_rules").select("id,location_id,rule_name,age_group,children_per_staff,minimum_staff,maximum_group_size,effective_from,effective_to,source_type,source_note,is_active").eq("is_active", true).order("effective_from", { ascending: false }),
       supabase.from("staff_access").select("user_id,full_name,role,locations").eq("is_active", true).order("full_name"),
       supabase.from("schedule_publications").select("id,location_id,week_of,status,revision,published_at,published_by,notes,needs_republish").eq("week_of", weekStart).order("updated_at", { ascending: false }),
+      supabase.from("time_off_requests").select("id,staff_user_id,location_id,request_scope,start_date,end_date,all_day,start_time,end_time,status").eq("status", "Approved").lte("start_date", weekEnd).gte("end_date", weekStart),
     ]);
 
-    const requiredError = locationResult.error || shiftResult.error || activityResult.error || ruleResult.error || publicationResult.error;
+    const requiredError = locationResult.error || shiftResult.error || activityResult.error || ruleResult.error || publicationResult.error || timeOffResult.error;
     if (requiredError) {
       setError(requiredError.message);
     } else {
@@ -265,6 +268,7 @@ export default function SchedulingPage() {
       setShifts((shiftResult.data ?? []) as StaffShiftRow[]);
       setActivities((activityResult.data ?? []) as StaffActivityRow[]);
       setRules((ruleResult.data ?? []) as StaffingRuleRow[]);
+      setApprovedTimeOff((timeOffResult.data ?? []) as ApprovedTimeOffRow[]);
       setPublications(nextPublications);
       setPublishedSnapshots(nextSnapshots);
       setAcknowledgements(nextAcknowledgements);
@@ -309,7 +313,8 @@ export default function SchedulingPage() {
     shifts,
     activities,
     rules,
-  }) : [], [activities, rules, schedules, selectedDate, selectedLocation, shifts]);
+    timeOff: approvedTimeOff,
+  }) : [], [activities, approvedTimeOff, rules, schedules, selectedDate, selectedLocation, shifts]);
 
   const allDayWindows = useMemo(() => locations.flatMap((location) => buildCoverageWindows({
     date: selectedDate,
@@ -318,7 +323,8 @@ export default function SchedulingPage() {
     shifts,
     activities,
     rules,
-  }).map((window) => ({ location, window }))), [activities, locations, rules, schedules, selectedDate, shifts]);
+    timeOff: approvedTimeOff,
+  }).map((window) => ({ location, window }))), [activities, approvedTimeOff, locations, rules, schedules, selectedDate, shifts]);
 
   const scheduledChildren = new Set(allDayWindows.flatMap(({ window }) => window.children.map((child) => child.childId))).size;
   const dayShiftRows = shifts.filter((shift) => shift.shift_date === selectedDate && shift.status !== "Cancelled");
