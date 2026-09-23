@@ -175,21 +175,23 @@ export async function PATCH(request: Request) {
 
     if (updateError) throw updateError;
 
-    if (laneProfileId) {
+    if (Object.prototype.hasOwnProperty.call(body, "lane_profile_id")) {
       const unlink = await admin
         .from("staff_lane_profiles")
         .update({ staff_user_id: null })
         .eq("organization_id", profile.organization_id)
         .eq("staff_user_id", userId)
-        .neq("id", laneProfileId);
+        .neq("id", laneProfileId || "00000000-0000-0000-0000-000000000000");
       if (unlink.error) throw unlink.error;
 
-      const link = await admin
-        .from("staff_lane_profiles")
-        .update({ staff_user_id: userId, full_name: fullName })
-        .eq("organization_id", profile.organization_id)
-        .eq("id", laneProfileId);
-      if (link.error) throw link.error;
+      if (laneProfileId) {
+        const link = await admin
+          .from("staff_lane_profiles")
+          .update({ staff_user_id: userId, full_name: fullName })
+          .eq("organization_id", profile.organization_id)
+          .eq("id", laneProfileId);
+        if (link.error) throw link.error;
+      }
     }
 
     await admin.auth.admin.updateUserById(userId, {
