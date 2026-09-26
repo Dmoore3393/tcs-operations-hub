@@ -18,7 +18,7 @@ import { careLocations, locationThemes, starterLocationHours, summarizeHours, ty
 import { buildBriefingSnapshot, buildSmartAlerts } from "@/lib/operations-intelligence";
 import { localIsoDate } from "@/lib/date-utils";
 import { buildTransportationFeeExpectations, mondayOfWeek, starterDigitalForms, starterEnrollmentLeads, starterTransportationFees, transportationChargeStatus, type DigitalFormRecord, type EnrollmentLeadRecord, type TransportationFeeRecord } from "@/lib/admin-ops";
-import { ArrowRight, Bus, CalendarClock, CheckCircle2, FileCheck2, FileText, FileWarning, HeartPulse, Lock, Printer, ShieldCheck, Utensils, Users } from "lucide-react";
+import { ArrowRight, BookOpen, Bus, CalendarClock, CalendarDays, CalendarOff, CheckCircle2, Coffee, FileCheck2, FileText, FileWarning, HeartPulse, Lock, Printer, ShieldCheck, Utensils, Users } from "lucide-react";
 import Link from "next/link";
 
 export default function Home() {
@@ -151,24 +151,39 @@ export default function Home() {
   return (
     <MainLayout>
       <div className="mx-auto max-w-[1600px] space-y-6">
-        <section className="space-y-4 lg:hidden">
-          <div className="overflow-hidden rounded-[28px] bg-gradient-to-br from-[#173d29] via-[#245a39] to-[#10291e] p-5 text-white shadow-xl">
-            <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-200">The Hub App • {location}</p>
-            <h1 className="mt-2 text-2xl font-black">What needs your attention right now?</h1>
-            <p className="mt-2 text-xs font-semibold leading-5 text-emerald-50/80">Fast mobile access to today’s transportation, emergency information, alerts, tours, and staffing.</p>
-            <div className="mt-5 grid grid-cols-4 gap-2">
-              {canUseTransportation && <MobileShortcut href="/transportation-v2" icon={<Bus className="h-5 w-5" />} label="Transport" />}
-              <MobileShortcut href="/emergency-cards" icon={<HeartPulse className="h-5 w-5" />} label="Emergency" />
-              <MobileShortcut href="/notifications" icon={<HeartPulse className="h-5 w-5" />} label="Alerts" />
-              {canUseScheduling ? <MobileShortcut href="/scheduling" icon={<CalendarClock className="h-5 w-5" />} label="Schedule" /> : canUseEnrollment ? <MobileShortcut href="/enrollment-pipeline" icon={<Users className="h-5 w-5" />} label="Tours" /> : null}
+        <section className="space-y-3 lg:hidden">
+          <div className="relative overflow-hidden rounded-[30px] p-5 text-white shadow-xl" style={{ background: "linear-gradient(145deg, var(--theme-700), var(--theme-950))" }}>
+            <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-white/10 blur-sm" />
+            <div className="pointer-events-none absolute -bottom-14 left-10 h-32 w-32 rounded-full bg-white/5" />
+            <div className="relative">
+              <p className="text-[10px] font-black uppercase tracking-[.18em] text-white/65">The Hub • {location}</p>
+              <h1 className="mt-2 text-[28px] font-black leading-8">Hi {profile?.full_name?.split(" ")[0] || "there"} 👋</h1>
+              <p className="mt-1 text-xs font-semibold text-white/70">{profile?.job_title || "TCS Team"}{profile?.secondary_title ? ` • ${profile.secondary_title}` : ""}</p>
+              <p className="mt-4 max-w-xs text-sm font-semibold leading-5 text-white/85">Everything you need for your shift, right from your phone.</p>
+
+              <div className="mt-5 grid grid-cols-4 gap-2">
+                <MobileShortcut href="/time-clock" icon={<CalendarClock className="h-5 w-5" />} label="Clock" />
+                <MobileShortcut href="/my-schedule" icon={<CalendarDays className="h-5 w-5" />} label="Schedule" />
+                <MobileShortcut href="/time-off" icon={<CalendarOff className="h-5 w-5" />} label="Time Off" />
+                <MobileShortcut href="/training-center" icon={<BookOpen className="h-5 w-5" />} label="Training" />
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            {canUseTransportation && <MobileAttention href="/transportation" value={routesNeedingReview.length} label="Routes to review" tone="blue" />}
-            {canUseEnrollment && <MobileAttention href="/enrollment-pipeline" value={activeEnrollmentLeads.length} label="Active family leads" tone="amber" />}
-            {canUseFiles && <MobileAttention href="/files" value={openFiles.length} label="File items open" tone="red" />}
-            {canUseWorkPlans && <MobileAttention href="/work-plans" value={urgentTasks} label="Urgent work items" tone="green" />}
+          <div className="flex items-center justify-between px-1">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[.16em] text-slate-400">Today</p>
+              <h2 className="text-lg font-black text-slate-950">Quick glance</h2>
+            </div>
+            <Link href="/employee-lounge" className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-2 text-[11px] font-black text-slate-700 shadow-sm"><Coffee className="h-3.5 w-3.5" /> Lounge</Link>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            {canUseScheduling && <MobileAttention href="/scheduling" value={todayShifts.length} label="staff shifts today" tone="green" />}
+            {canUseTransportation && <MobileAttention href="/transportation" value={routesNeedingReview.length} label="routes need review" tone="blue" />}
+            {canUseEnrollment && <MobileAttention href="/enrollment-pipeline" value={activeEnrollmentLeads.length} label="active family leads" tone="amber" />}
+            {canUseFiles && <MobileAttention href="/files" value={openFiles.length} label="file items open" tone="red" />}
+            {canUseWorkPlans && !canUseScheduling && <MobileAttention href="/work-plans" value={urgentTasks} label="urgent work items" tone="green" />}
           </div>
         </section>
 
