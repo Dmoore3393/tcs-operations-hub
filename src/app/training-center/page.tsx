@@ -150,7 +150,7 @@ export default function TrainingCenterPage() {
   const [verificationRequired, setVerificationRequired] = useState(true);
 
   if (!canAccessRoute(profile, "/training-center")) {
-    return <main className="grid min-h-screen place-items-center bg-[#06251f] p-6"><section className="max-w-lg rounded-3xl bg-white p-8 text-center shadow-2xl"><h1 className="text-2xl font-black">Training Center access is not available</h1><p className="mt-3 text-slate-600">Ask Danielle or Jennifer if your account should be able to use the Training Center.</p><Link href="/" className="mt-5 inline-flex rounded-xl bg-slate-950 px-5 py-3 font-black text-white">Return to Hub</Link></section></main>;
+    return <main className="grid min-h-screen place-items-center bg-[#06251f] p-6"><section className="max-w-lg rounded-3xl bg-white p-8 text-center shadow-2xl"><h1 className="text-2xl font-black">Training Center access is not available</h1><p className="mt-3 text-slate-600">Ask a TCS Owner/Admin if your account should be able to use the Training Center.</p><Link href="/" className="mt-5 inline-flex rounded-xl bg-slate-950 px-5 py-3 font-black text-white">Return to Hub</Link></section></main>;
   }
 
   const profileHasAll = (profile?.locations ?? []).includes("All Locations");
