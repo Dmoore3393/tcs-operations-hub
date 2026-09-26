@@ -27,6 +27,7 @@ const mobileNav = source("src/components/layout/MobileQuickActions.tsx");
 const mainLayout = source("src/components/layout/MainLayout.tsx");
 const trainingCenter = source("src/app/training-center/page.tsx");
 const trainingStyles = source("src/app/training-center/training-center-v2.css");
+const updater = source("src/components/pwa/PwaUpdater.tsx");
 const adminOps = source("src/lib/admin-ops.ts");
 
 assert(manifest.name === "The Hub — TCS Operations", "Manifest app name must stay The Hub — TCS Operations");
@@ -69,6 +70,7 @@ assert(mobileNav.includes("All your tools"), "Mobile app tool drawer is missing"
 assert(mainLayout.includes("pt-[env(safe-area-inset-top)]"), "Mobile app header must respect the device safe area");
 assert(trainingCenter.includes("<MainLayout>") && trainingCenter.includes("Hub Home"), "Training Center must stay integrated with the main app shell and provide a Hub Home control");
 assert(trainingStyles.includes("overflow-x:hidden") && trainingStyles.includes(".tc-view-nav"), "Training Center responsive overflow protection/navigation is missing");
+assert(updater.includes("NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA") && updater.includes("serverVersion") && updater.includes("pageshow"), "Installed app must force-refresh stale deployment snapshots");
 
 assert(/export const starterEnrollmentLeads:\s*EnrollmentLeadRecord\[\]\s*=\s*\[\s*\];/s.test(adminOps), "Enrollment starter data must remain empty");
 assert(/export const starterDigitalForms:\s*DigitalFormRecord\[\]\s*=\s*\[\s*\];/s.test(adminOps), "Digital-form starter data must remain empty");
