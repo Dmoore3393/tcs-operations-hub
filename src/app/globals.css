@@ -212,3 +212,47 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+
+/* Native-app-like mobile behavior. */
+@media (max-width: 1023px) {
+  html {
+    background: #f1f5f9;
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    min-height: 100dvh;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+
+  .tcs-theme {
+    min-height: 100dvh;
+    background:
+      radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--theme-100) 42%, transparent), transparent 28rem),
+      #f1f5f9;
+  }
+
+  .tcs-theme main {
+    max-width: 100vw;
+    overflow-x: clip;
+  }
+
+  /* Keep horizontally scrollable action rows clean on phones. */
+  .tcs-theme ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
+  .tcs-theme {
+    scrollbar-width: none;
+  }
+}
