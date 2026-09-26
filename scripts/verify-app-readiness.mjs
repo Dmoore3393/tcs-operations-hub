@@ -23,6 +23,8 @@ const timeClock = source("src/app/api/time-clock/route.ts");
 const readiness = source("src/app/api/app-readiness/route.ts");
 const privacy = source("src/app/privacy/page.tsx");
 const support = source("src/app/support/page.tsx");
+const mobileNav = source("src/components/layout/MobileQuickActions.tsx");
+const mainLayout = source("src/components/layout/MainLayout.tsx");
 const adminOps = source("src/lib/admin-ops.ts");
 
 assert(manifest.name === "The Hub — TCS Operations", "Manifest app name must stay The Hub — TCS Operations");
@@ -60,6 +62,9 @@ assert(readiness.includes("Real-device role smoke test"), "Live App Readiness au
 assert(readiness.includes("Leaked-password protection"), "App Readiness must surface leaked-password protection");
 assert(privacy.includes("The Hub Privacy Policy"), "Public privacy policy page is missing");
 assert(support.includes("Contact TCS Support"), "Public support page is missing");
+assert(mobileNav.includes('href: "/my-schedule"') && mobileNav.includes('href: "/time-clock"') && mobileNav.includes('href: "/notifications"'), "Mobile app navigation must keep Schedule, Time Clock, and Alerts");
+assert(mobileNav.includes("All your tools"), "Mobile app tool drawer is missing");
+assert(mainLayout.includes("pt-[env(safe-area-inset-top)]"), "Mobile app header must respect the device safe area");
 
 assert(/export const starterEnrollmentLeads:\s*EnrollmentLeadRecord\[\]\s*=\s*\[\s*\];/s.test(adminOps), "Enrollment starter data must remain empty");
 assert(/export const starterDigitalForms:\s*DigitalFormRecord\[\]\s*=\s*\[\s*\];/s.test(adminOps), "Digital-form starter data must remain empty");
