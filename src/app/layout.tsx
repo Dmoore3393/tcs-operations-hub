@@ -52,12 +52,17 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const currentVersion =
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.VERCEL_DEPLOYMENT_ID ||
+    process.env.VERCEL_URL ||
+    "development";
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col"><PwaUpdater /><AuthProvider><LocationProvider>{children}</LocationProvider></AuthProvider></body>
+      <body className="min-h-full flex flex-col"><PwaUpdater currentVersion={currentVersion} /><AuthProvider><LocationProvider>{children}</LocationProvider></AuthProvider></body>
     </html>
   );
 }
