@@ -55,22 +55,22 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 p-4 sm:p-8">
-      <div className="w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-white shadow-2xl">
-        <div className="bg-emerald-50 px-6 py-7 text-center sm:px-8">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-200">
+    <main className="flex min-h-[100dvh] items-center justify-center bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 p-0 sm:p-8">
+      <div className="min-h-[100dvh] w-full overflow-hidden bg-white shadow-2xl sm:min-h-0 sm:max-w-md sm:rounded-3xl sm:border sm:border-white/10">
+        <div className="bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 px-6 pb-10 pt-[max(3rem,env(safe-area-inset-top))] text-center text-white sm:bg-emerald-50 sm:px-8 sm:py-7 sm:text-slate-950">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] border border-white/15 bg-white/10 text-white shadow-xl backdrop-blur sm:h-14 sm:w-14 sm:rounded-2xl sm:border-0 sm:bg-emerald-600 sm:shadow-lg sm:shadow-emerald-200">
             <LockKeyhole className="h-7 w-7" />
           </div>
-          <p className="mt-4 text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
+          <p className="mt-5 text-xs font-black uppercase tracking-[0.18em] text-emerald-200 sm:mt-4 sm:text-emerald-700">
             TCS Operations Hub
           </p>
-          <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950">Secure Staff Login</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-2xl sm:text-slate-950">Welcome to The Hub</h1>
+          <p className="mx-auto mt-2 max-w-xs text-sm font-semibold leading-6 text-white/70 sm:text-slate-600">
             Secure access for Owner/Admin, Licensee, and Employee accounts invited through Team Access. Parent and family accounts are not active.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5 px-6 py-7 sm:px-8">
+        <form onSubmit={handleSubmit} className="-mt-5 space-y-5 rounded-t-[30px] bg-white px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-7 sm:mt-0 sm:rounded-none sm:px-8">
           {securityMessage && <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold leading-6 text-blue-900"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" /><p>{securityMessage}</p></div>}
 
           {!isSupabaseConfigured && (
@@ -133,7 +133,7 @@ export default function LoginPage() {
           </button>
 
           <p className="text-center text-xs leading-5 text-slate-500">
-            Invited TCS staff only. Use the email and password you created from your invitation. Contact Danielle or Jennifer if you need a new setup link or access change.
+            Invited TCS staff only. Use the email and password you created from your invitation. Contact a TCS Owner/Admin if you need a new setup link or access change.
           </p>
         </form>
       </div>
