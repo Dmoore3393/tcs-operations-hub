@@ -14,7 +14,7 @@ export function PageIntro({ eyebrow, title, description, actions }: { eyebrow: s
       initial={reducedMotion ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="relative overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-white via-white to-emerald-50 shadow-sm"
+      className="relative overflow-hidden rounded-[24px] border border-emerald-100 bg-gradient-to-br from-white via-white to-emerald-50 shadow-sm sm:rounded-3xl"
     >
       <motion.div
         className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full opacity-35"
@@ -28,13 +28,13 @@ export function PageIntro({ eyebrow, title, description, actions }: { eyebrow: s
         animate={reducedMotion ? undefined : { x: [0, 14, 0], y: [0, -8, 0] }}
         transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
       />
-      <div className="relative flex flex-col gap-5 p-6 sm:p-8 lg:flex-row lg:items-center lg:justify-between">
+      <div className="relative flex flex-col gap-4 p-5 sm:gap-5 sm:p-8 lg:flex-row lg:items-center lg:justify-between">
         <div className="max-w-3xl">
           <p className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-emerald-700">{eyebrow}</p>
-          <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{title}</h1>
+          <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-4xl">{title}</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">{description}</p>
         </div>
-        {actions && <div className="flex flex-wrap gap-3">{actions}</div>}
+        {actions && <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:gap-3 sm:overflow-visible sm:pb-0">{actions}</div>}
       </div>
     </motion.section>
   );
@@ -51,7 +51,7 @@ export function StatCard({ label, value, helper, icon, tone = "emerald" }: { lab
   };
   const reducedMotion = useReducedMotion();
   return (
-    <motion.article whileHover={reducedMotion ? undefined : { y: -3 }} transition={{ duration: 0.2 }} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <motion.article whileHover={reducedMotion ? undefined : { y: -3 }} transition={{ duration: 0.2 }} className="rounded-[20px] border border-slate-200 bg-white p-4 shadow-sm sm:rounded-2xl sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-slate-500">{label}</p>
@@ -67,9 +67,9 @@ export function StatCard({ label, value, helper, icon, tone = "emerald" }: { lab
 export function SectionCard({ title, description, action, children, className = "" }: { title?: string; description?: string; action?: ReactNode; children: ReactNode; className?: string }) {
   const reducedMotion = useReducedMotion();
   return (
-    <motion.section initial={reducedMotion ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`}>
+    <motion.section initial={reducedMotion ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className={`rounded-[22px] border border-slate-200 bg-white shadow-sm sm:rounded-2xl ${className}`}>
       {(title || description || action) && (
-        <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4">
           <div>
             {title && <h2 className="font-black text-slate-950">{title}</h2>}
             {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
@@ -77,7 +77,7 @@ export function SectionCard({ title, description, action, children, className = 
           {action}
         </div>
       )}
-      <div className="p-5">{children}</div>
+      <div className="p-4 sm:p-5">{children}</div>
     </motion.section>
   );
 }
@@ -104,14 +104,14 @@ export function SecondaryButton({ children, onClick, type = "button", disabled =
 
 export function Modal({ title, description, onClose, children, footer }: { title: string; description?: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" onMouseDown={onClose}>
-      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-200 bg-white px-6 py-5">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={onClose}>
+      <div className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-t-[30px] bg-white shadow-2xl sm:max-h-[92vh] sm:rounded-3xl" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-200 bg-white px-5 py-4 sm:px-6 sm:py-5">
           <div><h2 className="text-xl font-black text-slate-950">{title}</h2>{description && <p className="mt-1 text-sm text-slate-500">{description}</p>}</div>
           <button onClick={onClose} className="rounded-xl p-2 text-slate-500 hover:bg-slate-100" aria-label="Close"><X className="h-5 w-5" /></button>
         </div>
-        <div className="p-6">{children}</div>
-        {footer && <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4">{footer}</div>}
+        <div className="p-5 sm:p-6">{children}</div>
+        {footer && <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-white px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:gap-3 sm:px-6">{footer}</div>}
       </div>
     </div>
   );
