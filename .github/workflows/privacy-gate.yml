@@ -28,3 +28,5 @@ jobs:
         run: npm run app:check
       - name: Typecheck application
         run: npx tsc --noEmit
+      - name: Build application
+        run: npm run build
