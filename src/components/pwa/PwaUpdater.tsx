@@ -4,7 +4,12 @@ import { useEffect } from "react";
 
 const VERSION_KEY = "tcs-hub-active-deployment";
 
-export default function PwaUpdater({ currentVersion }: { currentVersion: string }) {
+const CURRENT_VERSION =
+  process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ||
+  process.env.NEXT_PUBLIC_VERCEL_URL ||
+  "development";
+
+export default function PwaUpdater() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
@@ -32,7 +37,7 @@ export default function PwaUpdater({ currentVersion }: { currentVersion: string 
         // Compare the deployment baked into the currently running app shell
         // against production. This catches iOS/PWA restored snapshots that can
         // otherwise keep old JavaScript/CSS after a new deployment.
-        if (currentVersion && currentVersion !== "development" && currentVersion !== serverVersion) {
+        if (CURRENT_VERSION && CURRENT_VERSION !== "development" && CURRENT_VERSION !== serverVersion) {
           reloading = true;
           sessionStorage.setItem(VERSION_KEY, serverVersion);
           window.location.reload();
@@ -71,7 +76,7 @@ export default function PwaUpdater({ currentVersion }: { currentVersion: string 
       window.removeEventListener("pageshow", handlePageShow);
       window.clearInterval(timer);
     };
-  }, [currentVersion]);
+  }, []);
 
   return null;
 }
