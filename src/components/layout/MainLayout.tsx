@@ -31,7 +31,6 @@ import {
   LoaderCircle,
   LogOut,
   Megaphone,
-  Menu,
   Pin,
   PackageCheck,
   Printer,
@@ -44,7 +43,6 @@ import {
   Trophy,
   Users,
   UserRound,
-  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { type LocationKey } from "@/lib/location-config";
@@ -186,7 +184,6 @@ type ThemeStyle = CSSProperties & {
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLocationHelp, setShowLocationHelp] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [sync, setSync] = useState<HubSyncDetail>({ state: "idle", message: "Secure shared data" });
@@ -250,16 +247,13 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="tcs-theme min-h-screen bg-slate-100 text-slate-950" style={themeStyle} data-location={location}>
-      {sidebarOpen && <button aria-label="Close navigation" onClick={() => setSidebarOpen(false)} className="fixed inset-0 z-40 bg-slate-950/45 lg:hidden" />}
-
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col text-white shadow-2xl transition-transform lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`} style={{ background: `linear-gradient(180deg, ${theme.primary} 0%, ${theme.primaryDark} 58%, ${theme.ink} 100%)`, color: theme.textOnPrimary }}>
+      <aside className="fixed inset-y-0 left-0 z-50 hidden w-72 flex-col text-white shadow-2xl lg:flex" style={{ background: `linear-gradient(180deg, ${theme.primary} 0%, ${theme.primaryDark} 58%, ${theme.ink} 100%)`, color: theme.textOnPrimary }}>
         <div className="flex items-start justify-between border-b border-white/10 p-6">
           <div>
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 text-lg font-black">TCS</div>
             <h1 className="mt-3 text-xl font-black">Operations Hub</h1>
             <p className="mt-1 text-xs font-semibold opacity-75">{location === "All Locations" ? "Thomason Childcare Solutions" : theme.fullName}</p>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="rounded-xl p-2 hover:bg-white/10 lg:hidden" aria-label="Close menu"><X className="h-5 w-5" /></button>
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
@@ -267,7 +261,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             const active = pathname === item.href;
             const Icon = item.icon;
             return (
-              <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-bold transition ${active ? "bg-white shadow-lg" : "hover:bg-white/12"}`} style={active ? { color: theme.ink } : { color: theme.textOnPrimary }}>
+              <Link key={item.href} href={item.href} className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-bold transition ${active ? "bg-white shadow-lg" : "hover:bg-white/12"}`} style={active ? { color: theme.ink } : { color: theme.textOnPrimary }}>
                 <Icon className="h-4.5 w-4.5" />
                 {item.label}
               </Link>
@@ -284,34 +278,62 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       </aside>
 
       <div className="lg:pl-72">
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
-          <div className="flex min-h-20 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-            <div className="flex min-w-0 items-center gap-3">
-              <button onClick={() => setSidebarOpen(true)} className="rounded-xl border border-slate-200 p-2.5 text-slate-700 lg:hidden" aria-label="Open menu"><Menu className="h-5 w-5" /></button>
-              <div className="min-w-0">
-                <h2 className="truncate text-lg font-black text-slate-950 sm:text-2xl">{meta.title}</h2>
-                <p className="hidden truncate text-sm text-slate-500 sm:block">{meta.subtitle}</p>
+        <header className="sticky top-0 z-30 lg:hidden">
+          <div className="border-b border-slate-200/80 bg-white/95 pt-[env(safe-area-inset-top)] shadow-sm backdrop-blur-xl">
+            <div className="flex min-h-[62px] items-center justify-between gap-3 px-4">
+              <Link href="/" className="flex min-w-0 items-center gap-3">
+                <span className="grid h-10 w-10 flex-none place-items-center rounded-[14px] text-xs font-black text-white shadow-sm" style={{ background: `linear-gradient(145deg, ${theme.primary}, ${theme.primaryDark})` }}>TCS</span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[10px] font-black uppercase tracking-[.14em]" style={{ color: theme.primary }}>The Hub</span>
+                  <span className="block truncate text-[15px] font-black text-slate-950">{meta.title}</span>
+                </span>
+              </Link>
+
+              <div className="relative flex items-center gap-2">
+                <NotificationBell />
+                <button onClick={() => setShowUserMenu((current) => !current)} className="grid h-10 w-10 place-items-center rounded-[14px] text-xs font-black shadow-sm" style={{ background: theme.primarySoft, color: theme.ink }} aria-label="Open user menu">{staffInitials(profile, user?.email)}</button>
+                {showUserMenu && <div className="absolute right-0 top-12 z-50 w-[min(19rem,calc(100vw-2rem))] rounded-[24px] border border-slate-200 bg-white p-4 text-sm shadow-2xl"><p className="font-black text-slate-950">{profile?.full_name || "TCS Staff"}</p><p className="mt-1 truncate text-xs text-slate-500">{profile?.email || user?.email}</p>{profile?.job_title && <p className="mt-3 text-sm font-black text-emerald-800">{profile.job_title}</p>}{profile?.secondary_title && <p className="mt-1 text-xs font-bold text-amber-700">{profile.secondary_title}</p>}<div className="mt-2 flex flex-wrap gap-2">{profile?.lane_level && <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-800">Level {profile.lane_level}</span>}<span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-700">Hub access: {profile?.role}</span></div><button onClick={() => { window.localStorage.removeItem("tcs-hub-app-setup-v1"); window.location.reload(); }} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700"><Settings className="h-4 w-4" /> App Setup</button><button onClick={() => void signOut()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button></div>}
               </div>
             </div>
 
-            <div className="relative flex items-center gap-2 sm:gap-3"><NotificationBell />
+            <div className="flex items-center gap-2 px-4 pb-2.5">
+              <label className="relative min-w-0 flex-1">
+                <span className="sr-only">Selected location</span>
+                <select value={location} disabled={availableLocations.length === 1} onChange={(event) => setLocation(event.target.value as LocationKey)} className="h-9 w-full appearance-none truncate rounded-xl border border-slate-200 bg-slate-50 py-1.5 pl-3 pr-8 text-[11px] font-black text-slate-700 outline-none">
+                  {availableLocations.map((item) => <option key={item}>{item}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+              </label>
+              <span title={sync.message} className={`inline-flex h-9 flex-none items-center gap-1.5 rounded-xl border px-2.5 text-[10px] font-black ${syncVisual.className}`}>{syncVisual.icon}{syncVisual.label}</span>
+            </div>
+          </div>
+        </header>
+
+        <header className="sticky top-0 z-30 hidden border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur lg:block">
+          <div className="flex min-h-20 items-center justify-between gap-4 px-8">
+            <div className="min-w-0">
+              <h2 className="truncate text-2xl font-black text-slate-950">{meta.title}</h2>
+              <p className="truncate text-sm text-slate-500">{meta.subtitle}</p>
+            </div>
+
+            <div className="relative flex items-center gap-3"><NotificationBell />
               <div className="relative">
                 <label className="relative block">
                   <span className="sr-only">Selected location</span>
-                  <select value={location} disabled={availableLocations.length === 1} onChange={(event) => setLocation(event.target.value as LocationKey)} className="appearance-none rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-3.5 pr-9 text-xs font-bold text-slate-700 outline-none hover:bg-slate-100 sm:text-sm" title="Changes the Hub colors and sets the active location for schedules, ratios, and printable tools">
+                  <select value={location} disabled={availableLocations.length === 1} onChange={(event) => setLocation(event.target.value as LocationKey)} className="appearance-none rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-3.5 pr-9 text-sm font-bold text-slate-700 outline-none hover:bg-slate-100" title="Changes the Hub colors and sets the active location for schedules, ratios, and printable tools">
                     {availableLocations.map((item) => <option key={item}>{item}</option>)}
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 </label>
               </div>
-              <button type="button" onClick={() => setShowLocationHelp((current) => !current)} className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 md:flex" aria-label="What does the location selector do?"><Info className="h-4 w-4" /></button>
-              <div title={sync.message} className={`hidden items-center gap-2 rounded-xl border px-3 py-2 text-xs font-black sm:flex ${syncVisual.className}`}>{syncVisual.icon}{syncVisual.label}</div>
+              <button type="button" onClick={() => setShowLocationHelp((current) => !current)} className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" aria-label="What does the location selector do?"><Info className="h-4 w-4" /></button>
+              <div title={sync.message} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-black ${syncVisual.className}`}>{syncVisual.icon}{syncVisual.label}</div>
               <div className="hidden rounded-xl border border-slate-200 bg-white px-3 py-2 text-right xl:block">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Signed in</p>
                 <p className="max-w-44 truncate text-sm font-black text-slate-800">{profile?.full_name || user?.email}</p>
               </div>
               <button onClick={() => setShowUserMenu((current) => !current)} className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-black" style={{ background: theme.primarySoft, color: theme.ink }} aria-label="Open user menu">{staffInitials(profile, user?.email)}</button>
-              {showLocationHelp && <div className="absolute right-12 top-14 z-40 w-80 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600 shadow-xl"><p className="font-black text-slate-950">Active location selector</p><p className="mt-1">It changes the Hub’s colors and tells location-aware pages—such as Child Schedules, Meals, Ratios, Work Plans, Student Store, Team Store, Training Center, and Marketing—which site you are working on. {locationLocked ? "Your login is limited to the location access assigned by Danielle or Jennifer. You cannot switch to another site or the company-wide view." : "Choose All Locations for company-wide information."}</p></div>}
+              {showLocationHelp && <div className="absolute right-12 top-14 z-40 w-80 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600 shadow-xl"><p className="font-black text-slate-950">Active location selector</p><p className="mt-1">It changes the Hub’s colors and tells location-aware pages which site you are working on. {locationLocked ? "Your login is limited to the location access assigned to your account." : "Choose All Locations for company-wide information."}</p></div>}
               {showUserMenu && <div className="absolute right-0 top-14 z-40 w-72 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-xl"><p className="font-black text-slate-950">{profile?.full_name || "TCS Staff"}</p><p className="mt-1 truncate text-xs text-slate-500">{profile?.email || user?.email}</p>{profile?.job_title && <p className="mt-3 text-sm font-black text-emerald-800">{profile.job_title}</p>}{profile?.secondary_title && <p className="mt-1 text-xs font-bold text-amber-700">{profile.secondary_title}</p>}<div className="mt-2 flex flex-wrap gap-2">{profile?.lane_level && <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-800">Level {profile.lane_level}</span>}<span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-700">Hub access: {profile?.role}</span></div><button onClick={() => { window.localStorage.removeItem("tcs-hub-app-setup-v1"); window.location.reload(); }} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700"><Settings className="h-4 w-4" /> App Setup</button><button onClick={() => void signOut()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button></div>}
             </div>
           </div>
@@ -324,7 +346,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             sync.state === "saved" ? <div className="flex items-center gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-1.5 text-[10px] font-bold text-emerald-800"><CloudCheck className="h-3.5 w-3.5" /> Saved and synced</div> : null}
         </div>
 
-        <main className="p-4 pb-28 sm:p-6 sm:pb-28 lg:p-8">{children}</main>
+        <main className="px-3 pb-28 pt-3 sm:px-5 sm:pt-5 lg:p-8">{children}</main>
       </div>
       <AppSetupPrompt />
       <MobileQuickActions />
