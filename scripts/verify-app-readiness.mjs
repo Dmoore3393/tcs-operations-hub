@@ -39,6 +39,7 @@ assert(existsSync(new URL("../public/app-icon-180.png", import.meta.url)), "Appl
 assert(existsSync(new URL("../public/app-icon-192.png", import.meta.url)), "192x192 app icon is missing");
 assert(existsSync(new URL("../public/app-icon-512.png", import.meta.url)), "512x512 app icon is missing");
 assert(existsSync(new URL("../public/branding/tcs-hub-launch.webp", import.meta.url)), "Official Hub launch artwork is missing");
+assert(existsSync(new URL("../public/branding/tcs-hub-loading.webp", import.meta.url)), "Official Hub loading artwork is missing");
 
 assert(serviceWorker.includes('self.addEventListener("push"'), "Service worker push handler is missing");
 assert(serviceWorker.includes("event.respondWith(fetch(event.request))"), "Private app pages must remain network-backed");
@@ -70,7 +71,8 @@ assert(mobileNav.includes('href: "/my-schedule"') && mobileNav.includes('href: "
 assert(mobileNav.includes("All your tools"), "Mobile app tool drawer is missing");
 assert(mainLayout.includes("pt-[env(safe-area-inset-top)]"), "Mobile app header must respect the device safe area");
 assert(mainLayout.includes('src="/app-icon-192.png"'), "Main Hub shell must display the official app icon");
-assert(auth.includes("AppLoadingScreen"), "Secure app loading must use the official branded launch screen");
+assert(auth.includes("AppLoadingScreen"), "Secure app loading must use the branded loading screen");
+assert(source("src/components/pwa/AppLoadingScreen.tsx").includes("tcs-hub-loading.webp"), "Secure loading must use the dedicated loading artwork, not the launch artwork");
 assert(layout.includes('apple: [{ url: "/app-icon-192.png"'), "Apple home-screen metadata must use the official app icon");
 assert(manifest.theme_color === "#0b5d35", "Manifest theme color must use the official Hub green");
 assert(trainingCenter.includes("<MainLayout>") && trainingCenter.includes("Hub Home"), "Training Center must stay integrated with the main app shell and provide a Hub Home control");
