@@ -74,6 +74,17 @@ export function normalizeLocation(value: string): LocationKey {
   return "All Locations";
 }
 
+
+export function locationSlug(value: Exclude<LocationKey, "All Locations">) {
+  return value.toLowerCase().replaceAll(" ", "-");
+}
+
+export function locationFromSlug(value: string): Exclude<LocationKey, "All Locations"> | null {
+  const normalized = value.trim().toLowerCase();
+  const match = careLocations.find((location) => locationSlug(location) === normalized);
+  return match ?? null;
+}
+
 export function formatClock(value: string) {
   if (!value) return "—";
   const [hourText, minuteText] = value.split(":");
