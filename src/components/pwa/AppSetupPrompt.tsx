@@ -93,10 +93,13 @@ export default function AppSetupPrompt() {
     <div className="fixed inset-0 z-[110] flex items-end bg-slate-950/45 p-3 backdrop-blur-sm sm:items-center sm:justify-center">
       <section className="w-full max-w-xl overflow-hidden rounded-[28px] bg-white shadow-2xl">
         <header className="flex items-start justify-between gap-4 bg-gradient-to-br from-[#214d31] to-[#102c20] px-5 py-5 text-white">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-200">The Hub App Setup</p>
+          <div className="flex min-w-0 items-start gap-3">
+            <img src="/app-icon-192.png" alt="" className="h-12 w-12 flex-none rounded-2xl object-cover shadow-lg" aria-hidden="true" />
+            <div>
+            <p className="text-[10px] font-black uppercase tracking-[.18em] text-yellow-200">The Hub App Setup</p>
             <h2 className="mt-1 text-2xl font-black">Set up this device</h2>
             <p className="mt-1 text-xs font-semibold leading-5 text-emerald-50/80">One quick setup gives this phone app-style navigation, background alerts, and the correct TCS access.</p>
+            </div>
           </div>
           <button onClick={() => setOpen(false)} className="rounded-xl bg-white/10 p-2"><X className="h-5 w-5" /></button>
         </header>
@@ -125,7 +128,7 @@ export default function AppSetupPrompt() {
           <SetupStep
             icon={<Smartphone className="h-5 w-5" />}
             title="Ready for daily use"
-            helper="Use the bottom app bar for Home, Transportation, Emergency, Alerts, and More."
+            helper="Use the bottom app bar for Home, Schedule, Clock, Alerts, and More."
             complete={stepsComplete}
           />
 
