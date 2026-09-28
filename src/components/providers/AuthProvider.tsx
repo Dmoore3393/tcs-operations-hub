@@ -186,7 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const response = await withTimeout(
       fetch("/api/auth/profile", {
-        method: "GET",
+        method: "POST",
         cache: "no-store",
         headers: {
           Authorization: `Bearer ${activeSession.access_token}`,
