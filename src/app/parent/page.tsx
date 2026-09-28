@@ -34,6 +34,7 @@ type ParentChild = {
   enrollmentStatus: string;
   attendanceToday: string;
   attendanceDate: string;
+  attendanceLocation: string;
   checkedInAt: string;
   checkedOutAt: string;
   pickupPerson: string;
@@ -333,13 +334,13 @@ export default function ParentPortalPage() {
         }),
       });
       const payload = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(payload.error || "Could not update the pickup PIN.");
+      if (!response.ok) throw new Error(payload.error || "Could not update the Family Attendance PIN.");
       await loadOverview(session);
       setPickupPin("");
-      setNotice(action === "set" ? "Pickup PIN updated securely." : "Pickup PIN removed.");
+      setNotice(action === "set" ? "Family Attendance PIN updated securely." : "Family Attendance PIN removed.");
       window.setTimeout(() => setNotice(""), 3200);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Could not update the pickup PIN.");
+      setError(saveError instanceof Error ? saveError.message : "Could not update the Family Attendance PIN.");
     } finally {
       setSavingPickupPin(false);
     }
@@ -420,7 +421,7 @@ export default function ParentPortalPage() {
       <section className="overflow-hidden rounded-[30px] bg-gradient-to-br from-[#173d29] via-[#2e6c47] to-[#143522] p-6 text-white shadow-xl">
         <p className="text-xs font-black uppercase tracking-[.18em] text-emerald-200">Welcome back</p>
         <h2 className="mt-2 text-3xl font-black">Your family at TCS</h2>
-        <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-emerald-50/80">Attendance, schedules, daily updates, forms, and important record follow-up stay together here. Private staff-only and other-family records are never shown in this portal.</p>
+        <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-emerald-50/80">Attendance, schedules, daily updates, forms, and important record follow-up stay together here. At drop-off or pickup, scan the QR posted at your TCS location and use your Family Attendance PIN. Private staff-only and other-family records are never shown in this portal.</p>
         {overview && overview.children.length > 1 && <div className="mt-5 flex flex-wrap gap-2">{overview.children.map((child) => <button key={child.id} onClick={() => setSelectedChildId(child.id)} className={`rounded-xl px-3 py-2 text-xs font-black ${selectedChild?.id === child.id ? "bg-white text-emerald-950" : "bg-white/10 text-white"}`}>{childName(child)}</button>)}</div>}
       </section>
 
@@ -456,6 +457,7 @@ export default function ParentPortalPage() {
               <Info label="Checked In" value={selectedChild.attendanceDate === todayPacific() ? formatTime(selectedChild.checkedInAt) : "—"} />
               <Info label="Checked Out" value={selectedChild.attendanceDate === todayPacific() ? formatTime(selectedChild.checkedOutAt) : "—"} />
               <Info label="Pickup Person" value={selectedChild.attendanceDate === todayPacific() ? selectedChild.pickupPerson || "—" : "—"} />
+              <Info label="Today at" value={selectedChild.attendanceDate === todayPacific() ? selectedChild.attendanceLocation || selectedChild.location || "Not set" : "—"} />
               <Info label="Transportation" value={selectedChild.transportation || "No transportation"} />
             </div>
 
@@ -475,8 +477,8 @@ export default function ParentPortalPage() {
             </section>
 
             <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-violet-700" /><h2 className="font-black text-slate-950">Secure pickup PIN</h2></div><p className="mt-1 text-xs text-slate-500">Use a private family PIN as an extra pickup verification step.</p></div><span className={`rounded-full px-2.5 py-1 text-[9px] font-black ${selectedChild.pickupPinConfigured ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>{selectedChild.pickupPinConfigured ? "Configured" : "Not Set"}</span></div>
-              <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs font-semibold leading-5 text-violet-950">Choose a 4–6 digit code your authorized pickup person can provide at checkout. TCS cannot see the saved PIN after you set it.</div>
+              <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-violet-700" /><h2 className="font-black text-slate-950">Family Attendance PIN</h2></div><p className="mt-1 text-xs text-slate-500">Create your own easy-to-remember code for QR check-in and check-out.</p></div><span className={`rounded-full px-2.5 py-1 text-[9px] font-black ${selectedChild.pickupPinConfigured ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>{selectedChild.pickupPinConfigured ? "Configured" : "Not Set"}</span></div>
+              <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs font-semibold leading-5 text-violet-950">Choose one 4–6 digit family code. After you scan a TCS location QR, this PIN lets you check your linked children in or out and also works as an extra pickup verification step. The same PIN is applied to your linked children, and TCS cannot display it after you save it.</div>
               <div className="mt-3 flex gap-2"><input inputMode="numeric" maxLength={6} value={pickupPin} onChange={(event) => setPickupPin(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="4–6 digits" className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-3 text-center text-base font-black tracking-[.25em]" /><button disabled={!/^\d{4,6}$/.test(pickupPin) || savingPickupPin} onClick={() => void updatePickupPin("set")} className="rounded-xl bg-violet-700 px-4 py-3 text-xs font-black text-white disabled:opacity-40">{savingPickupPin ? "Saving…" : selectedChild.pickupPinConfigured ? "Change PIN" : "Set PIN"}</button></div>
               {selectedChild.pickupPinConfigured && <div className="mt-3 flex items-center justify-between gap-3"><p className="text-[10px] font-semibold text-slate-500">Last updated {selectedChild.pickupPinUpdatedAt ? new Date(selectedChild.pickupPinUpdatedAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "recently"}</p><button disabled={savingPickupPin} onClick={() => void updatePickupPin("clear")} className="text-xs font-black text-red-700">Remove PIN</button></div>}
             </section>

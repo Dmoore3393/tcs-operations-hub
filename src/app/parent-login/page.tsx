@@ -15,6 +15,12 @@ export default function ParentLoginPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  function returnToTarget() {
+    if (typeof window === "undefined") return "";
+    const value = new URLSearchParams(window.location.search).get("returnTo") || "";
+    return value.startsWith("/parent/") ? value : "";
+  }
+
   async function routeSignedInParent(accessToken: string) {
     const response = await fetch("/api/parent/account-status", {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -30,7 +36,7 @@ export default function ParentLoginPage() {
     if (!response.ok) throw new Error(payload.error || "Could not verify Parent Portal access.");
 
     if (payload.hasActiveAccess) {
-      router.replace("/parent");
+      router.replace(returnToTarget() || "/parent");
       return;
     }
     if ((payload.pendingApprovalCount ?? 0) > 0) {

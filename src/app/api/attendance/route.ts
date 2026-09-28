@@ -1,4 +1,5 @@
 import { scryptSync, timingSafeEqual } from "node:crypto";
+import { locationSlug, normalizeLocation } from "@/lib/location-config";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 
 type DbRow = Record<string, unknown>;
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
     const body = object(await request.json().catch(() => ({})));
     const childId = text(body.childId);
     const action = text(body.action);
-    if (!childId || !["checkin", "checkout", "absent", "reset"].includes(action)) {
+    if (!childId || !["checkin", "checkout", "absent", "reset", "move"].includes(action)) {
       throw new Response("Choose a valid child and attendance action.", { status: 400 });
     }
 
@@ -77,6 +78,35 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     const date = pacificDate();
     const next: DbRow = { ...record };
+
+    const requestedLocation = text(action === "move" ? body.targetLocation : body.location);
+    let attendanceLocationId = text(record.attendanceLocationId) || String(current.data.location_id);
+    let attendanceLocationName = text(record.attendanceLocation) || text(record.location);
+    let attendanceLocationSource = text(record.attendanceLocationSource);
+
+    if (requestedLocation && requestedLocation !== "All Locations") {
+      const normalizedLocation = normalizeLocation(requestedLocation);
+      if (normalizedLocation === "All Locations") {
+        throw new Response("Choose a valid care location.", { status: 400 });
+      }
+
+      const locationResult = await userClient
+        .from("locations")
+        .select("id,name,slug")
+        .eq("organization_id", profile.organization_id)
+        .eq("slug", locationSlug(normalizedLocation))
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (locationResult.error) throw locationResult.error;
+      if (!locationResult.data) {
+        throw new Response("That care location is not active.", { status: 404 });
+      }
+
+      attendanceLocationId = String(locationResult.data.id);
+      attendanceLocationName = String(locationResult.data.name || normalizedLocation);
+      attendanceLocationSource = action === "move" ? "Staff Move" : "Staff Check-In";
+    }
     let attendanceStatus = text(current.data.attendance_status) || "Not Scheduled";
     let auditAction = "REVIEW";
     const auditMetadata: DbRow = { kind: "child_attendance", action, childId };
@@ -92,6 +122,9 @@ export async function POST(request: Request) {
       next.pickupPerson = "";
       next.pickupVerification = "Not Applicable";
       next.pickupNotes = "";
+      next.attendanceLocation = attendanceLocationName;
+      next.attendanceLocationId = attendanceLocationId;
+      next.attendanceLocationSource = attendanceLocationSource || "Staff Check-In";
       auditAction = "UPDATE";
     }
 
@@ -118,7 +151,23 @@ export async function POST(request: Request) {
       next.pickupPerson = "";
       next.pickupVerification = "Not Applicable";
       next.pickupNotes = "";
+      delete next.attendanceLocation;
+      delete next.attendanceLocationId;
+      delete next.attendanceLocationSource;
       auditAction = "UPDATE";
+    }
+
+    if (action === "move") {
+      if (!requestedLocation || requestedLocation === "All Locations") {
+        throw new Response("Choose the location this child is moving to today.", { status: 400 });
+      }
+      next.attendanceDate = date;
+      next.attendanceLocation = attendanceLocationName;
+      next.attendanceLocationId = attendanceLocationId;
+      next.attendanceLocationSource = "Staff Move";
+      auditAction = "UPDATE";
+      auditMetadata.fromLocation = text(record.attendanceLocation) || text(record.location);
+      auditMetadata.toLocation = attendanceLocationName;
     }
 
     if (action === "checkout") {
@@ -180,7 +229,9 @@ export async function POST(request: Request) {
         ? "Checked Out"
         : action === "absent"
           ? "Absent"
-          : "Expected";
+          : action === "move"
+            ? (attendanceStatus === "Present" ? "Checked In" : attendanceStatus === "Checked Out" ? "Checked Out" : "Expected")
+            : "Expected";
     const existingSession = await userClient
       .from("child_attendance_sessions")
       .select("id,check_in_at")
@@ -193,7 +244,7 @@ export async function POST(request: Request) {
 
     const attendanceSessionPayload = {
       organization_id: profile.organization_id,
-      location_id: current.data.location_id,
+      location_id: text(next.attendanceLocationId) || current.data.location_id,
       child_id: current.data.id,
       child_name: childName,
       attendance_date: date,
@@ -204,13 +255,19 @@ export async function POST(request: Request) {
           : null,
       check_out_at: action === "checkout" ? now : null,
       status: sessionStatus,
-      source: "Hub",
-      notes: action === "checkout" ? text(next.pickupVerification) : null,
+      source: action === "move" ? "Hub Location Move" : "Hub",
+      notes: action === "checkout"
+        ? text(next.pickupVerification)
+        : action === "move"
+          ? `Moved for today to ${attendanceLocationName}`
+          : null,
     };
 
     const attendanceSessionResult = existingSession.data?.id
       ? await userClient.from("child_attendance_sessions").update(attendanceSessionPayload).eq("id", existingSession.data.id)
-      : await userClient.from("child_attendance_sessions").insert(attendanceSessionPayload);
+      : action === "move"
+        ? { error: null }
+        : await userClient.from("child_attendance_sessions").insert(attendanceSessionPayload);
 
     if (attendanceSessionResult.error) throw attendanceSessionResult.error;
 
@@ -218,7 +275,7 @@ export async function POST(request: Request) {
       p_action: auditAction,
       p_table_name: "children",
       p_row_id: current.data.id,
-      p_location_id: current.data.location_id,
+      p_location_id: text(next.attendanceLocationId) || current.data.location_id,
       p_metadata: auditMetadata,
     });
 
@@ -230,6 +287,7 @@ export async function POST(request: Request) {
       checkedInAt: text(object(updated.data.record_data).checkedInAt),
       checkedOutAt: text(object(updated.data.record_data).checkedOutAt),
       pickupVerification: text(object(updated.data.record_data).pickupVerification),
+      attendanceLocation: text(object(updated.data.record_data).attendanceLocation) || text(record.location),
     });
   } catch (error) {
     return staffErrorResponse(error);

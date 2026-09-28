@@ -77,12 +77,15 @@ export type ChildRecord = {
   enrollmentStatus: EnrollmentStatus;
   attendanceToday: AttendanceStatus;
   attendanceDate?: string;
+  attendanceLocation?: string;
+  attendanceLocationId?: string;
+  attendanceLocationSource?: string;
   checkedInAt?: string;
   checkedInBy?: string;
   checkedOutAt?: string;
   checkedOutBy?: string;
   pickupPerson?: string;
-  pickupVerification?: "Authorized Contact" | "Pickup PIN" | "Licensee Override" | "Not Applicable";
+  pickupVerification?: "Authorized Contact" | "Pickup PIN" | "Parent QR + PIN" | "Licensee Override" | "Not Applicable";
   pickupPinConfigured?: boolean;
   pickupPinUpdatedAt?: string;
   pickupNotes?: string;

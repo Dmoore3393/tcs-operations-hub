@@ -169,6 +169,7 @@ export async function GET(request: Request) {
         enrollmentStatus: permissions.viewProfile ? text(record.enrollmentStatus) : "",
         attendanceToday: permissions.viewAttendance ? text(record.attendanceToday) : "",
         attendanceDate: permissions.viewAttendance ? text(record.attendanceDate) : "",
+        attendanceLocation: permissions.viewAttendance ? text(record.attendanceLocation) : "",
         checkedInAt: permissions.viewAttendance ? text(record.checkedInAt) : "",
         checkedOutAt: permissions.viewAttendance ? text(record.checkedOutAt) : "",
         pickupPerson: permissions.viewAttendance ? text(record.pickupPerson) : "",
