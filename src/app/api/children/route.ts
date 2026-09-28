@@ -174,9 +174,11 @@ function stableNumericId(value: string) {
 
 function normalizeChild(row: DbRow) {
   const record = object(row.record_data);
+  const safeRecord = { ...record };
+  delete safeRecord.pickupPinDigest;
   const legacyId = text(row.legacy_id);
   return {
-    ...record,
+    ...safeRecord,
     id: typeof record.id === "number" ? record.id : stableNumericId(legacyId),
     legacyId,
     firstName: text(record.firstName) || text(row.first_name),
@@ -202,12 +204,15 @@ function normalizeChild(row: DbRow) {
     enrollmentStatus: text(record.enrollmentStatus) || text(row.enrollment_status) || "Active",
     attendanceToday: text(record.attendanceToday) || text(row.attendance_status) || "Not Scheduled",
     attendanceDate: text(record.attendanceDate),
+    attendanceLocation: text(record.attendanceLocation),
+    attendanceLocationId: text(record.attendanceLocationId),
+    attendanceLocationSource: text(record.attendanceLocationSource),
     checkedInAt: text(record.checkedInAt),
     checkedInBy: text(record.checkedInBy),
     checkedOutAt: text(record.checkedOutAt),
     checkedOutBy: text(record.checkedOutBy),
     pickupPerson: text(record.pickupPerson),
-    pickupVerification: ["Authorized Contact", "Pickup PIN", "Licensee Override", "Not Applicable"].includes(text(record.pickupVerification)) ? text(record.pickupVerification) : "Not Applicable",
+    pickupVerification: ["Authorized Contact", "Pickup PIN", "Parent QR + PIN", "Licensee Override", "Not Applicable"].includes(text(record.pickupVerification)) ? text(record.pickupVerification) : "Not Applicable",
     pickupPinConfigured: Boolean(text(record.pickupPinDigest)),
     pickupPinUpdatedAt: text(record.pickupPinUpdatedAt),
     pickupNotes: text(record.pickupNotes),
@@ -433,6 +438,9 @@ export async function POST(request: Request) {
     const protectedPickupFields = {
       ...(text(existingRecord.pickupPinDigest) ? { pickupPinDigest: text(existingRecord.pickupPinDigest) } : {}),
       ...(text(existingRecord.pickupPinUpdatedAt) ? { pickupPinUpdatedAt: text(existingRecord.pickupPinUpdatedAt) } : {}),
+      ...(text(existingRecord.attendanceLocation) ? { attendanceLocation: text(existingRecord.attendanceLocation) } : {}),
+      ...(text(existingRecord.attendanceLocationId) ? { attendanceLocationId: text(existingRecord.attendanceLocationId) } : {}),
+      ...(text(existingRecord.attendanceLocationSource) ? { attendanceLocationSource: text(existingRecord.attendanceLocationSource) } : {}),
     };
 
     const payload = {
