@@ -266,10 +266,18 @@ export function buildCoverageWindows(args: {
 export function checkedInAtLocation(children: ChildRecord[], location: StaffingLocation, date: string) {
   const key = locationKeyForDbLocation(location);
   if (!key) return [];
-  return children.filter((child) =>
-    child.enrollmentStatus === "Active" &&
-    child.attendanceDate === date &&
-    child.attendanceToday === "Present" &&
-    normalizeLocation(child.location) === key,
-  );
+
+  return children.filter((child) => {
+    const liveLocation =
+      child.attendanceDate === date && child.attendanceLocation
+        ? child.attendanceLocation
+        : child.location;
+
+    return (
+      child.enrollmentStatus === "Active" &&
+      child.attendanceDate === date &&
+      child.attendanceToday === "Present" &&
+      normalizeLocation(liveLocation) === key
+    );
+  });
 }
