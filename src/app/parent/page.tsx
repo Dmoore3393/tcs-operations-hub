@@ -34,6 +34,7 @@ type ParentChild = {
   enrollmentStatus: string;
   attendanceToday: string;
   attendanceDate: string;
+  attendanceLocation: string;
   checkedInAt: string;
   checkedOutAt: string;
   pickupPerson: string;
@@ -420,7 +421,7 @@ export default function ParentPortalPage() {
       <section className="overflow-hidden rounded-[30px] bg-gradient-to-br from-[#173d29] via-[#2e6c47] to-[#143522] p-6 text-white shadow-xl">
         <p className="text-xs font-black uppercase tracking-[.18em] text-emerald-200">Welcome back</p>
         <h2 className="mt-2 text-3xl font-black">Your family at TCS</h2>
-        <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-emerald-50/80">Attendance, schedules, daily updates, forms, and important record follow-up stay together here. Private staff-only and other-family records are never shown in this portal.</p>
+        <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-emerald-50/80">Attendance, schedules, daily updates, forms, and important record follow-up stay together here. At drop-off or pickup, scan the QR posted at your TCS location and use your Family Attendance PIN. Private staff-only and other-family records are never shown in this portal.</p>
         {overview && overview.children.length > 1 && <div className="mt-5 flex flex-wrap gap-2">{overview.children.map((child) => <button key={child.id} onClick={() => setSelectedChildId(child.id)} className={`rounded-xl px-3 py-2 text-xs font-black ${selectedChild?.id === child.id ? "bg-white text-emerald-950" : "bg-white/10 text-white"}`}>{childName(child)}</button>)}</div>}
       </section>
 
@@ -456,6 +457,7 @@ export default function ParentPortalPage() {
               <Info label="Checked In" value={selectedChild.attendanceDate === todayPacific() ? formatTime(selectedChild.checkedInAt) : "—"} />
               <Info label="Checked Out" value={selectedChild.attendanceDate === todayPacific() ? formatTime(selectedChild.checkedOutAt) : "—"} />
               <Info label="Pickup Person" value={selectedChild.attendanceDate === todayPacific() ? selectedChild.pickupPerson || "—" : "—"} />
+              <Info label="Today at" value={selectedChild.attendanceDate === todayPacific() ? selectedChild.attendanceLocation || selectedChild.location || "Not set" : "—"} />
               <Info label="Transportation" value={selectedChild.transportation || "No transportation"} />
             </div>
 
