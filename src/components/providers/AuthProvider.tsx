@@ -152,6 +152,22 @@ function initials(name: string, email: string) {
     .join("");
 }
 
+
+const AUTH_OPERATION_TIMEOUT_MS = 8000;
+
+function withTimeout<T>(operation: PromiseLike<T>, label: string) {
+  let timer: number | undefined;
+  const timeout = new Promise<T>((_, reject) => {
+    timer = window.setTimeout(() => {
+      reject(new Error(`${label} timed out`));
+    }, AUTH_OPERATION_TIMEOUT_MS);
+  });
+
+  return Promise.race([Promise.resolve(operation), timeout]).finally(() => {
+    if (timer !== undefined) window.clearTimeout(timer);
+  });
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -168,11 +184,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const { data, error } = await supabase
-      .from("staff_access")
-      .select("user_id,email,full_name,role,locations,permissions,is_active,organization_id,invited_at,accepted_at")
-      .eq("user_id", activeSession.user.id)
-      .maybeSingle();
+    const { data, error } = await withTimeout(
+      supabase
+        .from("staff_access")
+        .select("user_id,email,full_name,role,locations,permissions,is_active,organization_id,invited_at,accepted_at")
+        .eq("user_id", activeSession.user.id)
+        .maybeSingle(),
+      "Staff access check",
+    );
 
     if (error) {
       setAccessError(`Could not verify staff access: ${error.message}`);
@@ -192,13 +211,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const laneResult = await supabase
-      .from("staff_lane_profiles")
-      .select("id,job_title,secondary_title,lane_level,lane_group,reports_to_label")
-      .eq("organization_id", data.organization_id)
-      .eq("staff_user_id", data.user_id)
-      .eq("is_active", true)
-      .maybeSingle();
+    const laneResult = await withTimeout(
+      supabase
+        .from("staff_lane_profiles")
+        .select("id,job_title,secondary_title,lane_level,lane_group,reports_to_label")
+        .eq("organization_id", data.organization_id)
+        .eq("staff_user_id", data.user_id)
+        .eq("is_active", true)
+        .maybeSingle(),
+      "Staff lane check",
+    );
 
     if (laneResult.error) {
       setAccessError(`Could not verify staff lane: ${laneResult.error.message}`);
@@ -225,20 +247,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     let mounted = true;
 
-    void supabase.auth.getSession().then(async ({ data, error }) => {
-      if (!mounted) return;
-      if (error) setAccessError(error.message);
-      const nextSession = data.session ?? null;
-      setSession(nextSession);
-      if (nextSession) await loadProfile(nextSession);
-      setLoading(false);
-    });
+    void (async () => {
+      try {
+        const { data, error } = await withTimeout(
+          supabase.auth.getSession(),
+          "Secure sign-in check",
+        );
+        if (!mounted) return;
+        if (error) setAccessError(error.message);
+
+        const nextSession = data.session ?? null;
+        setSession(nextSession);
+
+        if (nextSession) {
+          try {
+            await loadProfile(nextSession);
+          } catch {
+            if (!mounted) return;
+            setProfile(null);
+            setAccessError("The Hub could not finish checking your staff access. Please retry or sign in again.");
+          }
+        }
+      } catch {
+        if (!mounted) return;
+        setSession(null);
+        setProfile(null);
+        setAccessError("The Hub could not finish checking your sign-in. Please sign in again.");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
+
+      if (!nextSession) {
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       window.setTimeout(() => {
-        void loadProfile(nextSession).finally(() => setLoading(false));
+        void loadProfile(nextSession)
+          .catch(() => {
+            setProfile(null);
+            setAccessError("The Hub could not finish checking your staff access. Please retry or sign in again.");
+          })
+          .finally(() => setLoading(false));
       }, 0);
     });
 
@@ -364,7 +420,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           <h1 className="mt-5 text-2xl font-black text-slate-950">Staff access is not active</h1>
           <p className="mt-3 leading-7 text-slate-600">{accessError || "This account is signed in, but it has not been approved for the TCS Operations Hub."}</p>
           <p className="mt-2 text-sm text-slate-500">Signed in as {session.user.email}</p>
-          <button onClick={() => void signOut()} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <button
+              onClick={() => {
+                setLoading(true);
+                void loadProfile(session)
+                  .catch(() => {
+                    setProfile(null);
+                    setAccessError("The Hub still cannot reach secure staff access. Please sign out and try again.");
+                  })
+                  .finally(() => setLoading(false));
+              }}
+              className="inline-flex items-center justify-center rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white"
+            >
+              Retry
+            </button>
+            <button onClick={() => void signOut()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button>
+          </div>
         </section>
       </main>
     );
