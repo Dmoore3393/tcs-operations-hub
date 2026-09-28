@@ -188,8 +188,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [sync, setSync] = useState<HubSyncDetail>({ state: "idle", message: "Secure shared data" });
   const [isOnline, setIsOnline] = useState(true);
+  const [hasParentPortalAccess, setHasParentPortalAccess] = useState(false);
   const { location, setLocation, availableLocations, locationLocked, theme } = useHubLocation();
-  const { profile, user, signOut } = useAuth();
+  const { profile, user, session, signOut } = useAuth();
   const meta = useMemo(() => pageMeta[pathname] ?? pageMeta["/"], [pathname]);
   const visibleNavItems = useMemo(() => navItems.filter((item) => canAccessRoute(profile, item.href)), [profile]);
   useEffect(() => {
@@ -211,6 +212,30 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       window.removeEventListener("offline", update);
     };
   }, []);
+
+  useEffect(() => {
+    if (!session?.access_token) {
+      setHasParentPortalAccess(false);
+      return;
+    }
+
+    let active = true;
+    void fetch("/api/parent/account-status", {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({})) as { hasActiveAccess?: boolean };
+        if (active) setHasParentPortalAccess(Boolean(response.ok && payload.hasActiveAccess));
+      })
+      .catch(() => {
+        if (active) setHasParentPortalAccess(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [session?.access_token]);
   const syncVisual = sync.state === "saving" || sync.state === "loading"
     ? { label: sync.state === "saving" ? "Saving" : "Loading", icon: <LoaderCircle className="h-4 w-4 animate-spin" />, className: "text-blue-700 bg-blue-50 border-blue-200" }
     : sync.state === "error" || sync.state === "conflict"
@@ -292,7 +317,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               <div className="relative flex items-center gap-2">
                 <NotificationBell />
                 <button onClick={() => setShowUserMenu((current) => !current)} className="grid h-10 w-10 place-items-center rounded-[14px] text-xs font-black shadow-sm" style={{ background: theme.primarySoft, color: theme.ink }} aria-label="Open user menu">{staffInitials(profile, user?.email)}</button>
-                {showUserMenu && <div className="absolute right-0 top-12 z-50 w-[min(19rem,calc(100vw-2rem))] rounded-[24px] border border-slate-200 bg-white p-4 text-sm shadow-2xl"><p className="font-black text-slate-950">{profile?.full_name || "TCS Staff"}</p><p className="mt-1 truncate text-xs text-slate-500">{profile?.email || user?.email}</p>{profile?.job_title && <p className="mt-3 text-sm font-black text-emerald-800">{profile.job_title}</p>}{profile?.secondary_title && <p className="mt-1 text-xs font-bold text-amber-700">{profile.secondary_title}</p>}<div className="mt-2 flex flex-wrap gap-2">{profile?.lane_level && <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-800">Level {profile.lane_level}</span>}<span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-700">Hub access: {profile?.role}</span></div><button onClick={() => { window.localStorage.removeItem("tcs-hub-app-setup-v1"); window.location.reload(); }} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700"><Settings className="h-4 w-4" /> App Setup</button><button onClick={() => void signOut()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button></div>}
+                {showUserMenu && <div className="absolute right-0 top-12 z-50 w-[min(19rem,calc(100vw-2rem))] rounded-[24px] border border-slate-200 bg-white p-4 text-sm shadow-2xl"><p className="font-black text-slate-950">{profile?.full_name || "TCS Staff"}</p><p className="mt-1 truncate text-xs text-slate-500">{profile?.email || user?.email}</p>{profile?.job_title && <p className="mt-3 text-sm font-black text-emerald-800">{profile.job_title}</p>}{profile?.secondary_title && <p className="mt-1 text-xs font-bold text-amber-700">{profile.secondary_title}</p>}<div className="mt-2 flex flex-wrap gap-2">{profile?.lane_level && <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-800">Level {profile.lane_level}</span>}<span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-700">Hub access: {profile?.role}</span></div>{hasParentPortalAccess && <Link href="/parent" className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 font-black text-white"><Users className="h-4 w-4" /> Switch to Parent Portal</Link>}<button onClick={() => { window.localStorage.removeItem("tcs-hub-app-setup-v1"); window.location.reload(); }} className={`${hasParentPortalAccess ? "mt-2" : "mt-4"} flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700`}><Settings className="h-4 w-4" /> App Setup</button><button onClick={() => void signOut()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button></div>}
               </div>
             </div>
 
@@ -334,7 +359,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               </div>
               <button onClick={() => setShowUserMenu((current) => !current)} className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-black" style={{ background: theme.primarySoft, color: theme.ink }} aria-label="Open user menu">{staffInitials(profile, user?.email)}</button>
               {showLocationHelp && <div className="absolute right-12 top-14 z-40 w-80 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600 shadow-xl"><p className="font-black text-slate-950">Active location selector</p><p className="mt-1">It changes the Hub’s colors and tells location-aware pages which site you are working on. {locationLocked ? "Your login is limited to the location access assigned to your account." : "Choose All Locations for company-wide information."}</p></div>}
-              {showUserMenu && <div className="absolute right-0 top-14 z-40 w-72 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-xl"><p className="font-black text-slate-950">{profile?.full_name || "TCS Staff"}</p><p className="mt-1 truncate text-xs text-slate-500">{profile?.email || user?.email}</p>{profile?.job_title && <p className="mt-3 text-sm font-black text-emerald-800">{profile.job_title}</p>}{profile?.secondary_title && <p className="mt-1 text-xs font-bold text-amber-700">{profile.secondary_title}</p>}<div className="mt-2 flex flex-wrap gap-2">{profile?.lane_level && <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-800">Level {profile.lane_level}</span>}<span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-700">Hub access: {profile?.role}</span></div><button onClick={() => { window.localStorage.removeItem("tcs-hub-app-setup-v1"); window.location.reload(); }} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700"><Settings className="h-4 w-4" /> App Setup</button><button onClick={() => void signOut()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button></div>}
+              {showUserMenu && <div className="absolute right-0 top-14 z-40 w-72 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-xl"><p className="font-black text-slate-950">{profile?.full_name || "TCS Staff"}</p><p className="mt-1 truncate text-xs text-slate-500">{profile?.email || user?.email}</p>{profile?.job_title && <p className="mt-3 text-sm font-black text-emerald-800">{profile.job_title}</p>}{profile?.secondary_title && <p className="mt-1 text-xs font-bold text-amber-700">{profile.secondary_title}</p>}<div className="mt-2 flex flex-wrap gap-2">{profile?.lane_level && <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-800">Level {profile.lane_level}</span>}<span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-700">Hub access: {profile?.role}</span></div>{hasParentPortalAccess && <Link href="/parent" className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 font-black text-white"><Users className="h-4 w-4" /> Switch to Parent Portal</Link>}<button onClick={() => { window.localStorage.removeItem("tcs-hub-app-setup-v1"); window.location.reload(); }} className={`${hasParentPortalAccess ? "mt-2" : "mt-4"} flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700`}><Settings className="h-4 w-4" /> App Setup</button><button onClick={() => void signOut()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button></div>}
             </div>
           </div>
         </header>

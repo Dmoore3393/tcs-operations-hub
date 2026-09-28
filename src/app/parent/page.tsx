@@ -5,6 +5,7 @@ import type { Session } from "@supabase/supabase-js";
 import {
   AlertTriangle,
   Bell,
+  BriefcaseBusiness,
   CalendarDays,
   CheckCircle2,
   ClipboardCheck,
@@ -194,6 +195,7 @@ export default function ParentPortalPage() {
   const [notice, setNotice] = useState("");
   const [pickupPin, setPickupPin] = useState("");
   const [savingPickupPin, setSavingPickupPin] = useState(false);
+  const [hasStaffAccess, setHasStaffAccess] = useState(false);
 
   const loadOverview = useCallback(async (activeSession: Session) => {
     const response = await fetch("/api/parent/overview", {
@@ -213,8 +215,9 @@ export default function ParentPortalPage() {
       return;
     }
 
+    const client = supabase;
     let active = true;
-    void supabase.auth.getSession().then(async ({ data }) => {
+    void client.auth.getSession().then(async ({ data }) => {
       if (!active) return;
       const next = data.session;
       if (!next) {
@@ -222,6 +225,14 @@ export default function ParentPortalPage() {
         return;
       }
       setSession(next);
+
+      const staffResult = await client
+        .from("staff_access")
+        .select("user_id,is_active")
+        .eq("user_id", next.user.id)
+        .maybeSingle();
+      setHasStaffAccess(Boolean(staffResult.data?.is_active));
+
       try {
         await loadOverview(next);
         setError("");
@@ -232,10 +243,11 @@ export default function ParentPortalPage() {
       }
     });
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: subscription } = client.auth.onAuthStateChange((_event, next) => {
       if (!next) {
         setSession(null);
         setOverview(null);
+        setHasStaffAccess(false);
         router.replace("/parent-login");
         return;
       }
@@ -387,7 +399,17 @@ export default function ParentPortalPage() {
     <header className="sticky top-0 z-30 border-b border-emerald-900/10 bg-[#173d29]/95 text-white shadow-sm backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-200">TCS Family Access</p><h1 className="text-lg font-black">The Hub Parent Portal</h1></div>
-        <button onClick={() => void signOut()} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs font-black"><LogOut className="h-4 w-4" /> Sign Out</button>
+        <div className="flex items-center gap-2">
+          {hasStaffAccess && (
+            <button
+              onClick={() => router.push("/")}
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-black text-emerald-950 shadow-sm"
+            >
+              <BriefcaseBusiness className="h-4 w-4" /> Staff Hub
+            </button>
+          )}
+          <button onClick={() => void signOut()} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs font-black"><LogOut className="h-4 w-4" /> Sign Out</button>
+        </div>
       </div>
     </header>
 
