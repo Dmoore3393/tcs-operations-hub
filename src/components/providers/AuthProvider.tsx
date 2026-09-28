@@ -179,66 +179,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const timeoutTriggeredRef = useRef(false);
 
   const loadProfile = useCallback(async (activeSession: Session | null) => {
-    if (!supabase || !activeSession) {
+    if (!activeSession) {
       setProfile(null);
       return;
     }
 
-    const { data, error } = await withTimeout(
-      supabase
-        .from("staff_access")
-        .select("user_id,email,full_name,role,locations,permissions,is_active,organization_id,invited_at,accepted_at")
-        .eq("user_id", activeSession.user.id)
-        .maybeSingle(),
+    const response = await withTimeout(
+      fetch("/api/auth/profile", {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${activeSession.access_token}`,
+          "Cache-Control": "no-cache",
+        },
+      }),
       "Staff access check",
     );
 
-    if (error) {
-      setAccessError(`Could not verify staff access: ${error.message}`);
+    let payload: {
+      profile?: StaffAccessProfile;
+      error?: string;
+      bootstrapped?: boolean;
+    } = {};
+
+    try {
+      payload = await response.json();
+    } catch {
+      // The status below will provide the fallback message.
+    }
+
+    if (!response.ok || !payload.profile) {
+      setAccessError(
+        payload.error ||
+          "This login does not have active TCS staff access. Ask a TCS Owner/Admin to add or reactivate the account.",
+      );
       setProfile(null);
       return;
     }
 
-    if (!data || !data.is_active) {
-      setAccessError("This login does not have active TCS staff access. Ask a TCS Owner/Admin to add or reactivate the account.");
-      setProfile(null);
-      return;
-    }
-
-    if (!isApprovedPilotRole(data.role)) {
+    if (!isApprovedPilotRole(payload.profile.role)) {
       setAccessError("This account has an unsupported role. Ask a TCS Owner/Admin to update the role in Team Access.");
-      setProfile(null);
-      return;
-    }
-
-    const laneResult = await withTimeout(
-      supabase
-        .from("staff_lane_profiles")
-        .select("id,job_title,secondary_title,lane_level,lane_group,reports_to_label")
-        .eq("organization_id", data.organization_id)
-        .eq("staff_user_id", data.user_id)
-        .eq("is_active", true)
-        .maybeSingle(),
-      "Staff lane check",
-    );
-
-    if (laneResult.error) {
-      setAccessError(`Could not verify staff lane: ${laneResult.error.message}`);
       setProfile(null);
       return;
     }
 
     setAccessError("");
     setProfile({
-      ...(data as StaffAccessProfile),
-      permissions: Array.isArray(data.permissions) ? data.permissions : [],
-      locations: Array.isArray(data.locations) ? data.locations : [],
-      lane_profile_id: laneResult.data?.id ?? null,
-      job_title: laneResult.data?.job_title ?? null,
-      secondary_title: laneResult.data?.secondary_title ?? null,
-      lane_level: laneResult.data?.lane_level ?? null,
-      lane_group: laneResult.data?.lane_group ?? null,
-      reports_to_label: laneResult.data?.reports_to_label ?? null,
+      ...payload.profile,
+      permissions: Array.isArray(payload.profile.permissions) ? payload.profile.permissions : [],
+      locations: Array.isArray(payload.profile.locations) ? payload.profile.locations : [],
     });
   }, []);
 
