@@ -36,13 +36,18 @@ function verifyPin(pin: string, digest: string) {
   }
 }
 
-async function resolveLocation(admin: Awaited<ReturnType<typeof requireParent>>["admin"], slug: string) {
+async function resolveLocation(
+  admin: Awaited<ReturnType<typeof requireParent>>["admin"],
+  organizationId: string,
+  slug: string,
+) {
   const locationKey = locationFromSlug(slug);
   if (!locationKey) throw new Response("This location QR code is not valid.", { status: 404 });
 
   const result = await admin
     .from("locations")
     .select("id,slug,name,full_name,is_active")
+    .eq("organization_id", organizationId)
     .eq("slug", slug)
     .eq("is_active", true)
     .maybeSingle();
@@ -63,7 +68,9 @@ export async function GET(request: Request) {
     const { admin, children } = await requireParent(request);
     const url = new URL(request.url);
     const slug = url.searchParams.get("location")?.trim().toLowerCase() || "";
-    const location = await resolveLocation(admin, slug);
+    const organizationId = children[0]?.organizationId || "";
+    if (!organizationId) throw new Response("Your family account is not linked to a TCS organization.", { status: 403 });
+    const location = await resolveLocation(admin, organizationId, slug);
 
     return Response.json({
       location,
@@ -107,13 +114,29 @@ export async function POST(request: Request) {
       throw new Response("Choose at least one child.", { status: 400 });
     }
 
-    const location = await resolveLocation(admin, slug);
+    const organizationId = children[0]?.organizationId || "";
+    if (!organizationId) throw new Response("Your family account is not linked to a TCS organization.", { status: 403 });
+    const location = await resolveLocation(admin, organizationId, slug);
     const selected = children.filter((child) =>
       childIds.includes(child.legacyId) && child.access.permissions.managePickup,
     );
 
     if (selected.length !== childIds.length) {
       throw new Response("One or more selected children are not available to this Parent Portal account.", { status: 403 });
+    }
+
+    if (selected.some((child) => child.organizationId !== organizationId)) {
+      throw new Response("Selected children must belong to the same TCS organization.", { status: 403 });
+    }
+
+    const today = pacificDate();
+    if (action === "checkout") {
+      const notPresent = selected.find((child) =>
+        text(child.record.attendanceDate) !== today || text(child.record.attendanceToday) !== "Present"
+      );
+      if (notPresent) {
+        throw new Response(`${text(notPresent.record.firstName) || "A selected child"} is not currently checked in today.`, { status: 409 });
+      }
     }
 
     for (const child of selected) {
@@ -127,7 +150,7 @@ export async function POST(request: Request) {
     }
 
     const now = new Date().toISOString();
-    const date = pacificDate();
+    const date = today;
     const results = [];
 
     for (const child of selected) {
@@ -155,9 +178,6 @@ export async function POST(request: Request) {
         next.pickupVerification = "Not Applicable";
         next.pickupNotes = "";
       } else {
-        if (text(record.attendanceDate) !== date || text(record.attendanceToday) !== "Present") {
-          throw new Response(`${text(record.firstName) || "This child"} is not currently checked in today.`, { status: 409 });
-        }
         next.attendanceToday = "Checked Out";
         next.attendanceDate = date;
         next.checkedOutAt = now;
