@@ -73,7 +73,9 @@ assert(mobileNav.includes("All your tools"), "Mobile app tool drawer is missing"
 assert(mainLayout.includes("pt-[env(safe-area-inset-top)]"), "Mobile app header must respect the device safe area");
 assert(mainLayout.includes('src="/app-icon-192.png"'), "Main Hub shell must display the official app icon");
 assert(auth.includes("AppLoadingScreen"), "Secure app loading must use the branded loading screen");
+assert(auth.includes("AUTH_OPERATION_TIMEOUT_MS") && auth.includes("Secure sign-in check"), "Secure auth loading must time out instead of hanging forever");
 assert(source("src/components/pwa/AppLoadingScreen.tsx").includes("tcs-hub-loading.webp"), "Secure loading must use the dedicated loading artwork, not the launch artwork");
+assert(source("src/components/pwa/AppLoadingScreen.tsx").includes('backgroundSize: "contain"'), "Loading artwork must remain fully visible on desktop and mobile");
 assert(layout.includes('apple: [{ url: "/app-icon-192.png"'), "Apple home-screen metadata must use the official app icon");
 assert(manifest.theme_color === "#0b5d35", "Manifest theme color must use the official Hub green");
 assert(trainingCenter.includes("<MainLayout>") && trainingCenter.includes("Hub Home"), "Training Center must stay integrated with the main app shell and provide a Hub Home control");
