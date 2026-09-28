@@ -215,8 +215,9 @@ export default function ParentPortalPage() {
       return;
     }
 
+    const client = supabase;
     let active = true;
-    void supabase.auth.getSession().then(async ({ data }) => {
+    void client.auth.getSession().then(async ({ data }) => {
       if (!active) return;
       const next = data.session;
       if (!next) {
@@ -225,7 +226,7 @@ export default function ParentPortalPage() {
       }
       setSession(next);
 
-      const staffResult = await supabase
+      const staffResult = await client
         .from("staff_access")
         .select("user_id,is_active")
         .eq("user_id", next.user.id)
@@ -242,7 +243,7 @@ export default function ParentPortalPage() {
       }
     });
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: subscription } = client.auth.onAuthStateChange((_event, next) => {
       if (!next) {
         setSession(null);
         setOverview(null);
