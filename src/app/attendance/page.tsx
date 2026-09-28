@@ -254,15 +254,15 @@ export default function AttendancePage() {
         }),
       });
       const payload = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(payload.error || "Pickup PIN update failed.");
+      if (!response.ok) throw new Error(payload.error || "Family PIN update failed.");
       const name = childName(pinChild);
       setPinChild(null);
       setNewPickupPin("");
       await load();
-      setMessage(action === "set" ? `${name}'s pickup PIN was updated.` : `${name}'s pickup PIN was removed.`);
+      setMessage(action === "set" ? `${name}'s family PIN was updated.` : `${name}'s family PIN was removed.`);
       window.setTimeout(() => setMessage(""), 2600);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Pickup PIN update failed.");
+      setError(saveError instanceof Error ? saveError.message : "Family PIN update failed.");
     } finally {
       setSavingId(null);
     }
@@ -271,7 +271,7 @@ export default function AttendancePage() {
   return <MainLayout><div className="mx-auto max-w-[1500px] space-y-6 pb-12">
     <section className="overflow-hidden rounded-[30px] bg-gradient-to-br from-[#173d29] via-[#245a39] to-[#10291e] p-6 text-white shadow-xl sm:p-8">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-        <div><p className="text-xs font-black uppercase tracking-[.18em] text-emerald-200">Digital attendance + pickup control</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">Check-In / Check-Out</h1><p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-emerald-50/80">Track who is physically in care, who was absent, and who picked each child up. Pickup is blocked for unlisted people; families can also use a secure pickup PIN as a second verification step.</p></div>
+        <div><p className="text-xs font-black uppercase tracking-[.18em] text-emerald-200">Digital attendance + pickup control</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">Check-In / Check-Out</h1><p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-emerald-50/80">Track who is physically in care, where each child is today, who was absent, and who picked each child up. Families can scan the location QR and use their own Family Attendance PIN, while staff can move a child to another site for today without changing the enrolled home location.</p></div>
         <div className="rounded-2xl bg-white/10 p-4 backdrop-blur"><p className="text-[10px] font-black uppercase tracking-wider text-emerald-100">Today</p><p className="mt-1 text-xl font-black">{new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}</p></div>
       </div>
     </section>
@@ -346,10 +346,10 @@ export default function AttendancePage() {
 
     {pinChild && <div className="fixed inset-0 z-[10001] overflow-y-auto bg-slate-950/70 p-3 backdrop-blur-sm">
       <section className="mx-auto my-12 w-full max-w-md overflow-hidden rounded-[28px] bg-white shadow-2xl">
-        <header className="flex items-start justify-between gap-4 bg-gradient-to-r from-violet-800 to-[#245a39] px-5 py-4 text-white"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-violet-100">Pickup security</p><h2 className="mt-1 text-2xl font-black">{childName(pinChild)}</h2></div><button onClick={() => setPinChild(null)} className="rounded-xl bg-white/10 p-2"><X className="h-5 w-5" /></button></header>
+        <header className="flex items-start justify-between gap-4 bg-gradient-to-r from-violet-800 to-[#245a39] px-5 py-4 text-white"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-violet-100">Family attendance security</p><h2 className="mt-1 text-2xl font-black">{childName(pinChild)}</h2></div><button onClick={() => setPinChild(null)} className="rounded-xl bg-white/10 p-2"><X className="h-5 w-5" /></button></header>
         <div className="space-y-4 p-5">
-          <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-xs font-semibold leading-5 text-violet-950"><KeyRound className="mr-1 inline h-4 w-4" />Create a 4–6 digit family pickup PIN. The Hub stores only a one-way protected digest and never shows the saved PIN back to staff.</div>
-          <label><span className="mb-1 block text-xs font-black uppercase tracking-wider text-slate-500">New Pickup PIN</span><input inputMode="numeric" maxLength={6} value={newPickupPin} onChange={(event) => setNewPickupPin(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="4–6 digits" className="w-full rounded-xl border border-violet-200 px-3 py-3 text-center text-xl font-black tracking-[.35em]" /></label>
+          <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-xs font-semibold leading-5 text-violet-950"><KeyRound className="mr-1 inline h-4 w-4" />Create or reset the family's 4–6 digit attendance PIN. The Hub stores only a one-way protected digest and never shows the saved PIN back to staff.</div>
+          <label><span className="mb-1 block text-xs font-black uppercase tracking-wider text-slate-500">New Family PIN</span><input inputMode="numeric" maxLength={6} value={newPickupPin} onChange={(event) => setNewPickupPin(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="4–6 digits" className="w-full rounded-xl border border-violet-200 px-3 py-3 text-center text-xl font-black tracking-[.35em]" /></label>
           {pinChild.pickupPinConfigured && <button onClick={() => void savePickupPin("clear")} className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800">Remove Existing PIN</button>}
         </div>
         <footer className="flex justify-end gap-2 border-t border-slate-200 p-4"><button onClick={() => setPinChild(null)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-700">Cancel</button><button disabled={!/^\d{4,6}$/.test(newPickupPin) || savingId === pinChild.id} onClick={() => void savePickupPin("set")} className="inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-violet-800 px-4 py-2.5 text-sm font-black text-white disabled:opacity-40">{savingId === pinChild.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} Save PIN</button></footer>
@@ -362,7 +362,7 @@ export default function AttendancePage() {
         <div className="space-y-4 p-5">
           <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4"><div className="flex items-start gap-3"><BadgeCheck className="mt-0.5 h-5 w-5 text-blue-700" /><div><p className="font-black text-blue-950">Authorized contacts currently in the child record</p><p className="mt-1 text-xs font-semibold leading-5 text-blue-900">{[checkoutChild.primaryGuardian, checkoutChild.secondaryGuardian, checkoutChild.emergencyContact1Name, checkoutChild.emergencyContact2Name].filter(Boolean).join(" • ") || "No authorized contacts are entered."}</p></div></div></div>
           <label><span className="mb-1 block text-xs font-black uppercase tracking-wider text-slate-500">Person picking up</span><input value={pickupPerson} onChange={(event) => setPickupPerson(event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm font-bold" /></label>
-          {checkoutChild.pickupPinConfigured && <label><span className="mb-1 block text-xs font-black uppercase tracking-wider text-slate-500">Family Pickup PIN</span><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={pickupPin} onChange={(event) => setPickupPin(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="4–6 digit PIN" className="w-full rounded-xl border border-violet-200 bg-violet-50 px-3 py-3 text-center text-lg font-black tracking-[.35em] text-violet-950" /><p className="mt-1 text-[10px] font-semibold text-slate-500">The PIN is never displayed after it is saved. Staff still verify the pickup person against the authorized-contact list.</p></label>}
+          {checkoutChild.pickupPinConfigured && <label><span className="mb-1 block text-xs font-black uppercase tracking-wider text-slate-500">Family Family PIN</span><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={pickupPin} onChange={(event) => setPickupPin(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="4–6 digit PIN" className="w-full rounded-xl border border-violet-200 bg-violet-50 px-3 py-3 text-center text-lg font-black tracking-[.35em] text-violet-950" /><p className="mt-1 text-[10px] font-semibold text-slate-500">The PIN is never displayed after it is saved. Staff still verify the pickup person against the authorized-contact list.</p></label>}
           {(isSystemOwner || isLocationLicensee) && <label><span className="mb-1 block text-xs font-black uppercase tracking-wider text-slate-500">Override verification note</span><textarea value={pickupNotes} onChange={(event) => setPickupNotes(event.target.value)} placeholder="Required only if the pickup person is not listed in the child record. Describe how authorization was verified." className="min-h-24 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold leading-6" /></label>}
           {!isSystemOwner && !isLocationLicensee && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900"><AlertTriangle className="mr-1 inline h-4 w-4" />If the person is not listed, pickup will be blocked until a site Licensee or Owner/Admin verifies the authorization.</div>}
         </div>
