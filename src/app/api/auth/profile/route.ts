@@ -30,7 +30,7 @@ async function loadProfile(admin: ReturnType<typeof createSupabaseAdminClient>, 
     .maybeSingle();
 }
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   const token = bearerToken(request);
   if (!token) return Response.json({ error: "Missing staff session." }, { status: 401 });
 
