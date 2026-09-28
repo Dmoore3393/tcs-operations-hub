@@ -38,6 +38,7 @@ assert(Array.isArray(manifest.icons) && manifest.icons.some((icon) => icon.sizes
 assert(existsSync(new URL("../public/app-icon-180.png", import.meta.url)), "Apple 180x180 app icon is missing");
 assert(existsSync(new URL("../public/app-icon-192.png", import.meta.url)), "192x192 app icon is missing");
 assert(existsSync(new URL("../public/app-icon-512.png", import.meta.url)), "512x512 app icon is missing");
+assert(existsSync(new URL("../public/branding/tcs-hub-launch.webp", import.meta.url)), "Official Hub launch artwork is missing");
 
 assert(serviceWorker.includes('self.addEventListener("push"'), "Service worker push handler is missing");
 assert(serviceWorker.includes("event.respondWith(fetch(event.request))"), "Private app pages must remain network-backed");
@@ -68,6 +69,10 @@ assert(support.includes("Contact TCS Support"), "Public support page is missing"
 assert(mobileNav.includes('href: "/my-schedule"') && mobileNav.includes('href: "/time-clock"') && mobileNav.includes('href: "/notifications"'), "Mobile app navigation must keep Schedule, Time Clock, and Alerts");
 assert(mobileNav.includes("All your tools"), "Mobile app tool drawer is missing");
 assert(mainLayout.includes("pt-[env(safe-area-inset-top)]"), "Mobile app header must respect the device safe area");
+assert(mainLayout.includes('src="/app-icon-192.png"'), "Main Hub shell must display the official app icon");
+assert(auth.includes("AppLoadingScreen"), "Secure app loading must use the official branded launch screen");
+assert(layout.includes('apple: [{ url: "/app-icon-192.png"'), "Apple home-screen metadata must use the official app icon");
+assert(manifest.theme_color === "#0b5d35", "Manifest theme color must use the official Hub green");
 assert(trainingCenter.includes("<MainLayout>") && trainingCenter.includes("Hub Home"), "Training Center must stay integrated with the main app shell and provide a Hub Home control");
 assert(trainingStyles.includes("overflow-x:hidden") && trainingStyles.includes(".tc-view-nav"), "Training Center responsive overflow protection/navigation is missing");
 assert(updater.includes("NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA") && updater.includes("serverVersion") && updater.includes("pageshow"), "Installed app must force-refresh stale deployment snapshots");

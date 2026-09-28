@@ -12,7 +12,8 @@ import {
   normalizeAccessRole,
 } from "@/lib/team-access";
 import type { Session, User } from "@supabase/supabase-js";
-import { AlertTriangle, Database, LoaderCircle, LockKeyhole, LogOut } from "lucide-react";
+import { AlertTriangle, Database, LockKeyhole, LogOut } from "lucide-react";
+import AppLoadingScreen from "@/components/pwa/AppLoadingScreen";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
@@ -351,9 +352,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (loading) {
-    return <main className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-950 text-white"><LoaderCircle className="h-9 w-9 animate-spin" /><p className="font-bold">Verifying secure staff access…</p></main>;
-  }
+  if (loading) return <AppLoadingScreen />;
 
   if (!session) return null;
 

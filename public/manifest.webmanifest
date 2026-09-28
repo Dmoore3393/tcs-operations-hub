@@ -6,9 +6,12 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#f8f3e5",
-  "theme_color": "#294d31",
-  "categories": ["business", "productivity"],
+  "background_color": "#06291c",
+  "theme_color": "#0b5d35",
+  "categories": [
+    "business",
+    "productivity"
+  ],
   "icons": [
     {
       "src": "/app-icon-192.png",
@@ -34,19 +37,37 @@
       "name": "Emergency Cards",
       "short_name": "Emergency",
       "url": "/emergency-cards",
-      "icons": [{ "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "/app-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Transportation",
       "short_name": "Transportation",
       "url": "/transportation-v2",
-      "icons": [{ "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "/app-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Children Center",
       "short_name": "Children",
       "url": "/children",
-      "icons": [{ "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "/app-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }

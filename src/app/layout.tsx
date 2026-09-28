@@ -28,7 +28,7 @@ export const metadata: Metadata = {
       { url: "/app-icon-192.png", sizes: "192x192", type: "image/png" },
       { url: "/app-icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/app-icon-180.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: "/app-icon-192.png", sizes: "192x192", type: "image/png" }],
   },
   appleWebApp: {
     capable: true,
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#294d31",
+  themeColor: "#0b5d35",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",

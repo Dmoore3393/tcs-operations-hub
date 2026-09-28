@@ -58,9 +58,7 @@ export default function LoginPage() {
     <main className="flex min-h-[100dvh] items-center justify-center bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 p-0 sm:p-8">
       <div className="min-h-[100dvh] w-full overflow-hidden bg-white shadow-2xl sm:min-h-0 sm:max-w-md sm:rounded-3xl sm:border sm:border-white/10">
         <div className="bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 px-6 pb-10 pt-[max(3rem,env(safe-area-inset-top))] text-center text-white sm:bg-emerald-50 sm:px-8 sm:py-7 sm:text-slate-950">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] border border-white/15 bg-white/10 text-white shadow-xl backdrop-blur sm:h-14 sm:w-14 sm:rounded-2xl sm:border-0 sm:bg-emerald-600 sm:shadow-lg sm:shadow-emerald-200">
-            <LockKeyhole className="h-7 w-7" />
-          </div>
+          <img src="/app-icon-192.png" alt="The Hub app icon" className="mx-auto h-20 w-20 rounded-[24px] object-cover shadow-2xl ring-1 ring-white/20 sm:h-16 sm:w-16 sm:rounded-[20px]" />
           <p className="mt-5 text-xs font-black uppercase tracking-[0.18em] text-emerald-200 sm:mt-4 sm:text-emerald-700">
             TCS Operations Hub
           </p>

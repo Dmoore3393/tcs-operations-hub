@@ -250,7 +250,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       <aside className="fixed inset-y-0 left-0 z-50 hidden w-72 flex-col text-white shadow-2xl lg:flex" style={{ background: `linear-gradient(180deg, ${theme.primary} 0%, ${theme.primaryDark} 58%, ${theme.ink} 100%)`, color: theme.textOnPrimary }}>
         <div className="flex items-start justify-between border-b border-white/10 p-6">
           <div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 text-lg font-black">TCS</div>
+            <img src="/app-icon-192.png" alt="The Hub" className="h-11 w-11 rounded-2xl object-cover shadow-lg" />
             <h1 className="mt-3 text-xl font-black">Operations Hub</h1>
             <p className="mt-1 text-xs font-semibold opacity-75">{location === "All Locations" ? "Thomason Childcare Solutions" : theme.fullName}</p>
           </div>
@@ -282,7 +282,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           <div className="border-b border-slate-200/80 bg-white/95 pt-[env(safe-area-inset-top)] shadow-sm backdrop-blur-xl">
             <div className="flex min-h-[62px] items-center justify-between gap-3 px-4">
               <Link href="/" className="flex min-w-0 items-center gap-3">
-                <span className="grid h-10 w-10 flex-none place-items-center rounded-[14px] text-xs font-black text-white shadow-sm" style={{ background: `linear-gradient(145deg, ${theme.primary}, ${theme.primaryDark})` }}>TCS</span>
+                <img src="/app-icon-192.png" alt="The Hub" className="h-10 w-10 flex-none rounded-[14px] object-cover shadow-sm" />
                 <span className="min-w-0">
                   <span className="block truncate text-[10px] font-black uppercase tracking-[.14em]" style={{ color: theme.primary }}>The Hub</span>
                   <span className="block truncate text-[15px] font-black text-slate-950">{meta.title}</span>
