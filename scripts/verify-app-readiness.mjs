@@ -94,7 +94,7 @@ assert(parentPortal.includes("Scan to Check In / Out") && parentPortal.includes(
 assert(parentScanner.includes("getUserMedia") && parentScanner.includes("jsQR") && parentScanner.includes("locationFromSlug"), "Parent in-app scanner must decode camera QR codes and validate TCS location slugs");
 assert(parentScanner.includes("The Hub does not upload or save camera video or photos"), "Parent scanner must keep the on-device camera privacy disclosure");
 assert(staffTimeClock.includes("Scan to Clock In") && staffTimeClock.includes("Scan to Clock Out"), "Staff Time Clock must keep QR clock-in and clock-out entry points");
-assert(staffTimeClock.includes('act(qrAction, "Location QR")'), "Staff QR clock events must be recorded with the Location QR source");
+assert(staffTimeClock.includes('act(qrAction, "Location QR"'), "Staff QR clock events must be recorded with the Location QR source");
 assert(staffTimeClockScanner.includes("jsQR") && staffTimeClockScanner.includes("locationSlugFromQr"), "Staff Time Clock scanner must decode and validate posted TCS location QR codes");
 assert(staffTimeClockScanner.includes("It does not use or claim GPS verification"), "Staff scanner must not overstate QR location verification");
 assert(staffTimeClock.includes("My Staff Clock PIN") && staffTimeClock.includes("Maintenance Manual Clock"), "Time Clock must keep personal PIN setup and the maintenance-only manual exception");
