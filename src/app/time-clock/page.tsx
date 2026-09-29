@@ -153,7 +153,7 @@ export default function TimeClockPage() {
     : location;
 
   const [payload, setPayload] = useState<Payload | null>(null);
-  const [workLocation, setWorkLocation] = useState(firstLocation);
+  const [workLocation, setWorkLocation] = useState<string>(firstLocation);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingPin, setSavingPin] = useState(false);
@@ -165,9 +165,9 @@ export default function TimeClockPage() {
   const [clockPin, setClockPin] = useState("");
   const [newClockPin, setNewClockPin] = useState("");
 
-  const [maintenanceLocation, setMaintenanceLocation] = useState(firstLocation);
+  const [maintenanceLocation, setMaintenanceLocation] = useState<string>(firstLocation);
   const [adminTargetUserId, setAdminTargetUserId] = useState("");
-  const [adminLocation, setAdminLocation] = useState(firstLocation);
+  const [adminLocation, setAdminLocation] = useState<string>(firstLocation);
   const [adminPin, setAdminPin] = useState("");
   const [adminSaving, setAdminSaving] = useState(false);
   const [resettingPin, setResettingPin] = useState(false);
@@ -240,7 +240,7 @@ export default function TimeClockPage() {
   useEffect(() => {
     if (qrReady || !latestMine || latestMine.event === "clock_out") return;
     if (latestMine.location && latestMine.location !== "Maintenance / Offsite") {
-      setWorkLocation(latestMine.location as typeof workLocation);
+      setWorkLocation(latestMine.location);
     }
   }, [latestMine, qrReady]);
 
