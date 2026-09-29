@@ -37,6 +37,9 @@ const staffTimeClockScanner = source("src/app/time-clock/scan/page.tsx");
 const staffTimeClockRoute = source("src/app/api/time-clock/route.ts");
 const staffClockPinRoute = source("src/app/api/time-clock/pin/route.ts");
 const staffClockPinHelper = source("src/lib/server/staff-clock-pin.ts");
+const enrollmentForecastPage = source("src/app/enrollment-forecast/page.tsx");
+const enrollmentForecastModel = source("src/lib/enrollment-forecast.ts");
+const childrenModel = source("src/lib/children.ts");
 
 assert(manifest.name === "The Hub — TCS Operations", "Manifest app name must stay The Hub — TCS Operations");
 assert(manifest.short_name === "The Hub", "Manifest short name must stay The Hub");
@@ -106,6 +109,11 @@ assert(staffTimeClockRoute.includes("verifyStaffClockPin"), "Staff clock-in/out 
 assert(staffClockPinRoute.includes('action === "admin_reset"') && staffClockPinRoute.includes("Only an Owner/Admin"), "Only Owner/Admin may reset another staff clock PIN");
 assert(staffClockPinHelper.includes("createHmac") && staffClockPinHelper.includes("timingSafeEqual"), "Staff clock PINs must stay server-protected and timing-safe");
 assert(roles.includes('"/time-clock/scan"'), "Employee role must retain access to the secure staff QR scanner");
+assert(enrollmentForecastPage.includes("30 Days") && enrollmentForecastPage.includes("60 Days") && enrollmentForecastPage.includes("90 Days"), "Enrollment Forecast must keep 30/60/90-day planning windows");
+assert(enrollmentForecastPage.includes("Pipeline Demand") && enrollmentForecastPage.includes("Projected Openings"), "Enrollment Forecast must separate prospect demand from confirmed projected openings");
+assert(enrollmentForecastModel.includes("plannedLastDay") && enrollmentForecastModel.includes("preferredStartDate"), "Enrollment Forecast must use planned exits and Tour Board preferred starts");
+assert(childrenModel.includes("plannedStartDate") && childrenModel.includes("plannedLastDay"), "Child records must preserve planned enrollment dates for forecasting");
+assert(mainLayout.includes('href: "/enrollment-forecast"'), "Enrollment Forecast must remain reachable from Hub navigation");
 
 assert(/export const starterEnrollmentLeads:\s*EnrollmentLeadRecord\[\]\s*=\s*\[\s*\];/s.test(adminOps), "Enrollment starter data must remain empty");
 assert(/export const starterDigitalForms:\s*DigitalFormRecord\[\]\s*=\s*\[\s*\];/s.test(adminOps), "Digital-form starter data must remain empty");
