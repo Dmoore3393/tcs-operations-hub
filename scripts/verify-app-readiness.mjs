@@ -30,6 +30,8 @@ const trainingStyles = source("src/app/training-center/training-center-v2.css");
 const updater = source("src/components/pwa/PwaUpdater.tsx");
 const appVersionRoute = source("src/app/api/app-version/route.ts");
 const adminOps = source("src/lib/admin-ops.ts");
+const parentPortal = source("src/app/parent/page.tsx");
+const parentScanner = source("src/app/parent/scan/page.tsx");
 
 assert(manifest.name === "The Hub — TCS Operations", "Manifest app name must stay The Hub — TCS Operations");
 assert(manifest.short_name === "The Hub", "Manifest short name must stay The Hub");
@@ -83,6 +85,9 @@ assert(trainingStyles.includes("overflow-x:hidden") && trainingStyles.includes("
 assert(updater.includes("NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA") && updater.includes("serverVersion") && updater.includes("pageshow"), "Installed app must force-refresh stale deployment snapshots");
 assert(updater.includes("RELOAD_GUARD_KEY") && updater.includes("guardedVersion === serverVersion"), "Installed app updater must prevent permanent reload loops");
 assert(appVersionRoute.includes("gitSha") && appVersionRoute.includes("deploymentUrl"), "App-version endpoint must return like-for-like deployment identifiers");
+assert(parentPortal.includes("Scan to Check In / Out") && parentPortal.includes('router.push("/parent/scan")'), "Parent Portal must keep the in-app attendance scanner entry point");
+assert(parentScanner.includes("getUserMedia") && parentScanner.includes("jsQR") && parentScanner.includes("locationFromSlug"), "Parent in-app scanner must decode camera QR codes and validate TCS location slugs");
+assert(parentScanner.includes("The Hub does not upload or save camera video or photos"), "Parent scanner must keep the on-device camera privacy disclosure");
 
 assert(/export const starterEnrollmentLeads:\s*EnrollmentLeadRecord\[\]\s*=\s*\[\s*\];/s.test(adminOps), "Enrollment starter data must remain empty");
 assert(/export const starterDigitalForms:\s*DigitalFormRecord\[\]\s*=\s*\[\s*\];/s.test(adminOps), "Digital-form starter data must remain empty");
