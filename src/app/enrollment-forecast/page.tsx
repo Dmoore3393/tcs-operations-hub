@@ -64,7 +64,7 @@ export default function EnrollmentForecastPage() {
 
   const [storedLeads, , leadsHydrated] = usePersistentState<TourBoardLead[]>(
     "tcs-enrollment-pipeline-v1",
-    starterEnrollmentLeads.map((item) => normalizeTourLead(item as Partial<TourBoardLead>)),
+    starterEnrollmentLeads.map((item) => normalizeTourLead(item as any)),
   );
 
   const allowed = canAccessRoute(profile, "/enrollment-forecast");
@@ -99,7 +99,7 @@ export default function EnrollmentForecastPage() {
   }, [load]);
 
   const leads = useMemo(
-    () => storedLeads.map((item) => normalizeTourLead(item as Partial<TourBoardLead>)),
+    () => storedLeads.map((item) => normalizeTourLead(item as any)),
     [storedLeads],
   );
 
@@ -129,12 +129,18 @@ export default function EnrollmentForecastPage() {
   );
 
   const visibleChildren = useMemo(
-    () => children.filter((child) => visibleKeys.has(normalizeLocation(child.location))),
+    () => children.filter((child) => {
+      const key = normalizeLocation(child.location);
+      return key !== "All Locations" && visibleKeys.has(key);
+    }),
     [children, visibleKeys],
   );
 
   const visibleLeads = useMemo(
-    () => leads.filter((lead) => visibleKeys.has(normalizeLocation(lead.location))),
+    () => leads.filter((lead) => {
+      const key = normalizeLocation(lead.location);
+      return key !== "All Locations" && visibleKeys.has(key);
+    }),
     [leads, visibleKeys],
   );
 
