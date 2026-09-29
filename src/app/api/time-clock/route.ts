@@ -3,6 +3,7 @@ import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 
 type DbRow = Record<string, unknown>;
 type ClockEventType = "clock_in" | "clock_out" | "break_start" | "break_end";
+type ClockSource = "Location QR" | "Manual";
 type AttendanceSettingsRow = {
   late_tracking_enabled: boolean;
   late_grace_minutes: number | null;
@@ -232,6 +233,7 @@ export async function GET(request: Request) {
           role: text(staff?.role),
           location: locationKey,
           event: eventFromMetadata(row.metadata),
+          source: text(object(row.metadata).clockSource) === "Location QR" ? "Location QR" : "Manual",
           occurredAt: text(row.occurred_at),
         };
       })
@@ -268,6 +270,7 @@ export async function POST(request: Request) {
     const body = object(await request.json().catch(() => ({})));
     const event = text(body.event) as ClockEventType;
     const requested = normalizeLocation(text(body.location));
+    const clockSource: ClockSource = text(body.source) === "Location QR" ? "Location QR" : "Manual";
 
     if (!["clock_in", "clock_out", "break_start", "break_end"].includes(event)) {
       throw new Response("Choose a valid time clock action.", { status: 400 });
@@ -395,6 +398,7 @@ export async function POST(request: Request) {
         location: requested,
         clientTimestamp: text(body.clientTimestamp).slice(0, 40),
         scheduleExceptionApproved: approvedAny,
+        clockSource,
       },
     });
     if (error) throw error;
@@ -479,6 +483,7 @@ export async function POST(request: Request) {
       occurredAt: occurredAt.toISOString(),
       location: requested,
       needsLeadershipReview,
+      source: clockSource,
       policy: {
         earlyClockInWindowMinutes: earlyWindow,
         lateClockOutWindowMinutes: lateWindow,
