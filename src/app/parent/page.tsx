@@ -13,6 +13,7 @@ import {
   Home,
   LoaderCircle,
   LogOut,
+  ScanLine,
   ShieldCheck,
   Sparkles,
   UserRound,
@@ -284,6 +285,7 @@ export default function ParentPortalPage() {
 
   const openForms = overview?.forms.filter((form) => !["Signed", "Archived"].includes(form.status)) ?? [];
   const signedForms = overview?.forms.filter((form) => form.status === "Signed") ?? [];
+  const canUseFamilyAttendance = overview?.children.some((child) => child.access.permissions.managePickup) ?? false;
 
   async function sendFamilyMessage() {
     if (!selectedChild || !session || !replySubject.trim() || !replyBody.trim()) return;
@@ -422,6 +424,12 @@ export default function ParentPortalPage() {
         <p className="text-xs font-black uppercase tracking-[.18em] text-emerald-200">Welcome back</p>
         <h2 className="mt-2 text-3xl font-black">Your family at TCS</h2>
         <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-emerald-50/80">Attendance, schedules, daily updates, forms, and important record follow-up stay together here. At drop-off or pickup, scan the QR posted at your TCS location and use your Family Attendance PIN. Private staff-only and other-family records are never shown in this portal.</p>
+        {canUseFamilyAttendance && <button
+          onClick={() => router.push("/parent/scan")}
+          className="mt-5 inline-flex min-h-12 items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-emerald-950 shadow-lg transition hover:bg-emerald-50"
+        >
+          <ScanLine className="h-5 w-5" /> Scan to Check In / Out
+        </button>}
         {overview && overview.children.length > 1 && <div className="mt-5 flex flex-wrap gap-2">{overview.children.map((child) => <button key={child.id} onClick={() => setSelectedChildId(child.id)} className={`rounded-xl px-3 py-2 text-xs font-black ${selectedChild?.id === child.id ? "bg-white text-emerald-950" : "bg-white/10 text-white"}`}>{childName(child)}</button>)}</div>}
       </section>
 
