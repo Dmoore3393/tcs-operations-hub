@@ -91,7 +91,7 @@ export default function LocationsPage() {
               {location.shortName === "Division" && <Link href="/locations/division" onClick={() => setActiveLocation("Division")} className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/15 px-3 py-2 text-xs font-black text-white hover:bg-white/25">Open School Age Center Home →</Link>}
               {location.shortName === "42nd Street" && <Link href="/locations/42nd-street" onClick={() => setActiveLocation("42nd Street")} className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/15 px-3 py-2 text-xs font-black text-white hover:bg-white/25">Open Lara Family Childcare Home →</Link>}
               {location.shortName === "Tehachapi" && <Link href="/locations/tehachapi" onClick={() => setActiveLocation("Tehachapi")} className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/15 px-3 py-2 text-xs font-black text-white hover:bg-white/25">Open Thomason Family Childcare Home →</Link>}
-              <button onClick={() => setQrLocation(location)} className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/15 px-3 py-2 text-xs font-black text-white hover:bg-white/25"><QrCode className="h-4 w-4" /> Check-In QR</button>
+              <button onClick={() => setQrLocation(location)} className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/15 px-3 py-2 text-xs font-black text-white hover:bg-white/25"><QrCode className="h-4 w-4" /> Location QR</button>
             </div>
           </div>
           <div className="p-5">
@@ -107,22 +107,22 @@ export default function LocationsPage() {
     {qrLocation && origin && <div className="fixed inset-0 z-[10000] overflow-y-auto bg-slate-950/70 p-3 backdrop-blur-sm">
       <section className="mx-auto my-10 w-full max-w-lg overflow-hidden rounded-[30px] bg-white shadow-2xl">
         <header className="bg-gradient-to-br from-[#173d29] to-[#10291e] p-6 text-white">
-          <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-200">Family attendance</p>
+          <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-200">TCS location QR</p>
           <h2 className="mt-2 text-3xl font-black">{locationThemes[qrLocation.shortName].label}</h2>
-          <p className="mt-2 text-sm font-semibold text-emerald-50/80">Scan this QR to check children in or out at this location.</p>
+          <p className="mt-2 text-sm font-semibold text-emerald-50/80">One posted QR for family attendance and staff time clock location selection.</p>
         </header>
         <div className="p-6 text-center">
           <div className="mx-auto w-fit rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
             <img
               src={`https://quickchart.io/qr?size=360&margin=2&text=${encodeURIComponent(`${origin}/parent/check-in?location=${locationSlug(qrLocation.shortName)}`)}`}
-              alt={`${qrLocation.shortName} family check-in QR code`}
+              alt={`${qrLocation.shortName} TCS location QR code`}
               className="h-72 w-72 max-w-full"
             />
           </div>
           <p className="mt-5 text-sm font-black text-slate-950">{locationThemes[qrLocation.shortName].fullName}</p>
-          <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">Parents scan with their phone, sign in if needed, enter the Family Attendance PIN they created, and choose Check In or Check Out. This QR records this site for today only.</p>
+          <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">Parents scan this code for child check-in/out with their Family Attendance PIN. Staff scan the same code from The Hub Time Clock to select this site before confirming Clock In or Clock Out.</p>
           <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left text-xs font-semibold leading-5 text-amber-950">
-            Print or display this QR at the entrance. Each TCS location has a different QR, so attendance is logged to the site the family actually scanned.
+            Print or display this QR at the entrance. Each TCS location has a different code so family attendance and QR-based staff clock events can be tied to the correct site.
           </div>
         </div>
         <footer className="flex justify-end gap-2 border-t border-slate-200 p-4">
