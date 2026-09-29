@@ -297,12 +297,17 @@ export async function GET(request: Request) {
       adminClockStaff: isOwner
         ? staffRows
             .filter((row) => text(row.user_id) && text(row.user_id) !== user.id)
-            .map((row) => ({
-              userId: text(row.user_id),
-              fullName: text(row.full_name) || text(row.email),
-              role: text(row.role),
-              locations: Array.isArray(row.locations) ? row.locations : [],
-            }))
+            .map((row) => {
+              const staffUserId = text(row.user_id);
+              const lane = laneByUserId.get(staffUserId) ?? laneByName.get(text(row.full_name).toLowerCase());
+              return {
+                userId: staffUserId,
+                fullName: text(row.full_name) || text(row.email),
+                role: text(row.role),
+                locations: Array.isArray(row.locations) ? row.locations : [],
+                isMaintenance: isMaintenanceLane(lane),
+              };
+            })
             .sort((a, b) => a.fullName.localeCompare(b.fullName))
         : [],
       clockPolicy: settingsResult.data ?? {
