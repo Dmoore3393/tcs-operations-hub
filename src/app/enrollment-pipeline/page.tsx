@@ -324,6 +324,7 @@ export default function TourBoardPage() {
       subsidy: lead.subsidy || "",
       ageGroup: lead.ageGroup || "",
       weeklySchedule: lead.scheduleNeeded || lead.requestedCare || "",
+      preferredStartDate: lead.preferredStartDate || "",
       transportation: lead.transportationNeeded ? (lead.schoolName ? `Transportation needed • ${lead.schoolName}` : "Transportation needed") : "No transportation",
     };
     sessionStorage.setItem("tcs-tour-child-handoff", JSON.stringify(handoff));
