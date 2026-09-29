@@ -64,11 +64,6 @@ function withinWindow(value: string, start: string, end: string) {
   return Boolean(date && date >= start && date <= end);
 }
 
-function beforeOrOn(value: string, end: string) {
-  const date = dateOnly(value);
-  return Boolean(date && date <= end);
-}
-
 function activePipelineLead(lead: TourBoardLead) {
   return !["Enrolled", "Waitlist", "Declined"].includes(lead.stage);
 }
@@ -100,13 +95,13 @@ export function buildEnrollmentForecast(args: {
       const currentActive = children.filter((child) => child.enrollmentStatus === "Active").length;
       const confirmedStartsFromChildren = children.filter((child) =>
         child.enrollmentStatus === "Pending"
-        && beforeOrOn(child.plannedStartDate || "", through)
+        && withinWindow(child.plannedStartDate || "", start, through)
       ).length;
 
       const confirmedStartsFromTourBoard = leads.filter((lead) =>
         lead.stage === "Enrolled"
         && !lead.childRecordStartedAt
-        && beforeOrOn(lead.preferredStartDate || "", through)
+        && withinWindow(lead.preferredStartDate || "", start, through)
       ).length;
 
       const confirmedStarts = confirmedStartsFromChildren + confirmedStartsFromTourBoard;
@@ -121,7 +116,7 @@ export function buildEnrollmentForecast(args: {
 
       const pipelineDemand = leads.filter((lead) =>
         activePipelineLead(lead)
-        && beforeOrOn(lead.preferredStartDate || "", through)
+        && withinWindow(lead.preferredStartDate || "", start, through)
       ).length;
 
       const undatedPending = children.filter((child) =>
