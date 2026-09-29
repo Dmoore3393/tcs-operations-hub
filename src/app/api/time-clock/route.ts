@@ -464,7 +464,10 @@ export async function POST(request: Request) {
         || (location
           ? normalizeLocation(`${text(location.slug)} ${text(location.name)} ${text(location.full_name)}`)
           : "Maintenance / Offsite");
-    } else if (clockSource === "Maintenance Manual" && requestedLocationText === "Maintenance / Offsite") {
+    } else if (
+      requestedLocationText === "Maintenance / Offsite"
+      && (clockSource === "Maintenance Manual" || (clockSource === "Admin Override" && targetIsMaintenance))
+    ) {
       location = null;
       locationLabel = "Maintenance / Offsite";
     } else {
