@@ -34,6 +34,9 @@ const parentPortal = source("src/app/parent/page.tsx");
 const parentScanner = source("src/app/parent/scan/page.tsx");
 const staffTimeClock = source("src/app/time-clock/page.tsx");
 const staffTimeClockScanner = source("src/app/time-clock/scan/page.tsx");
+const staffTimeClockRoute = source("src/app/api/time-clock/route.ts");
+const staffClockPinRoute = source("src/app/api/time-clock/pin/route.ts");
+const staffClockPinHelper = source("src/lib/server/staff-clock-pin.ts");
 
 assert(manifest.name === "The Hub — TCS Operations", "Manifest app name must stay The Hub — TCS Operations");
 assert(manifest.short_name === "The Hub", "Manifest short name must stay The Hub");
@@ -94,6 +97,15 @@ assert(staffTimeClock.includes("Scan to Clock In") && staffTimeClock.includes("S
 assert(staffTimeClock.includes('act(qrAction, "Location QR")'), "Staff QR clock events must be recorded with the Location QR source");
 assert(staffTimeClockScanner.includes("jsQR") && staffTimeClockScanner.includes("locationSlugFromQr"), "Staff Time Clock scanner must decode and validate posted TCS location QR codes");
 assert(staffTimeClockScanner.includes("It does not use or claim GPS verification"), "Staff scanner must not overstate QR location verification");
+assert(staffTimeClock.includes("My Staff Clock PIN") && staffTimeClock.includes("Maintenance Manual Clock"), "Time Clock must keep personal PIN setup and the maintenance-only manual exception");
+assert(staffTimeClock.includes("Owner/Admin Staff Clock Override") && staffTimeClock.includes("Reset Staff PIN"), "Owner/Admin Time Clock override and PIN reset controls are missing");
+assert(staffTimeClockRoute.includes("Regular staff must scan the TCS location QR to clock in or out."), "Regular staff clock-in/out must require the location QR");
+assert(staffTimeClockRoute.includes('requestedSource === "Maintenance Manual" && targetIsMaintenance'), "Manual staff clocking must stay restricted to Maintenance");
+assert(staffTimeClockRoute.includes("Only an Owner/Admin can clock another staff member in or out."), "Only Owner/Admin may clock another staff member");
+assert(staffTimeClockRoute.includes("verifyStaffClockPin"), "Staff clock-in/out must verify the signed-in employee PIN");
+assert(staffClockPinRoute.includes('action === "admin_reset"') && staffClockPinRoute.includes("Only an Owner/Admin"), "Only Owner/Admin may reset another staff clock PIN");
+assert(staffClockPinHelper.includes("createHmac") && staffClockPinHelper.includes("timingSafeEqual"), "Staff clock PINs must stay server-protected and timing-safe");
+assert(roles.includes('"/time-clock/scan"'), "Employee role must retain access to the secure staff QR scanner");
 
 assert(/export const starterEnrollmentLeads:\s*EnrollmentLeadRecord\[\]\s*=\s*\[\s*\];/s.test(adminOps), "Enrollment starter data must remain empty");
 assert(/export const starterDigitalForms:\s*DigitalFormRecord\[\]\s*=\s*\[\s*\];/s.test(adminOps), "Digital-form starter data must remain empty");
