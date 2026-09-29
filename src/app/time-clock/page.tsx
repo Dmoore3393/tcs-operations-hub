@@ -3,6 +3,7 @@
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
+import { locationFromSlug } from "@/lib/location-config";
 import {
   Coffee,
   History,
@@ -10,9 +11,11 @@ import {
   LogIn,
   LogOut,
   Play,
+  ScanLine,
   ShieldCheck,
   TimerReset,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ClockEventType = "clock_in" | "clock_out" | "break_start" | "break_end";
@@ -23,6 +26,7 @@ type ClockEvent = {
   role: string;
   location: string;
   event: ClockEventType;
+  source: "Location QR" | "Manual";
   occurredAt: string;
 };
 type Payload = {
@@ -108,6 +112,7 @@ function hoursLabel(minutes: number) {
 }
 
 export default function TimeClockPage() {
+  const router = useRouter();
   const { session, user, profile, isSystemOwner, isLocationLicensee } = useAuth();
   const { location, availableLocations } = useHubLocation();
   const [payload, setPayload] = useState<Payload | null>(null);
@@ -116,6 +121,8 @@ export default function TimeClockPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [qrAction, setQrAction] = useState<"clock_in" | "clock_out" | "">("");
+  const [qrReady, setQrReady] = useState(false);
 
   const load = useCallback(async () => {
     if (!session?.access_token) return;
@@ -138,6 +145,25 @@ export default function TimeClockPage() {
 
   useEffect(() => { void load(); }, [load]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("qr") !== "1") return;
+
+    const scannedLocation = locationFromSlug(params.get("qrLocation") || "");
+    const scannedAction = params.get("qrAction") === "clock_out" ? "clock_out" : "clock_in";
+
+    if (!scannedLocation) {
+      setError("That scanned TCS location could not be recognized.");
+      router.replace("/time-clock");
+      return;
+    }
+
+    setWorkLocation(scannedLocation);
+    setQrAction(scannedAction);
+    setQrReady(true);
+    setNotice(`Location QR scanned: ${scannedLocation}. Confirm ${scannedAction === "clock_out" ? "Clock Out" : "Clock In"} below.`);
+  }, [router]);
+
   const mine = useMemo(
     () => payload?.events.filter((event) => event.actorUserId === user?.id) ?? [],
     [payload, user?.id],
@@ -152,7 +178,7 @@ export default function TimeClockPage() {
   const selectedShift = payload?.myPublishedShifts.find((shift) => shift.location === workLocation);
   const selectedException = payload?.myApprovedExceptions.find((item) => item.location_id === selectedShift?.location_id || (!selectedShift && item.work_date === payload.today));
 
-  async function act(event: ClockEventType) {
+  async function act(event: ClockEventType, source: "Location QR" | "Manual" = "Manual") {
     if (!session?.access_token) return;
     setSaving(true);
     setError("");
@@ -168,12 +194,18 @@ export default function TimeClockPage() {
           event,
           location: workLocation,
           clientTimestamp: new Date().toISOString(),
+          source,
         }),
       });
       const result = await response.json() as { error?: string; needsLeadershipReview?: boolean };
       if (!response.ok) throw new Error(result.error || "Time clock update failed.");
       await load();
-      setNotice(result.needsLeadershipReview ? `${labels[event]} • sent to leadership review` : labels[event]);
+      setNotice(result.needsLeadershipReview ? `${labels[event]} • sent to leadership review` : `${labels[event]}${source === "Location QR" ? " • Location QR" : ""}`);
+      if (source === "Location QR") {
+        setQrReady(false);
+        setQrAction("");
+        router.replace("/time-clock");
+      }
       window.setTimeout(() => setNotice(""), 2200);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Time clock update failed.");
@@ -181,6 +213,14 @@ export default function TimeClockPage() {
       setSaving(false);
     }
   }
+
+  useEffect(() => {
+    if (qrReady || todayMine.length === 0) return;
+    const latest = todayMine.at(-1);
+    if (latest && latest.event !== "clock_out" && latest.location) {
+      setWorkLocation(latest.location as typeof workLocation);
+    }
+  }, [qrReady, todayMine]);
 
   const teamToday = useMemo(() => {
     if (!payload) return [];
@@ -217,6 +257,43 @@ export default function TimeClockPage() {
       </div>
     </section>}
 
+    <section className="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2"><ScanLine className="h-5 w-5 text-emerald-700" /><h2 className="font-black text-slate-950">Location QR Time Clock</h2></div>
+          <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-600">Scan the same QR posted for family attendance. The Hub selects that TCS location, then asks you to confirm before recording the clock event.</p>
+        </div>
+        {state === "Off Clock" ? (
+          <button onClick={() => router.push("/time-clock/scan?action=clock_in")} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white shadow-sm"><ScanLine className="h-5 w-5" /> Scan to Clock In</button>
+        ) : state === "Working" ? (
+          <button onClick={() => router.push("/time-clock/scan?action=clock_out")} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-sm"><ScanLine className="h-5 w-5" /> Scan to Clock Out</button>
+        ) : (
+          <div className="rounded-xl bg-amber-100 px-4 py-3 text-xs font-black text-amber-900">End your break before clocking out.</div>
+        )}
+      </div>
+
+      {qrReady && qrAction && (
+        <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-emerald-300 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700">QR location confirmed</p>
+            <p className="mt-1 text-xl font-black text-slate-950">{workLocation}</p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">No payroll event has been recorded yet.</p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => { setQrReady(false); setQrAction(""); router.replace("/time-clock"); }} className="rounded-xl border border-slate-200 px-4 py-3 text-xs font-black text-slate-700">Cancel</button>
+            <button
+              disabled={saving || (qrAction === "clock_in" ? state !== "Off Clock" : state !== "Working")}
+              onClick={() => void act(qrAction, "Location QR")}
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white disabled:bg-slate-300"
+            >
+              {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+              Confirm {qrAction === "clock_out" ? "Clock Out" : "Clock In"}
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+
     <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
         <label><span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">Working At</span><select disabled={state !== "Off Clock"} value={workLocation} onChange={(event) => setWorkLocation(event.target.value as typeof workLocation)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold disabled:bg-slate-100">{availableLocations.filter((item) => item !== "All Locations").map((item) => <option key={item}>{item}</option>)}</select></label>
@@ -233,7 +310,7 @@ export default function TimeClockPage() {
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center gap-3"><History className="h-5 w-5 text-emerald-700" /><div><h2 className="font-black text-slate-950">My recent clock history</h2><p className="text-xs text-slate-500">Last 14 days</p></div></div>
         {loading ? <div className="flex min-h-40 items-center justify-center"><LoaderCircle className="h-5 w-5 animate-spin text-slate-400" /></div> :
-          <div className="mt-4 space-y-2">{mine.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">No clock events recorded yet.</p> : [...mine].reverse().slice(0, 20).map((event) => <div key={event.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"><div><strong className="text-xs text-slate-900">{labels[event.event]}</strong><p className="mt-1 text-[10px] text-slate-500">{event.location} • {dateLabel(event.occurredAt)}</p></div><span className="text-xs font-black text-slate-700">{timeLabel(event.occurredAt)}</span></div>)}</div>}
+          <div className="mt-4 space-y-2">{mine.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">No clock events recorded yet.</p> : [...mine].reverse().slice(0, 20).map((event) => <div key={event.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"><div><strong className="text-xs text-slate-900">{labels[event.event]}</strong><p className="mt-1 text-[10px] text-slate-500">{event.location} • {dateLabel(event.occurredAt)} • {event.source}</p></div><span className="text-xs font-black text-slate-700">{timeLabel(event.occurredAt)}</span></div>)}</div>}
       </section>
 
       {(isSystemOwner || isLocationLicensee) && <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
