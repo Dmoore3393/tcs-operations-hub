@@ -75,6 +75,8 @@ export type ChildRecord = {
   licensingStatus: LicensingStatus;
   missingDocuments: string[];
   enrollmentStatus: EnrollmentStatus;
+  plannedStartDate?: string;
+  plannedLastDay?: string;
   attendanceToday: AttendanceStatus;
   attendanceDate?: string;
   attendanceLocation?: string;
@@ -137,6 +139,8 @@ export type ChildFormState = {
   licensingStatus: LicensingStatus;
   missingDocuments: string;
   enrollmentStatus: EnrollmentStatus;
+  plannedStartDate: string;
+  plannedLastDay: string;
   attendanceToday: AttendanceStatus;
   medicalConsentStatus: MedicalConsentStatus;
   medicalConsentSignedAt: string;
@@ -257,6 +261,8 @@ export const emptyForm: ChildFormState = {
   licensingStatus: "Complete",
   missingDocuments: "",
   enrollmentStatus: "Active",
+  plannedStartDate: "",
+  plannedLastDay: "",
   attendanceToday: "Not Scheduled",
   medicalConsentStatus: "Missing",
   medicalConsentSignedAt: "",
