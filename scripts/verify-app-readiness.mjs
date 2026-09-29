@@ -32,6 +32,8 @@ const appVersionRoute = source("src/app/api/app-version/route.ts");
 const adminOps = source("src/lib/admin-ops.ts");
 const parentPortal = source("src/app/parent/page.tsx");
 const parentScanner = source("src/app/parent/scan/page.tsx");
+const staffTimeClock = source("src/app/time-clock/page.tsx");
+const staffTimeClockScanner = source("src/app/time-clock/scan/page.tsx");
 
 assert(manifest.name === "The Hub — TCS Operations", "Manifest app name must stay The Hub — TCS Operations");
 assert(manifest.short_name === "The Hub", "Manifest short name must stay The Hub");
@@ -88,6 +90,10 @@ assert(appVersionRoute.includes("gitSha") && appVersionRoute.includes("deploymen
 assert(parentPortal.includes("Scan to Check In / Out") && parentPortal.includes('router.push("/parent/scan")'), "Parent Portal must keep the in-app attendance scanner entry point");
 assert(parentScanner.includes("getUserMedia") && parentScanner.includes("jsQR") && parentScanner.includes("locationFromSlug"), "Parent in-app scanner must decode camera QR codes and validate TCS location slugs");
 assert(parentScanner.includes("The Hub does not upload or save camera video or photos"), "Parent scanner must keep the on-device camera privacy disclosure");
+assert(staffTimeClock.includes("Scan to Clock In") && staffTimeClock.includes("Scan to Clock Out"), "Staff Time Clock must keep QR clock-in and clock-out entry points");
+assert(staffTimeClock.includes('act(qrAction, "Location QR")'), "Staff QR clock events must be recorded with the Location QR source");
+assert(staffTimeClockScanner.includes("jsQR") && staffTimeClockScanner.includes("locationSlugFromQr"), "Staff Time Clock scanner must decode and validate posted TCS location QR codes");
+assert(staffTimeClockScanner.includes("It does not use or claim GPS verification"), "Staff scanner must not overstate QR location verification");
 
 assert(/export const starterEnrollmentLeads:\s*EnrollmentLeadRecord\[\]\s*=\s*\[\s*\];/s.test(adminOps), "Enrollment starter data must remain empty");
 assert(/export const starterDigitalForms:\s*DigitalFormRecord\[\]\s*=\s*\[\s*\];/s.test(adminOps), "Digital-form starter data must remain empty");
