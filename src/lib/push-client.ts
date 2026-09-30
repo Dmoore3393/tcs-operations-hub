@@ -1,7 +1,19 @@
+type NativeHubBridge = {
+  platform?: string;
+  version?: string;
+  bundleId?: string;
+  pushEnvironment?: "production" | "sandbox";
+  requestPushNotifications?: () => void;
+};
+
+function nativeBridge() {
+  if (typeof window === "undefined") return null;
+  const nativeWindow = window as typeof window & { __TCS_NATIVE_APP__?: NativeHubBridge };
+  return nativeWindow.__TCS_NATIVE_APP__ ?? null;
+}
+
 export function isNativeHubApp() {
-  if (typeof window === "undefined") return false;
-  const nativeWindow = window as typeof window & { __TCS_NATIVE_APP__?: { platform?: string; version?: string } };
-  return Boolean(nativeWindow.__TCS_NATIVE_APP__);
+  return Boolean(nativeBridge());
 }
 
 export function isStandaloneHubApp() {
@@ -20,13 +32,75 @@ function applicationServerKey(value: string) {
   return bytes;
 }
 
-export async function enableHubPushNotifications(accessToken: string) {
-  if (isNativeHubApp()) {
+async function registerNativePush(accessToken: string) {
+  const bridge = nativeBridge();
+  if (!bridge?.requestPushNotifications) {
     return {
       ok: false,
       permission: "unsupported" as const,
-      reason: "Native App Store notifications will be connected through Apple Push Notification service when the TCS Apple Developer account is linked.",
+      reason: "The native notification bridge is unavailable in this build.",
     };
+  }
+
+  const tokenEvent = await new Promise<{
+    deviceToken?: string;
+    environment?: "production" | "sandbox";
+    bundleId?: string;
+    appVersion?: string;
+    error?: string;
+  }>((resolve) => {
+    const timeout = window.setTimeout(() => {
+      window.removeEventListener("tcs-native-push-token", listener as EventListener);
+      resolve({ error: "The iPhone did not return a notification token." });
+    }, 15000);
+
+    const listener = (event: Event) => {
+      window.clearTimeout(timeout);
+      window.removeEventListener("tcs-native-push-token", listener as EventListener);
+      resolve((event as CustomEvent).detail || {});
+    };
+
+    window.addEventListener("tcs-native-push-token", listener as EventListener, { once: true });
+    bridge.requestPushNotifications?.();
+  });
+
+  if (!tokenEvent.deviceToken) {
+    return {
+      ok: false,
+      permission: "denied" as const,
+      reason: tokenEvent.error || "Notification permission was not granted.",
+    };
+  }
+
+  const response = await fetch("/api/notifications/native-subscription", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      deviceToken: tokenEvent.deviceToken,
+      environment: tokenEvent.environment || bridge.pushEnvironment || "production",
+      bundleId: tokenEvent.bundleId || bridge.bundleId || "com.thomasonchildcaresolutions.thehub",
+      appVersion: tokenEvent.appVersion || bridge.version || "1.0.0",
+    }),
+  });
+
+  const result = await response.json().catch(() => ({})) as { error?: string };
+  if (!response.ok) {
+    return {
+      ok: false,
+      permission: "denied" as const,
+      reason: result.error || "The native notification device could not be registered.",
+    };
+  }
+
+  return { ok: true, permission: "granted" as const, reason: "" };
+}
+
+export async function enableHubPushNotifications(accessToken: string) {
+  if (isNativeHubApp()) {
+    return registerNativePush(accessToken);
   }
   if (!("Notification" in window) || !("serviceWorker" in navigator)) {
     return { ok: false, permission: "unsupported" as const, reason: "Notifications are not supported on this device." };
