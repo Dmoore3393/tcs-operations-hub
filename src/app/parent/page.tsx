@@ -29,7 +29,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ParentChild = {
   id: string;
-  locationId: string;
   firstName: string;
   lastName: string;
   ageGroup: string;
@@ -363,7 +362,7 @@ export default function ParentPortalPage() {
 
   const selectedFamilyMatters = useMemo(() => {
     if (!overview || !selectedChild) return [];
-    return overview.familyMatters.filter((post) => !post.locationId || post.locationId === selectedChild.locationId).slice(0, 5);
+    return overview.familyMatters.slice(0, 5);
   }, [overview, selectedChild]);
 
   const selectedWeeklyCheckin = useMemo(() => {
