@@ -1,12 +1,16 @@
 "use client";
 
 import { CelebrationBits, FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
+import SafeImage from "@/components/media/SafeImage";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 import {
   AlertTriangle,
   Bell,
   BriefcaseBusiness,
+  Camera,
+  Heart,
+  Star,
   CalendarDays,
   CheckCircle2,
   ClipboardCheck,
@@ -144,6 +148,36 @@ type Overview = {
   careEntries: CareEntry[];
   forms: ParentForm[];
   transportationFees: TransportationFee[];
+  familyMatters: Array<{
+    id: string;
+    locationId: string;
+    category: string;
+    title: string;
+    message: string;
+    emoji: string;
+    startDate: string;
+    endDate: string;
+    isPinned: boolean;
+  }>;
+  weeklyCheckins: Array<{
+    id: string;
+    childId: string;
+    weekOf: string;
+    title: string;
+    message: string;
+    highlights: string[];
+    createdByName: string;
+    updatedAt: string;
+  }>;
+  media: Array<{
+    id: string;
+    childId: string;
+    kind: string;
+    date: string;
+    caption: string;
+    createdAt: string;
+    url: string;
+  }>;
 };
 
 function childName(child: ParentChild) {
@@ -326,6 +360,23 @@ export default function ParentPortalPage() {
     .filter((fee) => fee.paymentStatus === "Unpaid")
     .reduce((sum, fee) => sum + Math.max(0, fee.chargedAmount || fee.expectedAmount), 0);
 
+  const selectedFamilyMatters = useMemo(() => {
+    if (!overview || !selectedChild) return [];
+    return overview.familyMatters.slice(0, 5);
+  }, [overview, selectedChild]);
+
+  const selectedWeeklyCheckin = useMemo(() => {
+    if (!overview || !selectedChild) return null;
+    return overview.weeklyCheckins.find((entry) => entry.childId === selectedChild.id) ?? null;
+  }, [overview, selectedChild]);
+
+  const selectedMedia = useMemo(() => {
+    if (!overview || !selectedChild) return [];
+    return overview.media.filter((item) => item.childId === selectedChild.id && item.url);
+  }, [overview, selectedChild]);
+  const profilePhoto = selectedMedia.find((item) => item.kind === "Profile") ?? null;
+  const recentPhotos = selectedMedia.filter((item) => item.kind === "Daily Photo").slice(0, 9);
+
   const openForms = overview?.forms.filter((form) => !["Signed", "Archived"].includes(form.status)) ?? [];
   const signedForms = overview?.forms.filter((form) => form.status === "Signed") ?? [];
   const canUseFamilyAttendance = overview?.children.some((child) => child.access.permissions.managePickup) ?? false;
@@ -482,19 +533,26 @@ export default function ParentPortalPage() {
       </section>
 
       {selectedChild && <section className="rounded-3xl border border-violet-200 bg-gradient-to-br from-white to-violet-50 p-5 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="grid gap-5 md:grid-cols-[120px_1fr] md:items-start">
+          <div className="aspect-square overflow-hidden rounded-[28px] border-4 border-white bg-gradient-to-br from-emerald-100 to-violet-100 shadow-lg">
+            <SafeImage src={profilePhoto?.url} alt={`${childName(selectedChild)} profile`} className="h-full w-full object-cover" fallback={<div className="grid h-full place-items-center text-violet-700"><UserRound className="h-12 w-12" /></div>} loading="eager" />
+          </div>
           <div>
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
             <div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-violet-700" /><h2 className="font-black text-slate-950">Your access to {selectedChild.firstName}</h2></div>
             <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">You are signed in as <strong>{selectedChild.access.relationship}</strong> for <strong>{selectedChild.access.householdName}</strong>. Your portal only shows information TCS has authorized for your individual account.</p>
           </div>
-          <span className={`w-fit rounded-full px-3 py-1.5 text-[10px] font-black ${selectedChild.access.financialPrivacy === "Private" ? "bg-violet-700 text-white" : "bg-blue-100 text-blue-800"}`}>{selectedChild.access.financialPrivacy === "Private" ? "Private Household Billing" : "Shared Household Billing"}</span>
+              <span className={`w-fit rounded-full px-3 py-1.5 text-[10px] font-black ${selectedChild.access.financialPrivacy === "Private" ? "bg-violet-700 text-white" : "bg-blue-100 text-blue-800"}`}>{selectedChild.access.financialPrivacy === "Private" ? "Private Household Billing" : "Shared Household Billing"}</span>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <Info label="Household" value={selectedChild.access.householdName} />
+              <Info label="Relationship" value={selectedChild.access.relationship} />
+              <Info label="Financial Responsibility" value={billingResponsibilityLabel(selectedChild.access)} />
+            </div>
+            {selectedChild.access.financialPrivacy === "Private" && <div className="mt-4 rounded-xl border border-violet-200 bg-white p-3 text-xs font-semibold leading-5 text-violet-950">Other household balances, payments, saved payment methods, subsidy details, and unrelated children are not included in your account.</div>}
+          </div>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <Info label="Household" value={selectedChild.access.householdName} />
-          <Info label="Relationship" value={selectedChild.access.relationship} />
-          <Info label="Financial Responsibility" value={billingResponsibilityLabel(selectedChild.access)} />
-        </div>
-        {selectedChild.access.financialPrivacy === "Private" && <div className="mt-4 rounded-xl border border-violet-200 bg-white p-3 text-xs font-semibold leading-5 text-violet-950">Other household balances, payments, saved payment methods, subsidy details, and unrelated children are not included in your account.</div>}
       </section>}
 
       {selectedChild && <>
@@ -513,6 +571,27 @@ export default function ParentPortalPage() {
         </section>
 
         <div className="space-y-5">
+          <div className="grid gap-5 lg:grid-cols-2">
+            <section className="relative overflow-hidden rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-emerald-50 p-5 shadow-sm">
+              <FunDoodles className="opacity-20" />
+              <div className="relative z-10">
+                <div className="flex items-center gap-3"><Star className="h-5 w-5 text-amber-600" /><div><h2 className="font-black text-slate-950">This week at TCS</h2><p className="text-xs text-slate-500">A little progress note just for {selectedChild.firstName}.</p></div></div>
+                {selectedWeeklyCheckin ? <>
+                  <p className="mt-4 text-[10px] font-black uppercase tracking-wider text-emerald-700">Week of {formatDate(selectedWeeklyCheckin.weekOf)}</p>
+                  <h3 className="mt-1 text-xl font-black text-slate-950">{selectedWeeklyCheckin.title || "This Week at TCS"}</h3>
+                  <div className="mt-3 flex flex-wrap gap-1.5">{selectedWeeklyCheckin.highlights.map((item) => <span key={item} className="rounded-full bg-amber-100 px-2.5 py-1 text-[9px] font-black text-amber-900">⭐ {item}</span>)}</div>
+                  <p className="mt-4 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-700">{selectedWeeklyCheckin.message}</p>
+                  {selectedWeeklyCheckin.createdByName && <p className="mt-4 text-[10px] font-semibold text-slate-400">Shared by {selectedWeeklyCheckin.createdByName}</p>}
+                </> : <div className="mt-4 rounded-2xl bg-white/80 p-5 text-center"><Heart className="mx-auto h-7 w-7 text-emerald-700" /><p className="mt-2 text-sm font-black text-slate-800">No weekly check-in has been shared yet.</p><p className="mt-1 text-xs font-semibold leading-5 text-slate-500">When the TCS team posts this week’s progress note, it will appear right here.</p></div>}
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-sky-50 p-5 shadow-sm">
+              <div className="flex items-center gap-3"><Camera className="h-5 w-5 text-violet-700" /><div><h2 className="font-black text-slate-950">{selectedChild.firstName}’s photo moments</h2><p className="text-xs text-slate-500">Daily photos shared securely with your family.</p></div></div>
+              {recentPhotos.length ? <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">{recentPhotos.map((photo) => <figure key={photo.id} className="overflow-hidden rounded-2xl border border-white bg-white shadow-sm"><div className="aspect-square bg-slate-100"><SafeImage src={photo.url} alt={photo.caption || `${selectedChild.firstName} at TCS`} className="h-full w-full object-cover" fallback={<div className="grid h-full place-items-center text-slate-400"><Camera className="h-6 w-6" /></div>} /></div>{photo.caption && <figcaption className="p-2 text-[9px] font-semibold leading-4 text-slate-600">{photo.caption}</figcaption>}</figure>)}</div> : <div className="mt-4 rounded-2xl bg-white/80 p-5 text-center"><Camera className="mx-auto h-7 w-7 text-violet-700" /><p className="mt-2 text-sm font-black text-slate-800">No family photos yet.</p><p className="mt-1 text-xs font-semibold leading-5 text-slate-500">New daily moments will appear here when TCS shares them.</p></div>}
+            </section>
+          </div>
+
           <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-emerald-700" /><div><h2 className="font-black text-slate-950">Today & recent care</h2><p className="text-xs text-slate-500">Updates staff have recorded for {selectedChild.firstName}.</p></div></div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -571,10 +650,9 @@ export default function ParentPortalPage() {
             <section className="relative overflow-hidden rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-amber-50 p-5 shadow-sm">
               <FunDoodles className="opacity-25" />
               <div className="relative z-10">
-                <p className="text-[10px] font-black uppercase tracking-[.16em] text-sky-700">Your family matters here</p>
-                <h2 className="mt-1 text-xl font-black text-slate-950">A little reminder from the TCS gator 🐊</h2>
-                <p className="mt-2 max-w-xl text-xs font-semibold leading-5 text-slate-600">Checking schedules, reading updates, sending messages, and keeping forms current all help us plan better care for your child. You are not just using the app—you are part of the care team.</p>
-                <div className="mt-4"><GatorGuide size="md" message={<>Thanks for staying connected with us. It makes a difference. 💚</>} /></div>
+                <p className="text-[10px] font-black uppercase tracking-[.16em] text-sky-700">Family Matters</p>
+                <h2 className="mt-1 text-xl font-black text-slate-950">A little something from TCS 🐊</h2>
+                {selectedFamilyMatters.length ? <div className="mt-4 space-y-3">{selectedFamilyMatters.map((post) => <article key={post.id} className="rounded-2xl border border-white bg-white/90 p-4 shadow-sm"><div className="flex items-start gap-3"><span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-sky-50 text-xl">{post.emoji || "💚"}</span><div><div className="flex flex-wrap items-center gap-2"><p className="text-[9px] font-black uppercase tracking-wider text-sky-700">{post.category}</p>{post.isPinned && <span className="rounded-full bg-amber-100 px-2 py-1 text-[8px] font-black text-amber-900">PINNED</span>}</div><h3 className="mt-1 text-sm font-black text-slate-950">{post.title}</h3><p className="mt-2 text-xs font-semibold leading-5 text-slate-600">{post.message}</p></div></div></article>)}</div> : <><p className="mt-2 max-w-xl text-xs font-semibold leading-5 text-slate-600">Checking schedules, reading updates, sending messages, and keeping forms current all help us plan better care for your child. You are not just using the app—you are part of the care team.</p><div className="mt-4"><GatorGuide size="md" message={<>Thanks for staying connected with us. It makes a difference. 💚</>} /></div></>}
               </div>
             </section>
           </div>
