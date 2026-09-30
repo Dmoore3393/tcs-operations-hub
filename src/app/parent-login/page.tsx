@@ -1,5 +1,6 @@
 "use client";
 
+import { FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
 import { ArrowRight, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -117,24 +118,26 @@ export default function ParentLoginPage() {
     }
   }
 
-  return <main className="min-h-screen bg-gradient-to-br from-[#f5efe2] via-white to-[#eaf5ee] p-4 sm:p-8">
+  return <main className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#fff7dc] via-white to-[#e4f7eb] p-4 sm:p-8"><FunDoodles soft />
     <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-5xl items-center justify-center">
       <section className="grid w-full overflow-hidden rounded-[34px] border border-slate-200 bg-white shadow-2xl lg:grid-cols-[.9fr_1.1fr]">
-        <div className="bg-gradient-to-br from-[#173d29] via-[#245a39] to-[#10291e] p-7 text-white sm:p-10">
-          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white/10 text-xl font-black">TCS</div>
-          <p className="mt-8 text-xs font-black uppercase tracking-[.18em] text-emerald-200">Family access</p>
-          <h1 className="mt-2 text-4xl font-black">The Hub Parent Portal</h1>
-          <p className="mt-4 text-sm font-semibold leading-7 text-emerald-50/80">Use the Parent Portal account you created from your TCS invitation to view the child information and features assigned specifically to you.</p>
-          <div className="mt-8 space-y-3 text-sm font-semibold text-emerald-50/90">
+        <div className="relative overflow-hidden bg-gradient-to-br from-[#173d29] via-[#245a39] to-[#10291e] p-7 text-white sm:p-10"><FunDoodles className="opacity-60" />
+          <div className="relative z-10">
+            <GatorGuide size="lg" message={<>Welcome back! Your family is a <span className="text-emerald-700">big part</span> of the TCS team. 💚</>} />
+            <p className="mt-6 text-xs font-black uppercase tracking-[.18em] text-emerald-200">Family access</p>
+            <h1 className="mt-2 text-4xl font-black">The Hub Parent Portal</h1>
+            <p className="mt-4 text-sm font-semibold leading-7 text-emerald-50/85">Your child’s day, your voice, your schedule, and your connection to TCS—all together in one place.</p>
+            <div className="mt-8 space-y-3 text-sm font-semibold text-emerald-50/90">
             <p className="flex items-start gap-2"><ShieldCheck className="mt-0.5 h-5 w-5 flex-none text-emerald-200" />Parent accounts are invitation-only. TCS connects your verified email to specific children and permissions before access is granted.</p>
             <p className="flex items-start gap-2"><LockKeyhole className="mt-0.5 h-5 w-5 flex-none text-emerald-200" />You create and manage your own password. TCS staff cannot see it.</p>
+            </div>
           </div>
         </div>
 
-        <div className="p-7 sm:p-10">
+        <div className="relative p-7 sm:p-10">
           <p className="text-xs font-black uppercase tracking-[.18em] text-emerald-700">Parent sign in</p>
-          <h2 className="mt-2 text-3xl font-black text-slate-950">Welcome back</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-600">Enter the email and password you created when you accepted your Parent Portal invitation. New accounts remain locked until TCS reviews and approves the assigned access.</p>
+          <h2 className="mt-2 text-3xl font-black text-slate-950">Your family space is ready ✨</h2>
+          <p className="mt-3 text-sm leading-6 text-slate-600">Sign in to stay connected to care, schedules, forms, messages, and the moments that matter in your child’s TCS experience.</p>
 
           <form onSubmit={submit} className="mt-7 space-y-4">
             <label className="block"><span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">Email</span><div className="relative"><Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-3 text-sm font-semibold outline-none focus:border-emerald-400" /></div></label>
