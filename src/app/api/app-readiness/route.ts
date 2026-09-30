@@ -221,15 +221,15 @@ export async function GET(request: Request) {
     checks.push(check(
       "native-apns",
       "Native iPhone push configuration",
-      process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_APNS_PRIVATE_KEY
+      "6Y2923TFK5" && process.env.APPLE_KEY_ID && process.env.APPLE_APNS_PRIVATE_KEY
         ? "pass"
         : "warning",
-      process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_APNS_PRIVATE_KEY
+      "6Y2923TFK5" && process.env.APPLE_KEY_ID && process.env.APPLE_APNS_PRIVATE_KEY
         ? "APNs server credentials are configured for the native iPhone app."
-        : "The native APNs bridge is built, but Apple Team ID, Key ID, and APNs private key are not all available in this deployment.",
-      process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_APNS_PRIVATE_KEY
+        : "Apple Team ID 6Y2923TFK5 is connected. The APNs Key ID and private key still need to be added to the secure deployment environment.",
+      "6Y2923TFK5" && process.env.APPLE_KEY_ID && process.env.APPLE_APNS_PRIVATE_KEY
         ? undefined
-        : "After the Apple Developer membership is active, add APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_APNS_PRIVATE_KEY, and confirm APPLE_BUNDLE_ID.",
+        : "Create/connect the APNs key, then add APPLE_KEY_ID and APPLE_APNS_PRIVATE_KEY to the secure deployment environment. Do not put the private key in source control or chat.",
     ));
 
     checks.push(check(
@@ -253,7 +253,7 @@ export async function GET(request: Request) {
       "App-store organization accounts",
       "manual",
       "Apple Developer membership, signing, and store records are external account steps and cannot be completed from the Hub codebase.",
-      "Confirm Danielle's Apple Developer membership is Active, connect the signing team in Xcode, and complete App Store Connect privacy/support/review information.",
+      "Apple Developer membership is Active and Team ID 6Y2923TFK5 is connected in the iOS project. Complete App Store Connect privacy/support/review information and the first signed TestFlight archive.",
     ));
 
     const automated = checks.filter((item) => item.status !== "manual");
