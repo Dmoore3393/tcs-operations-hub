@@ -41,6 +41,7 @@ import {
   Store,
   Syringe,
   Trophy,
+  TrendingUp,
   Users,
   UserRound,
 } from "lucide-react";
@@ -100,6 +101,7 @@ const navItems = [
   { label: "Files", href: "/files", icon: FolderOpen },
   { label: "Digital Forms", href: "/digital-forms", icon: FileText },
   { label: "Tour Board", href: "/enrollment-pipeline", icon: Users },
+  { label: "Enrollment Forecast", href: "/enrollment-forecast", icon: TrendingUp },
   { label: "Reports", href: "/reports", icon: BarChart3 },
   { label: "Marketing", href: "/marketing", icon: Megaphone },
   { label: "Printable Studio", href: "/print-studio", icon: Printer },
@@ -158,6 +160,7 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/files": { title: "Compliance Files", subtitle: "Missing documents, signatures, and expirations" },
   "/digital-forms": { title: "Digital Forms", subtitle: "Prepare, sign, correct, and verify form workflows" },
   "/enrollment-pipeline": { title: "Tour Board", subtitle: "Track every childcare inquiry, tour, no-show, late arrival, follow-up, and enrollment outcome" },
+  "/enrollment-forecast": { title: "Enrollment Forecast", subtitle: "30, 60, and 90-day enrollment, openings, exits, and pipeline demand" },
   "/reports": { title: "Reports", subtitle: "Enrollment, attendance, staffing, and operations" },
   "/marketing": { title: "Marketing Studio", subtitle: "Generate captions and printable image ads" },
   "/print-studio": { title: "AI Printable Studio", subtitle: "Ratio plans, work plans, menus, notices, and transportation boards" },

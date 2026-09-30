@@ -18,7 +18,7 @@ import { careLocations, locationThemes, starterLocationHours, summarizeHours, ty
 import { buildBriefingSnapshot, buildSmartAlerts } from "@/lib/operations-intelligence";
 import { localIsoDate } from "@/lib/date-utils";
 import { buildTransportationFeeExpectations, mondayOfWeek, starterDigitalForms, starterEnrollmentLeads, starterTransportationFees, transportationChargeStatus, type DigitalFormRecord, type EnrollmentLeadRecord, type TransportationFeeRecord } from "@/lib/admin-ops";
-import { ArrowRight, BookOpen, Bus, CalendarClock, CalendarDays, CalendarOff, CheckCircle2, Coffee, FileCheck2, FileText, FileWarning, HeartPulse, Lock, Printer, ShieldCheck, Utensils, Users } from "lucide-react";
+import { ArrowRight, BookOpen, Bus, CalendarClock, CalendarDays, CalendarOff, CheckCircle2, Coffee, FileCheck2, FileText, FileWarning, HeartPulse, Lock, Printer, ShieldCheck, TrendingUp, Utensils, Users } from "lucide-react";
 import Link from "next/link";
 
 export default function Home() {
@@ -37,6 +37,7 @@ export default function Home() {
   const canUseTransportation = canAccessRoute(profile, "/transportation");
   const canUseTransportationFees = canAccessRoute(profile, "/transportation-fees");
   const canUseEnrollment = canAccessRoute(profile, "/enrollment-pipeline");
+  const canUseEnrollmentForecast = canAccessRoute(profile, "/enrollment-forecast");
   const canUseCompliance = canAccessRoute(profile, "/compliance");
   const canUseDigitalForms = canAccessRoute(profile, "/digital-forms");
   const canUseRatios = canAccessRoute(profile, "/ratios");
@@ -213,6 +214,7 @@ export default function Home() {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {canUseCompliance && <QuickTool href="/compliance" icon={<ShieldCheck className="h-5 w-5" />} title="Compliance Center" helper={`${openFiles.length} file items need attention`} />}
             {canUseEnrollment && <QuickTool href="/enrollment-pipeline" icon={<Users className="h-5 w-5" />} title="Enrollment Pipeline" helper={`${activeEnrollmentLeads.length} active prospect${activeEnrollmentLeads.length === 1 ? "" : "s"}`} />}
+            {canUseEnrollmentForecast && <QuickTool href="/enrollment-forecast" icon={<TrendingUp className="h-5 w-5" />} title="Enrollment Forecast" helper="30, 60 & 90-day openings and demand" />}
             {canUseTransportationFees && <QuickTool href="/transportation-fees" icon={<Bus className="h-5 w-5" />} title="Transportation Fees" helper={transportationBillingNeedsAttention ? `${transportationBillingNeedsAttention} billing item${transportationBillingNeedsAttention === 1 ? "" : "s"} need review` : "Current week matches entered billing records"} />}
             {canUseDigitalForms && <QuickTool href="/digital-forms" icon={<FileText className="h-5 w-5" />} title="Digital Forms" helper={`${openDigitalForms.length} open signature workflow${openDigitalForms.length === 1 ? "" : "s"}`} />}
           </div>

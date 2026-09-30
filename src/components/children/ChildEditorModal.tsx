@@ -121,6 +121,8 @@ export default function ChildEditorModal({
                     <Field label="Location"><select className={inputClass} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })}>{locations.map((location) => <option key={location}>{location}</option>)}</select></Field>
                     <Field label="Classroom"><input readOnly className={inputClass} value={form.classroom} /></Field>
                     <Field label="Enrollment status"><select className={inputClass} value={form.enrollmentStatus} onChange={(e) => setForm({ ...form, enrollmentStatus: e.target.value as EnrollmentStatus })}><option>Active</option><option>Pending</option><option>Archived</option></select></Field>
+                    <Field label="Planned start date"><input type="date" className={inputClass} value={form.plannedStartDate} onChange={(e) => setForm({ ...form, plannedStartDate: e.target.value })} /></Field>
+                    <Field label="Planned last day"><input type="date" className={inputClass} value={form.plannedLastDay} onChange={(e) => setForm({ ...form, plannedLastDay: e.target.value })} /></Field>
                     <Field label="Attendance today"><select className={inputClass} value={form.attendanceToday} onChange={(e) => setForm({ ...form, attendanceToday: e.target.value as AttendanceStatus })}><option>Not Scheduled</option><option>Present</option><option>Absent</option></select></Field>
                   </Grid>
                 </SectionCard>
