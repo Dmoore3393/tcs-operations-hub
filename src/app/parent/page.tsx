@@ -443,7 +443,7 @@ export default function ParentPortalPage() {
 
   return <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#fffaf0] via-[#f5f1e8] to-[#eef8f1] pb-24 text-slate-950"><FunDoodles soft />
     <header className="sticky top-0 z-30 border-b border-emerald-900/10 bg-[#173d29]/95 text-white shadow-sm backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+      <div className="mx-auto flex max-w-[1450px] items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-200">TCS Family Access</p><h1 className="text-lg font-black">The Hub Parent Portal</h1></div>
         <div className="flex items-center gap-2">
           {hasStaffAccess && (
@@ -459,7 +459,7 @@ export default function ParentPortalPage() {
       </div>
     </header>
 
-    <div className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6">
+    <div className="mx-auto max-w-[1450px] space-y-5 p-4 sm:p-6 lg:p-7">
       {notice && <div className="tcs-soft-pop relative overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-900"><CelebrationBits />{notice}</div>}
       {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-900">{error}</div>}
 
@@ -504,7 +504,7 @@ export default function ParentPortalPage() {
             <button onClick={() => router.push("/parent/schedule")} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-700 px-5 py-3 text-xs font-black text-white shadow-sm">{selectedChild.access.permissions.submitSchedule ? "Open & Submit Schedule" : "View Care Calendar"}</button>
           </div>
         </section>}
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <Card icon={<UserRound className="h-5 w-5" />} label="Attendance" value={selectedChild.attendanceDate === todayPacific() ? selectedChild.attendanceToday || "Not marked" : "Not marked today"} />
           <Card icon={<CalendarDays className="h-5 w-5" />} label="Schedule" value={selectedChild.weeklySchedule || "Schedule not entered"} />
           <Card icon={<Home className="h-5 w-5" />} label="Program" value={selectedChild.location || "Location not entered"} />
@@ -512,7 +512,7 @@ export default function ParentPortalPage() {
           <Card icon={<ShieldCheck className="h-5 w-5" />} label="Shot Record" value={selectedChild.immunizationStatus || "Needs review"} />
         </section>
 
-        <div className="grid gap-5 lg:grid-cols-[1.1fr_.9fr]">
+        <div className="space-y-5">
           <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-emerald-700" /><div><h2 className="font-black text-slate-950">Today & recent care</h2><p className="text-xs text-slate-500">Updates staff have recorded for {selectedChild.firstName}.</p></div></div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -526,7 +526,7 @@ export default function ParentPortalPage() {
             <div className="mt-5 space-y-3">{care.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">No recent daily-care updates are available yet.</p> : care.map((entry) => <div key={entry.id} className="rounded-2xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-wider text-emerald-700">{entry.category}</p><h3 className="mt-1 font-black text-slate-900">{entry.action || entry.result || "Care update"}</h3></div><span className="text-[10px] font-bold text-slate-400">{formatDate(entry.date)} • {entry.time}</span></div>{entry.result && entry.action && <p className="mt-2 text-sm font-semibold text-slate-700">{entry.result}</p>}{entry.notes && <p className="mt-2 text-xs leading-5 text-slate-500">{entry.notes}</p>}</div>)}</div>
           </section>
 
-          <div className="space-y-5">
+          <div className="grid gap-5 lg:grid-cols-2">
             <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-center gap-3"><ClipboardCheck className="h-5 w-5 text-blue-700" /><div><h2 className="font-black text-slate-950">File follow-up</h2><p className="text-xs text-slate-500">High-level status only; private internal notes stay with TCS.</p></div></div>
               <div className="mt-4 space-y-2">
@@ -566,6 +566,16 @@ export default function ParentPortalPage() {
               <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><FileSignature className="h-5 w-5 text-purple-700" /><h2 className="font-black text-slate-950">Forms & acknowledgments</h2></div><p className="mt-1 text-xs text-slate-500">{openForms.length} item{openForms.length === 1 ? "" : "s"} waiting</p></div><Bell className="h-5 w-5 text-slate-400" /></div>
               <div className="mt-4 space-y-3">{openForms.length === 0 ? <p className="rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-900"><CheckCircle2 className="mr-1 inline h-4 w-4" />No Parent Portal acknowledgments are currently waiting.</p> : openForms.map((form) => <div key={form.id} className="rounded-xl border border-slate-200 p-3"><div className="flex items-start justify-between gap-3"><div><strong className="text-sm text-slate-900">{form.formName}</strong><p className="mt-1 text-[10px] text-slate-500">{form.subjectName || "Family form"} • Due {form.dueDate ? formatDate(form.dueDate) : "not set"}</p></div><span className="rounded-full bg-amber-100 px-2 py-1 text-[9px] font-black text-amber-900">{form.status}</span></div>{form.signatureMethod === "Parent Portal Acknowledgment" ? <button onClick={() => openForm(form)} className="mt-3 w-full rounded-xl bg-purple-700 px-3 py-2.5 text-xs font-black text-white">Review & Acknowledge</button> : <p className="mt-3 text-[10px] font-semibold leading-4 text-slate-500">This form requires completion outside the Parent Portal. Contact your TCS location for instructions.</p>}</div>)}</div>
               {signedForms.length > 0 && <p className="mt-4 text-[10px] font-bold text-slate-400">{signedForms.length} portal/form item{signedForms.length === 1 ? "" : "s"} already completed.</p>}
+            </section>
+
+            <section className="relative overflow-hidden rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-amber-50 p-5 shadow-sm">
+              <FunDoodles className="opacity-25" />
+              <div className="relative z-10">
+                <p className="text-[10px] font-black uppercase tracking-[.16em] text-sky-700">Your family matters here</p>
+                <h2 className="mt-1 text-xl font-black text-slate-950">A little reminder from the TCS gator 🐊</h2>
+                <p className="mt-2 max-w-xl text-xs font-semibold leading-5 text-slate-600">Checking schedules, reading updates, sending messages, and keeping forms current all help us plan better care for your child. You are not just using the app—you are part of the care team.</p>
+                <div className="mt-4"><GatorGuide size="md" message={<>Thanks for staying connected with us. It makes a difference. 💚</>} /></div>
+              </div>
             </section>
           </div>
         </div>
