@@ -33,6 +33,12 @@ function safeParentMessages(value: unknown) {
   }).filter((message) => message.id && message.body);
 }
 
+async function signedChildMediaUrl(admin: Awaited<ReturnType<typeof requireParent>>["admin"], objectPath: string) {
+  if (!objectPath) return "";
+  const result = await admin.storage.from("child-media").createSignedUrl(objectPath, 60 * 60);
+  return result.error ? "" : result.data.signedUrl;
+}
+
 function latestAudit(record: DbRow): ChildFileAudit | null {
   const audits = Array.isArray(record.fileAudits) ? record.fileAudits as ChildFileAudit[] : [];
   return [...audits].sort((a, b) =>
@@ -46,7 +52,17 @@ export async function GET(request: Request) {
     const rowIds = children.map((child) => child.rowId);
     const organizationIds = [...new Set(children.map((child) => child.organizationId).filter(Boolean))];
 
-    const [careResult, formsResult, transportationFeesResult] = await Promise.all([
+    const parentVisibleChildren = children.filter((child) => child.access.permissions.viewProfile);
+    const parentVisibleRowIds = parentVisibleChildren.map((child) => child.rowId);
+    const parentVisibleLocationIds = [...new Set(parentVisibleChildren.map((child) => child.locationId).filter(Boolean))];
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Los_Angeles",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    const [careResult, formsResult, transportationFeesResult, familyMattersResult, weeklyCheckinsResult, mediaResult] = await Promise.all([
       rowIds.length
         ? admin
             .from("daily_care_entries")
@@ -70,11 +86,45 @@ export async function GET(request: Request) {
             .order("updated_at", { ascending: false })
             .limit(100)
         : Promise.resolve({ data: [], error: null }),
+      organizationIds.length
+        ? admin
+            .from("family_matters_posts")
+            .select("id,organization_id,location_id,category,title,message,emoji,start_date,end_date,is_pinned")
+            .in("organization_id", organizationIds)
+            .eq("is_active", true)
+            .lte("start_date", today)
+            .order("is_pinned", { ascending: false })
+            .order("start_date", { ascending: false })
+            .limit(50)
+        : Promise.resolve({ data: [], error: null }),
+      parentVisibleRowIds.length
+        ? admin
+            .from("child_weekly_checkins")
+            .select("id,child_id,child_legacy_id,week_of,title,message,highlights,created_by_name,updated_at")
+            .in("child_id", parentVisibleRowIds)
+            .eq("status", "Published")
+            .order("week_of", { ascending: false })
+            .limit(60)
+        : Promise.resolve({ data: [], error: null }),
+      parentVisibleRowIds.length
+        ? admin
+            .from("child_media")
+            .select("id,child_id,child_legacy_id,media_kind,service_date,caption,object_path,created_at")
+            .in("child_id", parentVisibleRowIds)
+            .eq("visible_to_family", true)
+            .eq("photo_consent_verified", true)
+            .order("service_date", { ascending: false })
+            .order("created_at", { ascending: false })
+            .limit(100)
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     if (careResult.error) throw careResult.error;
     if (formsResult.error) throw formsResult.error;
     if (transportationFeesResult.error) throw transportationFeesResult.error;
+    if (familyMattersResult.error) throw familyMattersResult.error;
+    if (weeklyCheckinsResult.error) throw weeklyCheckinsResult.error;
+    if (mediaResult.error) throw mediaResult.error;
 
     const childByRow = new Map(children.map((child) => [child.rowId, child]));
     const careEntries = ((careResult.data ?? []) as unknown as DbRow[]).map((row) => {
@@ -140,6 +190,46 @@ export async function GET(request: Request) {
         schools: strings(record.schools),
       }))
       .slice(0, 30);
+
+    const familyMatters = ((familyMattersResult.data ?? []) as unknown as DbRow[])
+      .filter((row) => {
+        const endDate = text(row.end_date);
+        if (endDate && endDate < today) return false;
+        const locationId = text(row.location_id);
+        return !locationId || parentVisibleLocationIds.includes(locationId);
+      })
+      .map((row) => ({
+        id: text(row.id),
+        locationId: text(row.location_id),
+        category: text(row.category),
+        title: text(row.title),
+        message: text(row.message),
+        emoji: text(row.emoji),
+        startDate: text(row.start_date),
+        endDate: text(row.end_date),
+        isPinned: row.is_pinned === true,
+      }));
+
+    const weeklyCheckins = ((weeklyCheckinsResult.data ?? []) as unknown as DbRow[]).map((row) => ({
+      id: text(row.id),
+      childId: text(row.child_legacy_id),
+      weekOf: text(row.week_of),
+      title: text(row.title),
+      message: text(row.message),
+      highlights: strings(row.highlights),
+      createdByName: text(row.created_by_name),
+      updatedAt: text(row.updated_at),
+    }));
+
+    const media = await Promise.all(((mediaResult.data ?? []) as unknown as DbRow[]).map(async (row) => ({
+      id: text(row.id),
+      childId: text(row.child_legacy_id),
+      kind: text(row.media_kind),
+      date: text(row.service_date),
+      caption: text(row.caption),
+      createdAt: text(row.created_at),
+      url: await signedChildMediaUrl(admin, text(row.object_path)),
+    })));
 
     const safeChildren = children.map((child) => {
       const record = child.record;
@@ -211,6 +301,9 @@ export async function GET(request: Request) {
       careEntries,
       forms: parentForms,
       transportationFees,
+      familyMatters,
+      weeklyCheckins,
+      media,
     }, {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
