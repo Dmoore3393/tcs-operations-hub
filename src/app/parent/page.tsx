@@ -17,6 +17,8 @@ import {
   FileSignature,
   Home,
   LoaderCircle,
+  Newspaper,
+  UploadCloud,
   LogOut,
   ScanLine,
   ShieldCheck,
@@ -178,6 +180,18 @@ type Overview = {
     createdAt: string;
     url: string;
   }>;
+  newsletters: Array<{
+    id: string;
+    locationId: string;
+    month: string;
+    title: string;
+    summary: string;
+    mimeType: string;
+    sizeBytes: number;
+    createdByName: string;
+    createdAt: string;
+    url: string;
+  }>;
 };
 
 function childName(child: ParentChild) {
@@ -204,6 +218,13 @@ function billingResponsibilityLabel(access: ParentChild["access"]) {
   if (responsibility.mode === "Fixed") return `${(responsibility.fixedWeeklyAmount ?? 0).toFixed(2)} weekly responsibility`;
   if (responsibility.mode === "Custom") return "Custom financial responsibility";
   return access.financialPrivacy === "Private" ? "Private account responsibility" : "Shared household responsibility";
+}
+
+function monthYear(value: string) {
+  if (!value) return "Newsletter";
+  const date = new Date(`${value.slice(0, 7)}-01T12:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString([], { month: "long", year: "numeric" });
 }
 
 function todayPacific() {
@@ -233,6 +254,7 @@ export default function ParentPortalPage() {
   const [pickupPin, setPickupPin] = useState("");
   const [savingPickupPin, setSavingPickupPin] = useState(false);
   const [hasStaffAccess, setHasStaffAccess] = useState(false);
+  const [uploadingProfilePhoto, setUploadingProfilePhoto] = useState(false);
 
   const loadOverview = useCallback(async (activeSession: Session) => {
     const controller = new AbortController();
@@ -380,6 +402,32 @@ export default function ParentPortalPage() {
   const openForms = overview?.forms.filter((form) => !["Signed", "Archived"].includes(form.status)) ?? [];
   const signedForms = overview?.forms.filter((form) => form.status === "Signed") ?? [];
   const canUseFamilyAttendance = overview?.children.some((child) => child.access.permissions.managePickup) ?? false;
+
+  async function uploadProfilePhoto(file: File | null) {
+    if (!file || !selectedChild || !session) return;
+    setUploadingProfilePhoto(true);
+    setError("");
+    setNotice("");
+    try {
+      const form = new FormData();
+      form.set("childId", selectedChild.id);
+      form.set("file", file);
+      const response = await fetch("/api/parent/profile-photo", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: form,
+      });
+      const payload = await response.json() as { error?: string; message?: string };
+      if (!response.ok) throw new Error(payload.error || "Could not update the profile picture.");
+      await loadOverview(session);
+      setNotice(payload.message || "Profile picture updated. 💚");
+      window.setTimeout(() => setNotice(""), 3200);
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "Could not update the profile picture.");
+    } finally {
+      setUploadingProfilePhoto(false);
+    }
+  }
 
   async function sendFamilyMessage() {
     if (!selectedChild || !session || !replySubject.trim() || !replyBody.trim()) return;
@@ -534,8 +582,16 @@ export default function ParentPortalPage() {
 
       {selectedChild && <section className="rounded-3xl border border-violet-200 bg-gradient-to-br from-white to-violet-50 p-5 shadow-sm">
         <div className="grid gap-5 md:grid-cols-[120px_1fr] md:items-start">
-          <div className="aspect-square overflow-hidden rounded-[28px] border-4 border-white bg-gradient-to-br from-emerald-100 to-violet-100 shadow-lg">
-            <SafeImage src={profilePhoto?.url} alt={`${childName(selectedChild)} profile`} className="h-full w-full object-cover" fallback={<div className="grid h-full place-items-center text-violet-700"><UserRound className="h-12 w-12" /></div>} loading="eager" />
+          <div>
+            <div className="aspect-square overflow-hidden rounded-[28px] border-4 border-white bg-gradient-to-br from-emerald-100 to-violet-100 shadow-lg">
+              <SafeImage src={profilePhoto?.url} alt={`${childName(selectedChild)} profile`} className="h-full w-full object-cover" fallback={<div className="grid h-full place-items-center text-violet-700"><UserRound className="h-12 w-12" /></div>} loading="eager" />
+            </div>
+            {selectedChild.access.permissions.viewProfile && <label className="mt-2 flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-violet-700 px-3 py-2 text-[10px] font-black text-white shadow-sm">
+              {uploadingProfilePhoto ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+              {uploadingProfilePhoto ? "Uploading…" : profilePhoto ? "Change Photo" : "Add Profile Photo"}
+              <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={uploadingProfilePhoto} onChange={(event) => { const next = event.target.files?.[0] ?? null; void uploadProfilePhoto(next); event.currentTarget.value = ""; }} />
+            </label>}
+            <p className="mt-2 text-center text-[9px] font-semibold leading-4 text-slate-500">Family profile photo • private to your secure TCS account</p>
           </div>
           <div>
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -645,6 +701,11 @@ export default function ParentPortalPage() {
               <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><FileSignature className="h-5 w-5 text-purple-700" /><h2 className="font-black text-slate-950">Forms & acknowledgments</h2></div><p className="mt-1 text-xs text-slate-500">{openForms.length} item{openForms.length === 1 ? "" : "s"} waiting</p></div><Bell className="h-5 w-5 text-slate-400" /></div>
               <div className="mt-4 space-y-3">{openForms.length === 0 ? <p className="rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-900"><CheckCircle2 className="mr-1 inline h-4 w-4" />No Parent Portal acknowledgments are currently waiting.</p> : openForms.map((form) => <div key={form.id} className="rounded-xl border border-slate-200 p-3"><div className="flex items-start justify-between gap-3"><div><strong className="text-sm text-slate-900">{form.formName}</strong><p className="mt-1 text-[10px] text-slate-500">{form.subjectName || "Family form"} • Due {form.dueDate ? formatDate(form.dueDate) : "not set"}</p></div><span className="rounded-full bg-amber-100 px-2 py-1 text-[9px] font-black text-amber-900">{form.status}</span></div>{form.signatureMethod === "Parent Portal Acknowledgment" ? <button onClick={() => openForm(form)} className="mt-3 w-full rounded-xl bg-purple-700 px-3 py-2.5 text-xs font-black text-white">Review & Acknowledge</button> : <p className="mt-3 text-[10px] font-semibold leading-4 text-slate-500">This form requires completion outside the Parent Portal. Contact your TCS location for instructions.</p>}</div>)}</div>
               {signedForms.length > 0 && <p className="mt-4 text-[10px] font-bold text-slate-400">{signedForms.length} portal/form item{signedForms.length === 1 ? "" : "s"} already completed.</p>}
+            </section>
+
+            <section className="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-5 shadow-sm">
+              <div className="flex items-center gap-3"><Newspaper className="h-5 w-5 text-emerald-700" /><div><h2 className="font-black text-slate-950">Monthly Newsletters</h2><p className="text-xs text-slate-500">Family updates, activities, reminders, and what’s happening around TCS.</p></div></div>
+              {overview?.newsletters?.length ? <div className="mt-4 space-y-3">{overview.newsletters.slice(0, 6).map((newsletter) => <article key={newsletter.id} className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><p className="text-[9px] font-black uppercase tracking-wider text-emerald-700">{monthYear(newsletter.month)}</p><h3 className="mt-1 text-sm font-black text-slate-950">{newsletter.title}</h3>{newsletter.summary && <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">{newsletter.summary}</p>}</div><Newspaper className="h-5 w-5 flex-none text-emerald-500" /></div>{newsletter.url && <a href={newsletter.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-3 py-2.5 text-[10px] font-black text-white"><UploadCloud className="h-3.5 w-3.5 rotate-180" />Open Newsletter</a>}</article>)}</div> : <div className="mt-4 rounded-2xl bg-white/80 p-5 text-center"><Newspaper className="mx-auto h-7 w-7 text-emerald-700" /><p className="mt-2 text-sm font-black text-slate-800">No newsletters posted yet.</p><p className="mt-1 text-xs font-semibold leading-5 text-slate-500">When TCS publishes a monthly newsletter, you’ll be able to open it here anytime.</p></div>}
             </section>
 
             <section className="relative overflow-hidden rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-amber-50 p-5 shadow-sm">
