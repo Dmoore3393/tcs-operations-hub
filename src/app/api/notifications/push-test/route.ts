@@ -5,6 +5,7 @@ import {
   parseNativePushRegistrations,
   saveNativePushRegistrations,
   sendApplePush,
+  type NativePushRegistration,
 } from "@/lib/server/native-push";
 
 export async function POST(request: Request) {
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const activeNative = [];
+    const activeNative: NativePushRegistration[] = [];
     for (const device of nativeDevices) {
       try {
         const result = await sendApplePush(device, {
