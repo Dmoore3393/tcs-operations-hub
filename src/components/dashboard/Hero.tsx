@@ -1,5 +1,6 @@
 "use client";
 
+import { FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
 import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import dashboardBanner from "@/assets/dashboard/tcs-dashboard-younger-school-age.png";
@@ -46,6 +47,7 @@ export default function DashboardHero() {
       className="tcs-pop relative isolate min-h-[430px] overflow-hidden rounded-[2rem] border bg-white shadow-[0_26px_70px_-35px_rgba(15,23,42,.55)] md:min-h-[370px]"
       style={{ borderColor: `${theme.primary}33` }}
     >
+      <FunDoodles className="z-[1] opacity-25" />
       <Image
         src={dashboardBanner}
         alt="A split childcare scene with younger children creating art and building, and school-age children reading, studying, and working on STEM activities."
@@ -112,6 +114,9 @@ export default function DashboardHero() {
             </Link>
           ))}
         </div>
+      </div>
+      <div className="absolute bottom-5 right-5 z-20 hidden xl:block">
+        <GatorGuide size="md" message={<>You’ve got this. One task at a time. ⭐</>} />
       </div>
     </section>
   );
