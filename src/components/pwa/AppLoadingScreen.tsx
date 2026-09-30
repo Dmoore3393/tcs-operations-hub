@@ -14,7 +14,7 @@ export default function AppLoadingScreen() {
         className="absolute inset-0 bg-center bg-no-repeat opacity-35"
         style={{
           backgroundImage: "url('/branding/tcs-hub-loading.webp')",
-          backgroundSize: "cover",
+          backgroundSize: "contain",
         }}
         aria-hidden="true"
       />
