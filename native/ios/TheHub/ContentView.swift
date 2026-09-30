@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @EnvironmentObject private var lock: AppLockController
@@ -6,14 +7,22 @@ struct ContentView: View {
 
     @State private var isLoading = true
     @State private var lastError: String?
+    @State private var hasShownLaunch = false
 
     var body: some View {
         ZStack {
-            Color(red: 0.97, green: 0.95, blue: 0.89)
+            Color(red: 0.024, green: 0.161, blue: 0.110)
                 .ignoresSafeArea()
 
             HubWebView(isLoading: $isLoading, lastError: $lastError)
                 .ignoresSafeArea(.container, edges: .bottom)
+                .opacity(isLoading && !hasShownLaunch ? 0 : 1)
+
+            if isLoading && !hasShownLaunch {
+                HubArtwork(resource: "tcs-hub-launch", fileExtension: "webp")
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+            }
 
             VStack(spacing: 0) {
                 if !network.isOnline {
@@ -25,12 +34,6 @@ struct ContentView: View {
                         .background(Color.red.opacity(0.92))
                 }
 
-                if isLoading {
-                    ProgressView()
-                        .tint(Color(red: 0.16, green: 0.30, blue: 0.19))
-                        .padding(.top, 8)
-                }
-
                 Spacer()
             }
 
@@ -38,16 +41,17 @@ struct ContentView: View {
                 VStack(spacing: 12) {
                     Image(systemName: "wifi.exclamationmark")
                         .font(.system(size: 42, weight: .semibold))
-                        .foregroundStyle(Color(red: 0.55, green: 0.16, blue: 0.18))
+                        .foregroundStyle(.white)
                     Text("The Hub is offline")
                         .font(.title2.bold())
+                        .foregroundStyle(.white)
                     Text(lastError)
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white.opacity(0.78))
                         .multilineTextAlignment(.center)
                 }
                 .padding(24)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .background(.black.opacity(0.38), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .padding()
             }
 
@@ -57,6 +61,49 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: lock.isLocked)
+        .onChange(of: isLoading) { _, loading in
+            if !loading {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    hasShownLaunch = true
+                }
+            }
+        }
+    }
+}
+
+private struct HubArtwork: View {
+    let resource: String
+    let fileExtension: String
+
+    private var image: UIImage? {
+        guard let url = Bundle.main.url(forResource: resource, withExtension: fileExtension),
+              let data = try? Data(contentsOf: url) else {
+            return nil
+        }
+        return UIImage(data: data)
+    }
+
+    var body: some View {
+        ZStack {
+            Color(red: 0.024, green: 0.161, blue: 0.110)
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .padding(.horizontal, 10)
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.system(size: 52, weight: .bold))
+                    Text("The Hub")
+                        .font(.largeTitle.bold())
+                    Text("TCS Operations")
+                        .font(.headline)
+                        .opacity(0.75)
+                }
+                .foregroundStyle(.white)
+            }
+        }
     }
 }
 

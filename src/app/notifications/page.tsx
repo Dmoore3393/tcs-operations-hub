@@ -3,7 +3,7 @@
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
-import { enableHubPushNotifications, isStandaloneHubApp } from "@/lib/push-client";
+import { enableHubPushNotifications, isNativeHubApp, isStandaloneHubApp } from "@/lib/push-client";
 import {
   defaultNotificationPreferences,
   type HubNotification,
@@ -39,6 +39,7 @@ type RegisteredDevice = {
   lastSeenAt: string;
   userAgent: string;
   expirationTime: number | null;
+  kind?: "web" | "ios";
 };
 
 type StaffDeviceGroup = {
@@ -118,7 +119,38 @@ export default function NotificationsPage() {
       });
       if (!response.ok) return;
       const payload = await response.json() as { devices?: RegisteredDevice[] };
-      setDevices(Array.isArray(payload.devices) ? payload.devices : []);
+      const webDevices = Array.isArray(payload.devices)
+        ? payload.devices.map((item) => ({ ...item, kind: "web" as const }))
+        : [];
+
+      if (isNativeHubApp()) {
+        const nativeResponse = await fetch("/api/notifications/native-subscription", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: "no-store",
+        });
+        if (nativeResponse.ok) {
+          const nativePayload = await nativeResponse.json() as {
+            devices?: Array<{
+              id: string;
+              createdAt: string;
+              lastSeenAt: string;
+              appVersion: string;
+            }>;
+          };
+          const nativeDevices = (nativePayload.devices ?? []).map((item) => ({
+            id: item.id,
+            createdAt: item.createdAt,
+            lastSeenAt: item.lastSeenAt,
+            userAgent: `The Hub iPhone app • v${item.appVersion || "1.0"}`,
+            expirationTime: null,
+            kind: "ios" as const,
+          }));
+          setDevices([...nativeDevices, ...webDevices]);
+          return;
+        }
+      }
+
+      setDevices(webDevices);
     } catch {
       // Device management should not interrupt Notification Center.
     }
@@ -141,7 +173,12 @@ export default function NotificationsPage() {
 
   useEffect(() => { void load(); void loadDevices(); void loadTeamDevices(); }, [load, loadDevices, loadTeamDevices]);
   useEffect(() => {
-    if (typeof window !== "undefined") setPermission("Notification" in window ? Notification.permission : "unsupported");
+    if (typeof window === "undefined") return;
+    if (isNativeHubApp()) {
+      setPermission("default");
+      return;
+    }
+    setPermission("Notification" in window ? Notification.permission : "unsupported");
   }, []);
 
   const visible = useMemo(
@@ -198,14 +235,17 @@ export default function NotificationsPage() {
     setPermission(result.permission === "unsupported" ? "unsupported" : result.permission);
     setPushMessage(result.ok ? "Background notifications are registered on this device." : result.reason);
     if (result.ok) {
-      const registration = await navigator.serviceWorker?.ready;
-      await registration?.showNotification("The Hub notifications are on", {
-        body: "Important TCS updates can now reach this device even when The Hub is not open.",
-        icon: "/app-icon-192.png",
-        badge: "/app-icon-192.png",
-        tag: "tcs-notifications-enabled",
-        data: { href: "/notifications" },
-      });
+      await loadDevices();
+      if (!isNativeHubApp()) {
+        const registration = await navigator.serviceWorker?.ready;
+        await registration?.showNotification("The Hub notifications are on", {
+          body: "Important TCS updates can now reach this device even when The Hub is not open.",
+          icon: "/app-icon-192.png",
+          badge: "/app-icon-192.png",
+          tag: "tcs-notifications-enabled",
+          data: { href: "/notifications" },
+        });
+      }
     }
   }
 
@@ -236,14 +276,17 @@ export default function NotificationsPage() {
     setSaving(`device-${device.id}`);
     setPushMessage("");
     try {
-      const response = await fetch("/api/notifications/subscription", {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
+      const response = await fetch(
+        device.kind === "ios" ? "/api/notifications/native-subscription" : "/api/notifications/subscription",
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ deviceId: device.id }),
         },
-        body: JSON.stringify({ deviceId: device.id }),
-      });
+      );
       const payload = await response.json() as { error?: string };
       if (!response.ok) throw new Error(payload.error || "Could not remove this device.");
       setPushMessage("The device was removed from background notifications.");
@@ -357,11 +400,11 @@ export default function NotificationsPage() {
         <aside className="space-y-4">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-100 text-emerald-700"><Smartphone className="h-5 w-5" /></span><div><h2 className="font-black text-slate-950">Device Alerts</h2><p className="text-xs text-slate-500">{permission === "granted" ? "Allowed on this device" : permission === "denied" ? "Blocked on this device" : permission === "unsupported" ? "Not supported here" : "Permission not requested"}</p></div></div>
-            {permission === "default" && <button onClick={() => void enableSystemAlerts()} className="mt-4 w-full rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white">Enable Device Alerts</button>}
+            {permission === "default" && <button onClick={() => void enableSystemAlerts()} className="mt-4 w-full rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white">{isNativeHubApp() ? "Enable iPhone Alerts" : "Enable Device Alerts"}</button>}
             {permission === "granted" && <button disabled={saving === "push-test"} onClick={() => void testBackgroundPush()} className="mt-4 w-full rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-800 disabled:opacity-50">{saving === "push-test" ? "Sending Test…" : "Send Test Background Alert"}</button>}
             {pushMessage && <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-semibold leading-5 text-slate-700">{pushMessage}</div>}
             {permission === "denied" && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900">Notifications were blocked in the device/browser settings. Change the permission there to turn them back on.</div>}
-            {!isStandaloneHubApp() && <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs font-semibold leading-5 text-blue-900">On iPhone, install The Hub to the Home Screen before enabling notification permission.</div>}
+            {!isNativeHubApp() && !isStandaloneHubApp() && <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs font-semibold leading-5 text-blue-900">On iPhone, install The Hub to the Home Screen before enabling notification permission.</div>}
 
             <div className="mt-5 border-t border-slate-100 pt-4">
               <div className="flex items-center justify-between"><div><h3 className="text-xs font-black text-slate-900">Registered devices</h3><p className="mt-0.5 text-[10px] text-slate-500">Remove an old or lost phone here.</p></div><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">{devices.length}</span></div>

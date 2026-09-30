@@ -37,18 +37,16 @@ Redesigned TCS forms can be added without changing the app architecture:
 4. Link generated/signed copies to the correct child, employee, facility, vehicle, or operational record.
 5. Apply a configured retention policy; do not invent a retention period when TCS has not approved one.
 
-## Apple organization enrollment
+## Apple Developer enrollment
 
-For organization enrollment, prepare:
-- Thomason Childcare Solutions legal entity information.
-- D-U-N-S number.
-- A person with legal authority to bind the organization.
-- Work email associated with the organization.
-- Functional public organization website.
-- Apple Developer Program annual membership fee.
-- App Store privacy answers, public privacy-policy URL, support URL, screenshots, app description, age rating, and review notes/test access.
+The planned Apple membership is the individual developer account Danielle is already enrolling in and paying for personally.
 
-Do not create the Apple signing/bundle identity until the organization developer account is available.
+Before submission:
+- Confirm the Apple Developer Program membership is Active.
+- Register the final bundle identifier: `com.thomasonchildcaresolutions.thehub`.
+- Select Danielle's Apple signing team in Xcode.
+- Create/connect an APNs key and add its Team ID, Key ID, and private key to the secured release environment.
+- Complete App Store privacy answers, public privacy-policy URL, support URL, screenshots, app description, age rating, and review notes/test access.
 
 ## Google Play organization enrollment
 

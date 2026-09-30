@@ -14,6 +14,12 @@ import { normalizeLocation } from "@/lib/location-config";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { sendWebPush, type StoredPushSubscription } from "@/lib/server/web-push";
+import {
+  parseNativePushRegistrations,
+  saveNativePushRegistrations,
+  sendApplePush,
+  type NativePushRegistration,
+} from "@/lib/server/native-push";
 
 const INBOX_KEY = "tcs_notification_inbox";
 const PREFS_KEY = "tcs_notification_preferences";
@@ -72,6 +78,57 @@ export async function savePushSubscriptions(
   appMetadata[PUSH_KEY] = subscriptions.slice(0, MAX_PUSH_SUBSCRIPTIONS);
   const { error } = await admin.auth.admin.updateUserById(user.id, { app_metadata: appMetadata });
   if (error) throw new Error(error.message);
+}
+
+async function deliverPushChannels(args: {
+  admin: SupabaseClient;
+  user: User;
+  payload: { title: string; body: string; href: string; tag: string };
+}) {
+  const webSubscriptions = parsePushSubscriptions(args.user);
+  const activeWeb: StoredPushSubscription[] = [];
+
+  for (const subscription of webSubscriptions) {
+    try {
+      const result = await sendWebPush(subscription, args.payload);
+      if (!result.stale) activeWeb.push(subscription);
+    } catch {
+      activeWeb.push(subscription);
+    }
+  }
+
+  if (activeWeb.length !== webSubscriptions.length) {
+    const refreshed = await args.admin.auth.admin.getUserById(args.user.id);
+    if (refreshed.data.user) {
+      await savePushSubscriptions(args.admin, refreshed.data.user, activeWeb);
+    }
+  }
+
+  const refreshedForNative = await args.admin.auth.admin.getUserById(args.user.id);
+  const currentUser = refreshedForNative.data.user ?? args.user;
+  const nativeDevices = parseNativePushRegistrations(currentUser);
+  const activeNative: NativePushRegistration[] = [];
+
+  for (const device of nativeDevices) {
+    try {
+      const result = await sendApplePush(device, args.payload);
+      if (!result.stale) activeNative.push(device);
+    } catch {
+      activeNative.push(device);
+    }
+  }
+
+  if (activeNative.length !== nativeDevices.length) {
+    const refreshed = await args.admin.auth.admin.getUserById(args.user.id);
+    if (refreshed.data.user) {
+      await saveNativePushRegistrations(args.admin, refreshed.data.user, activeNative);
+    }
+  }
+
+  return {
+    webRegistered: webSubscriptions.length,
+    nativeRegistered: nativeDevices.length,
+  };
 }
 
 function acceptsCategory(preferences: HubNotificationPreferences, eventType: HubNotificationEventType) {
@@ -234,30 +291,19 @@ export async function dispatchHubNotification(args: {
     const nextInbox = [notification, ...inbox].slice(0, MAX_NOTIFICATIONS);
     await saveNotificationState(admin, user, nextInbox, preferences);
 
-    const subscriptions = parsePushSubscriptions(user);
     const bypassQuietHours = notification.severity === "urgent";
     const shouldPush = !quietHoursActive(preferences) || bypassQuietHours;
-    if (subscriptions.length && shouldPush) {
-      const activeSubscriptions: StoredPushSubscription[] = [];
-      for (const subscription of subscriptions) {
-        try {
-          const result = await sendWebPush(subscription, {
-            title: notification.title,
-            body: notification.body,
-            href: notification.href,
-            tag: notification.eventKey || notification.id,
-          });
-          if (!result.stale) activeSubscriptions.push(subscription);
-        } catch {
-          activeSubscriptions.push(subscription);
-        }
-      }
-      if (activeSubscriptions.length !== subscriptions.length) {
-        const refreshed = await admin.auth.admin.getUserById(user.id);
-        if (refreshed.data.user) {
-          await savePushSubscriptions(admin, refreshed.data.user, activeSubscriptions);
-        }
-      }
+    if (shouldPush) {
+      await deliverPushChannels({
+        admin,
+        user,
+        payload: {
+          title: notification.title,
+          body: notification.body,
+          href: notification.href,
+          tag: notification.eventKey || notification.id,
+        },
+      });
     }
 
     delivered += 1;
@@ -338,26 +384,17 @@ export async function dispatchManualHubNotification(args: {
 
     await saveNotificationState(admin, state.user, [notification, ...state.inbox].slice(0, MAX_NOTIFICATIONS), state.preferences);
 
-    const subscriptions = parsePushSubscriptions(state.user);
-    if (subscriptions.length && !quietHoursActive(state.preferences)) {
-      const activeSubscriptions: StoredPushSubscription[] = [];
-      for (const subscription of subscriptions) {
-        try {
-          const result = await sendWebPush(subscription, {
-            title: notification.title,
-            body: notification.body,
-            href: notification.href,
-            tag: notification.eventKey,
-          });
-          if (!result.stale) activeSubscriptions.push(subscription);
-        } catch {
-          activeSubscriptions.push(subscription);
-        }
-      }
-      if (activeSubscriptions.length !== subscriptions.length) {
-        const refreshed = await admin.auth.admin.getUserById(state.user.id);
-        if (refreshed.data.user) await savePushSubscriptions(admin, refreshed.data.user, activeSubscriptions);
-      }
+    if (!quietHoursActive(state.preferences)) {
+      await deliverPushChannels({
+        admin,
+        user: state.user,
+        payload: {
+          title: notification.title,
+          body: notification.body,
+          href: notification.href,
+          tag: notification.eventKey,
+        },
+      });
     }
     delivered += 1;
   }
@@ -430,30 +467,18 @@ export async function dispatchFileAuditOversightNotification(args: {
       state.preferences,
     );
 
-    const subscriptions = parsePushSubscriptions(state.user);
     const bypassQuietHours = notification.severity === "urgent";
-    if (subscriptions.length && (!quietHoursActive(state.preferences) || bypassQuietHours)) {
-      const activeSubscriptions: StoredPushSubscription[] = [];
-      for (const subscription of subscriptions) {
-        try {
-          const result = await sendWebPush(subscription, {
-            title: notification.title,
-            body: notification.body,
-            href: notification.href,
-            tag: notification.eventKey,
-          });
-          if (!result.stale) activeSubscriptions.push(subscription);
-        } catch {
-          activeSubscriptions.push(subscription);
-        }
-      }
-
-      if (activeSubscriptions.length !== subscriptions.length) {
-        const refreshed = await args.admin.auth.admin.getUserById(state.user.id);
-        if (refreshed.data.user) {
-          await savePushSubscriptions(args.admin, refreshed.data.user, activeSubscriptions);
-        }
-      }
+    if (!quietHoursActive(state.preferences) || bypassQuietHours) {
+      await deliverPushChannels({
+        admin: args.admin,
+        user: state.user,
+        payload: {
+          title: notification.title,
+          body: notification.body,
+          href: notification.href,
+          tag: notification.eventKey,
+        },
+      });
     }
 
     delivered += 1;

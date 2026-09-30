@@ -24,13 +24,13 @@ That keeps the website and app on one operational system. Most Hub feature/conte
 
 Planned Apple distribution: **Unlisted App**.
 
-This keeps The Hub out of App Store search and charts. Staff receive the direct TCS download link. Downloading the app does not grant access; an active authorized TCS account is still required.
+The Apple Developer membership may remain under Danielle's individual developer account. The app itself remains branded as **The Hub — TCS Operations** and downloading it never grants access; an active authorized TCS staff or family account is still required.
 
-## Provisional bundle ID
+## Bundle ID direction
 
 com.thomasonchildcaresolutions.thehub
 
-Do not register this with Apple until the TCS Apple Developer account is ready. It can be changed before App Store registration if needed.
+Register this identifier once the Apple Developer membership is active and signing can be completed. The repo now uses this same identifier for native push registration and App Store packaging.
 
 ## Generate the Xcode project
 
@@ -42,8 +42,10 @@ This native shell uses XcodeGen so the Xcode project does not need to be hand-ma
 4. Open TheHub.xcodeproj.
 5. Choose the TCS Apple Developer team under Signing & Capabilities.
 6. Register the final bundle ID.
-7. Add Push Notifications / APNs capability after the Apple Developer account is connected.
-8. Add final App Store icons and screenshots before archive/release.
+7. The project already contains the Push Notifications entitlement and APNs bridge. Connect the Apple signing team and APNs key in the release environment.
+8. The official green/yellow Hub icon is converted to the required 1024×1024 App Store icon by the native pre-build step.
+9. The official Hub launch artwork is bundled as the native opening screen artwork.
+10. Capture final App Store screenshots after TestFlight smoke testing.
 
 ## Before App Store submission
 

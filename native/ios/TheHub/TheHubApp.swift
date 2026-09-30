@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct TheHubApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @Environment(\.scenePhase) private var scenePhase
 
     @StateObject private var lock = AppLockController()

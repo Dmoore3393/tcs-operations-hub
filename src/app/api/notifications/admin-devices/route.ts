@@ -4,6 +4,10 @@ import {
   savePushSubscriptions,
 } from "@/lib/server/notifications";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
+import {
+  parseNativePushRegistrations,
+  saveNativePushRegistrations,
+} from "@/lib/server/native-push";
 
 type StaffRow = {
   user_id: string;
@@ -38,19 +42,30 @@ export async function GET(request: Request) {
         lastSeenAt: string;
         userAgent: string;
         expirationTime: number | null;
+        kind?: "web" | "ios";
       }>;
     }> = [];
 
     for (const record of (staff ?? []) as StaffRow[]) {
       const { data } = await admin.auth.admin.getUserById(record.user_id);
       if (!data.user) continue;
-      const devices = parsePushSubscriptions(data.user).map((item) => ({
+      const webDevices = parsePushSubscriptions(data.user).map((item) => ({
         id: pushDeviceId(item.endpoint),
         createdAt: item.createdAt,
         lastSeenAt: item.lastSeenAt,
         userAgent: item.userAgent,
         expirationTime: item.expirationTime,
+        kind: "web" as const,
       }));
+      const nativeDevices = parseNativePushRegistrations(data.user).map((item) => ({
+        id: item.id,
+        createdAt: item.createdAt,
+        lastSeenAt: item.lastSeenAt,
+        userAgent: `The Hub iPhone app • v${item.appVersion || "1.0"}`,
+        expirationTime: null,
+        kind: "ios" as const,
+      }));
+      const devices = [...nativeDevices, ...webDevices];
       if (!devices.length) continue;
       rows.push({
         userId: record.user_id,
@@ -91,11 +106,20 @@ export async function DELETE(request: Request) {
     const { data: authData, error: authError } = await admin.auth.admin.getUserById(userId);
     if (authError || !authData.user) throw authError ?? new Error("Staff account not found.");
 
-    const current = parsePushSubscriptions(authData.user);
-    const next = current.filter((item) => pushDeviceId(item.endpoint) !== deviceId);
-    if (next.length === current.length) throw new Response("Registered device not found.", { status: 404 });
+    const webCurrent = parsePushSubscriptions(authData.user);
+    const nativeCurrent = parseNativePushRegistrations(authData.user);
+    const webNext = webCurrent.filter((item) => pushDeviceId(item.endpoint) !== deviceId);
+    const nativeNext = nativeCurrent.filter((item) => item.id !== deviceId);
 
-    await savePushSubscriptions(admin, authData.user, next);
+    if (webNext.length === webCurrent.length && nativeNext.length === nativeCurrent.length) {
+      throw new Response("Registered device not found.", { status: 404 });
+    }
+
+    if (webNext.length !== webCurrent.length) {
+      await savePushSubscriptions(admin, authData.user, webNext);
+    } else {
+      await saveNativePushRegistrations(admin, authData.user, nativeNext);
+    }
 
     await userClient.rpc("record_audit_event", {
       p_action: "REVIEW",
@@ -109,7 +133,7 @@ export async function DELETE(request: Request) {
       },
     });
 
-    return Response.json({ ok: true, remainingDevices: next.length });
+    return Response.json({ ok: true, remainingDevices: webNext.length + nativeNext.length });
   } catch (error) {
     return staffErrorResponse(error);
   }

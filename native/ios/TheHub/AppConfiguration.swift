@@ -6,6 +6,7 @@ enum AppConfiguration {
         "tcs-operations-hub.vercel.app"
     ]
 
+    static let bundleId = "com.thomasonchildcaresolutions.thehub"
     static let nativeUserAgentSuffix = "TheHubIOS/1.0"
     static let backgroundLockGracePeriod: TimeInterval = 30
 }
