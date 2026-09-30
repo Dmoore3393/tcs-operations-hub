@@ -1,5 +1,6 @@
 "use client";
 
+import { CelebrationBits, FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
 import { displayDate, lateDurationLabel } from "@/lib/family-care-calendar";
 import type { Session } from "@supabase/supabase-js";
@@ -216,14 +217,14 @@ export default function ParentScheduleCalendarPage() {
   }
 
   if (loading) {
-    return <main className="grid min-h-screen place-items-center bg-[#f4f0e7] text-slate-700"><div className="text-center"><LoaderCircle className="mx-auto h-8 w-8 animate-spin text-emerald-700" /><p className="mt-3 text-sm font-black">Opening your care calendar…</p></div></main>;
+    return <main className="relative grid min-h-screen place-items-center overflow-hidden bg-gradient-to-br from-[#fff7db] via-[#f4f0e7] to-[#e4f6ec] p-5 text-slate-700"><FunDoodles soft /><section className="tcs-soft-pop relative z-10 w-full max-w-md rounded-[30px] border border-emerald-200 bg-white/90 p-7 text-center shadow-2xl backdrop-blur"><div className="flex justify-center"><GatorGuide size="lg" /></div><p className="mt-2 text-[10px] font-black uppercase tracking-[.18em] text-emerald-700">Family Care Calendar</p><h1 className="mt-2 text-2xl font-black text-slate-950">Opening your planning space 📅✨</h1><p className="mt-2 text-sm font-semibold leading-6 text-slate-500">Checking upcoming weeks, TCS closures, and your family’s schedule status.</p><LoaderCircle className="mx-auto mt-5 h-6 w-6 animate-spin text-emerald-700" /></section></main>;
   }
 
   if (error && !data) {
     return <main className="min-h-screen bg-[#f4f0e7] p-4 sm:p-8"><section className="mx-auto mt-16 max-w-xl rounded-[28px] border border-red-200 bg-white p-7 text-center shadow-xl"><AlertTriangle className="mx-auto h-10 w-10 text-red-700" /><h1 className="mt-3 text-2xl font-black text-slate-950">Family Care Calendar</h1><p className="mt-3 text-sm font-semibold leading-6 text-slate-600">{error}</p><button onClick={() => router.push("/parent")} className="mt-5 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white">Back to Parent Portal</button></section></main>;
   }
 
-  return <main className="min-h-screen bg-[#f5f1e8] pb-16 text-slate-950">
+  return <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#fffaf0] via-[#f5f1e8] to-[#eef8f1] pb-16 text-slate-950"><FunDoodles soft />
     <header className="sticky top-0 z-30 border-b border-emerald-900/10 bg-[#173d29]/95 text-white shadow-sm backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
         <button onClick={() => router.push("/parent")} className="grid h-10 w-10 place-items-center rounded-xl bg-white/10"><ChevronLeft className="h-5 w-5" /></button>
@@ -232,13 +233,14 @@ export default function ParentScheduleCalendarPage() {
     </header>
 
     <div className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6">
-      <section className="overflow-hidden rounded-[30px] bg-gradient-to-br from-[#173d29] via-[#2e6c47] to-[#143522] p-6 text-white shadow-xl">
-        <CalendarDays className="h-9 w-9 text-emerald-200" />
-        <h2 className="mt-3 text-3xl font-black">Plan care when you know your schedule.</h2>
-        <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-emerald-50/85">Submit upcoming weeks early, or send a late request when the app still allows it. Weekly schedules are due Friday by 6:00 PM. A submitted schedule is not guaranteed until TCS reviews space, staffing, and ratios.</p>
+      <section className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-[#173d29] via-[#2e6c47] to-[#143522] p-6 text-white shadow-xl"><FunDoodles className="opacity-35" />
+        <div className="relative z-10 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div><CalendarDays className="h-9 w-9 text-emerald-200" /><h2 className="mt-3 text-3xl font-black sm:text-4xl">Your schedule helps us plan great care.</h2><p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-emerald-50/85">Submit upcoming weeks as soon as you know them. Weekly schedules are due Friday by 6:00 PM, and TCS reviews each request against space, staffing, and ratios before care is confirmed.</p></div>
+          <GatorGuide size="lg" message={<>Early schedules = easier planning for everybody. You can send future weeks anytime! 💚</>} />
+        </div>
       </section>
 
-      {notice && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-black text-emerald-900"><CheckCircle2 className="mr-2 inline h-4 w-4" />{notice}</div>}
+      {notice && <div className="tcs-soft-pop relative overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-black text-emerald-900"><CelebrationBits /><CheckCircle2 className="mr-2 inline h-4 w-4" />{notice}</div>}
       {warning && <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-black leading-6 text-amber-950"><AlertTriangle className="mr-2 inline h-4 w-4" />{warning}</div>}
       {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-900">{error}</div>}
 
@@ -266,7 +268,7 @@ export default function ParentScheduleCalendarPage() {
 
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{draft.map((day) => {
             const closure = closureForDate(day.date);
-            return <article key={day.date} className={`rounded-2xl border p-4 ${closure ? "border-slate-300 bg-slate-100" : day.noCare ? "border-slate-200 bg-white" : "border-emerald-300 bg-emerald-50"}`}>
+            return <article key={day.date} className={`tcs-joy-card rounded-2xl border p-4 ${closure ? "border-slate-300 bg-slate-100" : day.noCare ? "border-slate-200 bg-white" : "border-emerald-300 bg-emerald-50"}`}>
               <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{displayDate(day.date, { weekday: "long" })}</p><h3 className="mt-1 text-base font-black">{displayDate(day.date, { month: "short", day: "numeric" })}</h3></div>{closure ? <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2.5 py-1 text-[9px] font-black text-white"><Lock className="h-3 w-3" />Closed</span> : <button type="button" onClick={() => updateDay(day.date, { noCare: !day.noCare })} className={`rounded-full px-3 py-1.5 text-[10px] font-black ${day.noCare ? "bg-slate-100 text-slate-600" : "bg-emerald-700 text-white"}`}>{day.noCare ? "No care" : "Need care"}</button>}</div>
               {closure ? <div className="mt-4 rounded-xl border border-slate-300 bg-white p-3"><p className="text-xs font-black text-slate-900">{closure.title}</p>{closure.note && <p className="mt-1 text-[10px] font-semibold leading-4 text-slate-500">{closure.note}</p>}<p className="mt-2 text-[10px] font-black text-red-700">Care cannot be scheduled on this date.</p></div> : !day.noCare ? <div className="mt-4 space-y-3"><div className="grid grid-cols-2 gap-2"><label><span className="mb-1 block text-[9px] font-black uppercase text-slate-400">Drop-off</span><input type="time" value={day.startTime} onChange={(event) => updateDay(day.date, { startTime: event.target.value })} className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-sm font-black" /></label><label><span className="mb-1 block text-[9px] font-black uppercase text-slate-400">Pick-up</span><input type="time" value={day.endTime} onChange={(event) => updateDay(day.date, { endTime: event.target.value })} className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-sm font-black" /></label></div><textarea value={day.note} onChange={(event) => updateDay(day.date, { note: event.target.value.slice(0, 500) })} placeholder="Optional note for TCS" className="min-h-16 w-full resize-y rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-xs font-semibold" /></div> : <p className="mt-4 rounded-xl bg-slate-50 p-3 text-xs font-semibold text-slate-500">No care requested for this day.</p>}
             </article>;
