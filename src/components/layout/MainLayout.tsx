@@ -127,6 +127,7 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/family-access": { title: "Family Access & Privacy", subtitle: "Separate households, custody-aware portal permissions, and private billing access" },
   "/family-communications": { title: "Family Communication Center", subtitle: "Secure TCS-to-family conversations connected to Parent Portal" },
   "/children": { title: "Children", subtitle: "Enrollment, health alerts, and child files" },
+  "/children/import-brightwheel": { title: "Import Brightwheel Roster", subtitle: "Bulk-import child records without sending Parent Portal invitations" },
   "/attendance": { title: "Check-In / Check-Out", subtitle: "Live attendance, pickup verification, and daily handoff records" },
   "/child-file-audits": { title: "Child File Audits", subtitle: "In-home and School Age file checklists, document dates, expirations, and next audit tracking" },
   "/enrollment-readiness": { title: "Enrollment Readiness", subtitle: "Smart enrollment packets based on program, age, transportation, and file audits" },

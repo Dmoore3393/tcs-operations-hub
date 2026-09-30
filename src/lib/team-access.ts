@@ -162,6 +162,7 @@ export const ROLE_PERMISSION_SUMMARIES: Record<AccessRole, string[]> = {
 
 const routePermissionMap: Record<string, EmployeePermission> = {
   "/children": "children_basic",
+  "/children/import-brightwheel": "children_basic",
   "/attendance": "schedules",
   "/child-schedules": "schedules",
   "/family-care-calendar": "schedules",
