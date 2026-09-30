@@ -492,6 +492,12 @@ export default function ParentPortalPage() {
       </section>}
 
       {selectedChild && <>
+        {(selectedChild.access.permissions.viewSchedule || selectedChild.access.permissions.submitSchedule) && <section className="overflow-hidden rounded-3xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-blue-50 p-5 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3"><span className="grid h-12 w-12 flex-none place-items-center rounded-2xl bg-emerald-700 text-white shadow-sm"><CalendarDays className="h-6 w-6" /></span><div><p className="text-[10px] font-black uppercase tracking-wider text-emerald-700">Weekly care planning</p><h2 className="mt-1 text-xl font-black text-slate-950">Family Care Calendar</h2><p className="mt-1 text-xs font-semibold leading-5 text-slate-600">Submit upcoming schedules early, see TCS closure dates, and track whether each weekly request is pending, approved, or needs changes.</p></div></div>
+            <button onClick={() => router.push("/parent/schedule")} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-700 px-5 py-3 text-xs font-black text-white shadow-sm">{selectedChild.access.permissions.submitSchedule ? "Open & Submit Schedule" : "View Care Calendar"}</button>
+          </div>
+        </section>}
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Card icon={<UserRound className="h-5 w-5" />} label="Attendance" value={selectedChild.attendanceDate === todayPacific() ? selectedChild.attendanceToday || "Not marked" : "Not marked today"} />
           <Card icon={<CalendarDays className="h-5 w-5" />} label="Schedule" value={selectedChild.weeklySchedule || "Schedule not entered"} />
