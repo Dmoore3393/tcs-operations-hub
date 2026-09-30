@@ -134,7 +134,7 @@ assert(iosAssetScript.includes("1024") && iosAssetScript.includes("app-icon-512.
 assert(iosAssetScript.includes('SRCROOT') && !iosAssetScript.includes('dirname "$0"'), "Native app-icon build script must resolve paths from Xcode SRCROOT rather than $0 after XcodeGen inlines the script");
 assert(iosProject.includes('inputFiles:') && iosProject.includes('$(SRCROOT)/../../public/app-icon-512.png'), "Native app-icon build script must declare its source icon as an Xcode sandbox input");
 assert(iosProject.includes('outputFiles:') && iosProject.includes('$(SRCROOT)/TheHub/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png'), "Native app-icon build script must declare the generated App Store icon as an Xcode sandbox output");
-assert(iosContentView.includes('HubArtwork(resource: "tcs-hub-launch"'), "Native opening experience must use the official Hub launch artwork");
+assert(iosContentView.includes('"tcs-hub-launch"') && iosContentView.includes('"tcs-hub-loading"'), "Native opening experience must use both official Hub launch and loading artwork");
 assert(iosApp.includes("UIApplicationDelegateAdaptor(AppDelegate.self)"), "Native iOS app must attach the notification app delegate");
 assert(iosWebView.includes("requestPushNotifications") && iosWebView.includes("tcs-native-push-token"), "Native WebView must bridge APNs registration back to the secured Hub session");
 assert(iosWebView.includes("!AppConfiguration.allowedHosts.contains(host)"), "Native WebView must keep unrelated web hosts outside the secured Hub container");
