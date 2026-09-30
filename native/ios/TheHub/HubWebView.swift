@@ -1,6 +1,7 @@
 import SwiftUI
 import WebKit
 import UIKit
+import UserNotifications
 
 struct HubWebView: UIViewRepresentable {
     @Binding var isLoading: Bool
@@ -14,11 +15,29 @@ struct HubWebView: UIViewRepresentable {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+        configuration.userContentController.add(context.coordinator, name: "tcsNative")
+
+        #if DEBUG
+        let pushEnvironment = "sandbox"
+        #else
+        let pushEnvironment = "production"
+        #endif
+
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
+        let bundleId = Bundle.main.bundleIdentifier ?? AppConfiguration.bundleId
 
         let nativeBridge = """
         window.__TCS_NATIVE_APP__ = {
           platform: 'ios',
-          version: '1.0.0'
+          version: '(version)',
+          bundleId: '(bundleId)',
+          pushEnvironment: '(pushEnvironment)',
+          requestPushNotifications: function () {
+            window.webkit.messageHandlers.tcsNative.postMessage({ action: 'requestPushNotifications' });
+          },
+          openSettings: function () {
+            window.webkit.messageHandlers.tcsNative.postMessage({ action: 'openSettings' });
+          }
         };
         document.documentElement.classList.add('tcs-native-ios');
         window.dispatchEvent(new CustomEvent('tcs-native-ready', { detail: window.__TCS_NATIVE_APP__ }));
@@ -42,20 +61,66 @@ struct HubWebView: UIViewRepresentable {
         webView.scrollView.refreshControl = refresh
 
         context.coordinator.webView = webView
+        context.coordinator.startListening()
+
         webView.load(URLRequest(url: AppConfiguration.productionURL, cachePolicy: .reloadRevalidatingCacheData))
         return webView
     }
 
+    static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
+        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "tcsNative")
+        coordinator.stopListening()
+    }
+
     func updateUIView(_ webView: WKWebView, context: Context) {}
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         @Binding private var isLoading: Bool
         @Binding private var lastError: String?
         weak var webView: WKWebView?
 
+        private var pushObserver: NSObjectProtocol?
+        private var openPathObserver: NSObjectProtocol?
+
         init(isLoading: Binding<Bool>, lastError: Binding<String?>) {
             _isLoading = isLoading
             _lastError = lastError
+        }
+
+        deinit {
+            stopListening()
+        }
+
+        func startListening() {
+            guard pushObserver == nil else { return }
+
+            pushObserver = NotificationCenter.default.addObserver(
+                forName: .hubNativePushToken,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                self?.forwardNativePushToken(notification.userInfo ?? [:])
+            }
+
+            openPathObserver = NotificationCenter.default.addObserver(
+                forName: .hubOpenPath,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard let path = notification.userInfo?["path"] as? String else { return }
+                self?.openHubPath(path)
+            }
+        }
+
+        func stopListening() {
+            if let pushObserver {
+                NotificationCenter.default.removeObserver(pushObserver)
+                self.pushObserver = nil
+            }
+            if let openPathObserver {
+                NotificationCenter.default.removeObserver(openPathObserver)
+                self.openPathObserver = nil
+            }
         }
 
         @objc func refresh(_ sender: UIRefreshControl) {
@@ -108,6 +173,66 @@ struct HubWebView: UIViewRepresentable {
             }
 
             decisionHandler(.allow)
+        }
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.name == "tcsNative",
+                  let body = message.body as? [String: Any],
+                  let action = body["action"] as? String else {
+                return
+            }
+
+            switch action {
+            case "requestPushNotifications":
+                requestPushNotifications()
+            case "openSettings":
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            default:
+                break
+            }
+        }
+
+        private func requestPushNotifications() {
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+                DispatchQueue.main.async {
+                    if granted {
+                        UIApplication.shared.registerForRemoteNotifications()
+                    } else {
+                        self.forwardNativePushToken([
+                            "error": error?.localizedDescription ?? "Notification permission was not granted."
+                        ])
+                    }
+                }
+            }
+        }
+
+        private func forwardNativePushToken(_ details: [AnyHashable: Any]) {
+            guard let webView else { return }
+            var payload: [String: String] = [:]
+            for (key, value) in details {
+                guard let stringKey = key as? String else { continue }
+                payload[stringKey] = String(describing: value)
+            }
+            guard let data = try? JSONSerialization.data(withJSONObject: payload),
+                  let json = String(data: data, encoding: .utf8) else {
+                return
+            }
+
+            webView.evaluateJavaScript(
+                "window.dispatchEvent(new CustomEvent('tcs-native-push-token', { detail: (json) }));"
+            )
+        }
+
+        private func openHubPath(_ rawPath: String) {
+            let path = rawPath.hasPrefix("/") ? rawPath : "/notifications"
+            guard let url = URL(string: path, relativeTo: AppConfiguration.productionURL)?.absoluteURL,
+                  let host = url.host,
+                  AppConfiguration.allowedHosts.contains(host) else {
+                return
+            }
+            webView?.load(URLRequest(url: url))
         }
     }
 }
