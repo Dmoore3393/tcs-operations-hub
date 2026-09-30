@@ -84,7 +84,7 @@ export default function DashboardHero() {
           TCS Operations Hub
         </h1>
         <p className="mt-4 max-w-xl text-base font-semibold leading-7 text-slate-700 sm:text-lg">
-          Childcare operations, simplified—from little learners to school-age care.
+          Your work matters here. Keep children safe, families connected, and every TCS day moving forward.
         </p>
 
         <div className="mt-5 flex flex-wrap items-center gap-2.5">
