@@ -96,6 +96,8 @@ export async function GET(request: Request) {
     const retentionTypes = new Set((retentionResult.data ?? []).map((row) => String(row.document_type)));
     const performanceTypes = new Set((performanceTypesResult.data ?? []).map((row) => String(row.code)));
     const attendance = attendanceResult.data;
+    const appleTeamId = process.env.APPLE_TEAM_ID?.trim() || "6Y2923TFK5";
+    const nativeApnsReady = Boolean(appleTeamId && process.env.APPLE_KEY_ID && process.env.APPLE_APNS_PRIVATE_KEY);
 
     const checks: ReadinessCheck[] = [];
 
@@ -221,13 +223,13 @@ export async function GET(request: Request) {
     checks.push(check(
       "native-apns",
       "Native iPhone push configuration",
-      "6Y2923TFK5" && process.env.APPLE_KEY_ID && process.env.APPLE_APNS_PRIVATE_KEY
+      nativeApnsReady
         ? "pass"
         : "warning",
-      "6Y2923TFK5" && process.env.APPLE_KEY_ID && process.env.APPLE_APNS_PRIVATE_KEY
+      nativeApnsReady
         ? "APNs server credentials are configured for the native iPhone app."
         : "Apple Team ID 6Y2923TFK5 is connected. The APNs Key ID and private key still need to be added to the secure deployment environment.",
-      "6Y2923TFK5" && process.env.APPLE_KEY_ID && process.env.APPLE_APNS_PRIVATE_KEY
+      nativeApnsReady
         ? undefined
         : "Create/connect the APNs key, then add APPLE_KEY_ID and APPLE_APNS_PRIVATE_KEY to the secure deployment environment. Do not put the private key in source control or chat.",
     ));
