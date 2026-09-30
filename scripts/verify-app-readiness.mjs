@@ -124,6 +124,7 @@ assert(enrollmentForecastModel.includes("plannedLastDay") && enrollmentForecastM
 assert(childrenModel.includes("plannedStartDate") && childrenModel.includes("plannedLastDay"), "Child records must preserve planned enrollment dates for forecasting");
 assert(mainLayout.includes('href: "/enrollment-forecast"'), "Enrollment Forecast must remain reachable from Hub navigation");
 assert(iosProject.includes("ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon"), "Native iOS project must compile the official AppIcon asset");
+assert(iosProject.includes("DEVELOPMENT_TEAM: 6Y2923TFK5"), "Native iOS signing must stay connected to Apple Team 6Y2923TFK5");
 assert(iosProject.includes("TheHub/Resources"), "Native iOS project must bundle the official Hub resource folder");
 assert(existsSync(new URL("../native/ios/TheHub/Resources/tcs-hub-launch.webp", import.meta.url)), "Native Hub launch artwork resource link is missing");
 assert(existsSync(new URL("../native/ios/TheHub/Resources/tcs-hub-loading.webp", import.meta.url)), "Native Hub loading artwork resource link is missing");
@@ -135,6 +136,7 @@ assert(iosApp.includes("UIApplicationDelegateAdaptor(AppDelegate.self)"), "Nativ
 assert(iosWebView.includes("requestPushNotifications") && iosWebView.includes("tcs-native-push-token"), "Native WebView must bridge APNs registration back to the secured Hub session");
 assert(iosWebView.includes("!AppConfiguration.allowedHosts.contains(host)"), "Native WebView must keep unrelated web hosts outside the secured Hub container");
 assert(nativePush.includes("api.push.apple.com") && nativePush.includes("APPLE_APNS_PRIVATE_KEY"), "Server must include authenticated APNs delivery support");
+assert(nativePush.includes('"6Y2923TFK5"'), "APNs server configuration must keep the verified Apple Team ID fallback");
 assert(nativePushRoute.includes("requireStaff") && nativePushRoute.includes("deviceToken"), "Native device registration must require an authenticated staff account");
 assert(pushClient.includes("/api/notifications/native-subscription") && pushClient.includes("tcs-native-push-token"), "Web notification client must register the native APNs device through the signed-in Hub account");
 
