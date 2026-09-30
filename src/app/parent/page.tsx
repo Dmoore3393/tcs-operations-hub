@@ -200,14 +200,44 @@ export default function ParentPortalPage() {
   const [hasStaffAccess, setHasStaffAccess] = useState(false);
 
   const loadOverview = useCallback(async (activeSession: Session) => {
-    const response = await fetch("/api/parent/overview", {
-      headers: { Authorization: `Bearer ${activeSession.access_token}` },
-      cache: "no-store",
-    });
-    const payload = await response.json() as Overview & { error?: string };
-    if (!response.ok) throw new Error(payload.error || "Could not open your Parent Portal.");
-    setOverview(payload);
-    setSelectedChildId((current) => current || payload.children[0]?.id || "");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch("/api/parent/overview", {
+        headers: {
+          Authorization: `Bearer ${activeSession.access_token}`,
+        },
+        cache: "no-store",
+        signal: controller.signal,
+      });
+
+      const payload = await response.json() as Overview & { error?: string };
+
+      if (!response.ok) {
+        throw new Error(
+          payload.error || "Could not open your Parent Portal."
+        );
+      }
+
+      setOverview(payload);
+      setSelectedChildId(
+        (current) => current || payload.children[0]?.id || ""
+      );
+    } catch (loadError) {
+      if (
+        loadError instanceof DOMException &&
+        loadError.name === "AbortError"
+      ) {
+        throw new Error(
+          "The Parent Portal took too long to respond. Please try again."
+        );
+      }
+
+      throw loadError;
+    } finally {
+      window.clearTimeout(timeout);
+    }
   }, []);
 
   useEffect(() => {
@@ -228,12 +258,24 @@ export default function ParentPortalPage() {
       }
       setSession(next);
 
-      const staffResult = await client
+      // Staff access only controls whether the Back to Hub button appears.
+      // It should never block the family portal from loading.
+      void client
         .from("staff_access")
         .select("user_id,is_active")
         .eq("user_id", next.user.id)
-        .maybeSingle();
-      setHasStaffAccess(Boolean(staffResult.data?.is_active));
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (!active) return;
+
+          if (error) {
+            console.warn("Could not check staff access:", error);
+            setHasStaffAccess(false);
+            return;
+          }
+
+          setHasStaffAccess(Boolean(data?.is_active));
+        });
 
       try {
         await loadOverview(next);
