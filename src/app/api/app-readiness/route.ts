@@ -219,6 +219,20 @@ export async function GET(request: Request) {
     ));
 
     checks.push(check(
+      "native-apns",
+      "Native iPhone push configuration",
+      process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_APNS_PRIVATE_KEY
+        ? "pass"
+        : "warning",
+      process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_APNS_PRIVATE_KEY
+        ? "APNs server credentials are configured for the native iPhone app."
+        : "The native APNs bridge is built, but Apple Team ID, Key ID, and APNs private key are not all available in this deployment.",
+      process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_APNS_PRIVATE_KEY
+        ? undefined
+        : "After the Apple Developer membership is active, add APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_APNS_PRIVATE_KEY, and confirm APPLE_BUNDLE_ID.",
+    ));
+
+    checks.push(check(
       "leaked-password-protection",
       "Leaked-password protection",
       "manual",
@@ -238,8 +252,8 @@ export async function GET(request: Request) {
       "app-store-accounts",
       "App-store organization accounts",
       "manual",
-      "Apple and Android developer organization enrollment is an external account step and cannot be completed from the Hub codebase.",
-      "Prepare organization developer accounts, D-U-N-S information, website, and public privacy/support URLs.",
+      "Apple Developer membership, signing, and store records are external account steps and cannot be completed from the Hub codebase.",
+      "Confirm Danielle's Apple Developer membership is Active, connect the signing team in Xcode, and complete App Store Connect privacy/support/review information.",
     ));
 
     const automated = checks.filter((item) => item.status !== "manual");
