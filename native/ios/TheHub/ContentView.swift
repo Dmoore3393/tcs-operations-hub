@@ -7,7 +7,8 @@ struct ContentView: View {
 
     @State private var isLoading = true
     @State private var lastError: String?
-    @State private var hasShownLaunch = false
+    @State private var introStage: IntroStage = .launch
+    @State private var introComplete = false
 
     var body: some View {
         ZStack {
@@ -16,12 +17,15 @@ struct ContentView: View {
 
             HubWebView(isLoading: $isLoading, lastError: $lastError)
                 .ignoresSafeArea(.container, edges: .bottom)
-                .opacity(isLoading && !hasShownLaunch ? 0 : 1)
+                .opacity(introComplete ? 1 : 0)
 
-            if isLoading && !hasShownLaunch {
-                HubArtwork(resource: "tcs-hub-launch", fileExtension: "webp")
-                    .ignoresSafeArea()
-                    .transition(.opacity)
+            if !introComplete {
+                HubArtwork(
+                    resource: introStage == .launch ? "tcs-hub-launch" : "tcs-hub-loading",
+                    fileExtension: "webp"
+                )
+                .ignoresSafeArea()
+                .transition(.opacity)
             }
 
             VStack(spacing: 0) {
@@ -61,14 +65,35 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: lock.isLocked)
+        .task {
+            guard !introComplete else { return }
+
+            try? await Task.sleep(nanoseconds: 750_000_000)
+            withAnimation(.easeInOut(duration: 0.22)) {
+                introStage = .loading
+            }
+
+            try? await Task.sleep(nanoseconds: 750_000_000)
+            finishIntroIfReady()
+        }
         .onChange(of: isLoading) { loading in
-            if !loading {
-                withAnimation(.easeOut(duration: 0.25)) {
-                    hasShownLaunch = true
-                }
+            if !loading && introStage == .loading {
+                finishIntroIfReady()
             }
         }
     }
+
+    private func finishIntroIfReady() {
+        guard !isLoading else { return }
+        withAnimation(.easeOut(duration: 0.3)) {
+            introComplete = true
+        }
+    }
+}
+
+private enum IntroStage {
+    case launch
+    case loading
 }
 
 private struct HubArtwork: View {
