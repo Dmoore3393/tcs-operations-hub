@@ -18,6 +18,7 @@ import {
   parseNativePushRegistrations,
   saveNativePushRegistrations,
   sendApplePush,
+  type NativePushRegistration,
 } from "@/lib/server/native-push";
 
 const INBOX_KEY = "tcs_notification_inbox";
@@ -106,7 +107,7 @@ async function deliverPushChannels(args: {
   const refreshedForNative = await args.admin.auth.admin.getUserById(args.user.id);
   const currentUser = refreshedForNative.data.user ?? args.user;
   const nativeDevices = parseNativePushRegistrations(currentUser);
-  const activeNative = [];
+  const activeNative: NativePushRegistration[] = [];
 
   for (const device of nativeDevices) {
     try {
