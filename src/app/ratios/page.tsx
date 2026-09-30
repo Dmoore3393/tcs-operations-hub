@@ -168,7 +168,11 @@ export default function RatiosPage() {
       supabase.from("child_schedule_overrides").select("location_id,child_legacy_id,service_date,no_care,start_time,end_time,note").eq("service_date", date),
       supabase.from("care_calendar_closures").select("location_id,closure_date,title,note").eq("closure_date", date),
     ]);
-    const failure = locationResult.error || shiftResult.error || activityResult.error || ruleResult.error || overrideResult.error || closureResult.error;
+    const calendarSetupMissing = [overrideResult.error, closureResult.error].some((issue) =>
+      issue?.code === "42P01" || issue?.message?.toLowerCase().includes("does not exist"),
+    );
+    const failure = locationResult.error || shiftResult.error || activityResult.error || ruleResult.error
+      || (calendarSetupMissing ? null : overrideResult.error || closureResult.error);
     if (failure) setError(failure.message);
     else {
       setError("");
@@ -176,8 +180,8 @@ export default function RatiosPage() {
       setShifts((shiftResult.data ?? []) as StaffShiftRow[]);
       setActivities((activityResult.data ?? []) as StaffActivityRow[]);
       setRules((ruleResult.data ?? []) as StaffingRuleRow[]);
-      setScheduleOverrides((overrideResult.data ?? []) as DatedScheduleOverride[]);
-      setCalendarClosures((closureResult.data ?? []) as CareCalendarClosure[]);
+      setScheduleOverrides(calendarSetupMissing ? [] : (overrideResult.data ?? []) as DatedScheduleOverride[]);
+      setCalendarClosures(calendarSetupMissing ? [] : (closureResult.data ?? []) as CareCalendarClosure[]);
     }
     setLoading(false);
   }, [date]);
