@@ -45,7 +45,7 @@ Before submission:
 - Confirm the Apple Developer Program membership is Active.
 - Register the final bundle identifier: `com.thomasonchildcaresolutions.thehub`.
 - Select Danielle's Apple signing team in Xcode.
-- Create/connect an APNs key and add its Team ID, Key ID, and private key to the secured release environment.
+- APNs Team ID `6Y2923TFK5` and Key ID `9UCB82956G` are connected in code. Add only the APNs private `.p8` key to the secured release environment.
 - Complete App Store privacy answers, public privacy-policy URL, support URL, screenshots, app description, age rating, and review notes/test access.
 
 ## Google Play organization enrollment

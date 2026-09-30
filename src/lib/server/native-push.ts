@@ -81,7 +81,7 @@ export function upsertNativePushRegistration(args: {
 
 function apnsConfig() {
   const teamId = process.env.APPLE_TEAM_ID?.trim() || "6Y2923TFK5";
-  const keyId = process.env.APPLE_KEY_ID?.trim() || "";
+  const keyId = process.env.APPLE_KEY_ID?.trim() || "9UCB82956G";
   const privateKey = (process.env.APPLE_APNS_PRIVATE_KEY || "").replace(/\\n/g, "\n").trim();
   const bundleId = process.env.APPLE_BUNDLE_ID?.trim() || "com.thomasonchildcaresolutions.thehub";
 

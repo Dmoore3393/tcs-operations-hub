@@ -137,6 +137,7 @@ assert(iosWebView.includes("requestPushNotifications") && iosWebView.includes("t
 assert(iosWebView.includes("!AppConfiguration.allowedHosts.contains(host)"), "Native WebView must keep unrelated web hosts outside the secured Hub container");
 assert(nativePush.includes("api.push.apple.com") && nativePush.includes("APPLE_APNS_PRIVATE_KEY"), "Server must include authenticated APNs delivery support");
 assert(nativePush.includes('"6Y2923TFK5"'), "APNs server configuration must keep the verified Apple Team ID fallback");
+assert(nativePush.includes('"9UCB82956G"'), "APNs server configuration must keep the verified Apple Key ID fallback");
 assert(nativePushRoute.includes("requireStaff") && nativePushRoute.includes("deviceToken"), "Native device registration must require an authenticated staff account");
 assert(pushClient.includes("/api/notifications/native-subscription") && pushClient.includes("tcs-native-push-token"), "Web notification client must register the native APNs device through the signed-in Hub account");
 
