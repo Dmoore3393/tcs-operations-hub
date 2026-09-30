@@ -124,7 +124,9 @@ assert(enrollmentForecastModel.includes("plannedLastDay") && enrollmentForecastM
 assert(childrenModel.includes("plannedStartDate") && childrenModel.includes("plannedLastDay"), "Child records must preserve planned enrollment dates for forecasting");
 assert(mainLayout.includes('href: "/enrollment-forecast"'), "Enrollment Forecast must remain reachable from Hub navigation");
 assert(iosProject.includes("ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon"), "Native iOS project must compile the official AppIcon asset");
-assert(iosProject.includes("tcs-hub-launch.webp"), "Native iOS project must bundle the official Hub launch artwork");
+assert(iosProject.includes("TheHub/Resources"), "Native iOS project must bundle the official Hub resource folder");
+assert(existsSync(new URL("../native/ios/TheHub/Resources/tcs-hub-launch.webp", import.meta.url)), "Native Hub launch artwork resource link is missing");
+assert(existsSync(new URL("../native/ios/TheHub/Resources/tcs-hub-loading.webp", import.meta.url)), "Native Hub loading artwork resource link is missing");
 assert(iosProject.includes("TCS location QR check-in, staff clocking"), "Native camera permission must accurately describe QR and staff-clock camera use");
 assert(iosEntitlements.includes("aps-environment") && iosProject.includes("APS_ENVIRONMENT: production"), "Native iOS project must include APNs entitlements for release builds");
 assert(iosAssetScript.includes("1024") && iosAssetScript.includes("app-icon-512.png"), "Native pre-build must prepare the 1024×1024 App Store icon from the approved Hub icon");
