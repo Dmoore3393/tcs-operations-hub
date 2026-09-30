@@ -40,6 +40,15 @@ const staffClockPinHelper = source("src/lib/server/staff-clock-pin.ts");
 const enrollmentForecastPage = source("src/app/enrollment-forecast/page.tsx");
 const enrollmentForecastModel = source("src/lib/enrollment-forecast.ts");
 const childrenModel = source("src/lib/children.ts");
+const iosProject = source("native/ios/project.yml");
+const iosApp = source("native/ios/TheHub/TheHubApp.swift");
+const iosWebView = source("native/ios/TheHub/HubWebView.swift");
+const iosContentView = source("native/ios/TheHub/ContentView.swift");
+const iosEntitlements = source("native/ios/TheHub/TheHub.entitlements");
+const iosAssetScript = source("native/ios/scripts/prepare-assets.sh");
+const nativePush = source("src/lib/server/native-push.ts");
+const nativePushRoute = source("src/app/api/notifications/native-subscription/route.ts");
+const pushClient = source("src/lib/push-client.ts");
 
 assert(manifest.name === "The Hub — TCS Operations", "Manifest app name must stay The Hub — TCS Operations");
 assert(manifest.short_name === "The Hub", "Manifest short name must stay The Hub");
@@ -114,6 +123,18 @@ assert(enrollmentForecastPage.includes("Pipeline Demand") && enrollmentForecastP
 assert(enrollmentForecastModel.includes("plannedLastDay") && enrollmentForecastModel.includes("preferredStartDate"), "Enrollment Forecast must use planned exits and Tour Board preferred starts");
 assert(childrenModel.includes("plannedStartDate") && childrenModel.includes("plannedLastDay"), "Child records must preserve planned enrollment dates for forecasting");
 assert(mainLayout.includes('href: "/enrollment-forecast"'), "Enrollment Forecast must remain reachable from Hub navigation");
+assert(iosProject.includes("ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon"), "Native iOS project must compile the official AppIcon asset");
+assert(iosProject.includes("tcs-hub-launch.webp"), "Native iOS project must bundle the official Hub launch artwork");
+assert(iosProject.includes("TCS location QR check-in, staff clocking"), "Native camera permission must accurately describe QR and staff-clock camera use");
+assert(iosEntitlements.includes("aps-environment") && iosProject.includes("APS_ENVIRONMENT: production"), "Native iOS project must include APNs entitlements for release builds");
+assert(iosAssetScript.includes("1024") && iosAssetScript.includes("app-icon-512.png"), "Native pre-build must prepare the 1024×1024 App Store icon from the approved Hub icon");
+assert(iosContentView.includes('HubArtwork(resource: "tcs-hub-launch"'), "Native opening experience must use the official Hub launch artwork");
+assert(iosApp.includes("UIApplicationDelegateAdaptor(AppDelegate.self)"), "Native iOS app must attach the notification app delegate");
+assert(iosWebView.includes("requestPushNotifications") && iosWebView.includes("tcs-native-push-token"), "Native WebView must bridge APNs registration back to the secured Hub session");
+assert(iosWebView.includes("!AppConfiguration.allowedHosts.contains(host)"), "Native WebView must keep unrelated web hosts outside the secured Hub container");
+assert(nativePush.includes("api.push.apple.com") && nativePush.includes("APPLE_APNS_PRIVATE_KEY"), "Server must include authenticated APNs delivery support");
+assert(nativePushRoute.includes("requireStaff") && nativePushRoute.includes("deviceToken"), "Native device registration must require an authenticated staff account");
+assert(pushClient.includes("/api/notifications/native-subscription") && pushClient.includes("tcs-native-push-token"), "Web notification client must register the native APNs device through the signed-in Hub account");
 
 assert(/export const starterEnrollmentLeads:\s*EnrollmentLeadRecord\[\]\s*=\s*\[\s*\];/s.test(adminOps), "Enrollment starter data must remain empty");
 assert(/export const starterDigitalForms:\s*DigitalFormRecord\[\]\s*=\s*\[\s*\];/s.test(adminOps), "Digital-form starter data must remain empty");
@@ -122,4 +143,4 @@ if (failures.length) {
   console.error("App readiness verification failed:\n- " + [...new Set(failures)].join("\n- "));
   process.exit(1);
 }
-console.log("App readiness verification passed: installability, mobile privacy, role boundaries, lane identity, clock policy, security hardening, public policy pages, and form foundation are present.");
+console.log("App readiness verification passed: installability, native iOS branding, APNs bridge, mobile privacy, role boundaries, lane identity, clock policy, security hardening, public policy pages, and form foundation are present.");
