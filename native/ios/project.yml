@@ -23,6 +23,10 @@ targets:
     preBuildScripts:
       - name: Prepare official Hub app icon
         path: scripts/prepare-assets.sh
+        inputFiles:
+          - $(SRCROOT)/../../public/app-icon-512.png
+        outputFiles:
+          - $(SRCROOT)/TheHub/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
         basedOnDependencyAnalysis: false
     settings:
       base:
