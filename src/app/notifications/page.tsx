@@ -235,14 +235,17 @@ export default function NotificationsPage() {
     setPermission(result.permission === "unsupported" ? "unsupported" : result.permission);
     setPushMessage(result.ok ? "Background notifications are registered on this device." : result.reason);
     if (result.ok) {
-      const registration = await navigator.serviceWorker?.ready;
-      await registration?.showNotification("The Hub notifications are on", {
-        body: "Important TCS updates can now reach this device even when The Hub is not open.",
-        icon: "/app-icon-192.png",
-        badge: "/app-icon-192.png",
-        tag: "tcs-notifications-enabled",
-        data: { href: "/notifications" },
-      });
+      await loadDevices();
+      if (!isNativeHubApp()) {
+        const registration = await navigator.serviceWorker?.ready;
+        await registration?.showNotification("The Hub notifications are on", {
+          body: "Important TCS updates can now reach this device even when The Hub is not open.",
+          icon: "/app-icon-192.png",
+          badge: "/app-icon-192.png",
+          tag: "tcs-notifications-enabled",
+          data: { href: "/notifications" },
+        });
+      }
     }
   }
 
