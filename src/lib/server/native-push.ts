@@ -1,7 +1,7 @@
 import "server-only";
 
 import { connect } from "node:http2";
-import { createPrivateKey, sign } from "node:crypto";
+import { createHash, createPrivateKey, sign } from "node:crypto";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 const NATIVE_PUSH_KEY = "tcs_native_push_devices";
@@ -24,7 +24,7 @@ function base64Url(value: Buffer | string) {
 }
 
 function nativeDeviceId(token: string) {
-  return base64Url(Buffer.from(token.toLowerCase())).slice(-24);
+  return createHash("sha256").update(token.toLowerCase()).digest("hex").slice(0, 24);
 }
 
 export function parseNativePushRegistrations(user: User): NativePushRegistration[] {
