@@ -1,5 +1,6 @@
 "use client";
 
+import { CelebrationBits, FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 import {
@@ -433,14 +434,14 @@ export default function ParentPortalPage() {
   }
 
   if (loading) {
-    return <main className="grid min-h-screen place-items-center bg-[#f4f0e7] text-slate-700"><div className="text-center"><LoaderCircle className="mx-auto h-8 w-8 animate-spin text-emerald-700" /><p className="mt-3 text-sm font-black">Opening your secure family portal…</p></div></main>;
+    return <main className="relative grid min-h-screen place-items-center overflow-hidden bg-gradient-to-br from-[#fff6d7] via-[#f4f0e7] to-[#e3f6e8] p-5 text-slate-700"><FunDoodles soft /><section className="tcs-soft-pop relative z-10 w-full max-w-md rounded-[30px] border border-emerald-200 bg-white/90 p-7 text-center shadow-2xl backdrop-blur"><div className="flex justify-center"><GatorGuide size="lg" /></div><p className="mt-2 text-[10px] font-black uppercase tracking-[.18em] text-emerald-700">TCS Family Access</p><h1 className="mt-2 text-2xl font-black text-slate-950">Getting your family space ready ✨</h1><p className="mt-2 text-sm font-semibold leading-6 text-slate-500">Pulling together care updates, schedules, messages, and everything connected to your child.</p><LoaderCircle className="mx-auto mt-5 h-6 w-6 animate-spin text-emerald-700" /></section></main>;
   }
 
   if (error && !overview) {
     return <main className="min-h-screen bg-[#f4f0e7] p-4 sm:p-8"><section className="mx-auto mt-16 max-w-xl rounded-[28px] border border-red-200 bg-white p-7 text-center shadow-xl"><AlertTriangle className="mx-auto h-10 w-10 text-red-700" /><h1 className="mt-3 text-2xl font-black text-slate-950">Parent Portal access needs attention</h1><p className="mt-3 text-sm font-semibold leading-6 text-slate-600">{error}</p><button onClick={() => void signOut()} className="mt-5 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white">Sign Out</button></section></main>;
   }
 
-  return <main className="min-h-screen bg-[#f5f1e8] pb-24 text-slate-950">
+  return <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#fffaf0] via-[#f5f1e8] to-[#eef8f1] pb-24 text-slate-950"><FunDoodles soft />
     <header className="sticky top-0 z-30 border-b border-emerald-900/10 bg-[#173d29]/95 text-white shadow-sm backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-200">TCS Family Access</p><h1 className="text-lg font-black">The Hub Parent Portal</h1></div>
@@ -459,20 +460,25 @@ export default function ParentPortalPage() {
     </header>
 
     <div className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6">
-      {notice && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-900">{notice}</div>}
+      {notice && <div className="tcs-soft-pop relative overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-900"><CelebrationBits />{notice}</div>}
       {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-900">{error}</div>}
 
-      <section className="overflow-hidden rounded-[30px] bg-gradient-to-br from-[#173d29] via-[#2e6c47] to-[#143522] p-6 text-white shadow-xl">
-        <p className="text-xs font-black uppercase tracking-[.18em] text-emerald-200">Welcome back</p>
-        <h2 className="mt-2 text-3xl font-black">Your family at TCS</h2>
-        <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-emerald-50/80">Attendance, schedules, daily updates, forms, and important record follow-up stay together here. At drop-off or pickup, scan the QR posted at your TCS location and use your Family Attendance PIN. Private staff-only and other-family records are never shown in this portal.</p>
+      <section className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-[#173d29] via-[#2e6c47] to-[#143522] p-6 text-white shadow-xl"><FunDoodles className="opacity-40" />
+        <div className="relative z-10 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[.18em] text-emerald-200">Welcome back, family 💚</p>
+            <h2 className="mt-2 max-w-3xl text-3xl font-black sm:text-4xl">You are part of your child’s TCS day.</h2>
+            <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-emerald-50/85">Schedules, attendance, care updates, forms, and conversations live here so you can stay connected—not just informed. Your family voice matters in the care we provide.</p>
+          </div>
+          <GatorGuide size="lg" message={<>We’re glad you’re here! Check in, plan care, and stay connected. ⭐</>} />
+        </div>
         {canUseFamilyAttendance && <button
           onClick={() => router.push("/parent/scan")}
           className="mt-5 inline-flex min-h-12 items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-emerald-950 shadow-lg transition hover:bg-emerald-50"
         >
           <ScanLine className="h-5 w-5" /> Scan to Check In / Out
         </button>}
-        {overview && overview.children.length > 1 && <div className="mt-5 flex flex-wrap gap-2">{overview.children.map((child) => <button key={child.id} onClick={() => setSelectedChildId(child.id)} className={`rounded-xl px-3 py-2 text-xs font-black ${selectedChild?.id === child.id ? "bg-white text-emerald-950" : "bg-white/10 text-white"}`}>{childName(child)}</button>)}</div>}
+        {overview && overview.children.length > 1 && <div className="relative z-10 mt-5 flex flex-wrap gap-2">{overview.children.map((child) => <button key={child.id} onClick={() => setSelectedChildId(child.id)} className={`rounded-xl px-3 py-2 text-xs font-black ${selectedChild?.id === child.id ? "bg-white text-emerald-950 shadow-lg" : "bg-white/10 text-white"}`}>{childName(child)}</button>)}</div>}
       </section>
 
       {selectedChild && <section className="rounded-3xl border border-violet-200 bg-gradient-to-br from-white to-violet-50 p-5 shadow-sm">
@@ -587,7 +593,7 @@ export default function ParentPortalPage() {
 }
 
 function Card({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-700">{icon}</span><p className="mt-3 text-[9px] font-black uppercase tracking-wider text-slate-400">{label}</p><strong className="mt-1 block text-sm leading-5 text-slate-900">{value}</strong></section>;
+  return <section className="tcs-joy-card rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-700">{icon}</span><p className="mt-3 text-[9px] font-black uppercase tracking-wider text-slate-400">{label}</p><strong className="mt-1 block text-sm leading-5 text-slate-900">{value}</strong></section>;
 }
 function Info({ label, value }: { label: string; value: string }) {
   return <div className="rounded-xl bg-slate-50 p-3"><span className="text-[9px] font-black uppercase tracking-wider text-slate-400">{label}</span><strong className="mt-1 block text-xs text-slate-900">{value}</strong></div>;
