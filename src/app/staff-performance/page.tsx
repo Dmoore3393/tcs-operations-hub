@@ -38,6 +38,7 @@ import {
   UserRoundCheck,
   Users,
 } from "lucide-react";
+import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 type EventDraft = {
@@ -313,7 +314,7 @@ export default function StaffPerformancePage() {
       eyebrow="People • recognition • accountability"
       title="Staff Performance Command Center"
       description="Recognize strong work, document accountability consistently, spot patterns over time, and keep coaching records separate from rewards."
-      actions={<div className="flex flex-wrap gap-2"><SecondaryButton onClick={() => openCoachingRecord()}><ClipboardCheck className="h-4 w-4" /> Add Coaching Note</SecondaryButton><PrimaryButton onClick={() => openEvent()}><Plus className="h-4 w-4" /> Add Performance Event</PrimaryButton></div>}
+      actions={<div className="flex flex-wrap gap-2"><Link href="/employee-checkins" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-black text-white shadow-sm"><UserRoundCheck className="h-4 w-4" /> 30/60/90 Check-Ins</Link><SecondaryButton onClick={() => openCoachingRecord()}><ClipboardCheck className="h-4 w-4" /> Add Coaching Note</SecondaryButton><PrimaryButton onClick={() => openEvent()}><Plus className="h-4 w-4" /> Add Performance Event</PrimaryButton></div>}
     />
 
     <section className="overflow-hidden rounded-[30px] border border-emerald-900/10 bg-gradient-to-br from-[#092d22] via-[#145b3c] to-[#0b3153] p-6 text-white shadow-xl">
