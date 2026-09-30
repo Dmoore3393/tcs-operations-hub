@@ -51,7 +51,7 @@ export function StatCard({ label, value, helper, icon, tone = "emerald" }: { lab
   };
   const reducedMotion = useReducedMotion();
   return (
-    <motion.article whileHover={reducedMotion ? undefined : { y: -3 }} transition={{ duration: 0.2 }} className="rounded-[20px] border border-slate-200 bg-white p-4 shadow-sm sm:rounded-2xl sm:p-5">
+    <motion.article whileHover={reducedMotion ? undefined : { y: -3 }} transition={{ duration: 0.2 }} className="tcs-joy-card rounded-[20px] border border-slate-200 bg-white p-4 shadow-sm sm:rounded-2xl sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-slate-500">{label}</p>
@@ -67,7 +67,7 @@ export function StatCard({ label, value, helper, icon, tone = "emerald" }: { lab
 export function SectionCard({ title, description, action, children, className = "" }: { title?: string; description?: string; action?: ReactNode; children: ReactNode; className?: string }) {
   const reducedMotion = useReducedMotion();
   return (
-    <motion.section initial={reducedMotion ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className={`rounded-[22px] border border-slate-200 bg-white shadow-sm sm:rounded-2xl ${className}`}>
+    <motion.section initial={reducedMotion ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className={`tcs-joy-card rounded-[22px] border border-slate-200 bg-white shadow-sm sm:rounded-2xl ${className}`}>
       {(title || description || action) && (
         <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4">
           <div>
@@ -118,5 +118,5 @@ export function Modal({ title, description, onClose, children, footer }: { title
 }
 
 export function DemoNotice() {
-  return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-950"><strong>Secure owner & licensee pilot:</strong> Changes save to the shared TCS database. Danielle controls system settings; licensees use operational tools for their assigned location. Parent access remains disabled.</div>;
+  return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-950"><strong>Secure owner & licensee pilot:</strong> Changes save to the shared TCS database. Danielle controls system settings; licensees use operational tools for their assigned location. Parent Portal access is active only for verified adults and permissions assigned by TCS.</div>;
 }
