@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import MainLayout from "@/components/layout/MainLayout";
+import SafeImage from "@/components/media/SafeImage";
 import { DemoNotice, Modal, PageIntro, PrimaryButton, SecondaryButton, StatCard, StatusBadge, inputClass } from "@/components/hub/HubUI";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -113,10 +114,18 @@ export default function LocationsPage() {
         </header>
         <div className="p-6 text-center">
           <div className="mx-auto w-fit rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
-            <img
+            <SafeImage
               src={`https://quickchart.io/qr?size=360&margin=2&text=${encodeURIComponent(`${origin}/parent/check-in?location=${locationSlug(qrLocation.shortName)}`)}`}
               alt={`${qrLocation.shortName} TCS location QR code`}
-              className="h-72 w-72 max-w-full"
+              className="h-72 w-72 max-w-full object-contain"
+              loading="eager"
+              fallback={
+                <div className="flex h-72 w-72 max-w-full flex-col items-center justify-center gap-3 rounded-2xl bg-slate-50 p-6 text-slate-600">
+                  <QrCode className="h-16 w-16 text-emerald-700" />
+                  <p className="text-sm font-black text-slate-900">QR preview unavailable</p>
+                  <p className="text-xs font-semibold leading-5">The check-in link is still available. Close this window and try again with an internet connection.</p>
+                </div>
+              }
             />
           </div>
           <p className="mt-5 text-sm font-black text-slate-950">{locationThemes[qrLocation.shortName].fullName}</p>
