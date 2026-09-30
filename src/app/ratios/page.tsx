@@ -5,9 +5,9 @@ import { PageIntro, PrimaryButton, SecondaryButton, SectionCard, StatCard, Statu
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { initialChildren, type ChildRecord } from "@/lib/children";
-import { compactTime, starterChildSchedules, type ChildScheduleRecord } from "@/lib/child-schedules";
+import { blankDay, compactTime, createBlankChildSchedule, dateToDayName, starterChildSchedules, type ChildScheduleRecord } from "@/lib/child-schedules";
 import { localIsoDate } from "@/lib/date-utils";
-import { formatClock, locationThemes, normalizeLocation, starterLocationHours, type LocationHoursRecord, type LocationKey } from "@/lib/location-config";
+import { dayNames, formatClock, locationThemes, normalizeLocation, starterLocationHours, type LocationHoursRecord, type LocationKey } from "@/lib/location-config";
 import {
   buildCoverageWindows,
   checkedInAtLocation,
@@ -121,6 +121,23 @@ function buildCoverageSvg(args: {
   </svg>`;
 }
 
+type DatedScheduleOverride = {
+  location_id: string;
+  child_legacy_id: string;
+  service_date: string;
+  no_care: boolean;
+  start_time: string | null;
+  end_time: string | null;
+  note: string | null;
+};
+
+type CareCalendarClosure = {
+  location_id: string | null;
+  closure_date: string;
+  title: string;
+  note: string | null;
+};
+
 export default function RatiosPage() {
   const { location: activeLocation, setLocation: setActiveLocation } = useHubLocation();
   const [schedules] = usePersistentState<ChildScheduleRecord[]>("tcs-child-schedules-v2", starterChildSchedules);
@@ -130,6 +147,8 @@ export default function RatiosPage() {
   const [shifts, setShifts] = useState<StaffShiftRow[]>([]);
   const [activities, setActivities] = useState<StaffActivityRow[]>([]);
   const [rules, setRules] = useState<StaffingRuleRow[]>([]);
+  const [scheduleOverrides, setScheduleOverrides] = useState<DatedScheduleOverride[]>([]);
+  const [calendarClosures, setCalendarClosures] = useState<CareCalendarClosure[]>([]);
   const [date, setDate] = useState(() => localIsoDate());
   const [selectedLocationId, setSelectedLocationId] = useState("");
   const [schoolNote, setSchoolNote] = useState("Regular school schedule");
@@ -141,13 +160,19 @@ export default function RatiosPage() {
   const load = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
-    const [locationResult, shiftResult, activityResult, ruleResult] = await Promise.all([
+    const [locationResult, shiftResult, activityResult, ruleResult, overrideResult, closureResult] = await Promise.all([
       supabase.from("locations").select("id,slug,name,full_name,capacity,program_type").eq("is_active", true).order("name"),
       supabase.from("staff_shifts").select("id,location_id,user_id,staff_name,shift_date,start_time,end_time,status,position_label,notes").eq("shift_date", date).order("start_time"),
       supabase.from("staff_activity_intervals").select("id,location_id,shift_id,user_id,staff_name,activity_date,start_time,end_time,activity_type,counts_toward_floor,reason,source_key").eq("activity_date", date).order("start_time"),
       supabase.from("staffing_rules").select("id,location_id,rule_name,age_group,children_per_staff,minimum_staff,maximum_group_size,effective_from,effective_to,source_type,source_note,is_active").eq("is_active", true).order("effective_from", { ascending: false }),
+      supabase.from("child_schedule_overrides").select("location_id,child_legacy_id,service_date,no_care,start_time,end_time,note").eq("service_date", date),
+      supabase.from("care_calendar_closures").select("location_id,closure_date,title,note").eq("closure_date", date),
     ]);
-    const failure = locationResult.error || shiftResult.error || activityResult.error || ruleResult.error;
+    const calendarSetupMissing = [overrideResult.error, closureResult.error].some((issue) =>
+      issue?.code === "42P01" || issue?.message?.toLowerCase().includes("does not exist"),
+    );
+    const failure = locationResult.error || shiftResult.error || activityResult.error || ruleResult.error
+      || (calendarSetupMissing ? null : overrideResult.error || closureResult.error);
     if (failure) setError(failure.message);
     else {
       setError("");
@@ -155,6 +180,8 @@ export default function RatiosPage() {
       setShifts((shiftResult.data ?? []) as StaffShiftRow[]);
       setActivities((activityResult.data ?? []) as StaffActivityRow[]);
       setRules((ruleResult.data ?? []) as StaffingRuleRow[]);
+      setScheduleOverrides(calendarSetupMissing ? [] : (overrideResult.data ?? []) as DatedScheduleOverride[]);
+      setCalendarClosures(calendarSetupMissing ? [] : (closureResult.data ?? []) as CareCalendarClosure[]);
     }
     setLoading(false);
   }, [date]);
@@ -168,6 +195,8 @@ export default function RatiosPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "staff_shifts" }, () => void load())
       .on("postgres_changes", { event: "*", schema: "public", table: "staff_activity_intervals" }, () => void load())
       .on("postgres_changes", { event: "*", schema: "public", table: "staffing_rules" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "child_schedule_overrides" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "care_calendar_closures" }, () => void load())
       .subscribe();
     return () => { void supabase?.removeChannel(channel); };
   }, [load]);
@@ -185,14 +214,68 @@ export default function RatiosPage() {
   const hoursRecord = locationKey ? hours.find((record) => record.location === locationKey) : null;
   const day = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(new Date(`${date}T12:00:00`)) as keyof LocationHoursRecord["days"];
   const dailyHours = hoursRecord?.days[day] ?? { closed: false, open: "06:00", close: "18:00" };
+  const calendarClosure = selectedLocation
+    ? calendarClosures.find((closure) => !closure.location_id || closure.location_id === selectedLocation.id) ?? null
+    : null;
+
+  const effectiveSchedules = useMemo(() => {
+    if (!selectedLocation || !locationKey) return schedules;
+    const targetDay = dateToDayName(date);
+    const overrides = scheduleOverrides.filter((entry) => entry.location_id === selectedLocation.id);
+    const overrideByChild = new Map(overrides.map((entry) => [entry.child_legacy_id, entry]));
+
+    const next = schedules.map((record) => {
+      const override = overrideByChild.get(String(record.childId));
+      if (!override && !calendarClosure) return record;
+      const replacement = calendarClosure || override?.no_care
+        ? blankDay()
+        : {
+            noCare: false,
+            blocks: [{
+              id: `approved-${override!.child_legacy_id}-${date}`,
+              start: (override!.start_time || "").slice(0, 5),
+              end: (override!.end_time || "").slice(0, 5),
+              location: locationKey,
+            }],
+            note: override?.note || "",
+          };
+      return { ...record, days: { ...record.days, [targetDay]: replacement } };
+    });
+
+    if (calendarClosure) return next;
+
+    const scheduledIds = new Set(next.map((record) => String(record.childId)));
+    overrides.forEach((override) => {
+      if (scheduledIds.has(override.child_legacy_id) || override.no_care) return;
+      const child = children.find((item) => String(item.id) === override.child_legacy_id || item.legacyId === override.child_legacy_id);
+      if (!child) return;
+      const synthetic = createBlankChildSchedule(child);
+      synthetic.defaultLocation = locationKey;
+      synthetic.days = Object.fromEntries(dayNames.map((dayName) => [dayName, blankDay()])) as ChildScheduleRecord["days"];
+      synthetic.days[targetDay] = {
+        noCare: false,
+        blocks: [{
+          id: `approved-${override.child_legacy_id}-${date}`,
+          start: (override.start_time || "").slice(0, 5),
+          end: (override.end_time || "").slice(0, 5),
+          location: locationKey,
+        }],
+        note: override.note || "",
+      };
+      next.push(synthetic);
+    });
+
+    return next;
+  }, [calendarClosure, children, date, locationKey, scheduleOverrides, schedules, selectedLocation]);
+
   const windows = useMemo(() => selectedLocation ? buildCoverageWindows({
     date,
     location: selectedLocation,
-    schedules,
+    schedules: effectiveSchedules,
     shifts,
     activities,
     rules,
-  }) : [], [activities, date, rules, schedules, selectedLocation, shifts]);
+  }) : [], [activities, date, effectiveSchedules, rules, selectedLocation, shifts]);
 
   const peak = windows.reduce((max, window) => Math.max(max, window.childCount), 0);
   const flagged = windows.filter((window) => ["gap", "over-capacity", "rule-needed"].includes(window.status));
@@ -209,14 +292,14 @@ export default function RatiosPage() {
       location: selectedLocation,
       locationKey,
       date,
-      openingText: dailyHours.closed ? "Closed" : formatClock(dailyHours.open),
-      closingText: dailyHours.closed ? "Closed" : formatClock(dailyHours.close),
+      openingText: dailyHours.closed || calendarClosure ? "Closed" : formatClock(dailyHours.open),
+      closingText: dailyHours.closed || calendarClosure ? "Closed" : formatClock(dailyHours.close),
       windows,
       schoolNote,
       minimumDay,
       variant,
     });
-  }, [dailyHours, date, locationKey, minimumDay, schoolNote, selectedLocation, variant, windows]);
+  }, [calendarClosure, dailyHours, date, locationKey, minimumDay, schoolNote, selectedLocation, variant, windows]);
 
   const filename = selectedLocation ? `TCS-${selectedLocation.name.replaceAll(" ", "-")}-live-staffing-${date}` : `TCS-live-staffing-${date}`;
 
@@ -242,6 +325,7 @@ export default function RatiosPage() {
 
   return <MainLayout><div className="mx-auto max-w-[1600px] space-y-6 pb-12">
     <PageIntro eyebrow="One staffing truth across the Hub" title="Live Ratio + Coverage Plan" description="This page now uses the same staffing engine as the Staffing Command Center. Child schedules create demand, verified rules calculate required staffing, and transportation/break/admin blocks remove staff from floor coverage." actions={<div className="flex flex-wrap gap-2"><SecondaryButton onClick={() => setVariant((current) => current + 1)}><Palette className="h-4 w-4" /> New Look</SecondaryButton><PrimaryButton onClick={() => void exportPlan("PNG")}><Smartphone className="h-4 w-4" /> Save PNG</PrimaryButton></div>} />
+    {calendarClosure && <div className="rounded-2xl border border-slate-300 bg-slate-100 p-4 text-sm font-black text-slate-800"><ShieldAlert className="mr-2 inline h-4 w-4" />Care calendar closure: {calendarClosure.title || "TCS Closed"}{calendarClosure.note ? ` — ${calendarClosure.note}` : ""}. Parent-approved care is removed from demand for this date.</div>}
 
     <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm font-semibold leading-6 text-violet-950"><strong>No guessed ratios:</strong> if a verified staffing rule is not configured for a location/age group, the Hub shows <strong>Rule Needed</strong> instead of making up a number.</div>
     {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-900">{error}</div>}

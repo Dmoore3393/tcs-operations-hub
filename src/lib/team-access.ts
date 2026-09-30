@@ -164,6 +164,7 @@ const routePermissionMap: Record<string, EmployeePermission> = {
   "/children": "children_basic",
   "/attendance": "schedules",
   "/child-schedules": "schedules",
+  "/family-care-calendar": "schedules",
   "/daily-care": "daily_care",
   "/meals": "meals",
   "/shift-reports": "shift_reports",
