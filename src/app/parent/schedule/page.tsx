@@ -178,8 +178,6 @@ export default function ParentScheduleCalendarPage() {
         note: existing?.note || "",
       };
     }));
-    setNotice("");
-    setWarning("");
   }, [closureForDate, latestSubmission, selectedWeek]);
 
   function updateDay(date: string, update: Partial<ScheduleDay>) {
