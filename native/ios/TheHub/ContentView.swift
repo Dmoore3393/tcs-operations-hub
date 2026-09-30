@@ -63,7 +63,7 @@ struct ContentView: View {
                 .zIndex(7)
             }
 
-            if lock.isLocked {
+            if lock.isLocked && introComplete {
                 LockScreen()
                     .transition(.opacity)
                     .zIndex(8)
@@ -73,12 +73,12 @@ struct ContentView: View {
         .task {
             guard !introComplete else { return }
 
-            try? await Task.sleep(nanoseconds: 900_000_000)
+            try? await Task.sleep(nanoseconds: 1_250_000_000)
             withAnimation(.easeInOut(duration: 0.24)) {
                 introStage = .loading
             }
 
-            try? await Task.sleep(nanoseconds: 900_000_000)
+            try? await Task.sleep(nanoseconds: 1_250_000_000)
             finishIntroIfReady()
         }
         .onChange(of: isLoading) { loading in

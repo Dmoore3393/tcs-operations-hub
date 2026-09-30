@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const failures = [];
@@ -39,6 +39,9 @@ const staffClockPinRoute = source("src/app/api/time-clock/pin/route.ts");
 const staffClockPinHelper = source("src/lib/server/staff-clock-pin.ts");
 const enrollmentForecastPage = source("src/app/enrollment-forecast/page.tsx");
 const enrollmentForecastModel = source("src/lib/enrollment-forecast.ts");
+const teamStorePage = source("src/app/team-store/page.tsx");
+const studentStorePage = source("src/app/student-store/page.tsx");
+const locationsPage = source("src/app/locations/page.tsx");
 const childrenModel = source("src/lib/children.ts");
 const iosProject = source("native/ios/project.yml");
 const iosApp = source("native/ios/TheHub/TheHubApp.swift");
@@ -144,6 +147,38 @@ assert(nativePush.includes('"6Y2923TFK5"'), "APNs server configuration must keep
 assert(nativePush.includes('"9UCB82956G"'), "APNs server configuration must keep the verified Apple Key ID fallback");
 assert(nativePushRoute.includes("requireStaff") && nativePushRoute.includes("deviceToken"), "Native device registration must require an authenticated staff account");
 assert(pushClient.includes("/api/notifications/native-subscription") && pushClient.includes("tcs-native-push-token"), "Web notification client must register the native APNs device through the signed-in Hub account");
+
+assert(teamStorePage.includes("SafeImage") && teamStorePage.includes("reward.imageUrl"), "Team Store must replace failed reward images with a clean fallback");
+assert(studentStorePage.includes("SafeImage") && studentStorePage.includes("productImage(product)"), "Student Store must replace failed product images with a clean fallback");
+assert(locationsPage.includes("SafeImage") && locationsPage.includes("QR preview unavailable"), "Location QR must show a clean fallback instead of a broken image icon");
+
+function walkSource(relativeDir) {
+  const root = new URL(`../${relativeDir}/`, import.meta.url);
+  const files = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const child = new URL(entry.name + (entry.isDirectory() ? "/" : ""), root);
+    if (entry.isDirectory()) {
+      const nested = walkSource(`${relativeDir}/${entry.name}`);
+      files.push(...nested);
+    } else if (/\.(?:tsx|jsx|css)$/i.test(entry.name)) {
+      files.push(child);
+    }
+  }
+  return files;
+}
+
+for (const file of [...walkSource("src/app"), ...walkSource("src/components")]) {
+  const text = readFileSync(file, "utf8");
+  const staticImage = /["'`](\/[^"'\`?\s)]+?\.(?:png|jpe?g|webp|gif|svg|ico))(?:\?[^"'\`\s)]*)?/gi;
+  for (const match of text.matchAll(staticImage)) {
+    const assetPath = match[1];
+    assert(
+      existsSync(new URL(`../public${assetPath}`, import.meta.url)),
+      `Broken static image reference: ${assetPath} in ${fileURLToPath(file)}`,
+    );
+  }
+}
+
 
 assert(/export const starterEnrollmentLeads:\s*EnrollmentLeadRecord\[\]\s*=\s*\[\s*\];/s.test(adminOps), "Enrollment starter data must remain empty");
 assert(/export const starterDigitalForms:\s*DigitalFormRecord\[\]\s*=\s*\[\s*\];/s.test(adminOps), "Digital-form starter data must remain empty");
