@@ -9,7 +9,7 @@ import { childAttendsLocation, starterChildSchedules, type ChildScheduleRecord }
 import { type CareCategory, type CareLogEntry, starterCareLogs } from "@/lib/employee-care";
 import { type LocationKey } from "@/lib/location-config";
 import { starterMealServices, type MealServiceRecord } from "@/lib/meals";
-import { Baby, BedDouble, Check, Clock3, Droplets, Lock, NotebookPen, Search, Trash2, Utensils, Waves } from "lucide-react";
+import { Baby, BedDouble, Camera, Check, Clock3, Droplets, Lock, NotebookPen, Search, Sparkles, Trash2, Utensils, Waves } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { localIsoDate } from "@/lib/date-utils";
@@ -169,7 +169,7 @@ export default function DailyCarePage() {
   const rests = locationLogs.filter((entry) => entry.category === "Rest").length;
 
   return <MainLayout><div className="mx-auto max-w-[1550px] space-y-6">
-    <PageIntro eyebrow="Employee-only care tracking" title="Daily Care" description="Log bottles, diaper changes, potty-training progress, rest, and daily notes from one fast classroom screen. Use Meals & Menus for the full weekly menu and individual food intake." actions={<><Link href="/meals" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-sm hover:bg-emerald-700"><Utensils className="h-4 w-4" /> Open Meals & Menus</Link><div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700"><Lock className="h-4 w-4" /> Staff Access Only</div></>} />
+    <PageIntro eyebrow="Employee-only care tracking" title="Daily Care" description="Log bottles, diaper changes, potty-training progress, rest, and daily notes from one fast classroom screen. Use Meals & Menus for the full weekly menu and individual food intake." actions={<><Link href="/meals" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-sm hover:bg-emerald-700"><Utensils className="h-4 w-4" /> Open Meals & Menus</Link><Link href="/child-photos" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-black text-white shadow-sm"><Camera className="h-4 w-4" /> Add Child Photo</Link><Link href="/weekly-checkins" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-black text-slate-950 shadow-sm"><Sparkles className="h-4 w-4" /> Weekly Check-Ins</Link><div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700"><Lock className="h-4 w-4" /> Staff Access Only</div></>} />
     <DemoNotice />
 
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
