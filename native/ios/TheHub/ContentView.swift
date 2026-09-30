@@ -61,7 +61,7 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: lock.isLocked)
-        .onChange(of: isLoading) { _, loading in
+        .onChange(of: isLoading) { loading in
             if !loading {
                 withAnimation(.easeOut(duration: 0.25)) {
                     hasShownLaunch = true
