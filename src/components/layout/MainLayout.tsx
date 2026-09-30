@@ -1,5 +1,6 @@
 "use client";
 
+import { GatorGuide } from "@/components/brand/HubJoy";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -300,9 +301,14 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         </nav>
 
         <div className="border-t border-white/10 p-4">
-          <div className="rounded-2xl bg-white/10 p-3">
-            <p className="text-xs font-bold uppercase tracking-wider opacity-70">Weekly reminder</p>
-            <p className="mt-1 text-sm font-bold">Family schedules due Friday at 6 PM</p>
+          <div className="relative overflow-hidden rounded-2xl bg-white/10 p-3">
+            <div className="flex items-end gap-2">
+              <GatorGuide size="sm" />
+              <div className="min-w-0 pb-1">
+                <p className="text-[10px] font-black uppercase tracking-wider opacity-70">Gator reminder</p>
+                <p className="mt-1 text-sm font-black leading-5">Family schedules due Friday at 6 PM</p>
+              </div>
+            </div>
           </div>
         </div>
       </aside>
