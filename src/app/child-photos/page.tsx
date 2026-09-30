@@ -111,6 +111,13 @@ export default function ChildPhotosPage() {
   }, [session?.access_token]);
 
   useEffect(() => { void loadChildren(); }, [loadChildren]);
+  useEffect(() => {
+    if (!children.length || typeof window === "undefined") return;
+    const requested = new URLSearchParams(window.location.search).get("child");
+    if (requested && children.some((child) => String(child.legacyId || child.id) === requested)) {
+      setSelectedChildId(requested);
+    }
+  }, [children]);
   useEffect(() => { if (selectedChildId) void loadMedia(selectedChildId); }, [loadMedia, selectedChildId]);
 
   async function upload() {
