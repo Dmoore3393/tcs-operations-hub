@@ -183,6 +183,9 @@ const employeeAlwaysAllowedRoutes = new Set(["/", "/employee-lounge", "/employee
 
 export function employeeCanAccessRoute(permissions: string[], pathname: string) {
   if (employeeAlwaysAllowedRoutes.has(pathname)) return true;
+  if (pathname === "/family-care-calendar") {
+    return hasAnyPermission(permissions, ["schedules", "ratios"]);
+  }
   if (pathname === "/emergency-cards") {
     return hasAnyPermission(permissions, ["children_basic", "transportation", "health_safety"]);
   }
