@@ -1,5 +1,6 @@
 "use client";
 
+import { FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
 import MainLayout from "@/components/layout/MainLayout";
 import { SectionCard, StatCard, StatusBadge } from "@/components/hub/HubUI";
 import DashboardHero from "@/components/dashboard/Hero";
@@ -153,14 +154,14 @@ export default function Home() {
     <MainLayout>
       <div className="mx-auto max-w-[1600px] space-y-6">
         <section className="space-y-3 lg:hidden">
-          <div className="relative overflow-hidden rounded-[30px] p-5 text-white shadow-xl" style={{ background: "linear-gradient(145deg, var(--theme-700), var(--theme-950))" }}>
+          <div className="relative overflow-hidden rounded-[30px] p-5 text-white shadow-xl" style={{ background: "linear-gradient(145deg, var(--theme-700), var(--theme-950))" }}><FunDoodles className="opacity-35" />
             <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-white/10 blur-sm" />
             <div className="pointer-events-none absolute -bottom-14 left-10 h-32 w-32 rounded-full bg-white/5" />
             <div className="relative">
               <p className="text-[10px] font-black uppercase tracking-[.18em] text-white/65">The Hub • {location}</p>
               <h1 className="mt-2 text-[28px] font-black leading-8">Hi {profile?.full_name?.split(" ")[0] || "there"} 👋</h1>
               <p className="mt-1 text-xs font-semibold text-white/70">{profile?.job_title || "TCS Team"}{profile?.secondary_title ? ` • ${profile.secondary_title}` : ""}</p>
-              <p className="mt-4 max-w-xs text-sm font-semibold leading-5 text-white/85">Everything you need for your shift, right from your phone.</p>
+              <div className="mt-4 flex items-end justify-between gap-3"><p className="max-w-[230px] text-sm font-semibold leading-5 text-white/85">Everything you need for your shift, right from your phone—and a little more fun to use. ✨</p><GatorGuide size="sm" /></div>
 
               <div className="mt-5 grid grid-cols-4 gap-2">
                 <MobileShortcut href="/time-clock" icon={<CalendarClock className="h-5 w-5" />} label="Clock" />
