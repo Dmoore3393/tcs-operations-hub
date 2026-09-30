@@ -166,6 +166,8 @@ const routePermissionMap: Record<string, EmployeePermission> = {
   "/attendance": "schedules",
   "/child-schedules": "schedules",
   "/family-care-calendar": "schedules",
+  "/weekly-checkins": "daily_care",
+  "/child-photos": "daily_care",
   "/daily-care": "daily_care",
   "/meals": "meals",
   "/shift-reports": "shift_reports",
@@ -186,6 +188,9 @@ export function employeeCanAccessRoute(permissions: string[], pathname: string) 
   if (employeeAlwaysAllowedRoutes.has(pathname)) return true;
   if (pathname === "/family-care-calendar") {
     return hasAnyPermission(permissions, ["schedules", "ratios"]);
+  }
+  if (pathname === "/weekly-checkins" || pathname === "/child-photos") {
+    return hasAnyPermission(permissions, ["daily_care", "children_basic"]);
   }
   if (pathname === "/emergency-cards") {
     return hasAnyPermission(permissions, ["children_basic", "transportation", "health_safety"]);
