@@ -52,6 +52,7 @@ struct HubWebView: UIViewRepresentable {
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.keyboardDismissMode = .interactive
         webView.customUserAgent = ((webView.value(forKey: "userAgent") as? String) ?? "") + " " + AppConfiguration.nativeUserAgentSuffix
@@ -74,7 +75,7 @@ struct HubWebView: UIViewRepresentable {
 
     func updateUIView(_ webView: WKWebView, context: Context) {}
 
-    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         @Binding private var isLoading: Bool
         @Binding private var lastError: String?
         weak var webView: WKWebView?
@@ -164,15 +165,40 @@ struct HubWebView: UIViewRepresentable {
                 return
             }
 
-            if let host = url.host,
-               !AppConfiguration.allowedHosts.contains(host),
-               navigationAction.navigationType == .linkActivated {
+            if ["http", "https"].contains(scheme),
+               let host = url.host,
+               !AppConfiguration.allowedHosts.contains(host) {
                 UIApplication.shared.open(url)
                 decisionHandler(.cancel)
                 return
             }
 
             decisionHandler(.allow)
+        }
+
+        func webView(
+            _ webView: WKWebView,
+            createWebViewWith configuration: WKWebViewConfiguration,
+            for navigationAction: WKNavigationAction,
+            windowFeatures: WKWindowFeatures
+        ) -> WKWebView? {
+            guard navigationAction.targetFrame == nil,
+                  let url = navigationAction.request.url else {
+                return nil
+            }
+
+            let scheme = url.scheme?.lowercased() ?? ""
+            if ["tel", "sms", "mailto"].contains(scheme) {
+                UIApplication.shared.open(url)
+                return nil
+            }
+
+            if let host = url.host, AppConfiguration.allowedHosts.contains(host) {
+                webView.load(URLRequest(url: url))
+            } else {
+                UIApplication.shared.open(url)
+            }
+            return nil
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
