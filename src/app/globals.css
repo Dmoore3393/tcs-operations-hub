@@ -256,3 +256,98 @@
     scrollbar-width: none;
   }
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* TCS playful motion system — subtle, memorable, and reduced-motion friendly. */
+/* -------------------------------------------------------------------------- */
+@keyframes tcs-gator-float {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-7px) rotate(1.5deg); }
+}
+
+@keyframes tcs-doodle-float {
+  0%, 100% { transform: translate3d(0,0,0) rotate(var(--tw-rotate, 0deg)); }
+  50% { transform: translate3d(0,-9px,0) rotate(var(--tw-rotate, 0deg)); }
+}
+
+@keyframes tcs-doodle-bob {
+  0%, 100% { transform: scale(1) translateY(0); }
+  50% { transform: scale(1.07) translateY(-5px); }
+}
+
+@keyframes tcs-twinkle {
+  0%, 100% { opacity: .3; transform: scale(.9) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.15) rotate(8deg); }
+}
+
+@keyframes tcs-confetti-pop {
+  0% { opacity: 0; transform: translateY(-8px) scale(.7) rotate(0deg); }
+  35% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(34px) scale(1) rotate(160deg); }
+}
+
+@keyframes tcs-soft-pop {
+  0% { opacity: 0; transform: translateY(8px) scale(.985); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes tcs-shimmer {
+  0% { background-position: 180% 0; }
+  100% { background-position: -80% 0; }
+}
+
+.tcs-gator-float { animation: tcs-gator-float 3.7s ease-in-out infinite; }
+.tcs-doodle-float { animation: tcs-doodle-float 4.8s ease-in-out infinite; }
+.tcs-doodle-bob { animation: tcs-doodle-bob 3.9s ease-in-out infinite; }
+.tcs-doodle-twinkle { animation: tcs-twinkle 2.5s ease-in-out infinite; }
+.tcs-soft-pop { animation: tcs-soft-pop .42s ease-out both; }
+.tcs-confetti { animation: tcs-confetti-pop 1.25s ease-out infinite; }
+.tcs-delay-1 { animation-delay: .18s; }
+.tcs-delay-2 { animation-delay: .34s; }
+.tcs-delay-3 { animation-delay: .5s; }
+
+.tcs-speech-bubble {
+  position: relative;
+}
+.tcs-speech-bubble::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  bottom: 14px;
+  width: 16px;
+  height: 16px;
+  background: inherit;
+  transform: rotate(45deg);
+  border-left: inherit;
+  border-bottom: inherit;
+}
+
+.tcs-joy-card {
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.tcs-joy-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 42px -28px rgba(15,23,42,.45);
+}
+
+.tcs-shimmer {
+  background-image: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.35) 50%, transparent 65%);
+  background-size: 220% 100%;
+  animation: tcs-shimmer 3.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tcs-gator-float,
+  .tcs-doodle-float,
+  .tcs-doodle-bob,
+  .tcs-doodle-twinkle,
+  .tcs-soft-pop,
+  .tcs-confetti,
+  .tcs-shimmer {
+    animation: none !important;
+  }
+  .tcs-joy-card:hover {
+    transform: none;
+  }
+}

@@ -1,9 +1,11 @@
 "use client";
 
+import { FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
 import { AlertTriangle, Database, KeyRound, LoaderCircle, LockKeyhole, Mail } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 const fieldClass =
   "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100";
@@ -55,17 +57,15 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-[100dvh] items-center justify-center bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 p-0 sm:p-8">
+    <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-gradient-to-br from-[#fff5cf] via-[#e9f8ee] to-[#e9efff] p-0 sm:p-8"><FunDoodles soft />
       <div className="min-h-[100dvh] w-full overflow-hidden bg-white shadow-2xl sm:min-h-0 sm:max-w-md sm:rounded-3xl sm:border sm:border-white/10">
-        <div className="bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 px-6 pb-10 pt-[max(3rem,env(safe-area-inset-top))] text-center text-white sm:bg-emerald-50 sm:px-8 sm:py-7 sm:text-slate-950">
-          <img src="/app-icon-192.png" alt="The Hub app icon" className="mx-auto h-20 w-20 rounded-[24px] object-cover shadow-2xl ring-1 ring-white/20 sm:h-16 sm:w-16 sm:rounded-[20px]" />
+        <div className="relative overflow-hidden bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 px-6 pb-10 pt-[max(3rem,env(safe-area-inset-top))] text-center text-white sm:px-8 sm:py-7"><FunDoodles className="opacity-45" />
+          <div className="relative z-10 mx-auto flex justify-center"><GatorGuide size="md" /></div>
           <p className="mt-5 text-xs font-black uppercase tracking-[0.18em] text-emerald-200 sm:mt-4 sm:text-emerald-700">
             TCS Operations Hub
           </p>
           <h1 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-2xl sm:text-slate-950">Welcome to The Hub</h1>
-          <p className="mx-auto mt-2 max-w-xs text-sm font-semibold leading-6 text-white/70 sm:text-slate-600">
-            Secure access for Owner/Admin, Licensee, and Employee accounts invited through Team Access. Parent and family accounts are not active.
-          </p>
+          <p className="mx-auto mt-2 max-w-xs text-sm font-semibold leading-6 text-white/75">Your TCS workday lives here—schedules, training, care tools, transportation, team wins, and the things that keep every location moving.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="-mt-5 space-y-5 rounded-t-[30px] bg-white px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-7 sm:mt-0 sm:rounded-none sm:px-8">
@@ -130,9 +130,8 @@ export default function LoginPage() {
             {isSigningIn ? "Signing In…" : isSupabaseConfigured ? "Sign In" : "Setup Required"}
           </button>
 
-          <p className="text-center text-xs leading-5 text-slate-500">
-            Invited TCS staff only. Use the email and password you created from your invitation. Contact a TCS Owner/Admin if you need a new setup link or access change.
-          </p>
+          <p className="text-center text-xs leading-5 text-slate-500">Invited TCS staff only. Use the email and password you created from your invitation. Contact a TCS Owner/Admin if you need a new setup link or access change.</p>
+          <Link href="/parent-login" className="block rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-xs font-black text-emerald-900">Parent or guardian? Open the Family Portal →</Link>
         </form>
       </div>
     </main>

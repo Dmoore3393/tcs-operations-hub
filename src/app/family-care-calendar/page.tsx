@@ -1,5 +1,6 @@
 "use client";
 
+import { CelebrationBits, FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
 import Link from "next/link";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -266,14 +267,14 @@ export default function FamilyCareCalendarPage() {
   }
 
   return <MainLayout><div className="mx-auto max-w-[1600px] space-y-6">
-    <section className="overflow-hidden rounded-[30px] bg-gradient-to-br from-emerald-950 via-emerald-800 to-slate-950 p-6 text-white shadow-xl">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div><p className="text-xs font-black uppercase tracking-[.18em] text-emerald-200">Family schedule control</p><h1 className="mt-2 text-3xl font-black">Family Care Calendar</h1><p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-emerald-50/80">Parents can submit upcoming schedules early. Friday at 6:00 PM is tracked automatically, late requests are clearly flagged, closures block parent scheduling, and approved dated care times feed the Ratio Plan.</p></div>
-        <div className="flex flex-wrap gap-2"><Link href="/child-schedules" className="rounded-xl bg-white/10 px-4 py-2.5 text-xs font-black text-white">Child Schedules</Link><Link href="/ratios" className="rounded-xl bg-white px-4 py-2.5 text-xs font-black text-emerald-950">Open Ratio Plan</Link></div>
+    <section className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-emerald-950 via-emerald-800 to-slate-950 p-6 text-white shadow-xl"><FunDoodles className="opacity-35" />
+      <div className="relative z-10 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div><p className="text-xs font-black uppercase tracking-[.18em] text-emerald-200">Family schedule control</p><h1 className="mt-2 text-3xl font-black">Family Care Calendar</h1><p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-emerald-50/85">Parents can submit upcoming schedules early. Friday at 6:00 PM is tracked automatically, late requests are clearly flagged, closures block parent scheduling, and approved dated care times feed the Ratio Plan.</p><div className="mt-5 flex flex-wrap gap-2"><Link href="/child-schedules" className="rounded-xl bg-white/10 px-4 py-2.5 text-xs font-black text-white">Child Schedules</Link><Link href="/ratios" className="rounded-xl bg-white px-4 py-2.5 text-xs font-black text-emerald-950">Open Ratio Plan</Link></div></div>
+        <GatorGuide size="lg" message={<>Great planning = calmer days. Review what families need, then protect your ratios. ⭐</>} />
       </div>
     </section>
 
-    {notice && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-black text-emerald-900"><CheckCircle2 className="mr-2 inline h-4 w-4" />{notice}</div>}
+    {notice && <div className="tcs-soft-pop relative overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-black text-emerald-900"><CelebrationBits /><CheckCircle2 className="mr-2 inline h-4 w-4" />{notice}</div>}
     {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-900"><AlertTriangle className="mr-2 inline h-4 w-4" />{error}</div>}
 
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -316,7 +317,7 @@ export default function FamilyCareCalendarPage() {
       <div className="mt-5 space-y-4">{reviewQueue.length === 0 ? <div className="rounded-2xl bg-emerald-50 p-6 text-center text-sm font-black text-emerald-900"><CheckCircle2 className="mx-auto mb-2 h-7 w-7" />No family schedules are waiting for review.</div> : reviewQueue.map((submission) => {
         const location = data?.locations.find((item) => item.id === submission.locationId);
         const careDays = submission.schedule.filter((day) => !day.noCare);
-        return <article key={submission.id} className="rounded-3xl border border-slate-200 p-5">
+        return <article key={submission.id} className="tcs-joy-card rounded-3xl border border-slate-200 p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-lg font-black text-slate-950">{submission.childName}</h3><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[9px] font-black text-slate-600">{locationLabel(location)}</span>{submission.requestKind === "Change" && <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[9px] font-black text-violet-800">Change Request</span>}{submission.lateByMinutes > 0 && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[9px] font-black text-amber-900">{lateDurationLabel(submission.lateByMinutes)}</span>}</div><p className="mt-2 text-xs font-semibold text-slate-500">Week of {displayDate(submission.weekOf, { month: "long", day: "numeric", year: "numeric" })} • Submitted {new Date(submission.submittedAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p></div><span className={`w-fit rounded-full px-3 py-1.5 text-[10px] font-black ${statusStyle(submission.status)}`}>{submission.status}</span></div>
 
           <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{careDays.map((day) => <div key={day.date} className="rounded-xl bg-slate-50 p-3"><p className="text-[9px] font-black uppercase tracking-wider text-slate-400">{displayDate(day.date, { weekday: "short", month: "short", day: "numeric" })}</p><p className="mt-1 text-xs font-black text-slate-900">{day.startTime}–{day.endTime}</p>{day.note && <p className="mt-1 text-[9px] font-semibold leading-4 text-slate-500">{day.note}</p>}</div>)}</div>
