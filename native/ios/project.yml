@@ -19,8 +19,7 @@ targets:
     sources:
       - path: TheHub
     resources:
-      - path: ../../public/branding/tcs-hub-launch.webp
-      - path: ../../public/branding/tcs-hub-loading.webp
+      - path: TheHub/Resources
     preBuildScripts:
       - name: Prepare official Hub app icon
         path: scripts/prepare-assets.sh
