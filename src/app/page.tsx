@@ -7,6 +7,7 @@ import DashboardHero from "@/components/dashboard/Hero";
 import MorningBriefing from "@/components/dashboard/MorningBriefing";
 import SmartAlertsPanel from "@/components/dashboard/SmartAlertsPanel";
 import TodayAtTCS from "@/components/dashboard/TodayAtTCS";
+import EmployeeCheckinReminder from "@/components/dashboard/EmployeeCheckinReminder";
 import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useLiveStaffingSnapshot } from "@/hooks/useLiveStaffingSnapshot";
@@ -199,6 +200,8 @@ export default function Home() {
           leads={enrollmentLeads}
           permissions={{ scheduling: canUseScheduling, transportation: canUseTransportation, workPlans: canUseWorkPlans, enrollment: canUseEnrollment, meals: canUseMeals }}
         />
+
+        <EmployeeCheckinReminder />
 
         <section className={`grid gap-4 sm:grid-cols-2 ${administrativeToolsVisible ? "xl:grid-cols-6" : "xl:grid-cols-4"}`}>
           <StatCard label="Children Enrolled" value={totalEnrolled} helper={`Across ${visibleCareLocations.length} accessible location${visibleCareLocations.length === 1 ? "" : "s"}`} icon={<Users className="h-5 w-5" />} tone="emerald" />

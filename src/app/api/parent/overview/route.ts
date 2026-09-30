@@ -39,6 +39,12 @@ async function signedChildMediaUrl(admin: Awaited<ReturnType<typeof requireParen
   return result.error ? "" : result.data.signedUrl;
 }
 
+async function signedNewsletterUrl(admin: Awaited<ReturnType<typeof requireParent>>["admin"], objectPath: string) {
+  if (!objectPath) return "";
+  const result = await admin.storage.from("family-newsletters").createSignedUrl(objectPath, 60 * 60);
+  return result.error ? "" : result.data.signedUrl;
+}
+
 function latestAudit(record: DbRow): ChildFileAudit | null {
   const audits = Array.isArray(record.fileAudits) ? record.fileAudits as ChildFileAudit[] : [];
   return [...audits].sort((a, b) =>
@@ -62,7 +68,7 @@ export async function GET(request: Request) {
       day: "2-digit",
     }).format(new Date());
 
-    const [careResult, formsResult, transportationFeesResult, familyMattersResult, weeklyCheckinsResult, mediaResult] = await Promise.all([
+    const [careResult, formsResult, transportationFeesResult, familyMattersResult, weeklyCheckinsResult, mediaResult, newslettersResult] = await Promise.all([
       rowIds.length
         ? admin
             .from("daily_care_entries")
@@ -117,6 +123,16 @@ export async function GET(request: Request) {
             .order("created_at", { ascending: false })
             .limit(100)
         : Promise.resolve({ data: [], error: null }),
+      organizationIds.length
+        ? admin
+            .from("family_newsletters")
+            .select("id,organization_id,location_id,newsletter_month,title,summary,object_path,mime_type,size_bytes,created_by_name,created_at")
+            .in("organization_id", organizationIds)
+            .eq("is_published", true)
+            .order("newsletter_month", { ascending: false })
+            .order("created_at", { ascending: false })
+            .limit(36)
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     if (careResult.error) throw careResult.error;
@@ -125,6 +141,7 @@ export async function GET(request: Request) {
     if (familyMattersResult.error) throw familyMattersResult.error;
     if (weeklyCheckinsResult.error) throw weeklyCheckinsResult.error;
     if (mediaResult.error) throw mediaResult.error;
+    if (newslettersResult.error) throw newslettersResult.error;
 
     const childByRow = new Map(children.map((child) => [child.rowId, child]));
     const careEntries = ((careResult.data ?? []) as unknown as DbRow[]).map((row) => {
@@ -231,6 +248,24 @@ export async function GET(request: Request) {
       url: await signedChildMediaUrl(admin, text(row.object_path)),
     })));
 
+    const newsletters = await Promise.all(((newslettersResult.data ?? []) as unknown as DbRow[])
+      .filter((row) => {
+        const locationId = text(row.location_id);
+        return !locationId || parentVisibleLocationIds.includes(locationId);
+      })
+      .map(async (row) => ({
+        id: text(row.id),
+        locationId: text(row.location_id),
+        month: text(row.newsletter_month),
+        title: text(row.title),
+        summary: text(row.summary),
+        mimeType: text(row.mime_type),
+        sizeBytes: Number(row.size_bytes) || 0,
+        createdByName: text(row.created_by_name),
+        createdAt: text(row.created_at),
+        url: await signedNewsletterUrl(admin, text(row.object_path)),
+      })));
+
     const safeChildren = children.map((child) => {
       const record = child.record;
       const permissions = child.access.permissions;
@@ -304,6 +339,7 @@ export async function GET(request: Request) {
       familyMatters,
       weeklyCheckins,
       media,
+      newsletters,
     }, {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
