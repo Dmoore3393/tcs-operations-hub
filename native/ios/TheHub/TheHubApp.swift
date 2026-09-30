@@ -14,7 +14,7 @@ struct TheHubApp: App {
                 .environmentObject(lock)
                 .environmentObject(network)
         }
-        .onChange(of: scenePhase) { _, newPhase in
+        .onChange(of: scenePhase) { newPhase in
             switch newPhase {
             case .background:
                 lock.appMovedToBackground()
