@@ -35,8 +35,12 @@ async function accessibleLocationIds(auth: Awaited<ReturnType<typeof requireStaf
   return [...new Set((result.data ?? []).map((row) => String(row.location_id)))];
 }
 
-function canUseMeals(auth: Awaited<ReturnType<typeof requireStaff>>) {
+function canReadMeals(auth: Awaited<ReturnType<typeof requireStaff>>) {
   return auth.isOwner || auth.isLicensee || auth.profile.permissions.includes("meals") || auth.profile.permissions.includes("daily_care");
+}
+
+function canManageMeals(auth: Awaited<ReturnType<typeof requireStaff>>) {
+  return auth.isOwner || auth.isLicensee || auth.profile.permissions.includes("meals");
 }
 
 async function resolveLocation(auth: Awaited<ReturnType<typeof requireStaff>>, locationName: string) {
@@ -62,7 +66,7 @@ async function resolveLocation(auth: Awaited<ReturnType<typeof requireStaff>>, l
 export async function GET(request: Request) {
   try {
     const auth = await requireStaff(request);
-    if (!canUseMeals(auth)) throw new Response("Meals access is required.", { status: 403 });
+    if (!canReadMeals(auth)) throw new Response("Meals access is required.", { status: 403 });
 
     const url = new URL(request.url);
     const path = text(url.searchParams.get("path"));
@@ -92,7 +96,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const auth = await requireStaff(request);
-    if (!canUseMeals(auth)) throw new Response("Meals access is required.", { status: 403 });
+    if (!canManageMeals(auth)) throw new Response("Menu editing permission is required.", { status: 403 });
 
     const form = await request.formData();
     const locationName = text(form.get("location"));
@@ -139,7 +143,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const auth = await requireStaff(request);
-    if (!canUseMeals(auth)) throw new Response("Meals access is required.", { status: 403 });
+    if (!canManageMeals(auth)) throw new Response("Menu editing permission is required.", { status: 403 });
 
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const path = text(body.path);
