@@ -108,6 +108,12 @@ type CareEntry = {
   action: string;
   result: string;
   notes: string;
+  plannedFoods: string;
+  foodServed: string;
+  drinkServed: string;
+  intakeDetails: string;
+  alternativeFoods: string;
+  substitutionReason: string;
 };
 
 type ParentForm = {
@@ -787,7 +793,20 @@ export default function ParentPortalPage() {
               <Info label="Transportation" value={selectedChild.transportation || "No transportation"} />
             </div>
 
-            <div className="mt-5 space-y-3">{care.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">No recent daily-care updates are available yet.</p> : care.map((entry) => <div key={entry.id} className="rounded-2xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-wider text-emerald-700">{entry.category}</p><h3 className="mt-1 font-black text-slate-900">{entry.action || entry.result || "Care update"}</h3></div><span className="text-[10px] font-bold text-slate-400">{formatDate(entry.date)} • {entry.time}</span></div>{entry.result && entry.action && <p className="mt-2 text-sm font-semibold text-slate-700">{entry.result}</p>}{entry.notes && <p className="mt-2 text-xs leading-5 text-slate-500">{entry.notes}</p>}</div>)}</div>
+            <div className="mt-5 space-y-3">{care.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">No recent daily-care updates are available yet.</p> : care.map((entry) => {
+              const isMeal = entry.category === "Meal";
+              return <div key={entry.id} className={`rounded-2xl border p-4 ${isMeal ? "border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white" : "border-slate-200"}`}>
+                <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-wider text-emerald-700">{entry.category}</p><h3 className="mt-1 font-black text-slate-900">{entry.action || entry.result || "Care update"}</h3></div><span className="text-[10px] font-bold text-slate-400">{formatDate(entry.date)} • {entry.time}</span></div>
+                {isMeal ? <div className="mt-3 space-y-2">
+                  {entry.plannedFoods && <div className="rounded-xl bg-white p-3"><p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Planned menu</p><p className="mt-1 text-xs font-semibold leading-5 text-slate-700">{entry.plannedFoods}</p></div>}
+                  {entry.foodServed && <div className="rounded-xl bg-white p-3"><p className="text-[9px] font-black uppercase tracking-wider text-emerald-700">What was served</p><p className="mt-1 text-sm font-black leading-5 text-slate-900">{entry.foodServed}</p>{entry.drinkServed && <p className="mt-1 text-[10px] font-semibold text-slate-500">Drink: {entry.drinkServed}</p>}</div>}
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-[9px] font-black uppercase tracking-wider text-amber-800">What {selectedChild.firstName} ate</p><p className="mt-1 text-sm font-black text-amber-950">{entry.result || "Meal intake recorded"}</p>{entry.intakeDetails && <p className="mt-1 text-xs font-semibold leading-5 text-amber-900">{entry.intakeDetails}</p>}</div>
+                  {entry.alternativeFoods && <div className="rounded-xl border border-violet-200 bg-violet-50 p-3"><p className="text-[9px] font-black uppercase tracking-wider text-violet-700">Alternative / substitution</p><p className="mt-1 text-sm font-black text-violet-950">{entry.alternativeFoods}</p><p className="mt-1 text-[10px] font-semibold leading-4 text-violet-700">{selectedChild.firstName} was offered this instead of, or in addition to, the original meal.</p></div>}
+                  {entry.substitutionReason && <p className="text-[10px] font-semibold leading-4 text-slate-500"><strong>Meal change:</strong> {entry.substitutionReason}</p>}
+                  {entry.notes && <p className="text-xs leading-5 text-slate-500">{entry.notes}</p>}
+                </div> : <>{entry.result && entry.action && <p className="mt-2 text-sm font-semibold text-slate-700">{entry.result}</p>}{entry.notes && <p className="mt-2 text-xs leading-5 text-slate-500">{entry.notes}</p>}</>}
+              </div>;
+            })}</div>
           </section>
 
           <div className="grid gap-5 lg:grid-cols-2">
