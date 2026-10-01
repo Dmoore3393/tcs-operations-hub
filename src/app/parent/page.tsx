@@ -1,6 +1,7 @@
 "use client";
 
 import { CelebrationBits, FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
+import { TcsKidsScene } from "@/components/brand/TcsKidsScene";
 import SafeImage from "@/components/media/SafeImage";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
 import type { Session } from "@supabase/supabase-js";
@@ -569,7 +570,10 @@ export default function ParentPortalPage() {
             <h2 className="mt-2 max-w-3xl text-3xl font-black sm:text-4xl">You are part of your child’s TCS day.</h2>
             <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-emerald-50/85">Schedules, attendance, care updates, forms, and conversations live here so you can stay connected—not just informed. Your family voice matters in the care we provide.</p>
           </div>
-          <GatorGuide size="lg" message={<>We’re glad you’re here! Check in, plan care, and stay connected. ⭐</>} />
+          <div className="w-full max-w-[390px]">
+            <TcsKidsScene variant="family" compact className="opacity-95" />
+            <div className="-mt-4 flex justify-end"><GatorGuide size="sm" message={<>We’re glad you’re here! ⭐</>} /></div>
+          </div>
         </div>
         {canUseFamilyAttendance && <button
           onClick={() => router.push("/parent/scan")}
@@ -632,6 +636,7 @@ export default function ParentPortalPage() {
               <FunDoodles className="opacity-20" />
               <div className="relative z-10">
                 <div className="flex items-center gap-3"><Star className="h-5 w-5 text-amber-600" /><div><h2 className="font-black text-slate-950">This week at TCS</h2><p className="text-xs text-slate-500">A little progress note just for {selectedChild.firstName}.</p></div></div>
+                <TcsKidsScene variant="celebrate" compact className="-mb-5 -mt-2" />
                 {selectedWeeklyCheckin ? <>
                   <p className="mt-4 text-[10px] font-black uppercase tracking-wider text-emerald-700">Week of {formatDate(selectedWeeklyCheckin.weekOf)}</p>
                   <h3 className="mt-1 text-xl font-black text-slate-950">{selectedWeeklyCheckin.title || "This Week at TCS"}</h3>
@@ -711,6 +716,7 @@ export default function ParentPortalPage() {
             <section className="relative overflow-hidden rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-amber-50 p-5 shadow-sm">
               <FunDoodles className="opacity-25" />
               <div className="relative z-10">
+                <TcsKidsScene variant="reading" compact className="-mb-5 -mt-3" />
                 <p className="text-[10px] font-black uppercase tracking-[.16em] text-sky-700">Family Matters</p>
                 <h2 className="mt-1 text-xl font-black text-slate-950">A little something from TCS 🐊</h2>
                 {selectedFamilyMatters.length ? <div className="mt-4 space-y-3">{selectedFamilyMatters.map((post) => <article key={post.id} className="rounded-2xl border border-white bg-white/90 p-4 shadow-sm"><div className="flex items-start gap-3"><span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-sky-50 text-xl">{post.emoji || "💚"}</span><div><div className="flex flex-wrap items-center gap-2"><p className="text-[9px] font-black uppercase tracking-wider text-sky-700">{post.category}</p>{post.isPinned && <span className="rounded-full bg-amber-100 px-2 py-1 text-[8px] font-black text-amber-900">PINNED</span>}</div><h3 className="mt-1 text-sm font-black text-slate-950">{post.title}</h3><p className="mt-2 text-xs font-semibold leading-5 text-slate-600">{post.message}</p></div></div></article>)}</div> : <><p className="mt-2 max-w-xl text-xs font-semibold leading-5 text-slate-600">Checking schedules, reading updates, sending messages, and keeping forms current all help us plan better care for your child. You are not just using the app—you are part of the care team.</p><div className="mt-4"><GatorGuide size="md" message={<>Thanks for staying connected with us. It makes a difference. 💚</>} /></div></>}
