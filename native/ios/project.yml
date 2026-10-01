@@ -51,7 +51,7 @@ targets:
         CFBundleName: The Hub
         LSApplicationCategoryType: public.app-category.business
         NSFaceIDUsageDescription: The Hub uses Face ID to help protect access to authorized TCS staff and family information on this device.
-        NSCameraUsageDescription: The Hub uses the camera when an authorized user chooses to capture an approved childcare photo, document, QR code, or other supported image.
+        NSCameraUsageDescription: The Hub uses the camera for TCS location QR check-in, staff clocking, and approved childcare photo or document capture when an authorized user chooses those features.
         NSPhotoLibraryUsageDescription: The Hub can access only the photos an authorized staff member or family user selects to upload for approved childcare features such as child profile photos, daily photos, menus, newsletters, or documents.
         UIApplicationSupportsIndirectInputEvents: true
         UILaunchScreen:
