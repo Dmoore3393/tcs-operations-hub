@@ -104,6 +104,31 @@ function statusTone(status: MenuSlot["status"]): "green" | "amber" | "blue" | "s
   return "blue";
 }
 
+function componentsForPresetCategory(category: FoodPresetCategory): MealComponent[] {
+  if (category === "Protein" || category === "Dairy") return ["Protein"];
+  if (category === "Grain") return ["Grain"];
+  if (category === "Fruit") return ["Fruit"];
+  if (category === "Vegetable") return ["Vegetable"];
+  if (category === "Drink") return ["Milk"];
+  return [];
+}
+
+function emojiForPresetCategory(category: FoodPresetCategory) {
+  if (category === "Protein") return "🍗";
+  if (category === "Grain") return "🍞";
+  if (category === "Fruit") return "🍎";
+  if (category === "Vegetable") return "🥦";
+  if (category === "Dairy") return "🥛";
+  if (category === "Drink") return "💧";
+  return "🍽️";
+}
+
+function appendFood(current: string, next: string) {
+  const existing = current.split("•").map((item) => item.trim()).filter(Boolean);
+  if (existing.some((item) => item.toLowerCase() === next.trim().toLowerCase())) return current;
+  return [...existing, next.trim()].join(" • ");
+}
+
 export default function MealsPage() {
   const { location: activeLocation } = useHubLocation();
   const currentLocation: Exclude<LocationKey, "All Locations"> = activeLocation === "All Locations" ? "Halcom" : activeLocation;
@@ -269,6 +294,144 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
       if (existingIndex >= 0) return current.map((menu, index) => index === existingIndex ? nextMenu : menu);
       return [...current, nextMenu];
     });
+  }
+
+  function updateMenuMetadata(updates: Partial<WeeklyMenu>) {
+    setMenus((current) => {
+      const existingIndex = current.findIndex((menu) => menu.location === currentLocation && menu.weekOf === weekOf);
+      const nextMenu = existingIndex >= 0 ? structuredClone(current[existingIndex]) : createBlankWeeklyMenu(currentLocation, weekOf);
+      Object.assign(nextMenu, updates);
+      if (existingIndex >= 0) return current.map((menu, index) => index === existingIndex ? nextMenu : menu);
+      return [...current, nextMenu];
+    });
+  }
+
+  function applyPresetToMenu(preset: FoodPreset) {
+    setPresetDay((current) => current);
+    setMenus((current) => {
+      const existingIndex = current.findIndex((menu) => menu.location === currentLocation && menu.weekOf === weekOf);
+      const nextMenu = existingIndex >= 0 ? structuredClone(current[existingIndex]) : createBlankWeeklyMenu(currentLocation, weekOf);
+      const slot = nextMenu.days[presetDay][presetMeal];
+      slot.plannedFoods = appendFood(slot.plannedFoods, preset.name);
+      slot.components = [...new Set([...slot.components, ...preset.components])];
+      if (existingIndex >= 0) return current.map((menu, index) => index === existingIndex ? nextMenu : menu);
+      return [...current, nextMenu];
+    });
+    setMessage(`${preset.name} added to ${presetDay} ${presetMeal}.`);
+    window.setTimeout(() => setMessage(""), 1800);
+  }
+
+  function applyPresetToMealLog(preset: FoodPreset) {
+    setDraft((current) => ({
+      ...current,
+      actualFoods: appendFood(current.actualFoods, preset.name),
+      components: [...new Set([...current.components, ...preset.components])],
+      ...(preset.category === "Drink" && !current.drinkServed.trim() ? { drinkServed: preset.name } : {}),
+    }));
+  }
+
+  function addCustomPreset() {
+    const name = newPresetName.trim();
+    if (!name) {
+      setMessage("Enter a food name before adding a preset.");
+      return;
+    }
+    if (foodPresets.some((item) => item.name.toLowerCase() === name.toLowerCase())) {
+      setMessage("That food is already in your preset library.");
+      return;
+    }
+    const preset: FoodPreset = {
+      id: `food-custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name,
+      category: newPresetCategory,
+      components: componentsForPresetCategory(newPresetCategory),
+      emoji: emojiForPresetCategory(newPresetCategory),
+      active: true,
+      custom: true,
+    };
+    setFoodPresets((current) => [...current, preset]);
+    setNewPresetName("");
+    setMessage(`${name} added to your shared food presets.`);
+    window.setTimeout(() => setMessage(""), 2200);
+  }
+
+  function removeCustomPreset(id: string) {
+    setFoodPresets((current) => current.filter((item) => item.id !== id));
+  }
+
+  async function uploadMenuImage(file: File | null) {
+    if (!file || !session?.access_token) return;
+    setUploadingMenuImage(true);
+    setMessage("");
+    const oldPath = currentMenu.menuImagePath || "";
+    try {
+      const form = new FormData();
+      form.set("location", currentLocation);
+      form.set("weekOf", weekOf);
+      form.set("file", file);
+      const response = await fetch("/api/meals/menu-image", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: form,
+      });
+      const payload = await response.json() as { error?: string; path?: string; name?: string; uploadedAt?: string; url?: string; message?: string };
+      if (!response.ok || !payload.path) throw new Error(payload.error || "Could not upload the menu image.");
+
+      updateMenuMetadata({
+        menuImagePath: payload.path,
+        menuImageName: payload.name || file.name,
+        menuImageUploadedAt: payload.uploadedAt || new Date().toISOString(),
+      });
+      setMenuImageUrl(payload.url || "");
+
+      if (oldPath && oldPath !== payload.path) {
+        void fetch("/api/meals/menu-image", {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ path: oldPath, location: currentLocation }),
+        }).catch(() => undefined);
+      }
+
+      setMessage("Weekly menu image uploaded and attached to this week.");
+      window.setTimeout(() => setMessage(""), 2600);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not upload the menu image.");
+    } finally {
+      setUploadingMenuImage(false);
+    }
+  }
+
+  async function removeMenuImage() {
+    if (!session?.access_token || !currentMenu.menuImagePath) return;
+    const path = currentMenu.menuImagePath;
+    setUploadingMenuImage(true);
+    try {
+      const response = await fetch("/api/meals/menu-image", {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ path, location: currentLocation }),
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Could not remove the menu image.");
+      updateMenuMetadata({
+        menuImagePath: undefined,
+        menuImageName: undefined,
+        menuImageUploadedAt: undefined,
+      });
+      setMenuImageUrl("");
+      setMessage("Weekly menu image removed.");
+      window.setTimeout(() => setMessage(""), 2200);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not remove the menu image.");
+    } finally {
+      setUploadingMenuImage(false);
+    }
   }
 
   function copyHalcomMenu() {
