@@ -1,6 +1,8 @@
 "use client";
 
 import MainLayout from "@/components/layout/MainLayout";
+import SafeImage from "@/components/media/SafeImage";
+import { useAuth } from "@/components/providers/AuthProvider";
 import { DemoNotice, PageIntro, PrimaryButton, SectionCard, StatCard, StatusBadge, inputClass } from "@/components/hub/HubUI";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -17,11 +19,15 @@ import {
   mealDefaults,
   mealIntakeOptions,
   mealTypes,
+  foodPresetCategories,
+  starterFoodPresets,
   menuDayOrder,
   shiftWeek,
   starterMealServices,
   starterWeeklyMenus,
   weekStartFor,
+  type FoodPreset,
+  type FoodPresetCategory,
   type MealComponent,
   type MealIntake,
   type MealServiceRecord,
@@ -37,13 +43,18 @@ import {
   ClipboardList,
   Copy,
   History,
+  ImageUp,
   Lock,
+  Plus,
   Save,
   Search,
+  Sparkles,
+  Trash2,
   Users,
   Utensils,
+  X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { localIsoDate } from "@/lib/date-utils";
 
 const defaultDate = localIsoDate();
