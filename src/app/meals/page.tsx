@@ -91,6 +91,9 @@ function cloneMenuForLocation(source: WeeklyMenu, location: Exclude<LocationKey,
     id: `menu-${location.toLowerCase().replaceAll(" ", "-")}-${weekOf}`,
     location,
     weekOf,
+    menuImagePath: undefined,
+    menuImageName: undefined,
+    menuImageUploadedAt: undefined,
   };
 }
 
@@ -108,7 +111,9 @@ export default function MealsPage() {
 }
 
 function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<LocationKey, "All Locations"> }) {
+  const { session } = useAuth();
   const [menus, setMenus] = usePersistentState<WeeklyMenu[]>("tcs-weekly-menus-v1", starterWeeklyMenus);
+  const [foodPresets, setFoodPresets] = usePersistentState<FoodPreset[]>("tcs-food-presets-v1", starterFoodPresets);
   const [services, setServices] = usePersistentState<MealServiceRecord[]>("tcs-meal-services-v1", starterMealServices);
   const [careLogs, setCareLogs] = usePersistentState<CareLogEntry[]>("tcs-daily-care-v1", starterCareLogs);
   const [children] = usePersistentState<ChildRecord[]>("tcs-children-v1", initialChildren);
@@ -119,6 +124,14 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
   const [selectedChildren, setSelectedChildren] = useState<number[]>([]);
   const [intakeByChild, setIntakeByChild] = useState<Record<number, MealIntake>>({});
   const [message, setMessage] = useState("");
+  const [presetSearch, setPresetSearch] = useState("");
+  const [presetCategory, setPresetCategory] = useState<FoodPresetCategory | "All">("All");
+  const [presetDay, setPresetDay] = useState<(typeof menuDayOrder)[number]>("Monday");
+  const [presetMeal, setPresetMeal] = useState<MealType>("Breakfast");
+  const [newPresetName, setNewPresetName] = useState("");
+  const [newPresetCategory, setNewPresetCategory] = useState<FoodPresetCategory>("Other");
+  const [menuImageUrl, setMenuImageUrl] = useState("");
+  const [uploadingMenuImage, setUploadingMenuImage] = useState(false);
   const [draft, setDraft] = useState<MealDraft>({
     date: defaultDate,
     meal: "Breakfast",
@@ -174,6 +187,38 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
     counts[result] += 1;
     return counts;
   }, Object.fromEntries(mealIntakeOptions.map((item) => [item, 0])) as Record<MealIntake, number>);
+
+  const filteredFoodPresets = useMemo(() => {
+    const term = presetSearch.trim().toLowerCase();
+    return foodPresets
+      .filter((item) => item.active !== false)
+      .filter((item) => presetCategory === "All" || item.category === presetCategory)
+      .filter((item) => !term || `${item.name} ${item.category}`.toLowerCase().includes(term));
+  }, [foodPresets, presetCategory, presetSearch]);
+
+  useEffect(() => {
+    if (!session?.access_token || !currentMenu.menuImagePath) {
+      setMenuImageUrl("");
+      return;
+    }
+    let active = true;
+    const params = new URLSearchParams({
+      path: currentMenu.menuImagePath,
+      location: currentLocation,
+    });
+    void fetch(`/api/meals/menu-image?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      cache: "no-store",
+    })
+      .then(async (response) => response.ok ? response.json() as Promise<{ url: string }> : null)
+      .then((payload) => {
+        if (active) setMenuImageUrl(payload?.url || "");
+      })
+      .catch(() => {
+        if (active) setMenuImageUrl("");
+      });
+    return () => { active = false; };
+  }, [currentLocation, currentMenu.menuImagePath, session?.access_token]);
 
   function loadMealSelection(date: string, meal: MealType) {
     const service = services.find((item) => item.location === currentLocation && item.date === date && item.meal === meal);
