@@ -5,6 +5,17 @@ export type MealType = "Breakfast" | "AM Snack" | "Lunch" | "PM Snack" | "Dinner
 export type MealComponent = "Milk" | "Grain" | "Protein" | "Fruit" | "Vegetable";
 export type MealServiceStatus = "Planned" | "Served as Planned" | "Substitution" | "Closed";
 export type MealIntake = "Ate all" | "Ate most" | "Ate some" | "Ate a little" | "Refused" | "Not present";
+export type FoodPresetCategory = "Protein" | "Grain" | "Fruit" | "Vegetable" | "Dairy" | "Drink" | "Other";
+
+export type FoodPreset = {
+  id: string;
+  name: string;
+  category: FoodPresetCategory;
+  components: MealComponent[];
+  emoji: string;
+  active: boolean;
+  custom?: boolean;
+};
 
 export type MenuSlot = {
   plannedFoods: string;
@@ -21,6 +32,9 @@ export type WeeklyMenu = {
   location: Exclude<LocationKey, "All Locations">;
   weekOf: string;
   days: Record<DayName, Record<MealType, MenuSlot>>;
+  menuImagePath?: string;
+  menuImageName?: string;
+  menuImageUploadedAt?: string;
 };
 
 export type MealServiceRecord = {
@@ -52,6 +66,34 @@ export const mealDefaults: Record<MealType, { time: string; helper: string; sugg
 
 export const mealComponents: MealComponent[] = ["Milk", "Grain", "Protein", "Fruit", "Vegetable"];
 export const mealIntakeOptions: MealIntake[] = ["Ate all", "Ate most", "Ate some", "Ate a little", "Refused", "Not present"];
+
+export const foodPresetCategories: FoodPresetCategory[] = ["Protein", "Grain", "Fruit", "Vegetable", "Dairy", "Drink", "Other"];
+
+export const starterFoodPresets: FoodPreset[] = [
+  { id: "food-cereal", name: "Whole-grain cereal", category: "Grain", components: ["Grain"], emoji: "🥣", active: true },
+  { id: "food-oatmeal", name: "Oatmeal", category: "Grain", components: ["Grain"], emoji: "🥣", active: true },
+  { id: "food-waffles", name: "Waffles", category: "Grain", components: ["Grain"], emoji: "🧇", active: true },
+  { id: "food-pancakes", name: "Pancakes", category: "Grain", components: ["Grain"], emoji: "🥞", active: true },
+  { id: "food-french-toast", name: "French toast", category: "Grain", components: ["Grain"], emoji: "🍞", active: true },
+  { id: "food-rice", name: "Rice", category: "Grain", components: ["Grain"], emoji: "🍚", active: true },
+  { id: "food-crackers", name: "Crackers", category: "Grain", components: ["Grain"], emoji: "🍘", active: true },
+  { id: "food-muffin", name: "Muffin", category: "Grain", components: ["Grain"], emoji: "🧁", active: true },
+  { id: "food-chicken-nuggets", name: "Chicken nuggets", category: "Protein", components: ["Protein"], emoji: "🍗", active: true },
+  { id: "food-hot-dog", name: "Hot dog", category: "Protein", components: ["Protein"], emoji: "🌭", active: true },
+  { id: "food-cheese", name: "Cheese", category: "Dairy", components: ["Protein"], emoji: "🧀", active: true },
+  { id: "food-yogurt", name: "Yogurt", category: "Dairy", components: ["Protein"], emoji: "🥛", active: true },
+  { id: "food-spaghetti", name: "Spaghetti with protein", category: "Protein", components: ["Protein", "Grain"], emoji: "🍝", active: true },
+  { id: "food-banana", name: "Banana", category: "Fruit", components: ["Fruit"], emoji: "🍌", active: true },
+  { id: "food-apples", name: "Apples", category: "Fruit", components: ["Fruit"], emoji: "🍎", active: true },
+  { id: "food-applesauce", name: "Applesauce", category: "Fruit", components: ["Fruit"], emoji: "🍏", active: true },
+  { id: "food-fruit", name: "Seasonal fruit", category: "Fruit", components: ["Fruit"], emoji: "🍓", active: true },
+  { id: "food-corn", name: "Corn", category: "Vegetable", components: ["Vegetable"], emoji: "🌽", active: true },
+  { id: "food-green-beans", name: "Green beans", category: "Vegetable", components: ["Vegetable"], emoji: "🫛", active: true },
+  { id: "food-broccoli", name: "Broccoli", category: "Vegetable", components: ["Vegetable"], emoji: "🥦", active: true },
+  { id: "food-peas", name: "Peas", category: "Vegetable", components: ["Vegetable"], emoji: "🫛", active: true },
+  { id: "food-milk", name: "Milk", category: "Drink", components: ["Milk"], emoji: "🥛", active: true },
+  { id: "food-water", name: "Water", category: "Drink", components: [], emoji: "💧", active: true },
+];
 
 const dayOrder: DayName[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
