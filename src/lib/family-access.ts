@@ -12,6 +12,7 @@ export const familyPermissionKeys = [
   "managePickup",
   "editEmergencyContacts",
   "viewBilling",
+  "viewRewards",
   "makePayments",
 ] as const;
 
@@ -77,6 +78,7 @@ export const fullFamilyPermissions: FamilyAccessPermissions = {
   managePickup: true,
   editEmergencyContacts: true,
   viewBilling: true,
+  viewRewards: true,
   makePayments: true,
 };
 
@@ -94,6 +96,7 @@ export const pickupOnlyFamilyPermissions: FamilyAccessPermissions = {
   managePickup: false,
   editEmergencyContacts: false,
   viewBilling: false,
+  viewRewards: false,
   makePayments: false,
 };
 
