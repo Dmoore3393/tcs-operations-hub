@@ -51,6 +51,12 @@ async function signedNewsletterUrl(admin: Awaited<ReturnType<typeof requireParen
   return result.error ? "" : result.data.signedUrl;
 }
 
+async function signedMenuImageUrl(admin: Awaited<ReturnType<typeof requireParent>>["admin"], objectPath: string) {
+  if (!objectPath) return "";
+  const result = await admin.storage.from("weekly-menu-images").createSignedUrl(objectPath, 60 * 60);
+  return result.error ? "" : result.data.signedUrl;
+}
+
 function latestAudit(record: DbRow): ChildFileAudit | null {
   const audits = Array.isArray(record.fileAudits) ? record.fileAudits as ChildFileAudit[] : [];
   return [...audits].sort((a, b) =>
@@ -67,6 +73,8 @@ export async function GET(request: Request) {
     const parentVisibleChildren = children.filter((child) => child.access.permissions.viewProfile);
     const parentVisibleRowIds = parentVisibleChildren.map((child) => child.rowId);
     const parentVisibleLocationIds = [...new Set(parentVisibleChildren.map((child) => child.locationId).filter(Boolean))];
+    const mealVisibleChildren = children.filter((child) => child.access.permissions.viewMeals);
+    const mealVisibleLocationIds = [...new Set(mealVisibleChildren.map((child) => child.locationId).filter(Boolean))];
     const today = new Intl.DateTimeFormat("en-CA", {
       timeZone: "America/Los_Angeles",
       year: "numeric",
@@ -74,7 +82,7 @@ export async function GET(request: Request) {
       day: "2-digit",
     }).format(new Date());
 
-    const [careResult, formsResult, transportationFeesResult, familyMattersResult, weeklyCheckinsResult, mediaResult, newslettersResult, storeStateResult] = await Promise.all([
+    const [careResult, formsResult, transportationFeesResult, familyMattersResult, weeklyCheckinsResult, mediaResult, newslettersResult, storeStateResult, weeklyMenusResult] = await Promise.all([
       rowIds.length
         ? admin
             .from("daily_care_entries")
@@ -151,6 +159,15 @@ export async function GET(request: Request) {
               "tcs-job-assignments-v1"
             ])
         : Promise.resolve({ data: [], error: null }),
+      mealVisibleLocationIds.length
+        ? admin
+            .from("weekly_menus")
+            .select("id,organization_id,location_id,week_of,record_data")
+            .in("organization_id", organizationIds)
+            .in("location_id", mealVisibleLocationIds)
+            .order("week_of", { ascending: false })
+            .limit(30)
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     if (careResult.error) throw careResult.error;
@@ -161,6 +178,7 @@ export async function GET(request: Request) {
     if (mediaResult.error) throw mediaResult.error;
     if (newslettersResult.error) throw newslettersResult.error;
     if (storeStateResult.error) throw storeStateResult.error;
+    if (weeklyMenusResult.error) throw weeklyMenusResult.error;
 
     const childByRow = new Map(children.map((child) => [child.rowId, child]));
     const careEntries = ((careResult.data ?? []) as unknown as DbRow[]).map((row) => {
@@ -284,6 +302,30 @@ export async function GET(request: Request) {
         createdAt: text(row.created_at),
         url: await signedNewsletterUrl(admin, text(row.object_path)),
       })));
+
+    const weeklyMenus = await Promise.all(((weeklyMenusResult.data ?? []) as unknown as DbRow[])
+      .map(async (row) => {
+        const record = object(row.record_data);
+        const objectPath = text(record.menuImagePath);
+        if (!objectPath) return null;
+        const locationId = text(row.location_id);
+        const linkedChildIds = mealVisibleChildren
+          .filter((child) => child.locationId === locationId)
+          .map((child) => child.legacyId)
+          .filter(Boolean);
+        if (!linkedChildIds.length) return null;
+        return {
+          id: text(row.id),
+          childIds: linkedChildIds,
+          locationId,
+          weekOf: text(row.week_of),
+          location: text(record.location),
+          imageName: text(record.menuImageName),
+          uploadedAt: text(record.menuImageUploadedAt),
+          imageUrl: await signedMenuImageUrl(admin, objectPath),
+        };
+      }));
+    const familyMenus = weeklyMenus.filter((menu): menu is NonNullable<typeof menu> => Boolean(menu?.imageUrl));
 
     const storeState = new Map(
       ((storeStateResult.data ?? []) as unknown as DbRow[]).map((row) => [text(row.state_key), row.state_value]),
@@ -446,6 +488,7 @@ export async function GET(request: Request) {
       media,
       newsletters,
       gatorCash,
+      familyMenus,
     }, {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
