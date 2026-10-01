@@ -16,8 +16,12 @@ export type CareLogEntry = {
   initials: string;
   createdAt: string;
   mealServiceId?: string;
+  plannedFoods?: string;
   foodServed?: string;
   drinkServed?: string;
+  intakeDetails?: string;
+  alternativeFoods?: string;
+  substitutionReason?: string;
 };
 
 export type ShiftReportType = "Opening" | "Closing";
