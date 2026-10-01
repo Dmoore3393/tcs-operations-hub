@@ -15,6 +15,19 @@ export type FoodPreset = {
   emoji: string;
   active: boolean;
   custom?: boolean;
+  wholeGrainRich?: boolean;
+};
+
+export type NutritionRuleProfile = {
+  id: string;
+  label: string;
+  location: Exclude<LocationKey, "All Locations">;
+  configured: boolean;
+  breakfastRequired: MealComponent[];
+  lunchDinnerRequired: MealComponent[];
+  snackMinimumComponents: number;
+  wholeGrainRichDaily: boolean;
+  note: string;
 };
 
 export type MenuSlot = {
@@ -25,6 +38,7 @@ export type MenuSlot = {
   components: MealComponent[];
   initials: string;
   notes: string;
+  wholeGrainRich?: boolean;
 };
 
 export type WeeklyMenu = {
@@ -70,8 +84,8 @@ export const mealIntakeOptions: MealIntake[] = ["Ate all", "Ate most", "Ate some
 export const foodPresetCategories: FoodPresetCategory[] = ["Protein", "Grain", "Fruit", "Vegetable", "Dairy", "Drink", "Other"];
 
 export const starterFoodPresets: FoodPreset[] = [
-  { id: "food-cereal", name: "Whole-grain cereal", category: "Grain", components: ["Grain"], emoji: "🥣", active: true },
-  { id: "food-oatmeal", name: "Oatmeal", category: "Grain", components: ["Grain"], emoji: "🥣", active: true },
+  { id: "food-cereal", name: "Whole-grain cereal", category: "Grain", components: ["Grain"], emoji: "🥣", active: true, wholeGrainRich: true },
+  { id: "food-oatmeal", name: "Oatmeal", category: "Grain", components: ["Grain"], emoji: "🥣", active: true, wholeGrainRich: true },
   { id: "food-waffles", name: "Waffles", category: "Grain", components: ["Grain"], emoji: "🧇", active: true },
   { id: "food-pancakes", name: "Pancakes", category: "Grain", components: ["Grain"], emoji: "🥞", active: true },
   { id: "food-french-toast", name: "French toast", category: "Grain", components: ["Grain"], emoji: "🍞", active: true },
@@ -95,6 +109,62 @@ export const starterFoodPresets: FoodPreset[] = [
   { id: "food-water", name: "Water", category: "Drink", components: [], emoji: "💧", active: true },
 ];
 
+const standardNutritionProfile = (location: Exclude<LocationKey, "All Locations">): NutritionRuleProfile => ({
+  id: `nutrition-${location.toLowerCase().replaceAll(" ", "-")}`,
+  label: "TCS / CACFP Component Pattern",
+  location,
+  configured: true,
+  breakfastRequired: ["Milk", "Grain", "Fruit"],
+  lunchDinnerRequired: ["Milk", "Protein", "Grain", "Fruit", "Vegetable"],
+  snackMinimumComponents: 2,
+  wholeGrainRichDaily: true,
+  note: "Breakfast: milk + grain + fruit/vegetable. Snacks: any 2 creditable components. Lunch/dinner: milk + meat/meat alternate + grain + fruit + vegetable. At least one grain serving daily should be whole-grain-rich. Verify age-based serving sizes and food creditability separately.",
+});
+
+export const starterNutritionProfiles: NutritionRuleProfile[] = [
+  standardNutritionProfile("Halcom"),
+  standardNutritionProfile("21st Street"),
+  standardNutritionProfile("Division"),
+  standardNutritionProfile("33rd Street"),
+  {
+    ...standardNutritionProfile("Tehachapi"),
+    id: "nutrition-tehachapi",
+    label: "Tehachapi Custom Nutrition Profile",
+    configured: false,
+    note: "Tehachapi uses a different nutrition guideline. Configure the Tehachapi-specific component pattern before relying on automatic menu checks.",
+  },
+  standardNutritionProfile("42nd Street"),
+];
+
+export function requiredComponentsForMeal(meal: MealType, profile: NutritionRuleProfile) {
+  if (meal === "Breakfast") return profile.breakfastRequired;
+  if (meal === "Lunch" || meal === "Dinner") return profile.lunchDinnerRequired;
+  return [];
+}
+
+export function menuSlotNutritionCheck(slot: MenuSlot, meal: MealType, profile: NutritionRuleProfile) {
+  if (!slot.plannedFoods.trim()) return { state: "empty" as const, missing: [] as MealComponent[] };
+  if (!profile.configured) return { state: "review" as const, missing: [] as MealComponent[] };
+
+  if (meal === "AM Snack" || meal === "PM Snack") {
+    const distinct = new Set(slot.components);
+    return distinct.size >= profile.snackMinimumComponents
+      ? { state: "pass" as const, missing: [] as MealComponent[] }
+      : { state: "warn" as const, missing: [] as MealComponent[] };
+  }
+
+  const required = requiredComponentsForMeal(meal, profile);
+  const missing = required.filter((component) => !slot.components.includes(component));
+
+  if (meal === "Breakfast" && missing.includes("Fruit") && slot.components.includes("Vegetable")) {
+    return { state: missing.filter((component) => component !== "Fruit").length ? "warn" as const : "pass" as const, missing: missing.filter((component) => component !== "Fruit") };
+  }
+
+  return missing.length
+    ? { state: "warn" as const, missing }
+    : { state: "pass" as const, missing: [] as MealComponent[] };
+}
+
 const dayOrder: DayName[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 function blankSlot(meal: MealType): MenuSlot {
@@ -106,6 +176,7 @@ function blankSlot(meal: MealType): MenuSlot {
     components: [...mealDefaults[meal].suggestedComponents],
     initials: "",
     notes: "",
+    wholeGrainRich: false,
   };
 }
 
