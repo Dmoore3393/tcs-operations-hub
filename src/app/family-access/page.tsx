@@ -32,6 +32,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 const permissionLabels: Record<FamilyPermissionKey, string> = {
   viewProfile: "View child profile",
   viewSchedule: "View schedule",
+  viewMeals: "View weekly menu",
   submitSchedule: "Submit schedule changes",
   viewAttendance: "View attendance / check-in",
   viewTransportation: "View transportation",

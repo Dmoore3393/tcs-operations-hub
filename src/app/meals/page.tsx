@@ -21,6 +21,8 @@ import {
   mealTypes,
   foodPresetCategories,
   starterFoodPresets,
+  starterNutritionProfiles,
+  menuSlotNutritionCheck,
   menuDayOrder,
   shiftWeek,
   starterMealServices,
@@ -28,6 +30,7 @@ import {
   weekStartFor,
   type FoodPreset,
   type FoodPresetCategory,
+  type NutritionRuleProfile,
   type MealComponent,
   type MealIntake,
   type MealServiceRecord,
@@ -139,6 +142,7 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
   const { session } = useAuth();
   const [menus, setMenus] = usePersistentState<WeeklyMenu[]>("tcs-weekly-menus-v1", starterWeeklyMenus);
   const [foodPresets, setFoodPresets] = usePersistentState<FoodPreset[]>("tcs-food-presets-v1", starterFoodPresets);
+  const [nutritionProfiles, setNutritionProfiles] = usePersistentState<NutritionRuleProfile[]>("tcs-nutrition-rules-v1", starterNutritionProfiles);
   const [services, setServices] = usePersistentState<MealServiceRecord[]>("tcs-meal-services-v1", starterMealServices);
   const [careLogs, setCareLogs] = usePersistentState<CareLogEntry[]>("tcs-daily-care-v1", starterCareLogs);
   const [children] = usePersistentState<ChildRecord[]>("tcs-children-v1", initialChildren);
@@ -155,6 +159,7 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
   const [presetMeal, setPresetMeal] = useState<MealType>("Breakfast");
   const [newPresetName, setNewPresetName] = useState("");
   const [newPresetCategory, setNewPresetCategory] = useState<FoodPresetCategory>("Other");
+  const [newPresetWholeGrainRich, setNewPresetWholeGrainRich] = useState(false);
   const [menuImageUrl, setMenuImageUrl] = useState("");
   const [uploadingMenuImage, setUploadingMenuImage] = useState(false);
   const [draft, setDraft] = useState<MealDraft>({
@@ -194,6 +199,34 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
     () => menus.find((menu) => menu.location === currentLocation && menu.weekOf === weekOf) ?? createBlankWeeklyMenu(currentLocation, weekOf),
     [menus, currentLocation, weekOf],
   );
+  const activeNutritionProfile = nutritionProfiles.find((profile) => profile.location === currentLocation)
+    ?? starterNutritionProfiles.find((profile) => profile.location === currentLocation)
+    ?? starterNutritionProfiles[0];
+
+  const nutritionSummary = useMemo(() => {
+    let planned = 0;
+    let pass = 0;
+    let warn = 0;
+    let review = 0;
+    for (const day of menuDayOrder) {
+      for (const meal of mealTypes) {
+        const check = menuSlotNutritionCheck(currentMenu.days[day][meal], meal, activeNutritionProfile);
+        if (check.state === "empty") continue;
+        planned += 1;
+        if (check.state === "pass") pass += 1;
+        if (check.state === "warn") warn += 1;
+        if (check.state === "review") review += 1;
+      }
+    }
+    const wholeGrainMissingDays = activeNutritionProfile.wholeGrainRichDaily
+      ? menuDayOrder.filter((day) => {
+          const hasPlannedFood = mealTypes.some((meal) => currentMenu.days[day][meal].plannedFoods.trim());
+          return hasPlannedFood && !mealTypes.some((meal) => currentMenu.days[day][meal].wholeGrainRich);
+        })
+      : [];
+    return { planned, pass, warn, review, wholeGrainMissingDays };
+  }, [activeNutritionProfile, currentMenu]);
+
   const draftWeekOf = weekStartFor(draft.date);
   const draftDay = dayNameForDate(draft.date);
   const draftMenu = menus.find((menu) => menu.location === currentLocation && menu.weekOf === draftWeekOf)
@@ -314,6 +347,7 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
       const slot = nextMenu.days[presetDay][presetMeal];
       slot.plannedFoods = appendFood(slot.plannedFoods, preset.name);
       slot.components = [...new Set([...slot.components, ...preset.components])];
+      if (preset.wholeGrainRich) slot.wholeGrainRich = true;
       if (existingIndex >= 0) return current.map((menu, index) => index === existingIndex ? nextMenu : menu);
       return [...current, nextMenu];
     });
@@ -348,15 +382,48 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
       emoji: emojiForPresetCategory(newPresetCategory),
       active: true,
       custom: true,
+      wholeGrainRich: newPresetWholeGrainRich,
     };
     setFoodPresets((current) => [...current, preset]);
     setNewPresetName("");
+    setNewPresetWholeGrainRich(false);
     setMessage(`${name} added to your shared food presets.`);
     window.setTimeout(() => setMessage(""), 2200);
   }
 
   function removeCustomPreset(id: string) {
     setFoodPresets((current) => current.filter((item) => item.id !== id));
+  }
+
+  function toggleMenuComponent(day: (typeof menuDayOrder)[number], meal: MealType, component: MealComponent) {
+    const slot = currentMenu.days[day][meal];
+    const components = slot.components.includes(component)
+      ? slot.components.filter((item) => item !== component)
+      : [...slot.components, component];
+    updateMenuSlot(day, meal, { components });
+  }
+
+  function toggleWholeGrain(day: (typeof menuDayOrder)[number], meal: MealType) {
+    updateMenuSlot(day, meal, { wholeGrainRich: !currentMenu.days[day][meal].wholeGrainRich });
+  }
+
+  function updateNutritionProfile(updates: Partial<NutritionRuleProfile>) {
+    setNutritionProfiles((current) => {
+      const existing = current.findIndex((profile) => profile.location === currentLocation);
+      const base = existing >= 0 ? current[existing] : activeNutritionProfile;
+      const next = { ...base, ...updates };
+      if (existing >= 0) return current.map((profile, index) => index === existing ? next : profile);
+      return [...current, next];
+    });
+  }
+
+  function toggleNutritionRequired(field: "breakfastRequired" | "lunchDinnerRequired", component: MealComponent) {
+    const current = activeNutritionProfile[field];
+    updateNutritionProfile({
+      [field]: current.includes(component)
+        ? current.filter((item) => item !== component)
+        : [...current, component],
+    } as Partial<NutritionRuleProfile>);
   }
 
   async function uploadMenuImage(file: File | null) {
@@ -643,10 +710,33 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
 
             <div className="mt-4 rounded-2xl border border-emerald-200 bg-white p-3">
               <p className="text-[9px] font-black uppercase tracking-wider text-emerald-700">Add your own preset</p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_150px_auto]"><input className={inputClass} value={newPresetName} onChange={(event) => setNewPresetName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomPreset(); } }} placeholder="Ex: Turkey sandwich" /><select className={inputClass} value={newPresetCategory} onChange={(event) => setNewPresetCategory(event.target.value as FoodPresetCategory)}>{foodPresetCategories.map((category) => <option key={category}>{category}</option>)}</select><button type="button" onClick={addCustomPreset} className="inline-flex min-h-11 items-center justify-center gap-1 rounded-xl bg-emerald-700 px-4 text-xs font-black text-white"><Plus className="h-4 w-4" />Add</button></div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_150px_auto]"><input className={inputClass} value={newPresetName} onChange={(event) => setNewPresetName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomPreset(); } }} placeholder="Ex: Turkey sandwich" /><select className={inputClass} value={newPresetCategory} onChange={(event) => setNewPresetCategory(event.target.value as FoodPresetCategory)}>{foodPresetCategories.map((category) => <option key={category}>{category}</option>)}</select><button type="button" onClick={addCustomPreset} className="inline-flex min-h-11 items-center justify-center gap-1 rounded-xl bg-emerald-700 px-4 text-xs font-black text-white"><Plus className="h-4 w-4" />Add</button></div><label className="mt-2 inline-flex items-center gap-2 text-[10px] font-black text-slate-600"><input type="checkbox" checked={newPresetWholeGrainRich} onChange={(event) => setNewPresetWholeGrainRich(event.target.checked)} className="h-4 w-4 accent-emerald-700" />Mark this food as whole-grain-rich</label>
             </div>
           </section>
         </div>
+
+        <section className={`mb-5 rounded-3xl border p-5 ${activeNutritionProfile.configured ? "border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-sky-50" : "border-amber-300 bg-gradient-to-br from-amber-50 via-white to-orange-50"}`}>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex items-start gap-3"><span className={`grid h-11 w-11 flex-none place-items-center rounded-2xl text-white ${activeNutritionProfile.configured ? "bg-emerald-700" : "bg-amber-600"}`}><Check className="h-5 w-5" /></span><div><p className={`text-[9px] font-black uppercase tracking-[.16em] ${activeNutritionProfile.configured ? "text-emerald-700" : "text-amber-800"}`}>Nutrition guideline check • {currentLocation}</p><h3 className="mt-1 text-lg font-black text-slate-950">{activeNutritionProfile.label}</h3><p className="mt-1 max-w-4xl text-xs font-semibold leading-5 text-slate-600">{activeNutritionProfile.note}</p></div></div>
+            <div className="flex flex-wrap gap-2"><span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-black text-slate-700">{nutritionSummary.planned} planned meals/snacks</span>{activeNutritionProfile.configured ? <><span className="rounded-full bg-emerald-100 px-3 py-1.5 text-[10px] font-black text-emerald-800">{nutritionSummary.pass} component checks pass</span>{nutritionSummary.warn > 0 && <span className="rounded-full bg-red-100 px-3 py-1.5 text-[10px] font-black text-red-800">{nutritionSummary.warn} need attention</span>}{nutritionSummary.wholeGrainMissingDays.length > 0 && <span className="rounded-full bg-amber-100 px-3 py-1.5 text-[10px] font-black text-amber-900">{nutritionSummary.wholeGrainMissingDays.length} day{nutritionSummary.wholeGrainMissingDays.length === 1 ? "" : "s"} need whole-grain-rich</span>}</> : <span className="rounded-full bg-amber-200 px-3 py-1.5 text-[10px] font-black text-amber-950">CUSTOM RULES NEED SETUP</span>}</div>
+          </div>
+
+          {currentLocation === "Tehachapi" && <div className="mt-5 rounded-2xl border border-amber-200 bg-white p-4">
+            <div className="flex items-start justify-between gap-3"><div><p className="text-[9px] font-black uppercase tracking-wider text-amber-800">Tehachapi-specific rules</p><h4 className="mt-1 font-black text-slate-950">Keep Tehachapi separate from the other TCS locations</h4><p className="mt-1 text-xs font-semibold leading-5 text-slate-500">These settings only affect Tehachapi. The other locations keep the TCS/CACFP component pattern.</p></div><span className={`rounded-full px-2.5 py-1 text-[9px] font-black ${activeNutritionProfile.configured ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"}`}>{activeNutritionProfile.configured ? "Active" : "Not activated"}</span></div>
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Breakfast required components</p><div className="mt-2 flex flex-wrap gap-2">{mealComponents.map((component) => <button key={component} type="button" onClick={() => toggleNutritionRequired("breakfastRequired", component)} className={`rounded-full border px-3 py-2 text-[10px] font-black ${activeNutritionProfile.breakfastRequired.includes(component) ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-500"}`}>{activeNutritionProfile.breakfastRequired.includes(component) && <Check className="mr-1 inline h-3 w-3" />}{component}</button>)}</div></div>
+              <div><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Lunch / dinner required components</p><div className="mt-2 flex flex-wrap gap-2">{mealComponents.map((component) => <button key={component} type="button" onClick={() => toggleNutritionRequired("lunchDinnerRequired", component)} className={`rounded-full border px-3 py-2 text-[10px] font-black ${activeNutritionProfile.lunchDinnerRequired.includes(component) ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-500"}`}>{activeNutritionProfile.lunchDinnerRequired.includes(component) && <Check className="mr-1 inline h-3 w-3" />}{component}</button>)}</div></div>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-[180px_1fr]">
+              <label><span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">Snack components required</span><input type="number" min={1} max={5} value={activeNutritionProfile.snackMinimumComponents} onChange={(event) => updateNutritionProfile({ snackMinimumComponents: Math.max(1, Math.min(5, Number(event.target.value) || 1)) })} className={inputClass} /></label>
+              <label className="flex items-end"><span className="flex min-h-11 w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-black text-slate-700"><input type="checkbox" checked={activeNutritionProfile.wholeGrainRichDaily} onChange={(event) => updateNutritionProfile({ wholeGrainRichDaily: event.target.checked })} className="h-4 w-4 accent-emerald-700" />Require a whole-grain-rich item each day</span></label>
+            </div>
+            <label className="mt-4 block"><span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">Tehachapi rule note</span><textarea value={activeNutritionProfile.note} onChange={(event) => updateNutritionProfile({ note: event.target.value.slice(0, 1500) })} className={`${inputClass} min-h-20 resize-y`} placeholder="Enter the Tehachapi-specific meal pattern or sponsor requirements…" /></label>
+            {!activeNutritionProfile.configured && <button type="button" onClick={() => updateNutritionProfile({ configured: true })} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-700 px-4 py-2.5 text-xs font-black text-white"><Check className="h-4 w-4" />Activate Tehachapi Nutrition Rules</button>}
+          </div>}
+
+          <div className="mt-4 rounded-xl border border-slate-200 bg-white/80 p-3 text-[10px] font-semibold leading-5 text-slate-600"><strong>Important:</strong> The Hub checks meal components and the daily whole-grain-rich flag. Staff still verify age-appropriate serving sizes, whether each food is creditable, allergies, and approved substitutions before serving.</div>
+        </section>
 
         <div className="mb-3 flex flex-col gap-2 rounded-2xl border border-sky-200 bg-sky-50 p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-black text-sky-950">Structured weekly menu</p><p className="text-[10px] font-semibold text-sky-800">You can still type directly into any box. Clicking a box also makes it the target for Food Presets.</p></div><span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-black text-sky-800">Preset target: {presetDay} • {presetMeal}</span></div>
 
@@ -657,7 +747,11 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
               const slot = currentMenu.days[day][meal];
               const date = dateForDay(weekOf, day);
               const isLogged = services.some((service) => service.location === currentLocation && service.date === date && service.meal === meal);
-              return <td key={meal} className={`border-l border-slate-200 p-3 ${presetDay === day && presetMeal === meal ? "bg-emerald-50/50" : ""}`}><textarea aria-label={`${day} ${meal}`} onFocus={() => { setPresetDay(day); setPresetMeal(meal); }} className={`min-h-24 w-full resize-y rounded-xl border bg-white px-3 py-2.5 text-sm leading-5 text-slate-800 outline-none focus:ring-4 focus:ring-emerald-100 ${presetDay === day && presetMeal === meal ? "border-emerald-400" : "border-slate-200 focus:border-emerald-500"}`} value={slot.plannedFoods} onChange={(event) => updateMenuSlot(day, meal, { plannedFoods: event.target.value })} placeholder="Type foods or use Food Presets above…" /><div className="mt-2 flex items-center justify-between gap-2"><StatusBadge tone={isLogged ? statusTone(slot.status) : "blue"}>{isLogged ? slot.status : "Planned"}</StatusBadge>{isLogged && <span className="text-[11px] font-black text-slate-500">{slot.initials}</span>}</div></td>;
+              const nutritionCheck = menuSlotNutritionCheck(slot, meal, activeNutritionProfile);
+              return <td key={meal} className={`border-l border-slate-200 p-3 ${presetDay === day && presetMeal === meal ? "bg-emerald-50/50" : ""}`}><textarea aria-label={`${day} ${meal}`} onFocus={() => { setPresetDay(day); setPresetMeal(meal); }} className={`min-h-24 w-full resize-y rounded-xl border bg-white px-3 py-2.5 text-sm leading-5 text-slate-800 outline-none focus:ring-4 focus:ring-emerald-100 ${presetDay === day && presetMeal === meal ? "border-emerald-400" : "border-slate-200 focus:border-emerald-500"}`} value={slot.plannedFoods} onChange={(event) => updateMenuSlot(day, meal, { plannedFoods: event.target.value })} placeholder="Type foods or use Food Presets above…" />
+                <div className="mt-2 flex flex-wrap gap-1">{mealComponents.map((component) => <button type="button" key={component} onClick={() => toggleMenuComponent(day, meal, component)} className={`rounded-full px-2 py-1 text-[8px] font-black ${slot.components.includes(component) ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-400"}`}>{component}</button>)}</div>
+                {slot.components.includes("Grain") && <button type="button" onClick={() => toggleWholeGrain(day, meal)} className={`mt-2 rounded-full px-2 py-1 text-[8px] font-black ${slot.wholeGrainRich ? "bg-amber-200 text-amber-900" : "bg-slate-100 text-slate-400"}`}>{slot.wholeGrainRich ? "✓ Whole-grain-rich" : "Mark whole-grain-rich"}</button>}
+                <div className="mt-2 flex items-center justify-between gap-2"><div className="flex flex-wrap gap-1"><StatusBadge tone={isLogged ? statusTone(slot.status) : "blue"}>{isLogged ? slot.status : "Planned"}</StatusBadge>{slot.plannedFoods.trim() && <span className={`rounded-full px-2 py-1 text-[8px] font-black ${nutritionCheck.state === "pass" ? "bg-emerald-100 text-emerald-800" : nutritionCheck.state === "review" ? "bg-amber-100 text-amber-900" : "bg-red-100 text-red-800"}`}>{nutritionCheck.state === "pass" ? "Nutrition ✓" : nutritionCheck.state === "review" ? "Rule review" : nutritionCheck.missing.length ? `Missing: ${nutritionCheck.missing.join(", ")}` : "Needs components"}</span>}</div>{isLogged && <span className="text-[11px] font-black text-slate-500">{slot.initials}</span>}</div></td>;
             })}</tr>)}</tbody>
           </table>
         </div>

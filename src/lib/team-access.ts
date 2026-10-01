@@ -228,6 +228,7 @@ export function employeeCanReadState(permissions: string[], stateKey: string) {
     case "tcs-meal-services-v1":
     case "tcs-weekly-menus-v1":
     case "tcs-food-presets-v1":
+    case "tcs-nutrition-rules-v1":
       return hasAnyPermission(permissions, ["meals", "daily_care"]);
     case "tcs-shift-handoffs-v1":
     case "tcs-shift-reports-v1":
@@ -272,6 +273,7 @@ export function employeeCanWriteState(permissions: string[], stateKey: string) {
     case "tcs-meal-services-v1":
     case "tcs-weekly-menus-v1":
     case "tcs-food-presets-v1":
+    case "tcs-nutrition-rules-v1":
       return permissions.includes("meals");
     case "tcs-child-schedules-v2":
       return permissions.includes("schedules");
