@@ -152,6 +152,8 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
   const [search, setSearch] = useState("");
   const [selectedChildren, setSelectedChildren] = useState<number[]>([]);
   const [intakeByChild, setIntakeByChild] = useState<Record<number, MealIntake>>({});
+  const [intakeDetailsByChild, setIntakeDetailsByChild] = useState<Record<number, string>>({});
+  const [alternativeByChild, setAlternativeByChild] = useState<Record<number, string>>({});
   const [message, setMessage] = useState("");
   const [presetSearch, setPresetSearch] = useState("");
   const [presetCategory, setPresetCategory] = useState<FoodPresetCategory | "All">("All");
@@ -301,6 +303,8 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
       const priorLogs = careLogs.filter((entry) => entry.mealServiceId === service.id);
       setSelectedChildren(priorLogs.map((entry) => entry.childId));
       setIntakeByChild(Object.fromEntries(priorLogs.map((entry) => [entry.childId, entry.result as MealIntake])));
+      setIntakeDetailsByChild(Object.fromEntries(priorLogs.map((entry) => [entry.childId, entry.intakeDetails || ""])));
+      setAlternativeByChild(Object.fromEntries(priorLogs.map((entry) => [entry.childId, entry.alternativeFoods || ""])));
       return;
     }
 
@@ -317,6 +321,8 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
     });
     setSelectedChildren([]);
     setIntakeByChild({});
+    setIntakeDetailsByChild({});
+    setAlternativeByChild({});
   }
 
   function updateMenuSlot(day: (typeof menuDayOrder)[number], meal: MealType, updates: Partial<MenuSlot>) {
@@ -609,8 +615,12 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
       initials,
       createdAt: now,
       mealServiceId: serviceId,
+      plannedFoods: plannedFoods.trim(),
       foodServed: draft.actualFoods.trim(),
       drinkServed: draft.drinkServed.trim(),
+      intakeDetails: (intakeDetailsByChild[child.id] || "").trim(),
+      alternativeFoods: (alternativeByChild[child.id] || "").trim(),
+      substitutionReason: draft.substitutionReason.trim(),
     }));
     setCareLogs((current) => [...current.filter((entry) => entry.mealServiceId !== serviceId), ...newCareLogs]);
 
@@ -651,6 +661,8 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
     const priorLogs = careLogs.filter((entry) => entry.mealServiceId === service.id);
     setSelectedChildren(priorLogs.map((entry) => entry.childId));
     setIntakeByChild(Object.fromEntries(priorLogs.map((entry) => [entry.childId, entry.result as MealIntake])));
+    setIntakeDetailsByChild(Object.fromEntries(priorLogs.map((entry) => [entry.childId, entry.intakeDetails || ""])));
+    setAlternativeByChild(Object.fromEntries(priorLogs.map((entry) => [entry.childId, entry.alternativeFoods || ""])));
     setView("Log What Children Ate");
   }
 
@@ -771,13 +783,17 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
             const selected = selectedChildren.includes(child.id);
             return <article key={child.id} className={`rounded-2xl border p-3 transition ${selected ? "border-emerald-500 bg-emerald-50" : "border-slate-200"}`}>
               <div className="flex items-center gap-3"><button type="button" onClick={() => toggleChild(child.id)} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-black ${selected ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-700"}`}>{selected ? <Check className="h-5 w-5" /> : `${child.firstName[0]}${child.lastName[0]}`}</button><div className="min-w-0 flex-1"><p className="font-black text-slate-950">{child.firstName} {child.lastName}</p><p className="truncate text-xs font-semibold text-slate-500">{child.ageGroup} • {child.allergies}</p></div>{selected && <select className="max-w-40 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700" value={intakeByChild[child.id] ?? "Ate most"} onChange={(event) => setIntakeByChild((current) => ({ ...current, [child.id]: event.target.value as MealIntake }))}>{mealIntakeOptions.map((option) => <option key={option}>{option}</option>)}</select>}</div>
+              {selected && <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <label><span className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-500">What this child actually ate</span><input className={inputClass} value={intakeDetailsByChild[child.id] ?? ""} onChange={(event) => setIntakeDetailsByChild((current) => ({ ...current, [child.id]: event.target.value }))} placeholder="Ex: Only ate garlic bread and fruit" /></label>
+                <label><span className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-500">Alternative / child-specific substitution</span><input className={inputClass} value={alternativeByChild[child.id] ?? ""} onChange={(event) => setAlternativeByChild((current) => ({ ...current, [child.id]: event.target.value }))} placeholder="Ex: Turkey sandwich" /></label>
+              </div>}
             </article>;
           })}
           {!displayedChildren.length && <div className="rounded-2xl bg-slate-50 p-6 text-center text-sm text-slate-500">No active children match this location and search.</div>}
         </div>
       </SectionCard>
 
-      <SectionCard title="2. Record the Meal" description="Enter what was actually served, then save one individual intake result for every selected child.">
+      <SectionCard title="2. Record the Meal" description="Record what was served to the group. Each selected child can also have their own intake detail and alternative food so families can see exactly what happened.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Date"><input type="date" className={inputClass} value={draft.date} onChange={(event) => loadMealSelection(event.target.value, draft.meal)} /></Field>
           <Field label="Meal"><select className={inputClass} value={draft.meal} onChange={(event) => loadMealSelection(draft.date, event.target.value as MealType)}>{mealTypes.map((meal) => <option key={meal}>{meal}</option>)}</select></Field>
@@ -809,7 +825,7 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><div className="flex flex-wrap items-center gap-2"><StatusBadge tone={service.substitutionReason ? "amber" : "green"}>{service.substitutionReason ? "Substitution" : "Meal logged"}</StatusBadge><span className="text-xs font-black text-slate-500">{service.date} • {formatClock(service.servedTime)} • {service.initials}</span></div><h3 className="mt-3 text-xl font-black text-slate-950">{service.meal}</h3><p className="mt-1 text-sm font-bold leading-6 text-slate-800">{service.actualFoods}</p><p className="mt-1 text-xs text-slate-500">Drink: {service.drinkServed || "Not recorded"}</p></div><button onClick={() => editService(service)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm font-black text-slate-700 hover:bg-slate-50"><ClipboardList className="h-4 w-4" /> Edit Record</button></div>
           {service.plannedFoods && service.plannedFoods !== service.actualFoods && <div className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-950"><strong>Planned:</strong> {service.plannedFoods}{service.substitutionReason ? ` • ${service.substitutionReason}` : ""}</div>}
           <div className="mt-4 flex flex-wrap gap-2">{service.components.map((component) => <span key={component} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-800">{component}</span>)}</div>
-          <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{childEntries.map((entry) => <div key={entry.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2"><div><p className="text-sm font-black text-slate-800">{entry.childName}</p><p className="text-xs font-semibold text-slate-500">{entry.result}</p></div><span className="text-xs font-black text-slate-500">{entry.initials}</span></div>)}</div>
+          <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{childEntries.map((entry) => <div key={entry.id} className="rounded-xl bg-slate-50 px-3 py-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black text-slate-800">{entry.childName}</p><p className="text-xs font-semibold text-slate-500">{entry.result}</p></div><span className="text-xs font-black text-slate-500">{entry.initials}</span></div>{entry.intakeDetails && <p className="mt-2 text-[10px] font-semibold text-slate-600"><strong>Ate:</strong> {entry.intakeDetails}</p>}{entry.alternativeFoods && <p className="mt-1 text-[10px] font-semibold text-violet-700"><strong>Alternative:</strong> {entry.alternativeFoods}</p>}</div>)}</div>
           {!childEntries.length && <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-500">No child intake entries are connected to this service yet.</p>}
           {service.notes && <p className="mt-4 text-sm leading-6 text-slate-600"><strong>Notes:</strong> {service.notes}</p>}
         </article>;
