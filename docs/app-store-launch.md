@@ -73,6 +73,14 @@ Native-specific work:
 - App icons and launch/splash assets.
 - TestFlight/internal Android testing before production submission.
 
+## Unlisted App sequence
+
+Apple requires an unlisted app to be ready for final distribution and submitted to App Review before the unlisted-distribution request is considered. In App Review Notes, state that The Hub is intended for unlisted distribution. Use the public App Store distribution path for the initial record, then submit Apple’s Unlisted App Distribution request. If approved, the app remains accessible through a direct App Store link rather than normal search/browse discovery.
+
+App Store Connect also requires a privacy policy URL and app privacy disclosures that accurately cover the production app and integrated services.
+
+See `docs/app-store-v1-metadata.md` for the prepared v1 listing copy, screenshot plan, review notes, and submission fields.
+
 ## Release rule
 
 A store build is not considered ready merely because it compiles. It must pass:
