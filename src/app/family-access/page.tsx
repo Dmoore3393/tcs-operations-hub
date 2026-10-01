@@ -43,6 +43,7 @@ const permissionLabels: Record<FamilyPermissionKey, string> = {
   managePickup: "Manage pickup PIN",
   editEmergencyContacts: "Edit emergency contacts",
   viewBilling: "View this adult's billing",
+  viewRewards: "View child Gator Cash",
   makePayments: "Make payments",
 };
 

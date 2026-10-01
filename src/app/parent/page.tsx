@@ -10,8 +10,11 @@ import {
   Bell,
   BriefcaseBusiness,
   Camera,
+  Coins,
   Heart,
+  ShoppingBag,
   Star,
+  Trophy,
   CalendarDays,
   CheckCircle2,
   ClipboardCheck,
@@ -87,6 +90,7 @@ type ParentChild = {
       managePickup: boolean;
       editEmergencyContacts: boolean;
       viewBilling: boolean;
+      viewRewards: boolean;
       makePayments: boolean;
     };
     grantedCount: number;
@@ -192,6 +196,44 @@ type Overview = {
     createdByName: string;
     createdAt: string;
     url: string;
+  }>;
+  gatorCash: Array<{
+    childId: string;
+    balance: number;
+    lifetimeEarned: number;
+    lifetimeSpent: number;
+    earnedThisMonth: number;
+    recentTransactions: Array<{
+      id: string;
+      amount: number;
+      type: string;
+      reason: string;
+      staffName: string;
+      location: string;
+      createdAt: string;
+    }>;
+    recentPurchases: Array<{
+      id: string;
+      total: number;
+      location: string;
+      staffName: string;
+      createdAt: string;
+      items: Array<{
+        name: string;
+        quantity: number;
+        price: number;
+      }>;
+    }>;
+    activeJob: {
+      assignmentId: string;
+      jobId: string;
+      title: string;
+      payPerCompletion: number;
+      completedCount: number;
+      assignedAt: string;
+      lastPaidAt: string;
+      responsibilities: string[];
+    } | null;
   }>;
 };
 
@@ -397,6 +439,12 @@ export default function ParentPortalPage() {
     if (!overview || !selectedChild) return [];
     return overview.media.filter((item) => item.childId === selectedChild.id && item.url);
   }, [overview, selectedChild]);
+
+  const selectedGatorCash = useMemo(() => {
+    if (!overview || !selectedChild) return null;
+    return overview.gatorCash.find((item) => item.childId === selectedChild.id) ?? null;
+  }, [overview, selectedChild]);
+
   const profilePhoto = selectedMedia.find((item) => item.kind === "Profile") ?? null;
   const recentPhotos = selectedMedia.filter((item) => item.kind === "Daily Photo").slice(0, 9);
 
@@ -631,6 +679,47 @@ export default function ParentPortalPage() {
         </section>
 
         <div className="space-y-5">
+          {selectedChild.access.permissions.viewRewards && selectedGatorCash && <section className="relative overflow-hidden rounded-[30px] border border-amber-200 bg-gradient-to-br from-[#fff9df] via-white to-[#e8f8ee] p-5 shadow-sm sm:p-6">
+            <FunDoodles className="opacity-20" />
+            <div className="relative z-10 grid gap-5 xl:grid-cols-[1.05fr_.95fr] xl:items-start">
+              <div>
+                <div className="flex items-start gap-3">
+                  <span className="grid h-12 w-12 flex-none place-items-center rounded-2xl bg-[#173d29] text-amber-300 shadow-sm"><Coins className="h-6 w-6" /></span>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-700">Student rewards</p>
+                    <h2 className="mt-1 text-2xl font-black text-slate-950">{selectedChild.firstName}’s Gator Cash 🐊💰</h2>
+                    <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">See what {selectedChild.firstName} has earned for great choices, kindness, learning, leadership, jobs, and other TCS wins.</p>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-4">
+                  <div className="rounded-2xl bg-[#173d29] p-4 text-white shadow-md sm:col-span-1">
+                    <p className="text-[9px] font-black uppercase tracking-wider text-emerald-200">Current Balance</p>
+                    <strong className="mt-1 block text-3xl font-black text-amber-300">{selectedGatorCash.balance} <span className="text-sm">GC</span></strong>
+                  </div>
+                  <RewardStat label="Earned This Month" value={`+${selectedGatorCash.earnedThisMonth} GC`} />
+                  <RewardStat label="Lifetime Earned" value={`${selectedGatorCash.lifetimeEarned} GC`} />
+                  <RewardStat label="Used in Store" value={`${selectedGatorCash.lifetimeSpent} GC`} />
+                </div>
+
+                {selectedGatorCash.activeJob && <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                  <div className="flex items-start gap-3"><Trophy className="mt-0.5 h-5 w-5 flex-none text-violet-700" /><div><p className="text-[9px] font-black uppercase tracking-wider text-violet-700">Current Student Job</p><h3 className="mt-1 text-sm font-black text-slate-950">{selectedGatorCash.activeJob.title}</h3><p className="mt-1 text-xs font-semibold text-slate-600">{selectedGatorCash.activeJob.payPerCompletion} Gator Cash per completion • {selectedGatorCash.activeJob.completedCount} completed</p>{selectedGatorCash.activeJob.responsibilities.length > 0 && <p className="mt-2 text-[10px] font-semibold leading-4 text-slate-500">{selectedGatorCash.activeJob.responsibilities.slice(0,3).join(" • ")}</p>}</div></div>
+                </div>}
+              </div>
+
+              <div className="rounded-3xl border border-white bg-white/85 p-4 shadow-sm backdrop-blur">
+                <TcsKidsScene variant="celebrate" compact className="-mb-4 -mt-3" />
+                <div className="flex items-center justify-between gap-3"><div><p className="text-[9px] font-black uppercase tracking-wider text-amber-700">Recent Gator Cash activity</p><p className="text-xs font-semibold text-slate-500">Parents can view activity; only TCS staff can award or adjust Gator Cash.</p></div><Coins className="h-5 w-5 text-amber-600" /></div>
+                <div className="mt-3 space-y-2">{selectedGatorCash.recentTransactions.length ? selectedGatorCash.recentTransactions.slice(0,6).map((entry) => <div key={entry.id || `${entry.createdAt}-${entry.reason}`} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3"><div className="min-w-0"><p className="truncate text-xs font-black text-slate-900">{entry.reason || entry.type || "Gator Cash update"}</p><p className="mt-1 text-[9px] font-semibold text-slate-400">{entry.createdAt ? new Date(entry.createdAt).toLocaleDateString([], { month: "short", day: "numeric" }) : ""}{entry.location ? ` • ${entry.location}` : ""}</p></div><span className={`flex-none rounded-full px-2.5 py-1 text-[10px] font-black ${entry.amount >= 0 ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>{entry.amount >= 0 ? "+" : ""}{entry.amount} GC</span></div>) : <div className="rounded-2xl bg-amber-50 p-5 text-center"><Coins className="mx-auto h-7 w-7 text-amber-600" /><p className="mt-2 text-sm font-black text-slate-800">No Gator Cash activity yet.</p><p className="mt-1 text-xs font-semibold leading-5 text-slate-500">When TCS awards Gator Cash or {selectedChild.firstName} uses the Student Store, it will show here.</p></div>}</div>
+
+                {selectedGatorCash.recentPurchases.length > 0 && <div className="mt-4 border-t border-slate-100 pt-4">
+                  <div className="flex items-center gap-2"><ShoppingBag className="h-4 w-4 text-emerald-700" /><p className="text-[9px] font-black uppercase tracking-wider text-slate-500">Recent Student Store purchases</p></div>
+                  <div className="mt-2 space-y-2">{selectedGatorCash.recentPurchases.slice(0,3).map((order) => <div key={order.id} className="rounded-xl bg-emerald-50 p-3"><div className="flex items-start justify-between gap-3"><p className="text-xs font-black text-slate-900">{order.items.map((item) => `${item.name}${item.quantity > 1 ? ` ×${item.quantity}` : ""}`).join(", ") || "Student Store purchase"}</p><span className="flex-none text-xs font-black text-emerald-800">{order.total} GC</span></div><p className="mt-1 text-[9px] font-semibold text-slate-400">{order.createdAt ? new Date(order.createdAt).toLocaleDateString([], { month: "short", day: "numeric" }) : ""}</p></div>)}</div>
+                </div>}
+              </div>
+            </div>
+          </section>}
+
           <div className="grid gap-5 lg:grid-cols-2">
             <section className="relative overflow-hidden rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-emerald-50 p-5 shadow-sm">
               <FunDoodles className="opacity-20" />
@@ -749,6 +838,9 @@ export default function ParentPortalPage() {
 
 function Card({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return <section className="tcs-joy-card rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-700">{icon}</span><p className="mt-3 text-[9px] font-black uppercase tracking-wider text-slate-400">{label}</p><strong className="mt-1 block text-sm leading-5 text-slate-900">{value}</strong></section>;
+}
+function RewardStat({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm"><p className="text-[9px] font-black uppercase tracking-wider text-slate-400">{label}</p><strong className="mt-1 block text-lg text-slate-950">{value}</strong></div>;
 }
 function Info({ label, value }: { label: string; value: string }) {
   return <div className="rounded-xl bg-slate-50 p-3"><span className="text-[9px] font-black uppercase tracking-wider text-slate-400">{label}</span><strong className="mt-1 block text-xs text-slate-900">{value}</strong></div>;

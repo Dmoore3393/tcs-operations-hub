@@ -17,6 +17,12 @@ function strings(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+function records(value: unknown): DbRow[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is DbRow => Boolean(item) && typeof item === "object" && !Array.isArray(item))
+    : [];
+}
+
 function safeParentMessages(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value.slice(-100).map((entry) => {
@@ -68,7 +74,7 @@ export async function GET(request: Request) {
       day: "2-digit",
     }).format(new Date());
 
-    const [careResult, formsResult, transportationFeesResult, familyMattersResult, weeklyCheckinsResult, mediaResult, newslettersResult] = await Promise.all([
+    const [careResult, formsResult, transportationFeesResult, familyMattersResult, weeklyCheckinsResult, mediaResult, newslettersResult, storeStateResult] = await Promise.all([
       rowIds.length
         ? admin
             .from("daily_care_entries")
@@ -133,6 +139,18 @@ export async function GET(request: Request) {
             .order("created_at", { ascending: false })
             .limit(36)
         : Promise.resolve({ data: [], error: null }),
+      organizationIds.length && children.some((child) => child.access.permissions.viewRewards)
+        ? admin
+            .from("hub_state")
+            .select("organization_id,state_key,state_value")
+            .in("organization_id", organizationIds)
+            .in("state_key", [
+              "tcs-gator-ledger-v1",
+              "tcs-store-orders-v1",
+              "tcs-student-jobs-v1",
+              "tcs-job-assignments-v1"
+            ])
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     if (careResult.error) throw careResult.error;
@@ -142,6 +160,7 @@ export async function GET(request: Request) {
     if (weeklyCheckinsResult.error) throw weeklyCheckinsResult.error;
     if (mediaResult.error) throw mediaResult.error;
     if (newslettersResult.error) throw newslettersResult.error;
+    if (storeStateResult.error) throw storeStateResult.error;
 
     const childByRow = new Map(children.map((child) => [child.rowId, child]));
     const careEntries = ((careResult.data ?? []) as unknown as DbRow[]).map((row) => {
@@ -266,6 +285,92 @@ export async function GET(request: Request) {
         url: await signedNewsletterUrl(admin, text(row.object_path)),
       })));
 
+    const storeState = new Map(
+      ((storeStateResult.data ?? []) as unknown as DbRow[]).map((row) => [text(row.state_key), row.state_value]),
+    );
+    const gatorLedger = records(storeState.get("tcs-gator-ledger-v1"));
+    const storeOrders = records(storeState.get("tcs-store-orders-v1"));
+    const studentJobs = records(storeState.get("tcs-student-jobs-v1"));
+    const jobAssignments = records(storeState.get("tcs-job-assignments-v1"));
+    const currentMonth = today.slice(0, 7);
+
+    const gatorCash = children
+      .filter((child) => child.access.permissions.viewRewards)
+      .map((child) => {
+        const record = child.record;
+        const candidateIds = new Set(
+          [child.legacyId, String(record.id ?? "")].map((value) => String(value ?? "").trim()).filter(Boolean),
+        );
+        const matchesChild = (row: DbRow) => candidateIds.has(String(row.childId ?? "").trim());
+
+        const ledger = gatorLedger
+          .filter(matchesChild)
+          .map((row) => ({
+            id: text(row.id),
+            amount: Number(row.amount) || 0,
+            type: text(row.type),
+            reason: text(row.reason),
+            staffName: text(row.staffName),
+            location: text(row.location),
+            createdAt: text(row.createdAt),
+          }))
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+        const orders = storeOrders
+          .filter(matchesChild)
+          .map((row) => ({
+            id: text(row.id),
+            total: Number(row.total) || 0,
+            location: text(row.location),
+            staffName: text(row.staffName),
+            createdAt: text(row.createdAt),
+            items: records(row.items).map((item) => ({
+              name: text(item.name),
+              quantity: Math.max(1, Number(item.quantity) || 1),
+              price: Math.max(0, Number(item.price) || 0),
+            })),
+          }))
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+        const assignment = jobAssignments
+          .filter(matchesChild)
+          .find((row) => row.active === true);
+        const job = assignment
+          ? studentJobs.find((row) => text(row.id) === text(assignment.jobId))
+          : undefined;
+
+        const balance = ledger.reduce((sum, entry) => sum + entry.amount, 0);
+        const lifetimeEarned = ledger
+          .filter((entry) => entry.amount > 0)
+          .reduce((sum, entry) => sum + entry.amount, 0);
+        const lifetimeSpent = Math.abs(
+          ledger.filter((entry) => entry.amount < 0).reduce((sum, entry) => sum + entry.amount, 0),
+        );
+        const earnedThisMonth = ledger
+          .filter((entry) => entry.amount > 0 && entry.createdAt.slice(0, 7) === currentMonth)
+          .reduce((sum, entry) => sum + entry.amount, 0);
+
+        return {
+          childId: child.legacyId,
+          balance,
+          lifetimeEarned,
+          lifetimeSpent,
+          earnedThisMonth,
+          recentTransactions: ledger.slice(0, 12),
+          recentPurchases: orders.slice(0, 8),
+          activeJob: assignment && job ? {
+            assignmentId: text(assignment.id),
+            jobId: text(job.id),
+            title: text(job.title),
+            payPerCompletion: Number(assignment.payPerCompletion) || Number(job.pay) || 0,
+            completedCount: Number(assignment.completedCount) || 0,
+            assignedAt: text(assignment.assignedAt),
+            lastPaidAt: text(assignment.lastPaidAt),
+            responsibilities: strings(job.responsibilities),
+          } : null,
+        };
+      });
+
     const safeChildren = children.map((child) => {
       const record = child.record;
       const permissions = child.access.permissions;
@@ -340,6 +445,7 @@ export async function GET(request: Request) {
       weeklyCheckins,
       media,
       newsletters,
+      gatorCash,
     }, {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
