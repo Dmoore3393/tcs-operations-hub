@@ -86,7 +86,7 @@ export async function GET(request: Request) {
       rowIds.length
         ? admin
             .from("daily_care_entries")
-            .select("id,child_id,entry_date,entry_time,category,action,result,notes,created_at")
+            .select("id,child_id,entry_date,entry_time,category,action,result,notes,record_data,created_at")
             .in("child_id", rowIds)
             .order("entry_date", { ascending: false })
             .order("entry_time", { ascending: false })
@@ -184,6 +184,7 @@ export async function GET(request: Request) {
     const careEntries = ((careResult.data ?? []) as unknown as DbRow[]).map((row) => {
       const child = childByRow.get(text(row.child_id));
       if (!child?.access.permissions.viewAttendance) return null;
+      const record = object(row.record_data);
       return {
         id: text(row.id),
         childId: child.legacyId || "",
@@ -193,6 +194,12 @@ export async function GET(request: Request) {
         action: text(row.action),
         result: text(row.result),
         notes: text(row.notes),
+        plannedFoods: text(record.plannedFoods),
+        foodServed: text(record.foodServed),
+        drinkServed: text(record.drinkServed),
+        intakeDetails: text(record.intakeDetails),
+        alternativeFoods: text(record.alternativeFoods),
+        substitutionReason: text(record.substitutionReason),
       };
     }).filter((item): item is NonNullable<typeof item> => Boolean(item?.childId));
 
