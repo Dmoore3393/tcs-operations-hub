@@ -1,6 +1,7 @@
 "use client";
 
 import { CelebrationBits, FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
+import { TcsKidsScene } from "@/components/brand/TcsKidsScene";
 import SafeImage from "@/components/media/SafeImage";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -188,7 +189,10 @@ export default function ChildPhotosPage() {
     <section className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-[#5f3f72] via-[#2e6c47] to-[#173d29] p-6 text-white shadow-xl"><FunDoodles className="opacity-35" />
       <div className="relative z-10 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
         <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-violet-200">Family photo moments</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">Child Photos</h1><p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-white/85">Add a profile picture and daily moments families can see in their secure Parent Portal. Each photo stays tied to one child’s authorized family access.</p></div>
-        <GatorGuide size="lg" message={<>A quick photo can become a parent’s favorite part of the day. 📸💚</>} />
+        <div className="w-full max-w-[390px]">
+          <TcsKidsScene variant="art" compact />
+          <div className="-mt-4 flex justify-end"><GatorGuide size="sm" message={<>A quick photo can make a parent’s day. 📸💚</>} /></div>
+        </div>
       </div>
     </section>
 
