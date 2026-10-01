@@ -1,6 +1,7 @@
 "use client";
 
 import MainLayout from "@/components/layout/MainLayout";
+import { TcsKidsScene } from "@/components/brand/TcsKidsScene";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import {
@@ -377,7 +378,11 @@ export default function TransportationPage() {
           <div className="absolute -left-24 -top-20 h-60 w-60 rounded-full bg-[#ffc72c]/70" />
           <div className="absolute -right-24 -bottom-20 h-72 w-72 rounded-full bg-[#1757a8]/15" />
           <div className="relative grid min-h-[275px] gap-6 px-6 py-8 sm:px-9 lg:grid-cols-[.72fr_1.28fr] lg:items-center lg:px-12">
-            <div className="relative flex items-center justify-center"><div className="relative grid h-44 w-72 place-items-center rounded-[2.25rem] bg-[#ffc72c] shadow-2xl ring-8 ring-white/70"><Bus className="h-24 w-24 text-[#123f7d]" strokeWidth={1.8} /><div className="absolute bottom-4 left-7 h-9 w-9 rounded-full border-4 border-white bg-[#153f75]" /><div className="absolute bottom-4 right-7 h-9 w-9 rounded-full border-4 border-white bg-[#153f75]" /></div></div>
+            <div className="relative flex items-center justify-center">
+              <div className="w-full max-w-[430px] rounded-[2.25rem] bg-white/70 px-3 pt-3 shadow-2xl ring-8 ring-white/70 backdrop-blur-sm">
+                <TcsKidsScene variant="transport" />
+              </div>
+            </div>
             <div className="relative z-10 text-center lg:text-left"><p className="text-xs font-black uppercase tracking-[0.24em] text-[#1769d2]">TCS Operations Hub • School Shuttle</p><h1 className="mt-2 text-4xl font-black tracking-tight text-[#102a56] sm:text-6xl">The School Shuttle</h1><p className="mt-2 text-lg font-black text-[#1769d2]">Safe and Reliable Transportation</p><p className="mx-auto mt-4 max-w-3xl text-sm font-semibold leading-7 text-slate-600 lg:mx-0">Every child follows one custody chain: school pickup → in transit → checked into the destination location. Pickup and exception alerts go to Danielle and Jen; destination staff only receive the arrival notice for their location.</p><div className="mt-5 flex flex-wrap justify-center gap-2 lg:justify-start"><span className="rounded-full bg-white px-4 py-2 text-xs font-black text-[#123f7d] shadow-sm">✅ Required pickup tap</span><span className="rounded-full bg-white px-4 py-2 text-xs font-black text-[#123f7d] shadow-sm">🚌 In-transit custody</span><span className="rounded-full bg-white px-4 py-2 text-xs font-black text-[#123f7d] shadow-sm">📍 Required location check-in</span></div></div>
           </div>
         </section>
