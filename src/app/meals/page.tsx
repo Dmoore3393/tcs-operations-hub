@@ -109,7 +109,7 @@ function componentsForPresetCategory(category: FoodPresetCategory): MealComponen
   if (category === "Grain") return ["Grain"];
   if (category === "Fruit") return ["Fruit"];
   if (category === "Vegetable") return ["Vegetable"];
-  if (category === "Drink") return ["Milk"];
+  if (category === "Drink") return [];
   return [];
 }
 
@@ -446,6 +446,17 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
 
   function clearWeek() {
     if (!window.confirm(`Clear the menu for ${currentLocation} for ${formatWeekRange(weekOf)}?`)) return;
+    if (currentMenu.menuImagePath && session?.access_token) {
+      void fetch("/api/meals/menu-image", {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ path: currentMenu.menuImagePath, location: currentLocation }),
+      }).catch(() => undefined);
+    }
+    setMenuImageUrl("");
     setMenus((current) => [...current.filter((menu) => !(menu.location === currentLocation && menu.weekOf === weekOf)), createBlankWeeklyMenu(currentLocation, weekOf)]);
   }
 
