@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <header className="bg-gradient-to-br from-[#214d31] to-[#102c20] px-6 py-8 text-white sm:px-10">
         <p className="text-xs font-black uppercase tracking-[.18em] text-emerald-200">Thomason Childcare Solutions</p>
         <h1 className="mt-2 text-4xl font-black">The Hub Privacy Policy</h1>
-        <p className="mt-3 text-sm font-semibold text-white/75">Effective September 23, 2026</p>
+        <p className="mt-3 text-sm font-semibold text-white/75">Effective October 1, 2026</p>
       </header>
 
       <div className="space-y-8 px-6 py-8 text-sm leading-7 sm:px-10">
@@ -69,6 +69,7 @@ export default function PrivacyPage() {
         <footer className="flex flex-wrap gap-3 border-t border-slate-200 pt-6">
           <Link href="/support" className="rounded-xl bg-[#214d31] px-4 py-2.5 font-black text-white">Support</Link>
           <Link href="/login" className="rounded-xl border border-slate-300 px-4 py-2.5 font-black text-slate-700">Staff Login</Link>
+          <Link href="/parent-login" className="rounded-xl border border-slate-300 px-4 py-2.5 font-black text-slate-700">Parent Portal</Link>
         </footer>
       </div>
     </article>
