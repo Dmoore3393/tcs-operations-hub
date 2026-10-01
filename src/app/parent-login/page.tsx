@@ -1,6 +1,7 @@
 "use client";
 
 import { FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
+import { TcsKidsScene } from "@/components/brand/TcsKidsScene";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
 import { ArrowRight, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -123,7 +124,8 @@ export default function ParentLoginPage() {
       <section className="grid w-full overflow-hidden rounded-[34px] border border-slate-200 bg-white shadow-2xl lg:grid-cols-[.9fr_1.1fr]">
         <div className="relative overflow-hidden bg-gradient-to-br from-[#173d29] via-[#245a39] to-[#10291e] p-7 text-white sm:p-10"><FunDoodles className="opacity-60" />
           <div className="relative z-10">
-            <GatorGuide size="lg" message={<>Welcome back! Your family is a <span className="text-emerald-700">big part</span> of the TCS team. 💚</>} />
+            <GatorGuide size="md" message={<>Welcome back! Your family is a <span className="text-emerald-700">big part</span> of the TCS team. 💚</>} />
+            <TcsKidsScene variant="family" compact className="-mb-3 -mt-2" />
             <p className="mt-6 text-xs font-black uppercase tracking-[.18em] text-emerald-200">Family access</p>
             <h1 className="mt-2 text-4xl font-black">The Hub Parent Portal</h1>
             <p className="mt-4 text-sm font-semibold leading-7 text-emerald-50/85">Your child’s day, your voice, your schedule, and your connection to TCS—all together in one place.</p>

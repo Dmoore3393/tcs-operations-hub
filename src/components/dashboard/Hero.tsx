@@ -1,6 +1,7 @@
 "use client";
 
 import { FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
+import { TcsKidsScene } from "@/components/brand/TcsKidsScene";
 import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import dashboardBanner from "@/assets/dashboard/tcs-dashboard-younger-school-age.png";
@@ -115,8 +116,9 @@ export default function DashboardHero() {
           ))}
         </div>
       </div>
-      <div className="absolute bottom-5 right-5 z-20 hidden xl:block">
-        <GatorGuide size="md" message={<>You’ve got this. One task at a time. ⭐</>} />
+      <div className="absolute bottom-2 right-3 z-20 hidden w-[410px] xl:block">
+        <TcsKidsScene variant="playtime" compact className="opacity-95" />
+        <div className="-mt-5 flex justify-end pr-3"><GatorGuide size="sm" message={<>You’ve got this. One task at a time. ⭐</>} /></div>
       </div>
     </section>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { CelebrationBits, FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
+import { TcsKidsScene } from "@/components/brand/TcsKidsScene";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
@@ -150,7 +151,10 @@ export default function FamilyMattersPage() {
     <section className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-[#173d29] via-[#397855] to-[#223558] p-6 text-white shadow-xl"><FunDoodles className="opacity-35" />
       <div className="relative z-10 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
         <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-200">Family connection</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">Family Matters</h1><p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-white/85">Share policy reminders, schedule notes, closures, little thank-yous, and fun weekly messages so families feel connected to TCS—not just notified by us.</p></div>
-        <GatorGuide size="lg" message={<>Small reminders can still feel warm. 💚</>} />
+        <div className="w-full max-w-[390px]">
+          <TcsKidsScene variant="reading" compact />
+          <div className="-mt-4 flex justify-end"><GatorGuide size="sm" message={<>Small reminders can still feel warm. 💚</>} /></div>
+        </div>
       </div>
     </section>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { CelebrationBits, FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
+import { TcsKidsScene } from "@/components/brand/TcsKidsScene";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { addIsoDays, displayDate, mondayOfWeek } from "@/lib/family-care-calendar";
@@ -163,7 +164,10 @@ export default function WeeklyCheckinsPage() {
     <section className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-[#223558] via-[#2f6f49] to-[#173d29] p-6 text-white shadow-xl"><FunDoodles className="opacity-35" />
       <div className="relative z-10 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
         <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-sky-200">End-of-week family connection</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">Weekly Child Check-Ins</h1><p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-white/85">Give each family a short, cute progress note about the week—something their child enjoyed, learned, practiced, or felt proud of.</p></div>
-        <GatorGuide size="lg" message={<>Parents love the little details. Tell them what made their child shine this week. ⭐</>} />
+        <div className="w-full max-w-[390px]">
+          <TcsKidsScene variant="celebrate" compact />
+          <div className="-mt-4 flex justify-end"><GatorGuide size="sm" message={<>Tell families what made their child shine. ⭐</>} /></div>
+        </div>
       </div>
     </section>
 
@@ -207,7 +211,7 @@ export default function WeeklyCheckinsPage() {
 
         <div className="mt-5"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Highlights • choose up to 4</p><div className="mt-2 flex flex-wrap gap-2">{highlightOptions.map((item) => <button key={item} onClick={() => toggleHighlight(item)} className={`inline-flex items-center gap-1 rounded-full border px-3 py-2 text-xs font-black ${highlights.includes(item) ? "border-amber-300 bg-amber-100 text-amber-900" : "border-slate-200 bg-white text-slate-600"}`}><Star className="h-3.5 w-3.5" />{item}</button>)}</div></div>
 
-        <div className="mt-6 rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-amber-50 p-5"><p className="text-[9px] font-black uppercase tracking-wider text-emerald-700">Parent preview</p><h3 className="mt-1 text-xl font-black text-slate-950">{title || "This Week at TCS"}</h3><div className="mt-3 flex flex-wrap gap-1.5">{highlights.map((item) => <span key={item} className="rounded-full bg-amber-100 px-2.5 py-1 text-[9px] font-black text-amber-900">⭐ {item}</span>)}</div><p className="mt-4 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-700">{message || "Your weekly check-in message will appear here."}</p></div>
+        <div className="mt-6 overflow-hidden rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-amber-50 p-5"><TcsKidsScene variant="art" compact className="-mb-5 -mt-4" /><p className="text-[9px] font-black uppercase tracking-wider text-emerald-700">Parent preview</p><h3 className="mt-1 text-xl font-black text-slate-950">{title || "This Week at TCS"}</h3><div className="mt-3 flex flex-wrap gap-1.5">{highlights.map((item) => <span key={item} className="rounded-full bg-amber-100 px-2.5 py-1 text-[9px] font-black text-amber-900">⭐ {item}</span>)}</div><p className="mt-4 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-700">{message || "Your weekly check-in message will appear here."}</p></div>
 
         <button disabled={saving || !message.trim()} onClick={() => void save()} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-black text-white disabled:opacity-40">{saving ? <LoaderCircle className="h-5 w-5 animate-spin" /> : status === "Published" ? <Sparkles className="h-5 w-5" /> : <Save className="h-5 w-5" />}{saving ? "Saving…" : status === "Published" ? "Save & Publish to Family" : "Save Draft"}</button>
       </section>}

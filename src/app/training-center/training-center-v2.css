@@ -457,3 +457,5 @@
     height:60px;
   }
 }
+
+.tc-hero-kids{position:absolute;left:18px;bottom:-8px;z-index:2;width:300px;opacity:.9;filter:drop-shadow(0 12px 16px #001b1533)}@media(max-width:1180px){.tc-hero-kids{width:240px;opacity:.7}}@media(max-width:850px){.tc-hero-kids{display:none}}

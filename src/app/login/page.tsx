@@ -1,6 +1,7 @@
 "use client";
 
 import { FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
+import { TcsKidsScene } from "@/components/brand/TcsKidsScene";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
 import { AlertTriangle, Database, KeyRound, LoaderCircle, LockKeyhole, Mail } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
@@ -60,7 +61,8 @@ export default function LoginPage() {
     <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-gradient-to-br from-[#fff5cf] via-[#e9f8ee] to-[#e9efff] p-0 sm:p-8"><FunDoodles soft />
       <div className="min-h-[100dvh] w-full overflow-hidden bg-white shadow-2xl sm:min-h-0 sm:max-w-md sm:rounded-3xl sm:border sm:border-white/10">
         <div className="relative overflow-hidden bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 px-6 pb-10 pt-[max(3rem,env(safe-area-inset-top))] text-center text-white sm:px-8 sm:py-7"><FunDoodles className="opacity-45" />
-          <div className="relative z-10 mx-auto flex justify-center"><GatorGuide size="md" /></div>
+          <div className="relative z-10 mx-auto flex justify-center"><GatorGuide size="sm" /></div>
+          <TcsKidsScene variant="school" compact className="relative z-10 -mb-4 -mt-2" />
           <p className="mt-5 text-xs font-black uppercase tracking-[0.18em] text-emerald-200 sm:mt-4 sm:text-emerald-700">
             TCS Operations Hub
           </p>

@@ -1,6 +1,7 @@
 "use client";
 
 import { FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
+import { TcsKidsScene } from "@/components/brand/TcsKidsScene";
 
 export default function AppLoadingScreen() {
   return (
@@ -23,8 +24,9 @@ export default function AppLoadingScreen() {
 
       <section className="tcs-soft-pop relative z-10 mx-5 w-full max-w-md rounded-[34px] border border-white/15 bg-white/10 p-7 text-center text-white shadow-2xl backdrop-blur-xl">
         <div className="mx-auto flex justify-center">
-          <GatorGuide size="lg" />
+          <GatorGuide size="md" />
         </div>
+        <TcsKidsScene variant="playtime" compact className="-mb-4 -mt-3 opacity-95" />
         <p className="mt-1 text-[10px] font-black uppercase tracking-[.22em] text-emerald-200">The Hub</p>
         <h1 className="mt-2 text-3xl font-black">Getting everything ready ✨</h1>
         <p className="mx-auto mt-3 max-w-sm text-sm font-semibold leading-6 text-emerald-50/80">Schedules, care updates, team tools, and all the little things that keep TCS moving.</p>
