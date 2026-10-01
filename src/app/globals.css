@@ -351,3 +351,98 @@
     transform: none;
   }
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* Animated TCS kids scene library                                            */
+/* -------------------------------------------------------------------------- */
+@keyframes tcs-kid-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+@keyframes tcs-arm-wave {
+  0%, 100% { transform: rotate(0deg); transform-origin: 20px 40px; }
+  30% { transform: rotate(-16deg); transform-origin: 20px 40px; }
+  60% { transform: rotate(10deg); transform-origin: 20px 40px; }
+}
+@keyframes tcs-book-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-2px) rotate(-1deg); }
+}
+@keyframes tcs-arm-paint {
+  0%, 100% { transform: rotate(-5deg); transform-origin: 20px 40px; }
+  50% { transform: rotate(9deg); transform-origin: 20px 40px; }
+}
+@keyframes tcs-ball-bounce {
+  0%, 100% { transform: translateY(0); }
+  48% { transform: translateY(-20px); }
+  55% { transform: translateY(-18px); }
+}
+@keyframes tcs-star-pop-scene {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.15) rotate(8deg); }
+}
+@keyframes tcs-blocks-stack {
+  0% { transform: translateY(12px); opacity: .4; }
+  55% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+@keyframes tcs-paint-stroke {
+  0%, 100% { stroke-dashoffset: 70; }
+  50% { stroke-dashoffset: 0; }
+}
+@keyframes tcs-bubble-float {
+  0% { transform: translateY(10px) scale(.9); opacity: .35; }
+  50% { opacity: .9; }
+  100% { transform: translateY(-26px) scale(1.08); opacity: 0; }
+}
+@keyframes tcs-bus-roll {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(8px); }
+}
+@keyframes tcs-pencil-slide {
+  0%, 100% { transform: translateX(-8px); }
+  50% { transform: translateX(8px); }
+}
+@keyframes tcs-scene-confetti {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(10px) rotate(12deg); }
+}
+@keyframes tcs-heart-pulse {
+  0%, 100% { transform: scale(.95); opacity: .14; transform-origin: center; }
+  50% { transform: scale(1.08); opacity: .28; transform-origin: center; }
+}
+
+.tcs-kid-bob { animation: tcs-kid-bob 3.5s ease-in-out infinite; }
+.tcs-arm-wave { animation: tcs-arm-wave 1.8s ease-in-out infinite; }
+.tcs-book-bob { animation: tcs-book-bob 2.6s ease-in-out infinite; }
+.tcs-arm-paint { animation: tcs-arm-paint 1.9s ease-in-out infinite; }
+.tcs-ball-bounce { animation: tcs-ball-bounce 1.55s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.tcs-star-pop { animation: tcs-star-pop-scene 2.1s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.tcs-blocks-stack { animation: tcs-blocks-stack 1.3s ease-out both; }
+.tcs-paint-stroke { stroke-dasharray: 70; animation: tcs-paint-stroke 3s ease-in-out infinite; }
+.tcs-bubble { animation: tcs-bubble-float 3.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.tcs-bubble-2 { animation-delay: .8s; }
+.tcs-bubble-3 { animation-delay: 1.6s; }
+.tcs-bus-roll { animation: tcs-bus-roll 3.8s ease-in-out infinite; }
+.tcs-pencil-slide { animation: tcs-pencil-slide 2.8s ease-in-out infinite; }
+.tcs-scene-confetti { animation: tcs-scene-confetti 2.1s ease-in-out infinite; }
+.tcs-heart-pulse { animation: tcs-heart-pulse 2.8s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tcs-kid-bob,
+  .tcs-arm-wave,
+  .tcs-book-bob,
+  .tcs-arm-paint,
+  .tcs-ball-bounce,
+  .tcs-star-pop,
+  .tcs-blocks-stack,
+  .tcs-paint-stroke,
+  .tcs-bubble,
+  .tcs-bus-roll,
+  .tcs-pencil-slide,
+  .tcs-scene-confetti,
+  .tcs-heart-pulse {
+    animation: none !important;
+  }
+}
