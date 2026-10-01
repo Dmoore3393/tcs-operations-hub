@@ -593,7 +593,7 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
     <PageIntro
       eyebrow="Location-based menu and meal records"
       title="Meals & Menus"
-      description="Each location can enter its own weekly menu, record what was actually served, and document exactly what each child ate. The meal records also appear in Daily Care."
+      description="Build weekly menus with reusable food presets, upload a finished menu image, record what was actually served, and document exactly what each child ate. Meal records also appear in Daily Care."
       actions={<div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700"><Lock className="h-4 w-4" /> Staff Access Only</div>}
     />
     <DemoNotice />
