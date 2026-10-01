@@ -15,6 +15,7 @@ import {
   ShoppingBag,
   Star,
   Trophy,
+  Utensils,
   CalendarDays,
   CheckCircle2,
   ClipboardCheck,
@@ -79,6 +80,7 @@ type ParentChild = {
     permissions: {
       viewProfile: boolean;
       viewSchedule: boolean;
+      viewMeals: boolean;
       submitSchedule: boolean;
       viewAttendance: boolean;
       viewTransportation: boolean;
@@ -234,6 +236,16 @@ type Overview = {
       lastPaidAt: string;
       responsibilities: string[];
     } | null;
+  }>;
+  familyMenus: Array<{
+    id: string;
+    childIds: string[];
+    locationId: string;
+    weekOf: string;
+    location: string;
+    imageName: string;
+    uploadedAt: string;
+    imageUrl: string;
   }>;
 };
 
@@ -443,6 +455,14 @@ export default function ParentPortalPage() {
   const selectedGatorCash = useMemo(() => {
     if (!overview || !selectedChild) return null;
     return overview.gatorCash.find((item) => item.childId === selectedChild.id) ?? null;
+  }, [overview, selectedChild]);
+
+  const selectedMenus = useMemo(() => {
+    if (!overview || !selectedChild) return [];
+    return overview.familyMenus
+      .filter((menu) => menu.childIds.includes(selectedChild.id) && menu.imageUrl)
+      .sort((a, b) => b.weekOf.localeCompare(a.weekOf))
+      .slice(0, 4);
   }, [overview, selectedChild]);
 
   const profilePhoto = selectedMedia.find((item) => item.kind === "Profile") ?? null;
@@ -679,6 +699,21 @@ export default function ParentPortalPage() {
         </section>
 
         <div className="space-y-5">
+          {selectedChild.access.permissions.viewMeals && <section className="relative overflow-hidden rounded-[30px] border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-amber-50 p-5 shadow-sm sm:p-6">
+            <FunDoodles className="opacity-20" />
+            <div className="relative z-10">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-start gap-3"><span className="grid h-12 w-12 flex-none place-items-center rounded-2xl bg-emerald-700 text-white"><Utensils className="h-6 w-6" /></span><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-700">What’s on the menu?</p><h2 className="mt-1 text-2xl font-black text-slate-950">{selectedChild.firstName}’s Weekly Menu 🍎</h2><p className="mt-1 max-w-3xl text-xs font-semibold leading-5 text-slate-600">See the meals TCS has planned for the week. If a substitution is needed, staff will still record what was actually served in Daily Care.</p></div></div>
+                <span className="w-fit rounded-full bg-white px-3 py-1.5 text-[10px] font-black text-emerald-800 shadow-sm">{selectedChild.location || "TCS"}</span>
+              </div>
+              {selectedMenus.length ? <div className="mt-5 grid gap-4 xl:grid-cols-2">{selectedMenus.map((menu, index) => <article key={menu.id} className="overflow-hidden rounded-3xl border border-emerald-100 bg-white shadow-sm">
+                <div className="flex items-center justify-between gap-3 border-b border-emerald-100 px-4 py-3"><div><p className="text-[9px] font-black uppercase tracking-wider text-emerald-700">{index === 0 ? "Latest Menu" : "Menu"}</p><h3 className="text-sm font-black text-slate-950">Week of {formatDate(menu.weekOf)}</h3></div><span className="rounded-full bg-amber-100 px-2.5 py-1 text-[9px] font-black text-amber-900">Planned</span></div>
+                <a href={menu.imageUrl} target="_blank" rel="noreferrer" className="block bg-slate-50"><SafeImage src={menu.imageUrl} alt={`Weekly menu for ${selectedChild.firstName}, week of ${menu.weekOf}`} className="max-h-[620px] w-full object-contain" fallback={<div className="grid min-h-52 place-items-center text-sm font-semibold text-slate-400">Menu image unavailable</div>} /></a>
+                <div className="px-4 py-3 text-[10px] font-semibold leading-4 text-slate-500">This is the planned menu. Substitutions may happen when needed; actual foods served are documented separately.</div>
+              </article>)}</div> : <div className="mt-5 rounded-2xl border border-dashed border-emerald-200 bg-white/80 p-6 text-center"><Utensils className="mx-auto h-8 w-8 text-emerald-700" /><p className="mt-2 text-sm font-black text-slate-800">This week’s menu hasn’t been posted yet.</p><p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Once TCS uploads the weekly menu for {selectedChild.location || "your child’s location"}, it will appear here automatically.</p></div>}
+            </div>
+          </section>}
+
           {selectedChild.access.permissions.viewRewards && selectedGatorCash && <section className="relative overflow-hidden rounded-[30px] border border-amber-200 bg-gradient-to-br from-[#fff9df] via-white to-[#e8f8ee] p-5 shadow-sm sm:p-6">
             <FunDoodles className="opacity-20" />
             <div className="relative z-10 grid gap-5 xl:grid-cols-[1.05fr_.95fr] xl:items-start">
