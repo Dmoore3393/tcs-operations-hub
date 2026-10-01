@@ -31,11 +31,8 @@ function Kid({ x, y, scale = 1, skin, shirt, pants, hair, pose = "stand", delay 
   const isStar = pose === "star";
   const isBackpack = pose === "backpack";
   return (
-    <g
-      transform={`translate(${x} ${y}) scale(${scale})`}
-      className="tcs-kid-bob"
-      style={{ animationDelay: `${delay}s` }}
-    >
+    <g transform={`translate(${x} ${y}) scale(${scale})`}>
+      <g className="tcs-kid-bob" style={{ animationDelay: `${delay}s` }}>
       {isBackpack && <rect x="-21" y="34" width="14" height="29" rx="7" fill="#7c3aed" opacity=".9" />}
       <circle cx="0" cy="0" r="23" fill={skin} />
       <path d="M-20 -8 Q-14 -29 0 -28 Q17 -27 21 -8 Q10 -18 0 -15 Q-9 -18 -20 -8Z" fill={hair} />
@@ -83,10 +80,13 @@ function Kid({ x, y, scale = 1, skin, shirt, pants, hair, pose = "stand", delay 
       {isStar && <>
         <path d="M-19 39 L-29 56" stroke={skin} strokeWidth="9" strokeLinecap="round" />
         <path d="M19 39 L29 56" stroke={skin} strokeWidth="9" strokeLinecap="round" />
-        <g className="tcs-star-pop" transform="translate(0 62)">
-          <path d="M0 -20 L6 -7 L20 -5 L10 5 L13 19 L0 12 L-13 19 L-10 5 L-20 -5 L-6 -7Z" fill="#facc15" stroke="#a16207" strokeWidth="2" />
+        <g transform="translate(0 62)">
+          <g className="tcs-star-pop">
+            <path d="M0 -20 L6 -7 L20 -5 L10 5 L13 19 L0 12 L-13 19 L-10 5 L-20 -5 L-6 -7Z" fill="#facc15" stroke="#a16207" strokeWidth="2" />
+          </g>
         </g>
       </>}
+      </g>
     </g>
   );
 }
