@@ -44,6 +44,7 @@ export default function SupportPage() {
         <footer className="flex flex-wrap gap-3 border-t border-slate-200 pt-6">
           <Link href="/privacy" className="rounded-xl bg-[#214d31] px-4 py-2.5 text-sm font-black text-white">Privacy Policy</Link>
           <Link href="/login" className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-black text-slate-700">Staff Login</Link>
+          <Link href="/parent-login" className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-black text-slate-700">Parent Portal</Link>
         </footer>
       </div>
     </article>
