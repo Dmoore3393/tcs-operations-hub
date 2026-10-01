@@ -21,6 +21,8 @@ import {
   mealTypes,
   foodPresetCategories,
   starterFoodPresets,
+  starterNutritionProfiles,
+  menuSlotNutritionCheck,
   menuDayOrder,
   shiftWeek,
   starterMealServices,
@@ -28,6 +30,7 @@ import {
   weekStartFor,
   type FoodPreset,
   type FoodPresetCategory,
+  type NutritionRuleProfile,
   type MealComponent,
   type MealIntake,
   type MealServiceRecord,
@@ -139,6 +142,7 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
   const { session } = useAuth();
   const [menus, setMenus] = usePersistentState<WeeklyMenu[]>("tcs-weekly-menus-v1", starterWeeklyMenus);
   const [foodPresets, setFoodPresets] = usePersistentState<FoodPreset[]>("tcs-food-presets-v1", starterFoodPresets);
+  const [nutritionProfiles, setNutritionProfiles] = usePersistentState<NutritionRuleProfile[]>("tcs-nutrition-rules-v1", starterNutritionProfiles);
   const [services, setServices] = usePersistentState<MealServiceRecord[]>("tcs-meal-services-v1", starterMealServices);
   const [careLogs, setCareLogs] = usePersistentState<CareLogEntry[]>("tcs-daily-care-v1", starterCareLogs);
   const [children] = usePersistentState<ChildRecord[]>("tcs-children-v1", initialChildren);
@@ -155,6 +159,7 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
   const [presetMeal, setPresetMeal] = useState<MealType>("Breakfast");
   const [newPresetName, setNewPresetName] = useState("");
   const [newPresetCategory, setNewPresetCategory] = useState<FoodPresetCategory>("Other");
+  const [newPresetWholeGrainRich, setNewPresetWholeGrainRich] = useState(false);
   const [menuImageUrl, setMenuImageUrl] = useState("");
   const [uploadingMenuImage, setUploadingMenuImage] = useState(false);
   const [draft, setDraft] = useState<MealDraft>({
@@ -194,6 +199,34 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
     () => menus.find((menu) => menu.location === currentLocation && menu.weekOf === weekOf) ?? createBlankWeeklyMenu(currentLocation, weekOf),
     [menus, currentLocation, weekOf],
   );
+  const activeNutritionProfile = nutritionProfiles.find((profile) => profile.location === currentLocation)
+    ?? starterNutritionProfiles.find((profile) => profile.location === currentLocation)
+    ?? starterNutritionProfiles[0];
+
+  const nutritionSummary = useMemo(() => {
+    let planned = 0;
+    let pass = 0;
+    let warn = 0;
+    let review = 0;
+    for (const day of menuDayOrder) {
+      for (const meal of mealTypes) {
+        const check = menuSlotNutritionCheck(currentMenu.days[day][meal], meal, activeNutritionProfile);
+        if (check.state === "empty") continue;
+        planned += 1;
+        if (check.state === "pass") pass += 1;
+        if (check.state === "warn") warn += 1;
+        if (check.state === "review") review += 1;
+      }
+    }
+    const wholeGrainMissingDays = activeNutritionProfile.wholeGrainRichDaily
+      ? menuDayOrder.filter((day) => {
+          const hasPlannedFood = mealTypes.some((meal) => currentMenu.days[day][meal].plannedFoods.trim());
+          return hasPlannedFood && !mealTypes.some((meal) => currentMenu.days[day][meal].wholeGrainRich);
+        })
+      : [];
+    return { planned, pass, warn, review, wholeGrainMissingDays };
+  }, [activeNutritionProfile, currentMenu]);
+
   const draftWeekOf = weekStartFor(draft.date);
   const draftDay = dayNameForDate(draft.date);
   const draftMenu = menus.find((menu) => menu.location === currentLocation && menu.weekOf === draftWeekOf)
@@ -314,6 +347,7 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
       const slot = nextMenu.days[presetDay][presetMeal];
       slot.plannedFoods = appendFood(slot.plannedFoods, preset.name);
       slot.components = [...new Set([...slot.components, ...preset.components])];
+      if (preset.wholeGrainRich) slot.wholeGrainRich = true;
       if (existingIndex >= 0) return current.map((menu, index) => index === existingIndex ? nextMenu : menu);
       return [...current, nextMenu];
     });
@@ -348,15 +382,48 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
       emoji: emojiForPresetCategory(newPresetCategory),
       active: true,
       custom: true,
+      wholeGrainRich: newPresetWholeGrainRich,
     };
     setFoodPresets((current) => [...current, preset]);
     setNewPresetName("");
+    setNewPresetWholeGrainRich(false);
     setMessage(`${name} added to your shared food presets.`);
     window.setTimeout(() => setMessage(""), 2200);
   }
 
   function removeCustomPreset(id: string) {
     setFoodPresets((current) => current.filter((item) => item.id !== id));
+  }
+
+  function toggleMenuComponent(day: (typeof menuDayOrder)[number], meal: MealType, component: MealComponent) {
+    const slot = currentMenu.days[day][meal];
+    const components = slot.components.includes(component)
+      ? slot.components.filter((item) => item !== component)
+      : [...slot.components, component];
+    updateMenuSlot(day, meal, { components });
+  }
+
+  function toggleWholeGrain(day: (typeof menuDayOrder)[number], meal: MealType) {
+    updateMenuSlot(day, meal, { wholeGrainRich: !currentMenu.days[day][meal].wholeGrainRich });
+  }
+
+  function updateNutritionProfile(updates: Partial<NutritionRuleProfile>) {
+    setNutritionProfiles((current) => {
+      const existing = current.findIndex((profile) => profile.location === currentLocation);
+      const base = existing >= 0 ? current[existing] : activeNutritionProfile;
+      const next = { ...base, ...updates };
+      if (existing >= 0) return current.map((profile, index) => index === existing ? next : profile);
+      return [...current, next];
+    });
+  }
+
+  function toggleNutritionRequired(field: "breakfastRequired" | "lunchDinnerRequired", component: MealComponent) {
+    const current = activeNutritionProfile[field];
+    updateNutritionProfile({
+      [field]: current.includes(component)
+        ? current.filter((item) => item !== component)
+        : [...current, component],
+    } as Partial<NutritionRuleProfile>);
   }
 
   async function uploadMenuImage(file: File | null) {
