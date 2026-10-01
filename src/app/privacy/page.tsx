@@ -12,23 +12,23 @@ export default function PrivacyPage() {
       <header className="bg-gradient-to-br from-[#214d31] to-[#102c20] px-6 py-8 text-white sm:px-10">
         <p className="text-xs font-black uppercase tracking-[.18em] text-emerald-200">Thomason Childcare Solutions</p>
         <h1 className="mt-2 text-4xl font-black">The Hub Privacy Policy</h1>
-        <p className="mt-3 text-sm font-semibold text-white/75">Effective September 23, 2026</p>
+        <p className="mt-3 text-sm font-semibold text-white/75">Effective October 1, 2026</p>
       </header>
 
       <div className="space-y-8 px-6 py-8 text-sm leading-7 sm:px-10">
         <section>
           <h2 className="text-xl font-black">About The Hub</h2>
-          <p className="mt-2 text-slate-700">The Hub is a private operations application used by Thomason Childcare Solutions and authorized staff to manage childcare operations, staffing, schedules, timekeeping, transportation, training, compliance, documents, communications, and related business workflows. Access is limited to authorized users and is controlled by role, assigned location, and job permissions.</p>
+          <p className="mt-2 text-slate-700">The Hub is a private childcare operations and family-connection application used by Thomason Childcare Solutions, authorized staff, and invited parents or guardians. Staff access is controlled by role, assigned location, and job permissions. Family access is limited to children and information specifically linked to that family account.</p>
         </section>
 
         <section>
           <h2 className="text-xl font-black">Information The Hub may process</h2>
-          <p className="mt-2 text-slate-700">Depending on a user’s authorization and the work being performed, The Hub may process staff account information, work schedules, time-clock events, training records, performance and coaching records, time-off requests, work assignments, notifications, and uploaded business documents. Authorized childcare operations may also include child and family records such as enrollment information, emergency contacts, attendance, schedules, transportation information, care notes, health or allergy alerts, immunization information, incident records, subsidy records, and signed forms.</p>
+          <p className="mt-2 text-slate-700">Depending on authorization and the work being performed, The Hub may process staff account information, work schedules, time-clock events, training records, performance and coaching records, time-off requests, work assignments, notifications, and uploaded business documents. Child and family information may include enrollment information, emergency contacts, attendance, schedules, transportation information, daily-care and meal records, health or allergy alerts, immunization information, incident records, subsidy records, signed forms, child photos, profile photos, weekly check-ins, family communications, newsletters, and child reward activity such as Gator Cash.</p>
         </section>
 
         <section>
           <h2 className="text-xl font-black">How information is used</h2>
-          <p className="mt-2 text-slate-700">Information is used to operate childcare programs, supervise and schedule staff, support safe child care and transportation, maintain required records, administer training and workforce processes, communicate operational information, document approvals and acknowledgments, support billing and subsidy workflows, and maintain security and audit history.</p>
+          <p className="mt-2 text-slate-700">Information is used to operate childcare programs, supervise and schedule staff, support safe child care and transportation, maintain required records, administer training and workforce processes, communicate with families, share authorized child-care updates, document approvals and acknowledgments, support billing and subsidy workflows, and maintain security and audit history.</p>
         </section>
 
         <section>
@@ -38,12 +38,12 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="text-xl font-black">Security</h2>
-          <p className="mt-2 text-slate-700">TCS uses authenticated staff accounts, role and location restrictions, private server-side workflows, audit logging, session controls, and encrypted document storage. Sensitive uploaded documents are stored in a private bucket and are encrypted before storage. No security system can guarantee absolute protection, so access should only be used on trusted devices and credentials must not be shared.</p>
+          <p className="mt-2 text-slate-700">TCS uses authenticated accounts, role and location restrictions, family-to-child authorization checks, private server-side workflows, audit logging, session controls, and private document/media storage. Sensitive records are not intended to be publicly accessible. No security system can guarantee absolute protection, so The Hub should only be used on trusted devices and account credentials must not be shared.</p>
         </section>
 
         <section>
           <h2 className="text-xl font-black">Notifications and device features</h2>
-          <p className="mt-2 text-slate-700">If a user enables notifications, The Hub may register that device to receive operational alerts. Users can control notification permission through their device or browser settings. Camera or file access is used only when the user chooses to capture or upload a document or image. The current Time Clock uses the selected TCS work location and does not require continuous GPS tracking.</p>
+          <p className="mt-2 text-slate-700">If a user enables notifications, The Hub may register that device to receive operational or family alerts. Users can control notification permission through their device settings. Camera, photo-library, or file access is used only when an authorized user chooses to capture or upload a photo, document, or other permitted file. The current Time Clock uses the selected TCS work location and does not require continuous GPS tracking.</p>
         </section>
 
         <section>
@@ -69,6 +69,7 @@ export default function PrivacyPage() {
         <footer className="flex flex-wrap gap-3 border-t border-slate-200 pt-6">
           <Link href="/support" className="rounded-xl bg-[#214d31] px-4 py-2.5 font-black text-white">Support</Link>
           <Link href="/login" className="rounded-xl border border-slate-300 px-4 py-2.5 font-black text-slate-700">Staff Login</Link>
+          <Link href="/parent-login" className="rounded-xl border border-slate-300 px-4 py-2.5 font-black text-slate-700">Parent Portal</Link>
         </footer>
       </div>
     </article>
