@@ -1,6 +1,7 @@
 export const familyPermissionKeys = [
   "viewProfile",
   "viewSchedule",
+  "viewMeals",
   "submitSchedule",
   "viewAttendance",
   "viewTransportation",
@@ -67,6 +68,7 @@ function bool(value: unknown, fallback: boolean) {
 export const fullFamilyPermissions: FamilyAccessPermissions = {
   viewProfile: true,
   viewSchedule: true,
+  viewMeals: true,
   submitSchedule: true,
   viewAttendance: true,
   viewTransportation: true,
@@ -85,6 +87,7 @@ export const fullFamilyPermissions: FamilyAccessPermissions = {
 export const pickupOnlyFamilyPermissions: FamilyAccessPermissions = {
   viewProfile: true,
   viewSchedule: false,
+  viewMeals: false,
   submitSchedule: false,
   viewAttendance: false,
   viewTransportation: false,
