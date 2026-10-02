@@ -29,9 +29,9 @@ struct HubWebView: UIViewRepresentable {
         let nativeBridge = """
         window.__TCS_NATIVE_APP__ = {
           platform: 'ios',
-          version: '(version)',
-          bundleId: '(bundleId)',
-          pushEnvironment: '(pushEnvironment)',
+          version: '\(version)',
+          bundleId: '\(bundleId)',
+          pushEnvironment: '\(pushEnvironment)',
           requestPushNotifications: function () {
             window.webkit.messageHandlers.tcsNative.postMessage({ action: 'requestPushNotifications' });
           },
@@ -247,7 +247,7 @@ struct HubWebView: UIViewRepresentable {
             }
 
             webView.evaluateJavaScript(
-                "window.dispatchEvent(new CustomEvent('tcs-native-push-token', { detail: (json) }));"
+                "window.dispatchEvent(new CustomEvent('tcs-native-push-token', { detail: \(json) }));"
             )
         }
 
