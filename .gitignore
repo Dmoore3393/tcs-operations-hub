@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# generated native iOS artifacts (XcodeGen / pre-build)
+/native/ios/TheHub.xcodeproj/
+/native/ios/TheHub/Info.plist
+/native/ios/TheHub/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
