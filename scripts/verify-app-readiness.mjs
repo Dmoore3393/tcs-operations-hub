@@ -133,9 +133,9 @@ assert(existsSync(new URL("../native/ios/TheHub/Resources/tcs-hub-launch.webp", 
 assert(existsSync(new URL("../native/ios/TheHub/Resources/tcs-hub-loading.webp", import.meta.url)), "Native Hub loading artwork resource link is missing");
 assert(iosProject.includes("TCS location QR check-in, staff clocking"), "Native camera permission must accurately describe QR and staff-clock camera use");
 assert(iosEntitlements.includes("aps-environment") && iosProject.includes("APS_ENVIRONMENT: production"), "Native iOS project must include APNs entitlements for release builds");
-assert(iosAssetScript.includes("1024") && iosAssetScript.includes("app-icon-512.png"), "Native pre-build must prepare the 1024×1024 App Store icon from the approved Hub icon");
+assert(iosAssetScript.includes("1024") && iosAssetScript.includes("app-icon-1024.png"), "Native pre-build must prepare the 1024×1024 App Store icon from the approved Hub icon");
 assert(iosAssetScript.includes('SRCROOT') && !iosAssetScript.includes('dirname "$0"'), "Native app-icon build script must resolve paths from Xcode SRCROOT rather than $0 after XcodeGen inlines the script");
-assert(iosProject.includes('inputFiles:') && iosProject.includes('$(SRCROOT)/../../public/app-icon-512.png'), "Native app-icon build script must declare its source icon as an Xcode sandbox input");
+assert(iosProject.includes('inputFiles:') && iosProject.includes('$(SRCROOT)/../../public/app-icon-1024.png'), "Native app-icon build script must declare its source icon as an Xcode sandbox input");
 assert(iosProject.includes('outputFiles:') && iosProject.includes('$(SRCROOT)/TheHub/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png'), "Native app-icon build script must declare the generated App Store icon as an Xcode sandbox output");
 assert(iosContentView.includes("HubLaunchScreen()") && iosContentView.includes("HubLoadingScreen()"), "Native opening experience must render both branded Hub launch and secure loading screens");
 assert(iosContentView.includes("HubBrandMark") && iosContentView.includes("Preparing your secure workspace"), "Native opening experience must include the branded Hub mark and loading treatment");
