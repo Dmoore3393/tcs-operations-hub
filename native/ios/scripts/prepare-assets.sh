@@ -8,7 +8,7 @@ fi
 
 ROOT="$(cd "$SRCROOT/../.." && pwd)"
 ASSET_DIR="$SRCROOT/TheHub/Assets.xcassets/AppIcon.appiconset"
-SOURCE="$ROOT/public/app-icon-512.png"
+SOURCE="$ROOT/public/app-icon-1024.png"
 OUTPUT="$ASSET_DIR/AppIcon-1024.png"
 
 if [ ! -f "$SOURCE" ]; then
