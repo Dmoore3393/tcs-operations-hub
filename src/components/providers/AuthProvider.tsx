@@ -174,6 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<StaffAccessProfile | null>(null);
   const [loading, setLoading] = useState(isSupabaseConfigured);
+  const [checkingFamilyAccess, setCheckingFamilyAccess] = useState(false);
   const [accessError, setAccessError] = useState("");
   const lastActivityRef = useRef(Date.now());
   const timeoutTriggeredRef = useRef(false);
@@ -314,6 +315,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [loading, pathname, profile, router, session]);
 
+  useEffect(() => {
+    if (loading || !isSupabaseConfigured || !session || profile) {
+      setCheckingFamilyAccess(false);
+      return;
+    }
+    if (isParentPortalRoute(pathname) || isPublicInfoRoute(pathname) || pathname === "/login") {
+      setCheckingFamilyAccess(false);
+      return;
+    }
+
+    let cancelled = false;
+    setCheckingFamilyAccess(true);
+
+    void (async () => {
+      try {
+        const response = await withTimeout(
+          fetch("/api/parent/overview", {
+            method: "GET",
+            cache: "no-store",
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+              "Cache-Control": "no-cache",
+            },
+          }),
+          "Family access check",
+        );
+        if (!cancelled && response.ok) {
+          router.replace("/parent");
+          return;
+        }
+      } catch {
+        // If this is not a family account, fall through to the normal staff-access message.
+      } finally {
+        if (!cancelled) setCheckingFamilyAccess(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, pathname, profile, router, session]);
+
   const signOut = useCallback(async () => {
     if (supabase) await supabase.auth.signOut();
     setSession(null);
@@ -397,7 +440,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (loading) return <AppLoadingScreen />;
+  if (loading || checkingFamilyAccess) return <AppLoadingScreen />;
 
   if (!session) return null;
 
