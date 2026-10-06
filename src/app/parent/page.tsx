@@ -31,7 +31,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ParentChild = {
@@ -299,6 +299,8 @@ function todayPacific() {
 
 export default function ParentPortalPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const activeView = pathname === "/parent/care" ? "care" : pathname === "/parent/forms" ? "forms" : "home";
   const [session, setSession] = useState<Session | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [selectedChildId, setSelectedChildId] = useState("");
@@ -637,7 +639,7 @@ export default function ParentPortalPage() {
       {notice && <div className="tcs-soft-pop relative overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-900"><CelebrationBits />{notice}</div>}
       {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-900">{error}</div>}
 
-      <section className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-[#173d29] via-[#2e6c47] to-[#143522] p-6 text-white shadow-xl"><FunDoodles className="opacity-40" />
+      <section className={`${activeView === "home" ? "" : "hidden"} relative overflow-hidden rounded-[32px] bg-gradient-to-br from-[#173d29] via-[#2e6c47] to-[#143522] p-6 text-white shadow-xl`}><FunDoodles className="opacity-40" />
         <div className="relative z-10 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
           <div>
             <p className="text-xs font-black uppercase tracking-[.18em] text-emerald-200">Welcome back, family 💚</p>
@@ -658,7 +660,7 @@ export default function ParentPortalPage() {
         {overview && overview.children.length > 1 && <div className="relative z-10 mt-5 flex flex-wrap gap-2">{overview.children.map((child) => <button key={child.id} onClick={() => setSelectedChildId(child.id)} className={`rounded-xl px-3 py-2 text-xs font-black ${selectedChild?.id === child.id ? "bg-white text-emerald-950 shadow-lg" : "bg-white/10 text-white"}`}>{childName(child)}</button>)}</div>}
       </section>
 
-      {selectedChild && <section className="rounded-3xl border border-violet-200 bg-gradient-to-br from-white to-violet-50 p-5 shadow-sm">
+      {selectedChild && <section className={`${activeView === "home" ? "" : "hidden"} rounded-3xl border border-violet-200 bg-gradient-to-br from-white to-violet-50 p-5 shadow-sm`}>
         <div className="grid gap-5 md:grid-cols-[120px_1fr] md:items-start">
           <div>
             <div className="aspect-square overflow-hidden rounded-[28px] border-4 border-white bg-gradient-to-br from-emerald-100 to-violet-100 shadow-lg">
@@ -690,13 +692,20 @@ export default function ParentPortalPage() {
       </section>}
 
       {selectedChild && <>
-        {(selectedChild.access.permissions.viewSchedule || selectedChild.access.permissions.submitSchedule) && <section className="overflow-hidden rounded-3xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-blue-50 p-5 shadow-sm">
+        {activeView !== "home" && <section className="rounded-[28px] border border-emerald-200 bg-gradient-to-br from-white via-emerald-50 to-sky-50 p-5 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-700">{activeView === "care" ? "Care & daily updates" : "Forms & family records"}</p>
+          <div className="mt-2 flex items-start justify-between gap-4">
+            <div><h2 className="text-2xl font-black text-slate-950">{activeView === "care" ? `${selectedChild.firstName}’s Care` : `${selectedChild.firstName}’s Forms`}</h2><p className="mt-1 text-xs font-semibold leading-5 text-slate-600">{activeView === "care" ? "Meals, attendance, weekly progress, photos, and recent care updates in one place." : "Review family forms, acknowledgments, and file items that need attention."}</p></div>
+            <GatorGuide size="sm" />
+          </div>
+        </section>}
+        {(selectedChild.access.permissions.viewSchedule || selectedChild.access.permissions.submitSchedule) && <section className={`${activeView === "home" ? "" : "hidden"} overflow-hidden rounded-3xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-blue-50 p-5 shadow-sm`}>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3"><span className="grid h-12 w-12 flex-none place-items-center rounded-2xl bg-emerald-700 text-white shadow-sm"><CalendarDays className="h-6 w-6" /></span><div><p className="text-[10px] font-black uppercase tracking-wider text-emerald-700">Weekly care planning</p><h2 className="mt-1 text-xl font-black text-slate-950">Family Care Calendar</h2><p className="mt-1 text-xs font-semibold leading-5 text-slate-600">Submit upcoming schedules early, see TCS closure dates, and track whether each weekly request is pending, approved, or needs changes.</p></div></div>
             <button onClick={() => router.push("/parent/schedule")} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-700 px-5 py-3 text-xs font-black text-white shadow-sm">{selectedChild.access.permissions.submitSchedule ? "Open & Submit Schedule" : "View Care Calendar"}</button>
           </div>
         </section>}
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <section className={`${activeView === "home" ? "" : "hidden"} grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5`}>
           <Card icon={<UserRound className="h-5 w-5" />} label="Attendance" value={selectedChild.attendanceDate === todayPacific() ? selectedChild.attendanceToday || "Not marked" : "Not marked today"} />
           <Card icon={<CalendarDays className="h-5 w-5" />} label="Schedule" value={selectedChild.weeklySchedule || "Schedule not entered"} />
           <Card icon={<Home className="h-5 w-5" />} label="Program" value={selectedChild.location || "Location not entered"} />
@@ -705,7 +714,7 @@ export default function ParentPortalPage() {
         </section>
 
         <div className="space-y-5">
-          {selectedChild.access.permissions.viewMeals && <section className="relative overflow-hidden rounded-[30px] border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-amber-50 p-5 shadow-sm sm:p-6">
+          {selectedChild.access.permissions.viewMeals && <section className={`${activeView === "care" ? "" : "hidden"} relative overflow-hidden rounded-[30px] border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-amber-50 p-5 shadow-sm sm:p-6`}>
             <FunDoodles className="opacity-20" />
             <div className="relative z-10">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -720,7 +729,7 @@ export default function ParentPortalPage() {
             </div>
           </section>}
 
-          {selectedChild.access.permissions.viewRewards && selectedGatorCash && <section className="relative overflow-hidden rounded-[30px] border border-amber-200 bg-gradient-to-br from-[#fff9df] via-white to-[#e8f8ee] p-5 shadow-sm sm:p-6">
+          {selectedChild.access.permissions.viewRewards && selectedGatorCash && <section className={`${activeView === "home" ? "" : "hidden"} relative overflow-hidden rounded-[30px] border border-amber-200 bg-gradient-to-br from-[#fff9df] via-white to-[#e8f8ee] p-5 shadow-sm sm:p-6`}>
             <FunDoodles className="opacity-20" />
             <div className="relative z-10 grid gap-5 xl:grid-cols-[1.05fr_.95fr] xl:items-start">
               <div>
@@ -761,7 +770,7 @@ export default function ParentPortalPage() {
             </div>
           </section>}
 
-          <div className="grid gap-5 lg:grid-cols-2">
+          <div className={`${activeView === "care" ? "" : "hidden"} grid gap-5 lg:grid-cols-2`}>
             <section className="relative overflow-hidden rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-emerald-50 p-5 shadow-sm">
               <FunDoodles className="opacity-20" />
               <div className="relative z-10">
@@ -783,7 +792,7 @@ export default function ParentPortalPage() {
             </section>
           </div>
 
-          <section id="parent-care" className="scroll-mt-24 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section className={`${activeView === "care" ? "" : "hidden"} rounded-3xl border border-slate-200 bg-white p-5 shadow-sm`}>
             <div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-emerald-700" /><div><h2 className="font-black text-slate-950">Today & recent care</h2><p className="text-xs text-slate-500">Updates staff have recorded for {selectedChild.firstName}.</p></div></div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <Info label="Checked In" value={selectedChild.attendanceDate === todayPacific() ? formatTime(selectedChild.checkedInAt) : "—"} />
@@ -810,7 +819,7 @@ export default function ParentPortalPage() {
           </section>
 
           <div className="grid gap-5 lg:grid-cols-2">
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <section className={`${activeView === "forms" ? "" : "hidden"} rounded-3xl border border-slate-200 bg-white p-5 shadow-sm`}>
               <div className="flex items-center gap-3"><ClipboardCheck className="h-5 w-5 text-blue-700" /><div><h2 className="font-black text-slate-950">File follow-up</h2><p className="text-xs text-slate-500">High-level status only; private internal notes stay with TCS.</p></div></div>
               <div className="mt-4 space-y-2">
                 <StatusRow label="Child File Audit" ok={selectedChild.fileAuditComplete} value={selectedChild.fileAuditComplete ? "Current / complete" : "Needs follow-up"} />
@@ -821,14 +830,14 @@ export default function ParentPortalPage() {
               {selectedChild.missingDocuments.length > 0 && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900"><AlertTriangle className="mr-1 inline h-4 w-4" />TCS currently has {selectedChild.missingDocuments.length} file item{selectedChild.missingDocuments.length === 1 ? "" : "s"} marked for follow-up. Contact your location if you need the exact list.</div>}
             </section>
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <section className={`${activeView === "care" ? "" : "hidden"} rounded-3xl border border-slate-200 bg-white p-5 shadow-sm`}>
               <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-violet-700" /><h2 className="font-black text-slate-950">Family Attendance PIN</h2></div><p className="mt-1 text-xs text-slate-500">Create your own easy-to-remember code for QR check-in and check-out.</p></div><span className={`rounded-full px-2.5 py-1 text-[9px] font-black ${selectedChild.pickupPinConfigured ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>{selectedChild.pickupPinConfigured ? "Configured" : "Not Set"}</span></div>
               <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs font-semibold leading-5 text-violet-950">Choose one 4–6 digit family code. After you scan a TCS location QR, this PIN lets you check your linked children in or out and also works as an extra pickup verification step. The same PIN is applied to your linked children, and TCS cannot display it after you save it.</div>
               <div className="mt-3 flex gap-2"><input inputMode="numeric" maxLength={6} value={pickupPin} onChange={(event) => setPickupPin(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="4–6 digits" className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-3 text-center text-base font-black tracking-[.25em]" /><button disabled={!/^\d{4,6}$/.test(pickupPin) || savingPickupPin} onClick={() => void updatePickupPin("set")} className="rounded-xl bg-violet-700 px-4 py-3 text-xs font-black text-white disabled:opacity-40">{savingPickupPin ? "Saving…" : selectedChild.pickupPinConfigured ? "Change PIN" : "Set PIN"}</button></div>
               {selectedChild.pickupPinConfigured && <div className="mt-3 flex items-center justify-between gap-3"><p className="text-[10px] font-semibold text-slate-500">Last updated {selectedChild.pickupPinUpdatedAt ? new Date(selectedChild.pickupPinUpdatedAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "recently"}</p><button disabled={savingPickupPin} onClick={() => void updatePickupPin("clear")} className="text-xs font-black text-red-700">Remove PIN</button></div>}
             </section>
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <section className={`${activeView === "home" ? "" : "hidden"} rounded-3xl border border-slate-200 bg-white p-5 shadow-sm`}>
               <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><Bell className="h-5 w-5 text-emerald-700" /><h2 className="font-black text-slate-950">Messages with TCS</h2></div><p className="mt-1 text-xs text-slate-500">Secure family thread for {selectedChild.firstName}.</p></div><span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-black text-emerald-800">{selectedChild.messages?.length || 0}</span></div>
               <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">{!selectedChild.messages?.length ? <p className="rounded-xl bg-slate-50 p-4 text-xs font-semibold text-slate-500">No family messages yet.</p> : selectedChild.messages.slice(-12).map((message) => <div key={message.id} className={`flex ${message.direction === "Family to TCS" ? "justify-end" : "justify-start"}`}><div className={`max-w-[90%] rounded-2xl p-3 ${message.direction === "Family to TCS" ? "bg-emerald-700 text-white" : "border border-slate-200 bg-slate-50 text-slate-900"}`}><p className="text-[9px] font-black uppercase tracking-wider opacity-65">{message.direction}</p><p className="mt-1 text-xs font-black">{message.subject || "Message"}</p><p className="mt-1 whitespace-pre-wrap text-xs leading-5 opacity-90">{message.body}</p><p className="mt-2 text-[9px] font-semibold opacity-55">{message.createdAt ? new Date(message.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""}</p></div></div>)}</div>
               <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
@@ -838,25 +847,25 @@ export default function ParentPortalPage() {
               </div>
             </section>
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <section className={`${activeView === "home" ? "" : "hidden"} rounded-3xl border border-slate-200 bg-white p-5 shadow-sm`}>
               <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><CalendarDays className="h-5 w-5 text-blue-700" /><h2 className="font-black text-slate-950">Billing & transportation fees</h2></div><p className="mt-1 text-xs text-slate-500">Funding source and transportation charges currently recorded by TCS.</p></div><span className={`rounded-full px-2.5 py-1 text-[9px] font-black ${transportationDue > 0 ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800"}`}>{transportationDue > 0 ? `Due ${transportationDue.toFixed(2)}` : "No unpaid transport fee"}</span></div>
               <div className="mt-4 rounded-xl bg-slate-50 p-3"><p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Funding Source</p><p className="mt-1 text-sm font-black text-slate-900">{selectedChild.funding || "Not set"}</p></div>
               <div className="mt-4 space-y-2">{transportationFees.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs font-semibold text-slate-500">No transportation fee records are currently attached to this child.</p> : transportationFees.slice(0, 8).map((fee) => <div key={fee.id || fee.weekOf} className="rounded-xl border border-slate-200 p-3"><div className="flex items-start justify-between gap-3"><div><strong className="text-xs text-slate-900">Week of {fee.weekOf ? formatDate(fee.weekOf) : "Not set"}</strong><p className="mt-1 text-[10px] text-slate-500">{fee.schools.join(", ") || fee.location}</p></div><span className={`rounded-full px-2 py-1 text-[9px] font-black ${fee.paymentStatus === "Paid" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"}`}>{fee.paymentStatus || "Recorded"}</span></div><div className="mt-2 grid grid-cols-2 gap-2"><Info label="Expected" value={`${fee.expectedAmount.toFixed(2)}`} /><Info label="Charged" value={`${fee.chargedAmount.toFixed(2)}`} /></div>{fee.datePaid && <p className="mt-2 text-[10px] font-semibold text-emerald-700">Paid {formatDate(fee.datePaid)}</p>}</div>)}</div>
               <p className="mt-4 text-[10px] font-semibold leading-4 text-slate-500">Financial information shown here is limited to records assigned to your Parent Portal access. If separate household billing is enabled, another adult’s balance and payment activity stay private.</p>
             </section>
 
-            <section id="parent-forms" className="scroll-mt-24 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <section className={`${activeView === "forms" ? "" : "hidden"} rounded-3xl border border-slate-200 bg-white p-5 shadow-sm`}>
               <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><FileSignature className="h-5 w-5 text-purple-700" /><h2 className="font-black text-slate-950">Forms & acknowledgments</h2></div><p className="mt-1 text-xs text-slate-500">{openForms.length} item{openForms.length === 1 ? "" : "s"} waiting</p></div><Bell className="h-5 w-5 text-slate-400" /></div>
               <div className="mt-4 space-y-3">{openForms.length === 0 ? <p className="rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-900"><CheckCircle2 className="mr-1 inline h-4 w-4" />No Parent Portal acknowledgments are currently waiting.</p> : openForms.map((form) => <div key={form.id} className="rounded-xl border border-slate-200 p-3"><div className="flex items-start justify-between gap-3"><div><strong className="text-sm text-slate-900">{form.formName}</strong><p className="mt-1 text-[10px] text-slate-500">{form.subjectName || "Family form"} • Due {form.dueDate ? formatDate(form.dueDate) : "not set"}</p></div><span className="rounded-full bg-amber-100 px-2 py-1 text-[9px] font-black text-amber-900">{form.status}</span></div>{form.signatureMethod === "Parent Portal Acknowledgment" ? <button onClick={() => openForm(form)} className="mt-3 w-full rounded-xl bg-purple-700 px-3 py-2.5 text-xs font-black text-white">Review & Acknowledge</button> : <p className="mt-3 text-[10px] font-semibold leading-4 text-slate-500">This form requires completion outside the Parent Portal. Contact your TCS location for instructions.</p>}</div>)}</div>
               {signedForms.length > 0 && <p className="mt-4 text-[10px] font-bold text-slate-400">{signedForms.length} portal/form item{signedForms.length === 1 ? "" : "s"} already completed.</p>}
             </section>
 
-            <section className="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-5 shadow-sm">
+            <section className={`${activeView === "home" ? "" : "hidden"} rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-5 shadow-sm`}>
               <div className="flex items-center gap-3"><Newspaper className="h-5 w-5 text-emerald-700" /><div><h2 className="font-black text-slate-950">Monthly Newsletters</h2><p className="text-xs text-slate-500">Family updates, activities, reminders, and what’s happening around TCS.</p></div></div>
               {overview?.newsletters?.length ? <div className="mt-4 space-y-3">{overview.newsletters.slice(0, 6).map((newsletter) => <article key={newsletter.id} className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><p className="text-[9px] font-black uppercase tracking-wider text-emerald-700">{monthYear(newsletter.month)}</p><h3 className="mt-1 text-sm font-black text-slate-950">{newsletter.title}</h3>{newsletter.summary && <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">{newsletter.summary}</p>}</div><Newspaper className="h-5 w-5 flex-none text-emerald-500" /></div>{newsletter.url && <a href={newsletter.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-3 py-2.5 text-[10px] font-black text-white"><UploadCloud className="h-3.5 w-3.5 rotate-180" />Open Newsletter</a>}</article>)}</div> : <div className="mt-4 rounded-2xl bg-white/80 p-5 text-center"><Newspaper className="mx-auto h-7 w-7 text-emerald-700" /><p className="mt-2 text-sm font-black text-slate-800">No newsletters posted yet.</p><p className="mt-1 text-xs font-semibold leading-5 text-slate-500">When TCS publishes a monthly newsletter, you’ll be able to open it here anytime.</p></div>}
             </section>
 
-            <section className="relative overflow-hidden rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-amber-50 p-5 shadow-sm">
+            <section className={`${activeView === "home" ? "" : "hidden"} relative overflow-hidden rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-amber-50 p-5 shadow-sm`}>
               <FunDoodles className="opacity-25" />
               <div className="relative z-10">
                 <TcsKidsScene variant="reading" compact className="-mb-5 -mt-3" />
@@ -869,11 +878,11 @@ export default function ParentPortalPage() {
         </div>
       </>}
 
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-semibold leading-5 text-emerald-950"><ShieldCheck className="mr-1 inline h-4 w-4" />Parent Portal acknowledgment records the authenticated guardian email, typed name, time, and audit history. It is used only for forms TCS has specifically enabled for portal acknowledgment; it does not automatically replace a licensing form that requires a different signature process.</div>
+      <div className={`${activeView === "forms" ? "" : "hidden"} rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-semibold leading-5 text-emerald-950`}><ShieldCheck className="mr-1 inline h-4 w-4" />Parent Portal acknowledgment records the authenticated guardian email, typed name, time, and audit history. It is used only for forms TCS has specifically enabled for portal acknowledgment; it does not automatically replace a licensing form that requires a different signature process.</div>
     </div>
 
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 pb-[max(.4rem,env(safe-area-inset-bottom))] pt-1 shadow-[0_-8px_28px_rgba(15,23,42,.10)] backdrop-blur">
-      <div className="mx-auto grid max-w-md grid-cols-3 px-4"><Bottom icon={<Home className="h-5 w-5" />} label="Home" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} /><Bottom icon={<CalendarDays className="h-5 w-5" />} label="Care" onClick={() => document.getElementById("parent-care")?.scrollIntoView({ behavior: "smooth", block: "start" })} /><Bottom icon={<FileSignature className="h-5 w-5" />} label="Forms" onClick={() => document.getElementById("parent-forms")?.scrollIntoView({ behavior: "smooth", block: "start" })} /></div>
+      <div className="mx-auto grid max-w-md grid-cols-3 px-4"><Bottom icon={<Home className="h-5 w-5" />} label="Home" active={activeView === "home"} onClick={() => router.push("/parent")} /><Bottom icon={<CalendarDays className="h-5 w-5" />} label="Care" active={activeView === "care"} onClick={() => router.push("/parent/care")} /><Bottom icon={<FileSignature className="h-5 w-5" />} label="Forms" active={activeView === "forms"} onClick={() => router.push("/parent/forms")} /></div>
     </nav>
 
     {formToSign && <div className="fixed inset-0 z-[10000] overflow-y-auto bg-slate-950/70 p-3 backdrop-blur-sm">
@@ -902,6 +911,6 @@ function Info({ label, value }: { label: string; value: string }) {
 function StatusRow({ label, ok, value }: { label: string; ok: boolean; value: string }) {
   return <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"><span className="text-xs font-black text-slate-700">{label}</span><span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-black ${ok ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"}`}>{ok ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}{value}</span></div>;
 }
-function Bottom({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className="flex min-h-[62px] flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-black text-emerald-800 transition hover:bg-emerald-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"><span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-50">{icon}</span>{label}</button>;
+function Bottom({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
+  return <button type="button" aria-current={active ? "page" : undefined} onClick={onClick} className={`flex min-h-[62px] flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ${active ? "bg-emerald-50 text-emerald-950" : "text-emerald-700 hover:bg-emerald-50/70"}`}><span className={`grid h-8 w-8 place-items-center rounded-xl ${active ? "bg-emerald-700 text-white shadow-sm" : "bg-emerald-50"}`}>{icon}</span>{label}</button>;
 }
