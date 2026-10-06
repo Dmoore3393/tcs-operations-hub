@@ -783,7 +783,7 @@ export default function ParentPortalPage() {
             </section>
           </div>
 
-          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section id="parent-care" className="scroll-mt-24 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-emerald-700" /><div><h2 className="font-black text-slate-950">Today & recent care</h2><p className="text-xs text-slate-500">Updates staff have recorded for {selectedChild.firstName}.</p></div></div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <Info label="Checked In" value={selectedChild.attendanceDate === todayPacific() ? formatTime(selectedChild.checkedInAt) : "—"} />
@@ -845,7 +845,7 @@ export default function ParentPortalPage() {
               <p className="mt-4 text-[10px] font-semibold leading-4 text-slate-500">Financial information shown here is limited to records assigned to your Parent Portal access. If separate household billing is enabled, another adult’s balance and payment activity stay private.</p>
             </section>
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <section id="parent-forms" className="scroll-mt-24 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><FileSignature className="h-5 w-5 text-purple-700" /><h2 className="font-black text-slate-950">Forms & acknowledgments</h2></div><p className="mt-1 text-xs text-slate-500">{openForms.length} item{openForms.length === 1 ? "" : "s"} waiting</p></div><Bell className="h-5 w-5 text-slate-400" /></div>
               <div className="mt-4 space-y-3">{openForms.length === 0 ? <p className="rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-900"><CheckCircle2 className="mr-1 inline h-4 w-4" />No Parent Portal acknowledgments are currently waiting.</p> : openForms.map((form) => <div key={form.id} className="rounded-xl border border-slate-200 p-3"><div className="flex items-start justify-between gap-3"><div><strong className="text-sm text-slate-900">{form.formName}</strong><p className="mt-1 text-[10px] text-slate-500">{form.subjectName || "Family form"} • Due {form.dueDate ? formatDate(form.dueDate) : "not set"}</p></div><span className="rounded-full bg-amber-100 px-2 py-1 text-[9px] font-black text-amber-900">{form.status}</span></div>{form.signatureMethod === "Parent Portal Acknowledgment" ? <button onClick={() => openForm(form)} className="mt-3 w-full rounded-xl bg-purple-700 px-3 py-2.5 text-xs font-black text-white">Review & Acknowledge</button> : <p className="mt-3 text-[10px] font-semibold leading-4 text-slate-500">This form requires completion outside the Parent Portal. Contact your TCS location for instructions.</p>}</div>)}</div>
               {signedForms.length > 0 && <p className="mt-4 text-[10px] font-bold text-slate-400">{signedForms.length} portal/form item{signedForms.length === 1 ? "" : "s"} already completed.</p>}
@@ -873,7 +873,7 @@ export default function ParentPortalPage() {
     </div>
 
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 pb-[max(.4rem,env(safe-area-inset-bottom))] pt-1 shadow-[0_-8px_28px_rgba(15,23,42,.10)] backdrop-blur">
-      <div className="mx-auto grid max-w-md grid-cols-3 px-4"><Bottom icon={<Home className="h-5 w-5" />} label="Home" /><Bottom icon={<CalendarDays className="h-5 w-5" />} label="Care" /><Bottom icon={<FileSignature className="h-5 w-5" />} label="Forms" /></div>
+      <div className="mx-auto grid max-w-md grid-cols-3 px-4"><Bottom icon={<Home className="h-5 w-5" />} label="Home" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} /><Bottom icon={<CalendarDays className="h-5 w-5" />} label="Care" onClick={() => document.getElementById("parent-care")?.scrollIntoView({ behavior: "smooth", block: "start" })} /><Bottom icon={<FileSignature className="h-5 w-5" />} label="Forms" onClick={() => document.getElementById("parent-forms")?.scrollIntoView({ behavior: "smooth", block: "start" })} /></div>
     </nav>
 
     {formToSign && <div className="fixed inset-0 z-[10000] overflow-y-auto bg-slate-950/70 p-3 backdrop-blur-sm">
@@ -902,6 +902,6 @@ function Info({ label, value }: { label: string; value: string }) {
 function StatusRow({ label, ok, value }: { label: string; ok: boolean; value: string }) {
   return <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"><span className="text-xs font-black text-slate-700">{label}</span><span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-black ${ok ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"}`}>{ok ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}{value}</span></div>;
 }
-function Bottom({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return <div className="flex min-h-[62px] flex-col items-center justify-center gap-1 text-[10px] font-black text-emerald-800"><span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-50">{icon}</span>{label}</div>;
+function Bottom({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+  return <button type="button" onClick={onClick} className="flex min-h-[62px] flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-black text-emerald-800 transition hover:bg-emerald-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"><span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-50">{icon}</span>{label}</button>;
 }
