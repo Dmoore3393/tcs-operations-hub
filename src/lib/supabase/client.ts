@@ -5,6 +5,10 @@ const supabaseBrowserKey =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+export const supabaseAuthStorageKey = supabaseUrl
+  ? `sb-${new URL(supabaseUrl).hostname.split(".")[0]}-auth-token`
+  : "";
+
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseBrowserKey);
 
 // The browser must only use a publishable key (or the legacy public anon key). Database access is protected
@@ -12,6 +16,7 @@ export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseBrowserKey);
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl!, supabaseBrowserKey!, {
       auth: {
+        storageKey: supabaseAuthStorageKey,
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
