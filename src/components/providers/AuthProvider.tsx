@@ -11,6 +11,7 @@ import {
   isSupportedAccessRole,
   normalizeAccessRole,
 } from "@/lib/team-access";
+import { readAccessCheck } from "@/lib/access-check";
 import { signOutWithLocalRecovery } from "@/lib/supabase/sign-out";
 import type { Session, User } from "@supabase/supabase-js";
 import { AlertTriangle, Database, LockKeyhole, LogOut } from "lucide-react";
@@ -193,6 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         method: "POST",
         cache: "no-store",
         headers: {
+          Accept: "application/json",
           Authorization: `Bearer ${activeSession.access_token}`,
           "Cache-Control": "no-cache",
         },
@@ -200,28 +202,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       "Staff access check",
     );
 
-    let payload: {
-      profile?: StaffAccessProfile;
-      error?: string;
-      bootstrapped?: boolean;
-    } = {};
-
-    try {
-      payload = await response.json();
-    } catch {
-      // The status below will provide the fallback message.
-    }
+    const payload = await readAccessCheck<{ profile: StaffAccessProfile }>(
+      response,
+      "Staff access check",
+      (data) => Boolean(
+        data.profile && typeof data.profile === "object" &&
+        "user_id" in data.profile && typeof data.profile.user_id === "string"
+      ),
+    );
 
     if (signingOutRef.current) return;
-    if (!response.ok || !payload.profile) {
-      setAccessError(
-        payload.error ||
-          "This login does not have active TCS staff access. Ask a TCS Owner/Admin to add or reactivate the account.",
-      );
-      setProfile(null);
-      return;
-    }
-
     if (!isApprovedPilotRole(payload.profile.role)) {
       setAccessError("This account has an unsupported role. Ask a TCS Owner/Admin to update the role in Team Access.");
       setProfile(null);
@@ -256,10 +246,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (nextSession) {
           try {
             await loadProfile(nextSession);
-          } catch {
-            if (!mounted) return;
+          } catch (error) {
+            if (!mounted || signingOutRef.current) return;
             setProfile(null);
-            setAccessError("The Hub could not finish checking your staff access. Please retry or sign in again.");
+            setAccessError(error instanceof Error ? error.message : "The Hub could not finish checking your staff access. Please retry or sign in again.");
           }
         }
       } catch {
@@ -285,9 +275,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       window.setTimeout(() => {
         void loadProfile(nextSession)
-          .catch(() => {
+          .catch((error) => {
+            if (signingOutRef.current) return;
             setProfile(null);
-            setAccessError("The Hub could not finish checking your staff access. Please retry or sign in again.");
+            setAccessError(error instanceof Error ? error.message : "The Hub could not finish checking your staff access. Please retry or sign in again.");
           })
           .finally(() => setLoading(false));
       }, 0);
@@ -473,7 +464,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       <main className="flex min-h-screen items-center justify-center bg-slate-950 p-5">
         <section className="w-full max-w-xl rounded-3xl bg-white p-7 text-center shadow-2xl sm:p-10">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-100 text-red-700"><LockKeyhole className="h-7 w-7" /></div>
-          <h1 className="mt-5 text-2xl font-black text-slate-950">Staff access is not active</h1>
+          <h1 className="mt-5 text-2xl font-black text-slate-950">We couldn’t finish signing you in</h1>
           <p className="mt-3 leading-7 text-slate-600">{accessError || "This account is signed in, but it has not been approved for the TCS Operations Hub."}</p>
           <p className="mt-2 text-sm text-slate-500">Signed in as {session.user.email}</p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
@@ -481,9 +472,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               onClick={() => {
                 setLoading(true);
                 void loadProfile(session)
-                  .catch(() => {
+                  .catch((error) => {
+                    if (signingOutRef.current) return;
                     setProfile(null);
-                    setAccessError("The Hub still cannot reach secure staff access. Please sign out and try again.");
+                    setAccessError(error instanceof Error ? error.message : "The Hub still cannot reach secure staff access. Please sign out and try again.");
                   })
                   .finally(() => setLoading(false));
               }}

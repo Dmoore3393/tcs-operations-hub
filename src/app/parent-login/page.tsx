@@ -2,6 +2,7 @@
 
 import { FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
 import { TcsKidsScene } from "@/components/brand/TcsKidsScene";
+import { readAccessCheck } from "@/lib/access-check";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
 import { ArrowRight, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -25,17 +26,19 @@ export default function ParentLoginPage() {
 
   async function routeSignedInParent(accessToken: string) {
     const response = await fetch("/api/parent/account-status", {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
       cache: "no-store",
     });
-    const payload = await response.json().catch(() => ({})) as {
-      hasActiveAccess?: boolean;
+    const payload = await readAccessCheck<{
+      hasActiveAccess: boolean;
       pendingApprovalCount?: number;
       invitedCount?: number;
       state?: string;
-      error?: string;
-    };
-    if (!response.ok) throw new Error(payload.error || "Could not verify Parent Portal access.");
+    }>(
+      response,
+      "Parent access check",
+      (data) => typeof data.hasActiveAccess === "boolean",
+    );
 
     if (payload.hasActiveAccess) {
       router.replace(returnToTarget() || "/parent");
@@ -154,7 +157,7 @@ export default function ParentLoginPage() {
           {message && <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-900">{message}</div>}
           {error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold leading-6 text-red-900">{error}</div>}
 
-          <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600"><strong className="text-slate-900">Don't have an account yet?</strong> Parent accounts cannot be created from this login screen. Your TCS location must send you an invitation first so the correct children and privacy permissions are connected to your account.</div>
+          <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600"><strong className="text-slate-900">Don’t have an account yet?</strong> Parent accounts cannot be created from this login screen. Your TCS location must send you an invitation first so the correct children and privacy permissions are connected to your account.</div>
         </div>
       </section>
     </div>
