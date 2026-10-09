@@ -1,6 +1,6 @@
 "use client";
 
-import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
+import { isSupabaseConfigured, supabase, supabaseAuthStorageKey } from "@/lib/supabase/client";
 import {
   employeeCanAccessRoute,
   employeeCanReadState,
@@ -11,6 +11,7 @@ import {
   isSupportedAccessRole,
   normalizeAccessRole,
 } from "@/lib/team-access";
+import { signOutWithLocalRecovery } from "@/lib/supabase/sign-out";
 import type { Session, User } from "@supabase/supabase-js";
 import { AlertTriangle, Database, LockKeyhole, LogOut } from "lucide-react";
 import AppLoadingScreen from "@/components/pwa/AppLoadingScreen";
@@ -176,10 +177,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [checkingFamilyAccess, setCheckingFamilyAccess] = useState(false);
   const [accessError, setAccessError] = useState("");
-  const lastActivityRef = useRef(Date.now());
+  const signingOutRef = useRef(false);
+  const lastActivityRef = useRef(0);
   const timeoutTriggeredRef = useRef(false);
 
   const loadProfile = useCallback(async (activeSession: Session | null) => {
+    if (signingOutRef.current) return;
     if (!activeSession) {
       setProfile(null);
       return;
@@ -209,6 +212,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // The status below will provide the fallback message.
     }
 
+    if (signingOutRef.current) return;
     if (!response.ok || !payload.profile) {
       setAccessError(
         payload.error ||
@@ -243,7 +247,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           supabase.auth.getSession(),
           "Secure sign-in check",
         );
-        if (!mounted) return;
+        if (!mounted || signingOutRef.current) return;
         if (error) setAccessError(error.message);
 
         const nextSession = data.session ?? null;
@@ -269,6 +273,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (signingOutRef.current) return;
       setSession(nextSession);
 
       if (!nextSession) {
@@ -316,19 +321,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loading, pathname, profile, router, session]);
 
   useEffect(() => {
-    if (loading || !isSupabaseConfigured || !session || profile) {
-      setCheckingFamilyAccess(false);
-      return;
-    }
-    if (isParentPortalRoute(pathname) || isPublicInfoRoute(pathname) || pathname === "/login") {
-      setCheckingFamilyAccess(false);
-      return;
-    }
-
     let cancelled = false;
-    setCheckingFamilyAccess(true);
 
     void (async () => {
+      // Let effect cleanup cancel a superseded check before updating the UI.
+      await Promise.resolve();
+      if (cancelled || signingOutRef.current) return;
+      if (
+        loading || !isSupabaseConfigured || !session || profile ||
+        isParentPortalRoute(pathname) || isPublicInfoRoute(pathname) || pathname === "/login"
+      ) {
+        setCheckingFamilyAccess(false);
+        return;
+      }
+      setCheckingFamilyAccess(true);
       try {
         const response = await withTimeout(
           fetch("/api/parent/overview", {
@@ -358,11 +364,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loading, pathname, profile, router, session]);
 
   const signOut = useCallback(async () => {
-    if (supabase) await supabase.auth.signOut();
-    setSession(null);
-    setProfile(null);
-    router.replace("/login");
-  }, [router]);
+    if (signingOutRef.current) return;
+    signingOutRef.current = true;
+    setLoading(true);
+    try {
+      if (supabase) {
+        const auth = supabase.auth;
+        await signOutWithLocalRecovery(
+          (options) => auth.signOut(options),
+          window.localStorage,
+          supabaseAuthStorageKey,
+        );
+      }
+      setSession(null);
+      setProfile(null);
+      setAccessError("");
+      // A full navigation drops stale in-memory Auth state and pending checks.
+      window.location.replace("/login");
+    } catch {
+      signingOutRef.current = false;
+      setLoading(false);
+      setAccessError("The Hub could not clear this device's sign-in. Please close the app and retry.");
+    }
+  }, []);
 
   useEffect(() => {
     if (!session || !profile || pathname === "/login") return;
