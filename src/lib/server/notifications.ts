@@ -21,8 +21,7 @@ import {
   type NativePushRegistration,
 } from "@/lib/server/native-push";
 
-const INBOX_KEY = "tcs_notification_inbox";
-const PREFS_KEY = "tcs_notification_preferences";
+import { loadStoredNotificationState, saveStoredNotificationState } from "@/lib/server/notification-state-store";
 const MAX_NOTIFICATIONS = 100;
 const PUSH_KEY = "tcs_push_subscriptions";
 const MAX_PUSH_SUBSCRIPTIONS = 8;
@@ -33,23 +32,6 @@ export function pushDeviceId(endpoint: string) {
 
 function stringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
-function parseInbox(user: User): HubNotification[] {
-  const raw = user.app_metadata?.[INBOX_KEY];
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((item): item is HubNotification => Boolean(item) && typeof item === "object" && typeof (item as HubNotification).id === "string")
-    .slice(0, MAX_NOTIFICATIONS);
-}
-
-function parsePreferences(user: User): HubNotificationPreferences {
-  const raw = user.app_metadata?.[PREFS_KEY];
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return defaultNotificationPreferences;
-  return {
-    ...defaultNotificationPreferences,
-    ...(raw as Partial<HubNotificationPreferences>),
-  };
 }
 
 export function parsePushSubscriptions(user: User): StoredPushSubscription[] {
@@ -74,8 +56,7 @@ export async function savePushSubscriptions(
   user: User,
   subscriptions: StoredPushSubscription[],
 ) {
-  const appMetadata = { ...(user.app_metadata ?? {}) };
-  appMetadata[PUSH_KEY] = subscriptions.slice(0, MAX_PUSH_SUBSCRIPTIONS);
+  const appMetadata = { [PUSH_KEY]: subscriptions.slice(0, MAX_PUSH_SUBSCRIPTIONS) };
   const { error } = await admin.auth.admin.updateUserById(user.id, { app_metadata: appMetadata });
   if (error) throw new Error(error.message);
 }
@@ -210,11 +191,8 @@ function permissionMatches(role: string, permissions: string[], eventType: HubNo
 export async function loadNotificationState(admin: SupabaseClient, userId: string) {
   const { data, error } = await admin.auth.admin.getUserById(userId);
   if (error || !data.user) throw new Error(error?.message || "Could not load notification settings.");
-  return {
-    user: data.user,
-    inbox: parseInbox(data.user),
-    preferences: parsePreferences(data.user),
-  };
+  const state = await loadStoredNotificationState(admin, data.user, defaultNotificationPreferences);
+  return { user: data.user, ...state };
 }
 
 export async function saveNotificationState(
@@ -223,11 +201,7 @@ export async function saveNotificationState(
   inbox: HubNotification[],
   preferences: HubNotificationPreferences,
 ) {
-  const appMetadata = { ...(user.app_metadata ?? {}) };
-  appMetadata[INBOX_KEY] = inbox.slice(0, MAX_NOTIFICATIONS);
-  appMetadata[PREFS_KEY] = preferences;
-  const { error } = await admin.auth.admin.updateUserById(user.id, { app_metadata: appMetadata });
-  if (error) throw new Error(error.message);
+  await saveStoredNotificationState(admin, user.id, inbox, preferences);
 }
 
 export async function dispatchHubNotification(args: {
@@ -268,10 +242,8 @@ export async function dispatchHubNotification(args: {
     const user = userData.user;
     if (!user) continue;
 
-    const preferences = parsePreferences(user);
+    const { preferences, inbox } = await loadStoredNotificationState(admin, user, defaultNotificationPreferences);
     if (!acceptsCategory(preferences, eventType)) continue;
-
-    const inbox = parseInbox(user);
     if (inbox.some((item) => item.eventKey === eventKey)) continue;
 
     const now = new Date().toISOString();
