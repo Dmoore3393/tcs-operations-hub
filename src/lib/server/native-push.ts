@@ -48,8 +48,7 @@ export async function saveNativePushRegistrations(
   user: User,
   registrations: NativePushRegistration[],
 ) {
-  const appMetadata = { ...(user.app_metadata ?? {}) };
-  appMetadata[NATIVE_PUSH_KEY] = registrations.slice(0, MAX_NATIVE_PUSH_DEVICES);
+  const appMetadata = { [NATIVE_PUSH_KEY]: registrations.slice(0, MAX_NATIVE_PUSH_DEVICES) };
   const { error } = await admin.auth.admin.updateUserById(user.id, { app_metadata: appMetadata });
   if (error) throw new Error(error.message);
 }
