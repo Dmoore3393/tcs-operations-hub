@@ -1,4 +1,5 @@
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
+import { visiblePosts, prohibitedText } from "@/lib/server/lounge-safety";
 import { randomUUID } from "node:crypto";
 
 export const runtime = "nodejs";
@@ -74,9 +75,10 @@ async function loadRow(
 
 export async function GET(request: Request) {
   try {
-    const { admin, profile } = await requireStaff(request);
+    const staff = await requireStaff(request);
+    const { admin, profile } = staff;
     const row = await loadRow(admin, profile.organization_id);
-    return Response.json({ shoutOuts: normalizeShoutOuts(row?.state_value) });
+    return Response.json({ shoutOuts: await visiblePosts(staff, normalizeShoutOuts(row?.state_value)) });
   } catch (error) {
     return staffErrorResponse(error);
   }
@@ -84,8 +86,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { admin, user, profile } = await requireStaff(request);
-    const body = (await request.json().catch(() => ({}))) as { message?: unknown };
+    const staff = await requireStaff(request);
+    const { admin, user, profile } = staff;
+    const body = (await request.json().catch(() => ({}))) as { message?: unknown; agreeToRules?: unknown };
     const message = typeof body.message === "string" ? body.message.trim() : "";
 
     if (!message) {
@@ -95,6 +98,8 @@ export async function POST(request: Request) {
       return Response.json({ error: `Keep shout-outs under ${MAX_MESSAGE_LENGTH} characters.` }, { status: 400 });
     }
 
+    if(body.agreeToRules !== true) return Response.json({error:"Agree to the Lounge community rules before posting."},{status:400});
+    if(prohibitedText(message)) return Response.json({error:"Please use respectful workplace language. Harassment, hate, threats, and sexual content are not allowed."},{status:400});
     const newShoutOut: StoredShoutOut = {
       id: randomUUID(),
       from: profile.full_name?.trim() || "TCS Team Member",
@@ -105,6 +110,7 @@ export async function POST(request: Request) {
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const current = await loadRow(admin, profile.organization_id);
+      if(normalizeShoutOuts(current?.state_value).some(p=>p.created_by===user.id && Date.now()-Date.parse(p.created_at)<30000)) return Response.json({error:"Please wait 30 seconds before posting another shout-out."},{status:429});
       const nextShoutOuts = [newShoutOut, ...normalizeShoutOuts(current?.state_value)].slice(0, MAX_SHOUT_OUTS);
 
       if (!current) {
@@ -123,7 +129,7 @@ export async function POST(request: Request) {
         if (error?.code === "23505") continue;
         if (error) throw error;
         await repairLatestAuditActor(admin, profile.organization_id, "INSERT", user.id);
-        return Response.json({ ok: true, shoutOuts: normalizeShoutOuts(data?.state_value) });
+        return Response.json({ ok: true, shoutOuts: await visiblePosts(staff, normalizeShoutOuts(data?.state_value)) });
       }
 
       const { data, error } = await admin
@@ -144,7 +150,7 @@ export async function POST(request: Request) {
       if (!data) continue;
 
       await repairLatestAuditActor(admin, profile.organization_id, "UPDATE", user.id);
-      return Response.json({ ok: true, shoutOuts: normalizeShoutOuts(data.state_value) });
+      return Response.json({ ok: true, shoutOuts: await visiblePosts(staff, normalizeShoutOuts(data.state_value)) });
     }
 
     return Response.json({ error: "Someone else posted at the same time. Please try again." }, { status: 409 });

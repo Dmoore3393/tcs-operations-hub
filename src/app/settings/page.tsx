@@ -198,6 +198,7 @@ export default function SettingsPage() {
     <MainLayout>
       <div className="mx-auto max-w-[1250px] space-y-6">
         <Link href="/account-deletion-requests" className="inline-flex rounded-xl bg-emerald-700 px-4 py-3 font-bold text-white">Review Account Deletion Requests</Link>
+        <Link href="/employee-lounge" className="inline-flex rounded-xl border border-emerald-700 px-4 py-3 font-bold text-emerald-800">Review Lounge Content Reports</Link>
         <PageIntro eyebrow="System setup" title="Settings" description="Adjust organization details, operational policy defaults, notifications, privacy rules, retention, and secure shared data." actions={<PrimaryButton onClick={save}><Save className="h-4 w-4" /> {saved ? "Saved" : "Save Settings"}</PrimaryButton>} />
 
         <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
