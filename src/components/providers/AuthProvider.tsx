@@ -55,7 +55,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const ownerOnlyRoutes = new Set(["/settings", "/team-access", "/locations", "/audit-log", "/app-readiness", "/marketing", "/executive-dashboard", "/payroll-ops"]);
+const ownerOnlyRoutes = new Set(["/settings", "/team-access", "/locations", "/audit-log", "/app-readiness", "/marketing", "/executive-dashboard", "/payroll-ops", "/account-deletion-requests"]);
 const ownerOnlyReadStateKeys = new Set(["tcs-settings"]);
 const ownerOnlyWriteStateKeys = new Set([
   "tcs-settings",
@@ -74,7 +74,7 @@ function isParentPortalRoute(pathname: string) {
 }
 
 function isPublicInfoRoute(pathname: string) {
-  return pathname === "/privacy" || pathname === "/support";
+  return pathname === "/privacy" || pathname === "/support" || pathname === "/account";
 }
 
 function isTrainingAdminProfile(profile: StaffAccessProfile | null) {
@@ -437,7 +437,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [loadProfile, loading, profile, session, signOut]);
 
-  if (pathname === "/login" || isParentPortalRoute(pathname)) {
+  if (pathname === "/login" || pathname === "/account" || isParentPortalRoute(pathname)) {
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
   }
 
@@ -483,7 +483,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             >
               Retry
             </button>
-            <button onClick={() => void signOut()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button>
+            <a href="/account" className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-bold">Account & Privacy</a><button onClick={() => void signOut()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button>
           </div>
         </section>
       </main>

@@ -614,7 +614,7 @@ export default function ParentPortalPage() {
   }
 
   if (error && !overview) {
-    return <main className="min-h-screen bg-[#f4f0e7] p-4 sm:p-8"><section className="mx-auto mt-16 max-w-xl rounded-[28px] border border-red-200 bg-white p-7 text-center shadow-xl"><AlertTriangle className="mx-auto h-10 w-10 text-red-700" /><h1 className="mt-3 text-2xl font-black text-slate-950">Parent Portal access needs attention</h1><p className="mt-3 text-sm font-semibold leading-6 text-slate-600">{error}</p><button onClick={() => void signOut()} className="mt-5 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white">Sign Out</button></section></main>;
+    return <main className="min-h-screen bg-[#f4f0e7] p-4 sm:p-8"><section className="mx-auto mt-16 max-w-xl rounded-[28px] border border-red-200 bg-white p-7 text-center shadow-xl"><AlertTriangle className="mx-auto h-10 w-10 text-red-700" /><h1 className="mt-3 text-2xl font-black text-slate-950">Parent Portal access needs attention</h1><p className="mt-3 text-sm font-semibold leading-6 text-slate-600">{error}</p><button onClick={() => void signOut()} className="mt-5 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white">Sign Out</button><button onClick={() => router.push("/account")} className="mt-4 block w-full font-bold text-emerald-800">Account & Privacy</button></section></main>;
   }
 
   return <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#fffaf0] via-[#f5f1e8] to-[#eef8f1] pb-24 text-slate-950"><FunDoodles soft />
@@ -630,7 +630,7 @@ export default function ParentPortalPage() {
               <BriefcaseBusiness className="h-4 w-4" /> Staff Hub
             </button>
           )}
-          <button onClick={() => void signOut()} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs font-black"><LogOut className="h-4 w-4" /> Sign Out</button>
+          <button onClick={() => router.push("/account")} className="rounded-xl bg-white/10 px-3 py-2 text-xs font-black">Account & Privacy</button><button onClick={() => void signOut()} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs font-black"><LogOut className="h-4 w-4" /> Sign Out</button>
         </div>
       </div>
     </header>
