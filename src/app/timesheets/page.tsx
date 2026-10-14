@@ -1,6 +1,7 @@
 "use client";
 
 import "./timesheet-command.css";
+import { timesheetBatchKey } from "@/lib/timesheet-workflow";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
@@ -29,7 +30,7 @@ type CommandStage =
   | "Location Sign-Off"
   | "Dynasty Review"
   | "Personal Handoff"
-  | "Jen + Danielle Fill Out"
+  | "Danielle Fill Out"
   | "Scan & Send to Jennifer"
   | "Jennifer Email"
   | "Complete";
@@ -37,9 +38,9 @@ type CommandStage =
 const STAGES: Array<{ key: CommandStage; title: string; helper: string }> = [
   { key: "Location Sign-Off", title: "Location Sign-Off", helper: "Assigned collector checks off each signed child form" },
   { key: "Dynasty Review", title: "Dynasty Review", helper: "Every timesheet accounted for and signed" },
-  { key: "Personal Handoff", title: "Delivered to Jennifer", helper: "Dynasty personally hands the physical timesheets to Jennifer" },
-  { key: "Jen + Danielle Fill Out", title: "Jen + Danielle Fill Out", helper: "Complete each form from the child certificate" },
-  { key: "Scan & Send to Jennifer", title: "Scan & Send to Jen", helper: "Danielle or Anthony scans and sends to Jennifer" },
+  { key: "Personal Handoff", title: "Delivered to Danielle", helper: "Dynasty personally hands the physical timesheets to Danielle" },
+  { key: "Danielle Fill Out", title: "Danielle Fill Out", helper: "Complete each form from the child certificate" },
+  { key: "Scan & Send to Jennifer", title: "Scan & Send to Jen", helper: "Danielle scans and sends to Jennifer" },
   { key: "Jennifer Email", title: "Jennifer Email", helper: "Jennifer sends to the correct department" },
   { key: "Complete", title: "Complete", helper: "Fully submitted and recorded" },
 ];
@@ -65,6 +66,11 @@ type RecordItem = {
   dynastyReviewedBy: string;
   dynastyHandoffDate: string;
   dynastyHandedToJenniferAt: string;
+  dynastyHandedToDanielleAt: string;
+  handoffAt: string;
+  handoffRecipient: string;
+  scanBatchId: string;
+  emailBatchId: string;
   dynastyHandoffBy: string;
   certificateVerified: boolean;
   tuitionPolicyAcknowledged: boolean;
@@ -124,7 +130,7 @@ function stageTone(stage: CommandStage) {
   if (stage === "Complete") return "green";
   if (stage === "Jennifer Email") return "plum";
   if (stage === "Scan & Send to Jennifer") return "blue";
-  if (stage === "Jen + Danielle Fill Out" || stage === "Personal Handoff") return "gold";
+  if (stage === "Danielle Fill Out" || stage === "Personal Handoff") return "gold";
   if (stage === "Dynasty Review") return "red";
   return "";
 }
@@ -143,28 +149,32 @@ export default function TimesheetCommandCenterPage() {
   const [typeFilter, setTypeFilter] = useState("All Types");
   const [periodFilter, setPeriodFilter] = useState(currentServicePeriod());
 
+  const accessToken = session?.access_token;
   const request = useCallback(async (method: "GET" | "POST", body?: Record<string, unknown>) => {
-    if (!session?.access_token) throw new Error("Your staff session is not available yet.");
+    if (!accessToken) throw new Error("Your staff session is not available yet.");
     const response = await fetch("/api/timesheets", {
       method,
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
+        Authorization: `Bearer ${accessToken}`,
         ...(body ? { "Content-Type": "application/json" } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
       cache: "no-store",
     });
     const raw = await response.text();
-    let payload: any = {};
+    let payload: unknown = {};
     if (raw) {
       try { payload = JSON.parse(raw); } catch { payload = { error: raw }; }
     }
-    if (!response.ok) throw new Error(payload.error || raw || "Timesheet Command Center request failed.");
+    if (!response.ok) {
+      const detail = payload && typeof payload === "object" && "error" in payload ? String(payload.error) : "";
+      throw new Error(detail || raw || "Timesheet Command Center request failed.");
+    }
     return payload;
-  }, [session?.access_token]);
+  }, [accessToken]);
 
   const load = useCallback(async (quiet = false) => {
-    if (!session?.access_token) return;
+    if (!accessToken) return;
     if (!quiet) setLoading(true);
     setError("");
     try {
@@ -176,12 +186,12 @@ export default function TimesheetCommandCenterPage() {
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [request, session?.access_token]);
+  }, [request, accessToken]);
 
   useEffect(() => {
-    void load();
+    const initialLoad = window.setTimeout(() => void load(), 0);
     const timer = window.setInterval(() => void load(true), 30000);
-    return () => window.clearInterval(timer);
+    return () => { window.clearTimeout(initialLoad); window.clearInterval(timer); };
   }, [load]);
 
   async function runAction(body: Record<string, unknown>, successText: string) {
@@ -199,7 +209,7 @@ export default function TimesheetCommandCenterPage() {
     }
   }
 
-  const records = data?.records ?? [];
+  const records = useMemo(() => data?.records ?? [], [data?.records]);
   const periods = useMemo(() => {
     const values = new Set([currentServicePeriod(), ...records.map((record) => record.servicePeriod).filter(Boolean)]);
     return [...values];
@@ -219,7 +229,7 @@ export default function TimesheetCommandCenterPage() {
     missing: periodRecords.filter((record) => !record.collectorSigned).length,
     review: periodRecords.filter((record) => record.stage === "Dynasty Review").length,
     handoff: periodRecords.filter((record) => record.stage === "Personal Handoff").length,
-    fill: periodRecords.filter((record) => record.stage === "Jen + Danielle Fill Out").length,
+    fill: periodRecords.filter((record) => record.stage === "Danielle Fill Out").length,
     scan: periodRecords.filter((record) => record.stage === "Scan & Send to Jennifer").length,
     email: periodRecords.filter((record) => record.stage === "Jennifer Email").length,
     complete: periodRecords.filter((record) => record.stage === "Complete").length,
@@ -227,6 +237,17 @@ export default function TimesheetCommandCenterPage() {
 
   const workflowCounts = useMemo(() => new Map(STAGES.map((stage) => [stage.key, periodRecords.filter((record) => record.stage === stage.key).length])), [periodRecords]);
   const collectorCards = data?.collectors ?? [];
+  const batches = useMemo(() => {
+    const groups = new Map<string, RecordItem[]>();
+    for (const record of periodRecords) {
+      if (locationFilter !== "All Locations" && record.locationSlug !== locationFilter) continue;
+      if (typeFilter !== "All Types" && record.timesheetType !== typeFilter) continue;
+      const key = timesheetBatchKey(record.servicePeriod, record.locationSlug, record.timesheetType);
+      groups.set(key, [...(groups.get(key) ?? []), record]);
+    }
+    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [periodRecords, locationFilter, typeFilter]);
+
 
   return (
     <MainLayout>
@@ -267,9 +288,9 @@ export default function TimesheetCommandCenterPage() {
               <Kpi label="Total Timesheets" value={stats.total} helper={periodFilter} />
               <Kpi label="Missing Sign-Off" value={stats.missing} helper="location follow-up" />
               <Kpi label="Waiting for Dynasty" value={stats.review} helper="accountability review" />
-              <Kpi label="Ready for Handoff" value={stats.handoff} helper="personally to Jennifer" />
-              <Kpi label="In Fill-Out" value={stats.fill} helper="Jennifer + Danielle" />
-              <Kpi label="Waiting to Scan" value={stats.scan} helper="Danielle or Anthony" />
+              <Kpi label="Ready for Handoff" value={stats.handoff} helper="personally to Danielle" />
+              <Kpi label="In Fill-Out" value={stats.fill} helper="Danielle" />
+              <Kpi label="Waiting to Scan" value={stats.scan} helper="Danielle" />
               <Kpi label="Waiting for Jennifer" value={stats.email} helper={`${stats.complete} complete`} />
             </section>
 
@@ -301,12 +322,12 @@ export default function TimesheetCommandCenterPage() {
               </section>
 
               <section className="tscc-panel">
-                <div className="tscc-panel-head"><div><h2>Timesheet Batches & Pipeline</h2><p>Track the five agency timesheet types through every step.</p></div><span className="tscc-chip gold"><ClipboardCheck size={12}/> {periodFilter}</span></div>
+                <div className="tscc-panel-head"><div><h2>Timesheet Batches & Pipeline</h2><p>Track program progress. Submission batches below keep every location and month separate.</p></div><span className="tscc-chip gold"><ClipboardCheck size={12}/> {periodFilter}</span></div>
                 <div className="tscc-panel-body tscc-table-wrap">
                   <table className="tscc-pipeline"><thead><tr><th>Type</th><th>Missing</th><th>Dynasty</th><th>Handoff</th><th>Fill</th><th>Scan</th><th>Email</th></tr></thead><tbody>
                     {COMMAND_TYPES.map((type) => {
-                      const rows = periodRecords.filter((record) => record.timesheetType === type);
-                      return <tr key={type}><td><strong>{type}</strong></td><td><span className="tscc-cell red">{rows.filter((r) => !r.collectorSigned).length}</span></td><td><span className="tscc-cell gold">{rows.filter((r) => r.stage === "Dynasty Review").length}</span></td><td><span className="tscc-cell gold">{rows.filter((r) => r.stage === "Personal Handoff").length}</span></td><td><span className="tscc-cell blue">{rows.filter((r) => r.stage === "Jen + Danielle Fill Out").length}</span></td><td><span className="tscc-cell green">{rows.filter((r) => r.stage === "Scan & Send to Jennifer").length}</span></td><td><span className="tscc-cell plum">{rows.filter((r) => r.stage === "Jennifer Email" || r.stage === "Complete").length}</span></td></tr>;
+                      const rows = periodRecords.filter((record) => record.timesheetType === type && (locationFilter === "All Locations" || record.locationSlug === locationFilter));
+                      return <tr key={type}><td><strong>{type}</strong></td><td><span className="tscc-cell red">{rows.filter((r) => !r.collectorSigned).length}</span></td><td><span className="tscc-cell gold">{rows.filter((r) => r.stage === "Dynasty Review").length}</span></td><td><span className="tscc-cell gold">{rows.filter((r) => r.stage === "Personal Handoff").length}</span></td><td><span className="tscc-cell blue">{rows.filter((r) => r.stage === "Danielle Fill Out").length}</span></td><td><span className="tscc-cell green">{rows.filter((r) => r.stage === "Scan & Send to Jennifer").length}</span></td><td><span className="tscc-cell plum">{rows.filter((r) => r.stage === "Jennifer Email" || r.stage === "Complete").length}</span></td></tr>;
                     })}
                     {periodRecords.some((record) => record.timesheetType === "CCRC") && <tr><td><strong>CCRC — Needs Stage</strong></td><td><span className="tscc-cell red">{periodRecords.filter((r) => r.timesheetType === "CCRC").length}</span></td><td colSpan={5} style={{textAlign:"left",color:"#9a4d40",fontWeight:900}}>Choose Stage 1 or Stage 2 before final submission.</td></tr>}
                   </tbody></table>
@@ -314,13 +335,21 @@ export default function TimesheetCommandCenterPage() {
               </section>
             </div>
 
+            <section className="tscc-panel tscc-records">
+              <div className="tscc-panel-head"><div><h2>Submission Batches by Location & Program</h2><p>CCRC Stage 1, CCRC Stage 2, CCCC, and DCFS stay separate for each location and service month. Respite is separate when applicable.</p></div></div>
+              <div className="tscc-panel-body tscc-batch-grid">
+                {batches.map(([key, rows]) => <SubmissionBatch key={key} rows={rows} actor={data?.actor} routes={data?.routes} saving={saving} onAction={runAction} />)}
+                {!batches.length && <div className="tscc-empty">No submission batches for these filters.</div>}
+              </div>
+            </section>
+
             <div className="tscc-grid">
-              <QueuePanel title="Dynasty Review & Personal Handoff" helper="Dynasty verifies every form, then personally hands the batch to Jennifer — no third-party drop-off." icon={<Truck size={16}/>} rows={periodRecords.filter((record) => record.stage === "Dynasty Review" || record.stage === "Personal Handoff")} onOpen={setSelected} />
-              <QueuePanel title="Jennifer + Danielle Completion" helper="Fill out every timesheet from the child certificate. Tuition is charged regardless of attendance." icon={<PenLine size={16}/>} rows={periodRecords.filter((record) => record.stage === "Jen + Danielle Fill Out")} onOpen={setSelected} />
+              <QueuePanel title="Dynasty Review & Personal Handoff" helper="Dynasty verifies every form, then personally hands the batch to Danielle — no third-party drop-off." icon={<Truck size={16}/>} rows={periodRecords.filter((record) => record.stage === "Dynasty Review" || record.stage === "Personal Handoff")} onOpen={setSelected} />
+              <QueuePanel title="Danielle Completion" helper="Fill out every timesheet from the child certificate. Tuition is charged regardless of attendance." icon={<PenLine size={16}/>} rows={periodRecords.filter((record) => record.stage === "Danielle Fill Out")} onOpen={setSelected} />
             </div>
 
             <div className="tscc-grid">
-              <QueuePanel title="Scan Queue" helper="Danielle or Anthony scans completed paperwork and sends the scan to Jennifer." icon={<ScanLine size={16}/>} rows={periodRecords.filter((record) => record.stage === "Scan & Send to Jennifer")} onOpen={setSelected} />
+              <QueuePanel title="Scan Queue" helper="Danielle scans completed paperwork and sends the scan to Jennifer." icon={<ScanLine size={16}/>} rows={periodRecords.filter((record) => record.stage === "Scan & Send to Jennifer")} onOpen={setSelected} />
               <QueuePanel title="Jennifer Department Email Queue" helper="Jennifer is the final sender to the configured department for CCRC Stage 1, CCRC Stage 2, CCCC, DCFS, and Respite." icon={<Mail size={16}/>} rows={periodRecords.filter((record) => record.stage === "Jennifer Email")} onOpen={setSelected} />
             </div>
 
@@ -367,7 +396,6 @@ function RecordModal({ record, actor, routes, saving, onClose, onAction }: { rec
   const [handoffDate, setHandoffDate] = useState(record.dynastyHandoffDate || new Date().toISOString().slice(0,10));
   const [certificateVerified, setCertificateVerified] = useState(record.certificateVerified);
   const [tuitionAck, setTuitionAck] = useState(record.tuitionPolicyAcknowledged);
-  const [scanChecked, setScanChecked] = useState(record.scanQualityChecked);
   const step = stageIndex(record.stage);
   const route = record.timesheetType === "CCRC" ? null : routes[record.timesheetType];
   const canCollect = actor.collectorSlug === record.locationSlug;
@@ -382,27 +410,25 @@ function RecordModal({ record, actor, routes, saving, onClose, onAction }: { rec
       </StageCard>
 
       <StageCard number={2} title="Dynasty Review" helper="All timesheets go to Dynasty. She confirms every form is accounted for and signed." done={step > 1 || record.dynastyStatus === "Accounted For"} current={step === 1} icon={<ClipboardCheck size={16}/>}>
-        <div className="tscc-stage-actions"><button className="tscc-btn red" disabled={!actor.canDynastyReview || saving || !record.collectorSigned} onClick={() => void onAction({ action:"dynastyReview", id:record.id, status:"Needs Correction" }, `${record.childName} returned to the location for correction.`)}>Needs Correction</button><button className="tscc-btn green" disabled={!actor.canDynastyReview || saving || !record.collectorSigned} onClick={() => void onAction({ action:"dynastyReview", id:record.id, status:"Accounted For" }, `${record.childName} accounted for by Dynasty.`)}>Accounted For + Signed</button><span className="tscc-chip">{record.dynastyReviewedAt ? formatStamp(record.dynastyReviewedAt) : record.dynastyStatus}</span></div>
+        <div className="tscc-stage-actions"><button className="tscc-btn red" disabled={!actor.canDynastyReview || saving || !record.collectorSigned || Boolean(record.handoffAt)} onClick={() => void onAction({ action:"dynastyReview", id:record.id, status:"Needs Correction" }, `${record.childName} returned to the location for correction.`)}>Needs Correction</button><button className="tscc-btn green" disabled={!actor.canDynastyReview || saving || !record.collectorSigned || Boolean(record.handoffAt)} onClick={() => void onAction({ action:"dynastyReview", id:record.id, status:"Accounted For" }, `${record.childName} accounted for by Dynasty.`)}>Accounted For + Signed</button><span className="tscc-chip">{record.dynastyReviewedAt ? formatStamp(record.dynastyReviewedAt) : record.dynastyStatus}</span></div>
       </StageCard>
 
-      <StageCard number={3} title="Dynasty → Jennifer Personal Handoff" helper="Dynasty gives the physical timesheets directly to Jennifer. No third-party drop-off. The completion date is permanently recorded." done={step > 2} current={step === 2} icon={<Truck size={16}/>}>
-        <div className="tscc-note" style={{marginBottom:9}}>PERSONAL HANDOFF ONLY — Dynasty to Jennifer.</div><div className="tscc-stage-actions"><input type="date" value={handoffDate} onChange={(event) => setHandoffDate(event.target.value)} disabled={!actor.canDynastyHandoff || saving}/><button className="tscc-btn primary" disabled={!actor.canDynastyHandoff || saving || record.dynastyStatus !== "Accounted For"} onClick={() => void onAction({ action:"dynastyHandoff", id:record.id, handoffDate }, `Personal handoff to Jennifer recorded for ${handoffDate}.`)}>Confirm Personal Handoff</button>{record.dynastyHandedToJenniferAt && <span className="tscc-chip green">Recorded {record.dynastyHandoffDate}</span>}</div>
+      <StageCard number={3} title="Dynasty → Danielle Personal Handoff" helper="Dynasty gives the physical timesheets directly to Danielle. No third-party drop-off. The completion date is permanently recorded." done={step > 2} current={step === 2} icon={<Truck size={16}/>}>
+        <div className="tscc-note" style={{marginBottom:9}}>PERSONAL HANDOFF ONLY — Dynasty to Danielle.</div><div className="tscc-stage-actions"><input type="date" value={handoffDate} onChange={(event) => setHandoffDate(event.target.value)} disabled={!actor.canDynastyHandoff || saving}/><button className="tscc-btn primary" disabled={!actor.canDynastyHandoff || saving || Boolean(record.handoffAt) || record.dynastyStatus !== "Accounted For"} onClick={() => void onAction({ action:"dynastyHandoff", id:record.id, handoffDate }, `Personal handoff to Danielle recorded for ${handoffDate}.`)}>Confirm Personal Handoff</button>{record.handoffAt && <span className="tscc-chip green">{record.handoffRecipient} • {record.dynastyHandoffDate}</span>}</div>
       </StageCard>
 
-      <StageCard number={4} title="Jennifer + Danielle Fill Out" helper="Use the child's certificate to complete the timesheet." done={step > 3} current={step === 3} icon={<PenLine size={16}/>}>
-        <div className="tscc-tuition">Tuition is charged regardless of attendance.</div><div className="tscc-stage-actions" style={{marginTop:9}}><label className="tscc-check"><input type="checkbox" checked={certificateVerified} onChange={(event) => setCertificateVerified(event.target.checked)} disabled={!actor.canFillOut || saving}/><span>Child certificate reviewed and correct program/rates verified</span></label><label className="tscc-check"><input type="checkbox" checked={tuitionAck} onChange={(event) => setTuitionAck(event.target.checked)} disabled={!actor.canFillOut || saving}/><span>Tuition policy applied regardless of attendance</span></label><button className="tscc-btn primary" disabled={!actor.canFillOut || saving || !certificateVerified || !tuitionAck || !record.dynastyHandedToJenniferAt} onClick={() => void onAction({ action:"fillOut", id:record.id, certificateVerified, tuitionPolicyAcknowledged:tuitionAck }, `${record.childName} timesheet marked filled out from the certificate.`)}>Mark Timesheet Filled Out</button>{record.completedAt && <span className="tscc-chip green">{record.completedBy} • {formatStamp(record.completedAt)}</span>}</div>
+      <StageCard number={4} title="Danielle Fill Out" helper="Use the child's certificate to complete the timesheet." done={step > 3} current={step === 3} icon={<PenLine size={16}/>}>
+        <div className="tscc-tuition">Tuition is charged regardless of attendance.</div><div className="tscc-stage-actions" style={{marginTop:9}}><label className="tscc-check"><input type="checkbox" checked={certificateVerified} onChange={(event) => setCertificateVerified(event.target.checked)} disabled={!actor.canFillOut || saving}/><span>Child certificate reviewed and correct program/rates verified</span></label><label className="tscc-check"><input type="checkbox" checked={tuitionAck} onChange={(event) => setTuitionAck(event.target.checked)} disabled={!actor.canFillOut || saving}/><span>Tuition policy applied regardless of attendance</span></label><button className="tscc-btn primary" disabled={!actor.canFillOut || saving || Boolean(record.completedAt) || !certificateVerified || !tuitionAck || !record.handoffAt} onClick={() => void onAction({ action:"fillOut", id:record.id, certificateVerified, tuitionPolicyAcknowledged:tuitionAck }, `${record.childName} timesheet marked filled out from the certificate.`)}>Mark Timesheet Filled Out</button>{record.completedAt && <span className="tscc-chip green">{record.completedBy} • {formatStamp(record.completedAt)}</span>}</div>
       </StageCard>
 
-      <StageCard number={5} title="Danielle or Anthony Scan + Send to Jennifer" helper="Scan all pages, confirm quality, then send the completed scan to Jennifer." done={step > 4} current={step === 4} icon={<ScanLine size={16}/>}>
-        <div className="tscc-stage-actions"><label className="tscc-check"><input type="checkbox" checked={scanChecked} onChange={(event) => setScanChecked(event.target.checked)} disabled={!actor.canScan || saving}/><span>Scan is readable, upright, complete, and includes every page</span></label><button className="tscc-btn primary" disabled={!actor.canScan || saving || !scanChecked || !record.completedAt} onClick={() => void onAction({ action:"scan", id:record.id, scanQualityChecked:scanChecked }, `${record.childName} scanned and sent to Jennifer.`)}>Mark Scanned + Sent to Jen</button>{record.scannedAt && <span className="tscc-chip blue">{record.scannedBy} • {formatStamp(record.scannedAt)}</span>}</div>
+      <StageCard number={5} title="Danielle Scans + Sends Batch to Jen" helper="Use the submission batch below the pipeline. Each service month, location, and program is sent separately." done={step > 4} current={step === 4} icon={<ScanLine size={16}/>}>
+        <p>Record the complete scanned batch only after all pages have been sent to Jen.</p>{record.scannedAt && <span className="tscc-chip blue">{record.scannedBy} • {formatStamp(record.scannedAt)}</span>}
+      </StageCard>
+      <StageCard number={6} title="Jen Emails the Company Batch" helper="Jen emails each separate batch to the configured company, then records the submission using the batch controls." done={record.stage === "Complete"} current={step === 5} icon={<Mail size={16}/>}>
+        <div className="tscc-note">{route?.department || "Department not configured"}<br/>{route?.email || "Email not configured"}</div>{record.emailedAt && <span className="tscc-chip green">{record.emailedBy} • {formatStamp(record.emailedAt)}</span>}
       </StageCard>
 
-      <StageCard number={6} title="Jennifer Emails Correct Department" helper="Jennifer is the final sender. Submission routing comes from the configured department for this timesheet type." done={record.stage === "Complete"} current={step === 5} icon={<Mail size={16}/>}>
-        {record.timesheetType === "CCRC" ? <div className="tscc-note">Choose CCRC Stage 1 or CCRC Stage 2 first.</div> : <div className={`tscc-note`}><strong>{route?.department || "Department not configured"}</strong><br/>{route?.email || "Email not configured"}{route?.deadline ? ` • ${route.deadline}` : ""}</div>}
-        <div className="tscc-stage-actions" style={{marginTop:9}}><button className="tscc-btn primary" disabled={!actor.canEmail || saving || !record.sentToJenniferAt || !route?.department || !route?.email} onClick={() => void onAction({ action:"email", id:record.id }, `${record.childName} marked emailed to the correct department by Jennifer.`)}>Mark Emailed to Department</button>{record.emailedAt && <span className="tscc-chip green">{record.emailedBy} • {formatStamp(record.emailedAt)}</span>}</div>
-      </StageCard>
-
-      {record.stage === "Complete" && <div className="tscc-stage-card done" style={{textAlign:"center"}}><CheckCircle2 size={28} style={{margin:"0 auto",color:"#2f7652"}}/><h3 style={{justifyContent:"center",marginTop:7}}>Timesheet Complete</h3><p>Signed, reviewed by Dynasty, personally handed to Jennifer, filled out from the certificate, scanned, returned to Jennifer, and emailed to the department.</p></div>}
+      {record.stage === "Complete" && <div className="tscc-stage-card done" style={{textAlign:"center"}}><CheckCircle2 size={28} style={{margin:"0 auto",color:"#2f7652"}}/><h3 style={{justifyContent:"center",marginTop:7}}>Timesheet Complete</h3><p>Signed, reviewed by Dynasty, handed off to {record.handoffRecipient || "the recorded recipient"}, filled out from the certificate, scanned, sent to Jen in its location/program batch, and emailed to the department.</p></div>}
     </div>
   </div></div>;
 }
@@ -414,4 +440,36 @@ function StageCard({ number, title, helper, done, current, icon, children }: { n
 function RouteModal({ routes, saving, onClose, onSave }: { routes: Record<CommandType, RouteConfig>; saving: boolean; onClose: () => void; onSave: (type: CommandType, route: RouteConfig) => Promise<void> }) {
   const [draft, setDraft] = useState<Record<CommandType, RouteConfig>>(() => JSON.parse(JSON.stringify(routes)));
   return <div className="tscc-modal-backdrop"><div className="tscc-modal"><div className="tscc-modal-head"><div><h2>Department Email Routing</h2><p>Jennifer uses these live routes for final submission. No department or email is guessed.</p></div><button className="tscc-close" onClick={onClose}><X size={16}/></button></div><div className="tscc-modal-body"><div className="tscc-route-grid">{COMMAND_TYPES.map((type) => <section className="tscc-route-card" key={type}><h3>{type}</h3><label>Department<input value={draft[type].department} onChange={(event) => setDraft((current) => ({...current,[type]:{...current[type],department:event.target.value}}))} placeholder="Exact department name"/></label><label>Email<input type="email" value={draft[type].email} onChange={(event) => setDraft((current) => ({...current,[type]:{...current[type],email:event.target.value}}))} placeholder="Exact submission email"/></label><label>Deadline<input value={draft[type].deadline} onChange={(event) => setDraft((current) => ({...current,[type]:{...current[type],deadline:event.target.value}}))} placeholder="Optional deadline"/></label><label>File Name Format<input value={draft[type].fileNameFormat} onChange={(event) => setDraft((current) => ({...current,[type]:{...current[type],fileNameFormat:event.target.value}}))}/></label><button className="tscc-btn primary" style={{marginTop:9}} disabled={saving} onClick={() => void onSave(type,draft[type])}>Save {type} Route</button></section>)}</div></div></div></div>;
+}
+
+
+function SubmissionBatch({ rows, actor, routes, saving, onAction }: { rows: RecordItem[]; actor?: ActorCaps; routes?: Record<CommandType, RouteConfig>; saving: boolean; onAction: (body: Record<string, unknown>, message: string) => Promise<void> }) {
+  const [scansConfirmed, setScansConfirmed] = useState(false);
+  const [emailConfirmed, setEmailConfirmed] = useState(false);
+  const first = rows[0];
+  const classified = first.timesheetType !== "CCRC";
+  const sent = rows.filter(row => Boolean(row.sentToJenniferAt)).length;
+  const emailed = rows.filter(row => row.stage === "Complete").length;
+  const scanReady = classified && sent < rows.length && rows.every(row => ["Scan & Send to Jennifer", "Jennifer Email", "Complete"].includes(row.stage));
+  const emailReady = classified && emailed < rows.length && rows.every(row => ["Jennifer Email", "Complete"].includes(row.stage));
+  const route = classified ? routes?.[first.timesheetType as CommandType] : undefined;
+  const body = { servicePeriod: first.servicePeriod, locationSlug: first.locationSlug, timesheetType: first.timesheetType };
+  const label = `${first.location} — ${first.timesheetType} — ${first.servicePeriod}`;
+  return <article className="tscc-stage-card">
+    <h3>{first.location} • {first.timesheetType}</h3><p>{first.servicePeriod} • {rows.length} forms • {sent} sent to Jen • {emailed} emailed to company</p>
+    <details><summary>View all {rows.length} forms</summary><ul>{rows.map(row => <li key={row.id}>{row.childName} — {row.stage}</li>)}</ul></details>
+    {!classified && <div className="tscc-note">Classify these CCRC forms as Stage 1 or Stage 2 before sending.</div>}
+    {actor?.canScan && <div className="tscc-stage-actions" style={{marginTop:9}}>
+      <label className="tscc-check"><input type="checkbox" checked={scansConfirmed} disabled={saving || !scanReady} onChange={event => setScansConfirmed(event.target.checked)}/><span>Every page in this batch is readable, complete, and has been sent to Jen.</span></label>
+      <button className="tscc-btn primary" disabled={saving || !scanReady || !scansConfirmed} onClick={async () => { await onAction({ ...body, action:"scanBatch", scanQualityChecked:true }, `${label}: scanned batch sent to Jen recorded.`); setScansConfirmed(false); }}>Record Scanned Batch Sent to Jen</button>
+      {!scanReady && sent < rows.length && <p>Waiting for all forms in this batch to be completed.</p>}
+    </div>}
+    {actor?.canEmail && <div className="tscc-stage-actions" style={{marginTop:9}}>
+      <div className="tscc-note">{route?.department || "Configure department routing"}<br/>{route?.email || "Submission email not configured"}</div>
+      <label className="tscc-check"><input type="checkbox" checked={emailConfirmed} disabled={saving || !emailReady} onChange={event => setEmailConfirmed(event.target.checked)}/><span>I attached and emailed this complete batch to the company above.</span></label>
+      <button className="tscc-btn primary" disabled={saving || !emailReady || !emailConfirmed || !route?.department || !route?.email} onClick={async () => { await onAction({ ...body, action:"emailBatch", attachmentConfirmed:true }, `${label}: company email recorded.`); setEmailConfirmed(false); }}>Record Batch Emailed to Company</button>
+    </div>}
+    {emailed === rows.length && <span className="tscc-chip green">Batch complete</span>}
+    <p>These controls record a completed handoff or email; they do not send files or email automatically.</p>
+  </article>;
 }
