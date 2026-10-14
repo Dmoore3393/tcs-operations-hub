@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
+import LoungeSafety from "@/components/LoungeSafety";
 import MainLayout from "@/components/layout/MainLayout";
 import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
 
@@ -72,7 +73,9 @@ const quickLinks = [
 ];
 
 export default function EmployeeLoungePage() {
-  const { profile, session } = useAuth();
+  const { profile, session, user } = useAuth();
+  const [safetyPost,setSafetyPost] = useState<ShoutOut|null>(null);
+  const [agreeToRules,setAgreeToRules] = useState(false);
   const [savedShoutOuts, setSavedShoutOuts] = useState<ShoutOut[]>([]);
   const [newShoutOut, setNewShoutOut] = useState("");
   const [showShoutOutForm, setShowShoutOutForm] = useState(false);
@@ -146,10 +149,11 @@ export default function EmployeeLoungePage() {
     try {
       const payload = await apiRequest("/api/employee-lounge/shout-outs", {
         method: "POST",
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, agreeToRules }),
       });
       setSavedShoutOuts(Array.isArray(payload.shoutOuts) ? payload.shoutOuts as ShoutOut[] : []);
       setNewShoutOut("");
+      setAgreeToRules(false);
       setShowShoutOutForm(false);
       setFeedNotice("Shout-out saved and shared with the TCS team. 💚");
       window.setTimeout(() => setFeedNotice(""), 3500);
@@ -228,6 +232,7 @@ export default function EmployeeLoungePage() {
                 <article key={item.id} className="rounded-2xl bg-[#fff8ed] p-4">
                   <p className="text-sm font-semibold italic leading-6 text-slate-700">“{item.message}”</p>
                   <p className="mt-2 text-xs font-black text-[#2f6b37]">— {item.from}</p>
+                  {item.created_at && <button type="button" onClick={()=>setSafetyPost(item)} className="mt-3 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">Report or block</button>}
                 </article>
               ))}
             </div>
@@ -317,6 +322,7 @@ export default function EmployeeLoungePage() {
           </section>
         </div>
 
+        <LoungeSafety selected={safetyPost} onClose={()=>setSafetyPost(null)} onChanged={()=>loadShoutOuts()} apiRequest={apiRequest} userId={user?.id} />
         <footer className="mt-6 rounded-3xl bg-[#0b3153] px-6 py-5 text-center text-white shadow-xl">
           <p className="text-xl font-black">We’re better together. 💚</p>
           <p className="mt-1 text-sm font-semibold text-white/75">Take a moment to relax, recharge, and celebrate all that makes TCS special.</p>
@@ -344,10 +350,11 @@ export default function EmployeeLoungePage() {
               <p>Posts save to the shared TCS database and are visible to active staff.</p>
               <span className="font-black">{newShoutOut.length}/500</span>
             </div>
+            <label className="mt-4 flex items-start gap-3 rounded-xl bg-slate-50 p-3 text-sm"><input type="checkbox" checked={agreeToRules} onChange={e=>setAgreeToRules(e.target.checked)} className="mt-1" /><span>I agree to keep posts respectful, with no harassment, hate, threats, sexual content, or confidential child/family information. TCS may remove posts or restrict accounts that violate these rules.</span></label>
             {feedError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-700">{feedError}</p>}
             <div className="mt-5 flex justify-end gap-3">
               <button type="button" disabled={savingShoutOut} onClick={() => setShowShoutOutForm(false)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-600 disabled:opacity-50">Cancel</button>
-              <button type="submit" disabled={savingShoutOut || !newShoutOut.trim()} className="inline-flex items-center gap-2 rounded-xl bg-[#0b3153] px-5 py-2.5 text-sm font-black text-white disabled:opacity-50">
+              <button type="submit" disabled={savingShoutOut || !newShoutOut.trim() || !agreeToRules} className="inline-flex items-center gap-2 rounded-xl bg-[#0b3153] px-5 py-2.5 text-sm font-black text-white disabled:opacity-50">
                 {savingShoutOut ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 {savingShoutOut ? "Saving…" : "Post Shout-Out"}
               </button>

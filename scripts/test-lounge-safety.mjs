@@ -1,0 +1,42 @@
+import assert from "node:assert/strict";
+import {readFile} from "node:fs/promises";
+import test from "node:test";
+import ts from "typescript";
+const compile=s=>ts.transpileModule(s,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const url=s=>"data:text/javascript;base64,"+Buffer.from(compile(s)).toString("base64");
+const helperUrl=url((await readFile("src/lib/server/lounge-safety.ts","utf8")).replace('import "server-only";',""));
+const helper=await import(helperUrl);
+let src=await readFile("src/app/api/employee-lounge/safety/route.ts","utf8");
+src=src.replace(/import \{ requireStaff, staffErrorResponse \} from .*?;/,'const requireStaff=async()=>{if(!globalThis.staff)throw new Response("Unauthorized",{status:401});return globalThis.staff;}; const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
+src=src.replace(/from "@\/lib\/server\/lounge-safety"/, 'from "'+helperUrl+'"');
+const api=await import(url(src));
+const me="11111111-1111-4111-8111-111111111111",author="22222222-2222-4222-8222-222222222222",reportId="33333333-3333-4333-8333-333333333333";
+const post={id:"post-one",from:"Demo Author",message:"Thank you team!",created_by:author,created_at:"2026-01-01"};
+let writes,filters,readTables;
+function setup({owner=false,feed=[post],blocks=[],reports=[],missingReport=false,error=false}={}){
+ writes=[];filters=[];readTables=[];
+ const admin={from(table){let patch;readTables.push(table);const q={select(){return q},eq(k,v){filters.push([table,k,v]);return q},order(){return q},limit(){return q},upsert(p){patch=p;writes.push([table,p]);return q},update(p){patch=p;writes.push([table,p]);return q},delete(){writes.push([table,"delete"]);return q},maybeSingle(){return Promise.resolve({data:table==="hub_state"?{state_value:feed}:missingReport?null:{id:reportId},error:error?Error("DB"):null})},then(resolve,reject){return Promise.resolve({data:table==="lounge_blocks"?blocks:table==="lounge_reports"?reports:[],error:error?Error("DB"):null}).then(resolve,reject)}};return q;}};
+ globalThis.staff={admin,user:{id:me},profile:{organization_id:"demo-org"},isOwner:owner};
+}
+const request=body=>new Request("https://hub.test/api/employee-lounge/safety",{method:body?"POST":"GET",body:body?JSON.stringify(body):undefined});
+test("safety actions require authenticated staff",async()=>{setup();globalThis.staff=null;assert.equal((await api.GET(request())).status,401);assert.equal((await api.POST(request({action:"report"}))).status,401);});
+test("a post outside the staff organization cannot be reported or blocked",async()=>{setup({feed:[]});assert.equal((await api.POST(request({action:"report",postId:"foreign",reason:"Concern"}))).status,404);assert.equal(writes.length,0);assert.ok(filters.some(f=>f[1]==="organization_id"&&f[2]==="demo-org"));});
+test("report takes author and text from stored post and reporter from session",async()=>{setup();assert.equal((await api.POST(request({action:"report",postId:post.id,reason:"Privacy concern",reporter_id:author,post_message:"Forged"}))).status,200);assert.equal(writes[0][1].reporter_id,me);assert.equal(writes[0][1].post_message,post.message);assert.equal(writes[0][1].organization_id,"demo-org");});
+test("empty report reasons rejected",async()=>{setup();assert.equal((await api.POST(request({action:"report",postId:post.id,reason:" "}))).status,400);assert.equal(writes.length,0);});
+test("blocking derives author from stored post",async()=>{setup();assert.equal((await api.POST(request({action:"block",postId:post.id,userId:me}))).status,200);assert.equal(writes[0][1].user_id,me);assert.equal(writes[0][1].blocked_user_id,author);});
+test("self blocking rejected",async()=>{setup({feed:[{...post,created_by:me}]});assert.equal((await api.POST(request({action:"block",postId:post.id}))).status,400);});
+test("unblock is scoped to signed-in user's organization",async()=>{setup();await api.POST(request({action:"unblock",userId:author}));assert.ok(filters.some(f=>f[1]==="user_id"&&f[2]===me));assert.ok(filters.some(f=>f[1]==="organization_id"&&f[2]==="demo-org"));});
+test("non-owners cannot read report queue or resolve reports",async()=>{setup();await api.GET(request());assert.ok(!readTables.includes("lounge_reports"));assert.equal((await api.POST(request({action:"resolve",id:reportId,status:"Hidden"}))).status,403);});
+test("owner resolution must target current organization",async()=>{setup({owner:true,missingReport:true});assert.equal((await api.POST(request({action:"resolve",id:reportId,status:"Hidden"}))).status,404);assert.ok(filters.some(f=>f[1]==="organization_id"&&f[2]==="demo-org"));});
+test("blocked author posts stay hidden when feed reloads",async()=>{setup({blocks:[{blocked_user_id:author}]});assert.deepEqual(await helper.visiblePosts(globalThis.staff,[post]),[]);});
+test("pending reports hide only for reporter; Hidden hides for everyone",async()=>{setup({reports:[{post_id:post.id,reporter_id:author,status:"Pending"}]});assert.equal((await helper.visiblePosts(globalThis.staff,[post])).length,1);setup({reports:[{post_id:post.id,reporter_id:me,status:"Pending"}]});assert.deepEqual(await helper.visiblePosts(globalThis.staff,[post]),[]);setup({reports:[{post_id:post.id,reporter_id:author,status:"Hidden"}]});assert.deepEqual(await helper.visiblePosts(globalThis.staff,[post]),[]);});
+test("safety filter fails closed on DB error",async()=>{setup({error:true});await assert.rejects(()=>helper.visiblePosts(globalThis.staff,[post]));});
+test("basic objectionable-language filter rejects abusive text",()=>{assert.equal(helper.prohibitedText("kill yourself"),true);assert.equal(helper.prohibitedText("Thank you for your teamwork"),false);});
+
+let feedSrc=await readFile("src/app/api/employee-lounge/shout-outs/route.ts","utf8");
+feedSrc=feedSrc.replace(/import \{ requireStaff, staffErrorResponse \} from .*?;/,'const requireStaff=async()=>{if(!globalThis.staff)throw new Response("Unauthorized",{status:401});return globalThis.staff;}; const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
+feedSrc=feedSrc.replace(/from "@\/lib\/server\/lounge-safety"/, 'from "'+helperUrl+'"');
+const feedApi=await import(url(feedSrc));
+test("posting requires agreement and rejects abusive language before any write",async()=>{setup();assert.equal((await feedApi.POST(request({message:"Thanks team"}))).status,400);assert.equal((await feedApi.POST(request({message:"kill yourself",agreeToRules:true}))).status,400);assert.equal(writes.length,0);});
+test("rapid repeated posts are rate limited",async()=>{setup({feed:[{...post,created_by:me,created_at:new Date().toISOString()}]});assert.equal((await feedApi.POST(request({message:"Thanks team",agreeToRules:true}))).status,429);assert.equal(writes.length,0);});
+test("feed GET also applies persistent blocking",async()=>{setup({blocks:[{blocked_user_id:author}]});const r=await feedApi.GET(request());assert.equal(r.status,200);assert.deepEqual((await r.json()).shoutOuts,[]);});
