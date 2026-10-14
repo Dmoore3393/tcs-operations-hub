@@ -1,8 +1,10 @@
+import { randomUUID } from "node:crypto";
+import { TIMESHEET_TYPES, timesheetType as normalizeType, signedTimesheet as signed, timesheetStage as stage, timesheetHandoff, timesheetBatchKey, validateTimesheetBatch } from "@/lib/timesheet-workflow";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 
 export const runtime = "nodejs";
 
-const COMMAND_TYPES = ["CCRC Stage 1", "CCRC Stage 2", "CCCC", "DCFS", "Respite"] as const;
+const COMMAND_TYPES = TIMESHEET_TYPES;
 const DEFAULT_FILE_NAME = "LastName_FirstName_ServiceMonth_Location.pdf";
 const COLLECTOR_LABELS: Record<string, string> = {
   "33rd-street": "Nathaly Cornejo",
@@ -49,33 +51,6 @@ function actorFor(fullName: string, isOwner: boolean) {
     canViewAll: isOwner || isDynasty || isDanielle || isJennifer || isAnthony,
   };
 }
-function normalizeType(value: unknown) {
-  const source = asText(value).trim().toLowerCase();
-  if (source.includes("ccrc") && source.includes("stage") && source.includes("1")) return "CCRC Stage 1";
-  if (source.includes("ccrc") && source.includes("stage") && source.includes("2")) return "CCRC Stage 2";
-  if (source === "ccrc1" || source === "ccrc 1") return "CCRC Stage 1";
-  if (source === "ccrc2" || source === "ccrc 2") return "CCRC Stage 2";
-  if (source === "cccc") return "CCCC";
-  if (source === "dcfs") return "DCFS";
-  if (source.includes("respite")) return "Respite";
-  return "CCRC";
-}
-function signed(record: DbRow) {
-  const prep = asObject(record.prep);
-  return asBool(record.collectorSigned)
-    || Boolean(asText(record.licenseeSubmittedAt))
-    || (asBool(prep.parentSignature) && asBool(prep.providerSignature));
-}
-function stage(record: DbRow) {
-  if (!signed(record)) return "Location Sign-Off";
-  if (asText(record.dynastyStatus) !== "Accounted For") return "Dynasty Review";
-  if (!(asText(record.dynastyHandedToJenniferAt) || asText(record.jenniferReceivedAt))) return "Personal Handoff";
-  if (!asText(record.completedAt)) return "Jen + Danielle Fill Out";
-  if (!asText(record.scannedAt) || !asText(record.sentToJenniferAt)) return "Scan & Send to Jennifer";
-  if (!(asText(record.emailedAt) || asText(record.emailedByJenniferAt))) return "Jennifer Email";
-  return "Complete";
-}
-
 async function liveLocations(admin: Awaited<ReturnType<typeof requireStaff>>["admin"], organizationId: string) {
   const result = await admin
     .from("locations")
@@ -134,7 +109,7 @@ export async function GET(request: Request) {
       if (!actor.canViewAll && actor.collectorSlug !== slug) continue;
       const record = asObject(row.record_data);
       const type = normalizeType(record.timesheetType ?? record.fundingSource ?? row.funding_source);
-      const handoffAt = asText(record.dynastyHandedToJenniferAt) || asText(record.jenniferReceivedAt);
+      const handoffAt = timesheetHandoff(record);
       const emailedAt = asText(record.emailedAt) || asText(record.emailedByJenniferAt);
       records.push({
         id: asText(row.legacy_id),
@@ -156,7 +131,12 @@ export async function GET(request: Request) {
         dynastyReviewedAt: asText(record.dynastyReviewedAt),
         dynastyReviewedBy: asText(record.dynastyReviewedBy) || asText(record.dynastyInitials),
         dynastyHandoffDate: asText(record.dynastyHandoffDate) || handoffAt.slice(0, 10),
-        dynastyHandedToJenniferAt: handoffAt,
+        dynastyHandedToDanielleAt: asText(record.dynastyHandedToDanielleAt),
+        dynastyHandedToJenniferAt: asText(record.dynastyHandedToJenniferAt) || asText(record.jenniferReceivedAt),
+        handoffAt,
+        handoffRecipient: asText(record.dynastyHandoffRecipient) || (asText(record.dynastyHandedToDanielleAt) ? "Danielle" : handoffAt ? "Jennifer (previous workflow)" : ""),
+        scanBatchId: asText(record.scanBatchId),
+        emailBatchId: asText(record.emailBatchId),
         dynastyHandoffBy: asText(record.dynastyHandoffBy) || asText(record.batchReceivedBy),
         certificateVerified: asBool(record.certificateVerified),
         tuitionPolicyAcknowledged: asBool(record.tuitionPolicyAcknowledged),
@@ -197,8 +177,8 @@ export async function GET(request: Request) {
         canCreateBatch: actor.isDanielle || actor.isJennifer || actor.isOwner,
         canDynastyReview: actor.isDynasty,
         canDynastyHandoff: actor.isDynasty,
-        canFillOut: actor.isDanielle || actor.isJennifer,
-        canScan: actor.isDanielle || actor.isAnthony,
+        canFillOut: actor.isDanielle,
+        canScan: actor.isDanielle,
         canEmail: actor.isJennifer,
         canManageRoutes: actor.isDanielle || actor.isJennifer || actor.isOwner,
       },
@@ -282,6 +262,8 @@ export async function POST(request: Request) {
           dynastyReviewedBy: "",
           dynastyHandoffDate: "",
           dynastyHandedToJenniferAt: "",
+        dynastyHandedToDanielleAt: "",
+        dynastyHandoffRecipient: "",
           dynastyHandoffBy: "",
           certificateVerified: false,
           tuitionPolicyAcknowledged: false,
@@ -363,6 +345,50 @@ export async function POST(request: Request) {
       return Response.json({ ok: true });
     }
 
+    if (action === "scanBatch" || action === "emailBatch") {
+      if (action === "scanBatch" && !actor.isDanielle) return Response.json({ error: "Only Danielle can record scanned batches sent to Jen." }, { status: 403 });
+      if (action === "emailBatch" && !actor.isJennifer) return Response.json({ error: "Only Jen can record batches emailed to each company." }, { status: 403 });
+      const servicePeriod = asText(body.servicePeriod).trim();
+      const type = normalizeType(body.timesheetType);
+      if (!servicePeriod || !COMMAND_TYPES.some(item => item === type)) return Response.json({ error: "Choose a service month and a specific program, including CCRC Stage 1 or Stage 2." }, { status: 400 });
+      const locations = await liveLocations(admin, profile.organization_id);
+      const location = locations.find(item => asText(item.slug) === asText(body.locationSlug));
+      if (!location) return Response.json({ error: "Batch location not found." }, { status: 400 });
+      const result = await admin.from("timesheets").select("*").eq("organization_id", profile.organization_id).eq("location_id", location.id).eq("service_period", servicePeriod);
+      if (result.error) throw result.error;
+      const rows = ((result.data ?? []) as unknown as DbRow[]).filter(row => {
+        const record = asObject(row.record_data);
+        return normalizeType(record.timesheetType ?? record.fundingSource ?? row.funding_source) === type;
+      });
+      const batchError = validateTimesheetBatch(rows.map(row => asObject(row.record_data)), action);
+      if (batchError) return Response.json({ error: batchError }, { status: 400 });
+      if (action === "scanBatch" && !asBool(body.scanQualityChecked)) return Response.json({ error: "Confirm every scan is readable and all pages in this batch were sent to Jen." }, { status: 400 });
+      if (action === "emailBatch" && !asBool(body.attachmentConfirmed)) return Response.json({ error: "Confirm this complete batch was attached and emailed to the company." }, { status: 400 });
+      const routes = await liveRoutes(admin, profile.organization_id);
+      const route = routes[type];
+      if (action === "emailBatch" && (!route || !asText(route.department) || !asText(route.email))) return Response.json({ error: `Department routing for ${type} is not configured yet.` }, { status: 400 });
+      const now = new Date().toISOString();
+      const batchId = randomUUID();
+      const batchKey = timesheetBatchKey(servicePeriod, asText(location.slug), type);
+      const updates = rows.map(row => {
+        const current = asObject(row.record_data);
+        const alreadyRecorded = action === "scanBatch" ? Boolean(asText(current.sentToJenniferAt)) : stage(current) === "Complete";
+        const patch = alreadyRecorded ? {} : action === "scanBatch" ? {
+          scanQualityChecked: true, scannedBy: actor.name, scannedAt: now, sentToJenniferAt: now, scanBatchId: batchId, submissionBatchKey: batchKey,
+        } : {
+          department: asText(route.department), departmentEmail: asText(route.email), attachmentConfirmed: true, emailedBy: actor.name, emailedAt: now, emailedByJenniferAt: now, emailBatchId: batchId, submissionBatchKey: batchKey,
+        };
+        const record = { ...current, ...patch };
+        return { id: row.id, expected_updated_at: row.updated_at, record_data: record, workflow_stage: stage(record), changed: !alreadyRecorded };
+      });
+      const saved = await admin.rpc("record_timesheet_submission_batch", {
+        p_organization_id: profile.organization_id, p_location_id: location.id, p_service_period: servicePeriod, p_type: type, p_actor_id: user.id,
+        p_action: action, p_batch_id: batchId, p_updates: updates,
+      });
+      if (saved.error) return Response.json({ error: "The batch changed or could not be saved. Refresh and try again." }, { status: 409 });
+      return Response.json({ ok: true, recorded: saved.data, batchId });
+    }
+
     const id = asText(body.id);
     if (!id) return Response.json({ error: "A timesheet record is required." }, { status: 400 });
     const rowResult = await admin
@@ -413,6 +439,7 @@ export async function POST(request: Request) {
 
     if (action === "setType") {
       if (!(actor.collectorSlug === slug || actor.isDynasty || actor.isDanielle || actor.isJennifer)) return Response.json({ error: "You cannot classify this timesheet." }, { status: 403 });
+      if (asText(current.sentToJenniferAt) || stage(current) === "Complete") return Response.json({ error: "A submitted batch cannot be reclassified." }, { status: 400 });
       const type = normalizeType(body.timesheetType);
       if (!COMMAND_TYPES.some((item) => item === type)) return Response.json({ error: "Choose CCRC Stage 1, CCRC Stage 2, CCCC, DCFS, or Respite." }, { status: 400 });
       await save({ timesheetType: type, fundingSource: type }, "SET_TYPE");
@@ -421,6 +448,7 @@ export async function POST(request: Request) {
 
     if (action === "markSigned") {
       if (actor.collectorSlug !== slug) return Response.json({ error: `Only ${COLLECTOR_LABELS[slug] || "the assigned collector"} can check off signed forms for this location.` }, { status: 403 });
+      if (!["Location Sign-Off", "Dynasty Review"].includes(stage(current))) return Response.json({ error: "The form has already passed location sign-off." }, { status: 400 });
       const checked = asBool(body.signed);
       const now = new Date().toISOString();
       const patch: DbRow = checked ? {
@@ -440,6 +468,8 @@ export async function POST(request: Request) {
         dynastyReviewedAt: "",
         dynastyReviewedBy: "",
         dynastyHandedToJenniferAt: "",
+        dynastyHandedToDanielleAt: "",
+        dynastyHandoffRecipient: "",
         dynastyHandoffDate: "",
         dynastyHandoffBy: "",
         jenniferReceivedAt: "",
@@ -458,6 +488,7 @@ export async function POST(request: Request) {
 
     if (action === "dynastyReview") {
       if (!actor.isDynasty) return Response.json({ error: "Dynasty is the required reviewer for all timesheets." }, { status: 403 });
+      if (timesheetHandoff(current)) return Response.json({ error: "The handoff has already been recorded." }, { status: 400 });
       const status = asText(body.status);
       if (status !== "Accounted For" && status !== "Needs Correction") return Response.json({ error: "Choose Accounted For or Needs Correction." }, { status: 400 });
       if (status === "Accounted For" && !signed(current)) return Response.json({ error: "The location must check off the child's signed form first." }, { status: 400 });
@@ -478,6 +509,8 @@ export async function POST(request: Request) {
         licenseeSubmittedAt: "",
         licenseeInitials: "",
         dynastyHandedToJenniferAt: "",
+        dynastyHandedToDanielleAt: "",
+        dynastyHandoffRecipient: "",
         dynastyHandoffDate: "",
         dynastyHandoffBy: "",
       }, status === "Accounted For" ? "DYNASTY_ACCOUNTED" : "DYNASTY_CORRECTION");
@@ -485,54 +518,32 @@ export async function POST(request: Request) {
     }
 
     if (action === "dynastyHandoff") {
-      if (!actor.isDynasty) return Response.json({ error: "Dynasty must personally hand the timesheets to Jennifer." }, { status: 403 });
+      if (!actor.isDynasty) return Response.json({ error: "Dynasty must personally hand the timesheets to Danielle." }, { status: 403 });
+      if (timesheetHandoff(current)) return Response.json({ error: "The handoff has already been recorded." }, { status: 400 });
       if (asText(current.dynastyStatus) !== "Accounted For") return Response.json({ error: "Dynasty must first confirm the timesheet is accounted for and signed." }, { status: 400 });
       const now = new Date().toISOString();
       await save({
         dynastyHandoffDate: asText(body.handoffDate) || now.slice(0, 10),
-        dynastyHandedToJenniferAt: now,
+        dynastyHandedToDanielleAt: now,
+        dynastyHandoffRecipient: "Danielle",
         dynastyHandoffBy: actor.name,
-        jenniferReceivedAt: now,
-        batchReceivedBy: "Jennifer",
-      }, "PERSONAL_HANDOFF_TO_JENNIFER");
+        danielleReceivedAt: now,
+        batchReceivedBy: "Danielle",
+      }, "PERSONAL_HANDOFF_TO_DANIELLE");
       return Response.json({ ok: true });
     }
 
     if (action === "fillOut") {
-      if (!(actor.isDanielle || actor.isJennifer)) return Response.json({ error: "Only Jennifer or Danielle can fill out timesheets from the child's certificate." }, { status: 403 });
-      if (!(asText(current.dynastyHandedToJenniferAt) || asText(current.jenniferReceivedAt))) return Response.json({ error: "Dynasty's personal handoff to Jennifer must be recorded first." }, { status: 400 });
+      if (!actor.isDanielle) return Response.json({ error: "Only Danielle can fill out timesheets from the child's certificate." }, { status: 403 });
+      if (!timesheetHandoff(current)) return Response.json({ error: "Dynasty's personal handoff must be recorded first." }, { status: 400 });
+      if (asText(current.completedAt)) return Response.json({ error: "Completion has already been recorded." }, { status: 400 });
       if (!asBool(body.certificateVerified) || !asBool(body.tuitionPolicyAcknowledged)) return Response.json({ error: "Verify the child certificate and acknowledge tuition is charged regardless of attendance." }, { status: 400 });
       await save({ certificateVerified: true, tuitionPolicyAcknowledged: true, completedBy: actor.name, completedAt: new Date().toISOString() }, "TIMESHEET_FILLED_FROM_CERTIFICATE");
       return Response.json({ ok: true });
     }
 
-    if (action === "scan") {
-      if (!(actor.isDanielle || actor.isAnthony)) return Response.json({ error: "Only Danielle or Anthony can scan completed timesheets and send them to Jennifer." }, { status: 403 });
-      if (!asText(current.completedAt)) return Response.json({ error: "Jennifer or Danielle must fill out this timesheet first." }, { status: 400 });
-      if (!asBool(body.scanQualityChecked)) return Response.json({ error: "Confirm the scan is readable and complete." }, { status: 400 });
-      const now = new Date().toISOString();
-      await save({ scanQualityChecked: true, scannedBy: actor.name, scannedAt: now, sentToJenniferAt: now }, "SCANNED_AND_SENT_TO_JENNIFER");
-      return Response.json({ ok: true });
-    }
-
-    if (action === "email") {
-      if (!actor.isJennifer) return Response.json({ error: "Jennifer is the final sender for department email submission." }, { status: 403 });
-      if (!asText(current.sentToJenniferAt)) return Response.json({ error: "The completed timesheet must be scanned and sent to Jennifer first." }, { status: 400 });
-      const type = normalizeType(current.timesheetType ?? current.fundingSource ?? row.funding_source);
-      if (!COMMAND_TYPES.some((item) => item === type)) return Response.json({ error: "Choose CCRC Stage 1 or CCRC Stage 2 before final submission." }, { status: 400 });
-      const routes = await liveRoutes(admin, profile.organization_id);
-      const route = routes[type];
-      if (!route || !asText(route.department) || !asText(route.email)) return Response.json({ error: `Department routing for ${type} is not configured yet.` }, { status: 400 });
-      const now = new Date().toISOString();
-      await save({
-        department: asText(route.department),
-        departmentEmail: asText(route.email),
-        attachmentConfirmed: true,
-        emailedBy: actor.name,
-        emailedAt: now,
-        emailedByJenniferAt: now,
-      }, "EMAILED_TO_DEPARTMENT");
-      return Response.json({ ok: true });
+    if (action === "scan" || action === "email") {
+      return Response.json({ error: "Use the location and program batch controls to record scans sent to Jen or company email submission." }, { status: 400 });
     }
 
     return Response.json({ error: "Unknown Timesheet Command Center action." }, { status: 400 });
