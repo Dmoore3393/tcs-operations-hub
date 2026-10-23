@@ -1,7 +1,9 @@
 "use client";
 
 import "./timesheet-command.css";
-import { timesheetBatchKey } from "@/lib/timesheet-workflow";
+import "./timesheet-controls.css";
+import { timesheetBatchKey, timesheetRouteKey, batchOverdue } from "@/lib/timesheet-workflow";
+import SubmissionBatchControls, { type SubmissionRecord, type SubmissionRoute } from "@/components/timesheets/SubmissionBatchControls";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
@@ -33,6 +35,10 @@ type CommandStage =
   | "Danielle Fill Out"
   | "Scan & Send to Jennifer"
   | "Jennifer Email"
+  | "Licensee Approval"
+  | "Licensee Verification"
+  | "Agency Receipt"
+  | "Correction Required"
   | "Complete";
 
 const STAGES: Array<{ key: CommandStage; title: string; helper: string }> = [
@@ -41,11 +47,14 @@ const STAGES: Array<{ key: CommandStage; title: string; helper: string }> = [
   { key: "Personal Handoff", title: "Delivered to Danielle", helper: "Dynasty personally hands the physical timesheets to Danielle" },
   { key: "Danielle Fill Out", title: "Danielle Fill Out", helper: "Complete each form from the child certificate" },
   { key: "Scan & Send to Jennifer", title: "Scan & Send to Jen", helper: "Danielle scans and sends to Jennifer" },
+  { key: "Licensee Approval", title: "Licensee Packet Check", helper: "Full roster, scans, stage and destination verified" },
   { key: "Jennifer Email", title: "Jennifer Email", helper: "Jennifer sends to the correct department" },
-  { key: "Complete", title: "Complete", helper: "Fully submitted and recorded" },
+  { key: "Licensee Verification", title: "Licensee Sent Check", helper: "Independent check of actual sent email and attachments" },
+  { key: "Agency Receipt", title: "Agency Receipt", helper: "Follow up until the correct agency acknowledges receipt" },
+  { key: "Complete", title: "Submission Closed", helper: "Verified submission and documented agency receipt" },
 ];
 
-type RecordItem = {
+type RecordItem = SubmissionRecord & {
   id: string;
   rowId: string;
   childName: string;
@@ -89,10 +98,11 @@ type RecordItem = {
   updatedAt: string;
 };
 
-type RouteConfig = { department: string; email: string; deadline: string; fileNameFormat: string };
+type RouteConfig = SubmissionRoute;
 type CollectorCard = { slug: string; location: string; collector: string };
 type ActorCaps = {
   name: string;
+  userId: string;
   collectorSlug: string | null;
   canViewAll: boolean;
   canCreateBatch: boolean;
@@ -105,7 +115,7 @@ type ActorCaps = {
 };
 type ApiData = {
   records: RecordItem[];
-  routes: Record<CommandType, RouteConfig>;
+  routes: Record<string, RouteConfig>;
   types: readonly CommandType[];
   collectors: CollectorCard[];
   actor: ActorCaps;
@@ -202,8 +212,10 @@ export default function TimesheetCommandCenterPage() {
       setMessage(successText);
       window.setTimeout(() => setMessage(""), 2600);
       await load(true);
+      return true;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The change could not be saved.");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -232,8 +244,11 @@ export default function TimesheetCommandCenterPage() {
     fill: periodRecords.filter((record) => record.stage === "Danielle Fill Out").length,
     scan: periodRecords.filter((record) => record.stage === "Scan & Send to Jennifer").length,
     email: periodRecords.filter((record) => record.stage === "Jennifer Email").length,
+    licensee: periodRecords.filter(record => ["Licensee Approval", "Licensee Verification"].includes(record.stage)).length,
+    receipt: periodRecords.filter(record => record.stage === "Agency Receipt").length,
+    issues: records.filter(record => record.stage === "Correction Required").length,
     complete: periodRecords.filter((record) => record.stage === "Complete").length,
-  }), [periodRecords]);
+  }), [periodRecords, records]);
 
   const workflowCounts = useMemo(() => new Map(STAGES.map((stage) => [stage.key, periodRecords.filter((record) => record.stage === stage.key).length])), [periodRecords]);
   const collectorCards = data?.collectors ?? [];
@@ -266,7 +281,7 @@ export default function TimesheetCommandCenterPage() {
             </div>
             <div className="tscc-live-card">
               <div className="tscc-live-row"><strong>Live Database</strong><span className="tscc-live-dot" /></div>
-              <small>Every checkoff, Dynasty review, personal handoff date, certificate completion, scan, and final email is written to the shared Supabase timesheet record and audit trail.</small>
+              <small>Each location is accountable through agency receipt. Missing forms, incorrect destinations, and disputed submissions stay open with a named next step and recorded evidence.</small>
             </div>
           </header>
 
@@ -284,6 +299,8 @@ export default function TimesheetCommandCenterPage() {
           <div className="tscc-body">
             {(message || error) && <div className="tscc-alert"><span>{error ? `⚠ ${error}` : `✓ ${message}`}</span><button onClick={() => { setMessage(""); setError(""); }}><X size={14}/></button></div>}
 
+            {records.some(record => record.stage !== "Complete" && record.servicePeriod !== currentServicePeriod()) && <div className="tscc-alert"><span>Earlier months still have open submissions. They need follow-up even when another month is selected.</span><button className="tscc-btn" onClick={() => { setPeriodFilter("All Periods"); setLocationFilter("All Locations"); setTypeFilter("All Types"); }}>Show All Months</button></div>}
+            {records.some(record => batchOverdue([{ ...record }])) && <div className="tscc-alert"><span>Overdue submissions need follow-up. An email marked sent does not close the batch.</span></div>}
             <section className="tscc-kpis">
               <Kpi label="Total Timesheets" value={stats.total} helper={periodFilter} />
               <Kpi label="Missing Sign-Off" value={stats.missing} helper="location follow-up" />
@@ -291,7 +308,10 @@ export default function TimesheetCommandCenterPage() {
               <Kpi label="Ready for Handoff" value={stats.handoff} helper="personally to Danielle" />
               <Kpi label="In Fill-Out" value={stats.fill} helper="Danielle" />
               <Kpi label="Waiting to Scan" value={stats.scan} helper="Danielle" />
-              <Kpi label="Waiting for Jennifer" value={stats.email} helper={`${stats.complete} complete`} />
+              <Kpi label="Waiting for Jennifer" value={stats.email} helper="company email + proof" />
+              <Kpi label="Licensee Checks" value={stats.licensee} helper="packet or sent-email review" />
+              <Kpi label="Agency Receipt" value={stats.receipt} helper={`${stats.complete} submissions closed`} />
+              <Kpi label="Flagged Issues" value={stats.issues} helper="all service months" />
             </section>
 
             <div className="tscc-grid">
@@ -338,7 +358,7 @@ export default function TimesheetCommandCenterPage() {
             <section className="tscc-panel tscc-records">
               <div className="tscc-panel-head"><div><h2>Submission Batches by Location & Program</h2><p>CCRC Stage 1, CCRC Stage 2, CCCC, and DCFS stay separate for each location and service month. Respite is separate when applicable.</p></div></div>
               <div className="tscc-panel-body tscc-batch-grid">
-                {batches.map(([key, rows]) => <SubmissionBatch key={key} rows={rows} actor={data?.actor} routes={data?.routes} saving={saving} onAction={runAction} />)}
+                {batches.map(([key, rows]) => <SubmissionBatchControls key={`${key}:${rows.map(row => row.updatedAt).join("|")}`} rows={rows} actor={data?.actor} routes={data?.routes} saving={saving} onAction={runAction} />)}
                 {!batches.length && <div className="tscc-empty">No submission batches for these filters.</div>}
               </div>
             </section>
@@ -378,7 +398,7 @@ export default function TimesheetCommandCenterPage() {
 
         {loading && !data && <div className="tscc-modal-backdrop"><div className="tscc-modal" style={{maxWidth:420}}><div className="tscc-modal-body" style={{textAlign:"center",padding:35}}><RefreshCw className="animate-spin" style={{margin:"0 auto"}}/><h2 style={{marginTop:12}}>Loading the live timesheet database…</h2></div></div></div>}
         {selected && data && <RecordModal record={selected} actor={data.actor} routes={data.routes} saving={saving} onClose={() => setSelected(null)} onAction={runAction} />}
-        {showRoutes && data && <RouteModal routes={data.routes} saving={saving} onClose={() => setShowRoutes(false)} onSave={(type, route) => runAction({ action: "saveRoute", timesheetType: type, ...route }, `${type} department routing saved.`)} />}
+        {showRoutes && data && <RouteModal collectors={data.collectors} routes={data.routes} saving={saving} onClose={() => setShowRoutes(false)} onSave={(locationSlug, type, route) => runAction({ action: "saveRoute", locationSlug, timesheetType: type, ...route }, `${type} routing saved for this location.`)} />}
       </div>
     </MainLayout>
   );
@@ -392,12 +412,12 @@ function QueuePanel({ title, helper, icon, rows, onOpen }: { title: string; help
   return <section className="tscc-panel"><div className="tscc-panel-head"><div><h2 style={{display:"flex",alignItems:"center",gap:7}}>{icon}{title}</h2><p>{helper}</p></div><span className="tscc-count" style={{background:"#e7d7c1",color:"#5c4639"}}>{rows.length}</span></div><div className="tscc-panel-body"><div className="tscc-queue">{rows.slice(0,8).map((record) => <div className="tscc-queue-row" key={record.id}><div><strong>{record.childName}</strong><span>{record.location} • {record.timesheetType}</span></div><button className="tscc-btn light" style={{minHeight:30}} onClick={() => onOpen(record)}>Open</button></div>)}{rows.length === 0 && <div className="tscc-empty">Nothing waiting here right now.</div>}{rows.length > 8 && <div className="tscc-empty">+ {rows.length - 8} more in the master ledger</div>}</div></div></section>;
 }
 
-function RecordModal({ record, actor, routes, saving, onClose, onAction }: { record: RecordItem; actor: ActorCaps; routes: Record<CommandType, RouteConfig>; saving: boolean; onClose: () => void; onAction: (body: Record<string, unknown>, successText: string) => Promise<void> }) {
+function RecordModal({ record, actor, routes, saving, onClose, onAction }: { record: RecordItem; actor: ActorCaps; routes: Record<string, RouteConfig>; saving: boolean; onClose: () => void; onAction: (body: Record<string, unknown>, successText: string) => Promise<unknown> }) {
   const [handoffDate, setHandoffDate] = useState(record.dynastyHandoffDate || new Date().toISOString().slice(0,10));
   const [certificateVerified, setCertificateVerified] = useState(record.certificateVerified);
   const [tuitionAck, setTuitionAck] = useState(record.tuitionPolicyAcknowledged);
   const step = stageIndex(record.stage);
-  const route = record.timesheetType === "CCRC" ? null : routes[record.timesheetType];
+  const route = record.timesheetType === "CCRC" ? null : routes[timesheetRouteKey(record.locationSlug, record.timesheetType)];
   const canCollect = actor.collectorSlug === record.locationSlug;
 
   return <div className="tscc-modal-backdrop"><div className="tscc-modal">
@@ -424,11 +444,11 @@ function RecordModal({ record, actor, routes, saving, onClose, onAction }: { rec
       <StageCard number={5} title="Danielle Scans + Sends Batch to Jen" helper="Use the submission batch below the pipeline. Each service month, location, and program is sent separately." done={step > 4} current={step === 4} icon={<ScanLine size={16}/>}>
         <p>Record the complete scanned batch only after all pages have been sent to Jen.</p>{record.scannedAt && <span className="tscc-chip blue">{record.scannedBy} • {formatStamp(record.scannedAt)}</span>}
       </StageCard>
-      <StageCard number={6} title="Jen Emails the Company Batch" helper="Jen emails each separate batch to the configured company, then records the submission using the batch controls." done={record.stage === "Complete"} current={step === 5} icon={<Mail size={16}/>}>
+      <StageCard number={6} title="Jen Emails the Company Batch" helper="Jen emails each separate batch to the configured company, then records the submission using the batch controls." done={record.stage === "Complete"} current={record.stage === "Jennifer Email"} icon={<Mail size={16}/>}>
         <div className="tscc-note">{route?.department || "Department not configured"}<br/>{route?.email || "Email not configured"}</div>{record.emailedAt && <span className="tscc-chip green">{record.emailedBy} • {formatStamp(record.emailedAt)}</span>}
       </StageCard>
 
-      {record.stage === "Complete" && <div className="tscc-stage-card done" style={{textAlign:"center"}}><CheckCircle2 size={28} style={{margin:"0 auto",color:"#2f7652"}}/><h3 style={{justifyContent:"center",marginTop:7}}>Timesheet Complete</h3><p>Signed, reviewed by Dynasty, handed off to {record.handoffRecipient || "the recorded recipient"}, filled out from the certificate, scanned, sent to Jen in its location/program batch, and emailed to the department.</p></div>}
+      {record.stage === "Complete" && <div className="tscc-stage-card done" style={{textAlign:"center"}}><CheckCircle2 size={28} style={{margin:"0 auto",color:"#2f7652"}}/><h3 style={{justifyContent:"center",marginTop:7}}>Timesheet Complete</h3><p>Signed, reviewed by Dynasty, handed off to {record.handoffRecipient || "the recorded recipient"}, filled out from the certificate, scanned, sent to Jen in its location/program batch, independently verified by the location licensee, and acknowledged by the agency.</p></div>}
     </div>
   </div></div>;
 }
@@ -437,39 +457,14 @@ function StageCard({ number, title, helper, done, current, icon, children }: { n
   return <section className={`tscc-stage-card ${done ? "done" : current ? "current" : ""}`}><h3><span className="tscc-step-num" style={{width:23,height:23,fontSize:9,background:done?"#347755":current?"#ad6a43":"#7e807b"}}>{done ? "✓" : number}</span>{icon}{title}</h3><p>{helper}</p>{children}</section>;
 }
 
-function RouteModal({ routes, saving, onClose, onSave }: { routes: Record<CommandType, RouteConfig>; saving: boolean; onClose: () => void; onSave: (type: CommandType, route: RouteConfig) => Promise<void> }) {
-  const [draft, setDraft] = useState<Record<CommandType, RouteConfig>>(() => JSON.parse(JSON.stringify(routes)));
-  return <div className="tscc-modal-backdrop"><div className="tscc-modal"><div className="tscc-modal-head"><div><h2>Department Email Routing</h2><p>Jennifer uses these live routes for final submission. No department or email is guessed.</p></div><button className="tscc-close" onClick={onClose}><X size={16}/></button></div><div className="tscc-modal-body"><div className="tscc-route-grid">{COMMAND_TYPES.map((type) => <section className="tscc-route-card" key={type}><h3>{type}</h3><label>Department<input value={draft[type].department} onChange={(event) => setDraft((current) => ({...current,[type]:{...current[type],department:event.target.value}}))} placeholder="Exact department name"/></label><label>Email<input type="email" value={draft[type].email} onChange={(event) => setDraft((current) => ({...current,[type]:{...current[type],email:event.target.value}}))} placeholder="Exact submission email"/></label><label>Deadline<input value={draft[type].deadline} onChange={(event) => setDraft((current) => ({...current,[type]:{...current[type],deadline:event.target.value}}))} placeholder="Optional deadline"/></label><label>File Name Format<input value={draft[type].fileNameFormat} onChange={(event) => setDraft((current) => ({...current,[type]:{...current[type],fileNameFormat:event.target.value}}))}/></label><button className="tscc-btn primary" style={{marginTop:9}} disabled={saving} onClick={() => void onSave(type,draft[type])}>Save {type} Route</button></section>)}</div></div></div></div>;
-}
-
-
-function SubmissionBatch({ rows, actor, routes, saving, onAction }: { rows: RecordItem[]; actor?: ActorCaps; routes?: Record<CommandType, RouteConfig>; saving: boolean; onAction: (body: Record<string, unknown>, message: string) => Promise<void> }) {
-  const [scansConfirmed, setScansConfirmed] = useState(false);
-  const [emailConfirmed, setEmailConfirmed] = useState(false);
-  const first = rows[0];
-  const classified = first.timesheetType !== "CCRC";
-  const sent = rows.filter(row => Boolean(row.sentToJenniferAt)).length;
-  const emailed = rows.filter(row => row.stage === "Complete").length;
-  const scanReady = classified && sent < rows.length && rows.every(row => ["Scan & Send to Jennifer", "Jennifer Email", "Complete"].includes(row.stage));
-  const emailReady = classified && emailed < rows.length && rows.every(row => ["Jennifer Email", "Complete"].includes(row.stage));
-  const route = classified ? routes?.[first.timesheetType as CommandType] : undefined;
-  const body = { servicePeriod: first.servicePeriod, locationSlug: first.locationSlug, timesheetType: first.timesheetType };
-  const label = `${first.location} — ${first.timesheetType} — ${first.servicePeriod}`;
-  return <article className="tscc-stage-card">
-    <h3>{first.location} • {first.timesheetType}</h3><p>{first.servicePeriod} • {rows.length} forms • {sent} sent to Jen • {emailed} emailed to company</p>
-    <details><summary>View all {rows.length} forms</summary><ul>{rows.map(row => <li key={row.id}>{row.childName} — {row.stage}</li>)}</ul></details>
-    {!classified && <div className="tscc-note">Classify these CCRC forms as Stage 1 or Stage 2 before sending.</div>}
-    {actor?.canScan && <div className="tscc-stage-actions" style={{marginTop:9}}>
-      <label className="tscc-check"><input type="checkbox" checked={scansConfirmed} disabled={saving || !scanReady} onChange={event => setScansConfirmed(event.target.checked)}/><span>Every page in this batch is readable, complete, and has been sent to Jen.</span></label>
-      <button className="tscc-btn primary" disabled={saving || !scanReady || !scansConfirmed} onClick={async () => { await onAction({ ...body, action:"scanBatch", scanQualityChecked:true }, `${label}: scanned batch sent to Jen recorded.`); setScansConfirmed(false); }}>Record Scanned Batch Sent to Jen</button>
-      {!scanReady && sent < rows.length && <p>Waiting for all forms in this batch to be completed.</p>}
-    </div>}
-    {actor?.canEmail && <div className="tscc-stage-actions" style={{marginTop:9}}>
-      <div className="tscc-note">{route?.department || "Configure department routing"}<br/>{route?.email || "Submission email not configured"}</div>
-      <label className="tscc-check"><input type="checkbox" checked={emailConfirmed} disabled={saving || !emailReady} onChange={event => setEmailConfirmed(event.target.checked)}/><span>I attached and emailed this complete batch to the company above.</span></label>
-      <button className="tscc-btn primary" disabled={saving || !emailReady || !emailConfirmed || !route?.department || !route?.email} onClick={async () => { await onAction({ ...body, action:"emailBatch", attachmentConfirmed:true }, `${label}: company email recorded.`); setEmailConfirmed(false); }}>Record Batch Emailed to Company</button>
-    </div>}
-    {emailed === rows.length && <span className="tscc-chip green">Batch complete</span>}
-    <p>These controls record a completed handoff or email; they do not send files or email automatically.</p>
-  </article>;
+function RouteModal({ routes, collectors, saving, onClose, onSave }: { routes: Record<string, RouteConfig>; collectors: CollectorCard[]; saving: boolean; onClose: () => void; onSave: (locationSlug: string, type: CommandType, route: RouteConfig & { routingVerified: boolean }) => Promise<unknown> }) {
+  const [locationSlug, setLocationSlug] = useState(collectors[0]?.slug || "");
+  const [draft, setDraft] = useState<Record<string, RouteConfig>>(() => structuredClone(routes));
+  const [confirmed, setConfirmed] = useState<Record<string, boolean>>({});
+  return <div className="tscc-modal-backdrop"><div className="tscc-modal" role="dialog" aria-modal="true" aria-label="Department Email Routing"><div className="tscc-modal-head"><div><h2>Department Email Routing</h2><p>Verify the exact agency instructions for each location and program. Changing a route requires fresh licensee approval before submission.</p></div><button className="tscc-close" onClick={onClose} aria-label="Close routing"><X size={16}/></button></div><div className="tscc-modal-body"><label>Location<select className="tscc-select" value={locationSlug} onChange={event => setLocationSlug(event.target.value)}>{collectors.map(location => <option value={location.slug} key={location.slug}>{location.location}</option>)}</select></label><div className="tscc-route-grid">{COMMAND_TYPES.map(type => {
+    const key = timesheetRouteKey(locationSlug, type);
+    const value = draft[key] || { department: "", email: "", deadline: "", fileNameFormat: "", revision: "", verified: false };
+    const update = (patch: Partial<RouteConfig>) => { setDraft(current => ({ ...current, [key]: { ...value, ...patch } })); setConfirmed(current => ({ ...current, [key]: false })); };
+    return <section className="tscc-route-card" key={key}><h3>{type}</h3><label>Department<input value={value.department} maxLength={200} onChange={event => update({ department: event.target.value })} placeholder="Exact department name"/></label><label>Submission email<input type="email" value={value.email} maxLength={254} onChange={event => update({ email: event.target.value })} placeholder="Exact submission email"/></label><label>Agency deadline instructions<input value={value.deadline} onChange={event => update({ deadline: event.target.value })} placeholder="Set the actual date on each batch"/></label><label>File name format<input value={value.fileNameFormat} onChange={event => update({ fileNameFormat: event.target.value })}/></label><label className="tscc-check"><input type="checkbox" checked={Boolean(confirmed[key])} onChange={event => setConfirmed(current => ({ ...current, [key]: event.target.checked }))}/><span>I checked these instructions with the agency for this location and program.</span></label><button className="tscc-btn primary" disabled={saving || !confirmed[key] || !value.department || !value.email} onClick={() => void onSave(locationSlug, type, { ...value, routingVerified: Boolean(confirmed[key]) })}>Save Verified {type} Route</button></section>;
+  })}</div></div></div></div>;
 }

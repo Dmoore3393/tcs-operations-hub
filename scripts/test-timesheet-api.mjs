@@ -5,17 +5,20 @@ import ts from 'typescript';
 const compile=source=>ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
 const url=source=>'data:text/javascript;base64,'+Buffer.from(compile(source)).toString('base64');
 const helper=url(await readFile(new URL('../src/lib/timesheet-workflow.ts',import.meta.url),'utf8'));
+const control=url((await readFile(new URL('../src/lib/server/timesheet-batch-controls.ts',import.meta.url),'utf8')).replace('\"@/lib/timesheet-workflow\"',JSON.stringify(helper)));
+const locationHelper=url((await readFile(new URL('../src/lib/server/location-slug.ts',import.meta.url),'utf8')).replace('import \"server-only\";',''));
 let source=await readFile(new URL('../src/app/api/timesheets/route.ts',import.meta.url),'utf8');
+source=source.replace('\"@/lib/server/timesheet-batch-controls\"',JSON.stringify(control)).replace('\"@/lib/server/location-slug\"',JSON.stringify(locationHelper));
 source=source.replace('"@/lib/timesheet-workflow"',JSON.stringify(helper)).replace(/import \{ requireStaff, staffErrorResponse \} from .*?;/,'const requireStaff=async()=>globalThis.__timesheetAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
 const api=await import(url(source));
 let changes=[];
 const location={id:'loc',slug:'halcom',name:'Halcom',full_name:'Halcom'};
 function setup(name,record={collectorSigned:true,dynastyStatus:'Accounted For'}){
  changes=[];
- const admin={from(table){let patch;const q={select(){return q},eq(){return q},order(){return q},update(value){patch=value;return q},insert(value){changes.push({table,value});return Promise.resolve({error:null})},maybeSingle(){return Promise.resolve({data:{id:'row',legacy_id:'ts',location_id:'loc',record_data:record},error:null})},then(resolve,reject){if(patch)changes.push({table,patch});return Promise.resolve({data:table==='locations'?[location]:[],error:null}).then(resolve,reject)}};return q}};
- globalThis.__timesheetAuth={admin,profile:{full_name:name,organization_id:'org'},user:{id:'actor'},isOwner:false};
+ const admin={async rpc(name,args){changes.push({table:'timesheets',patch:{record_data:args.p_record}});return {error:null}},from(table){let patch;const q={select(){return q},eq(){return q},order(){return q},update(value){patch=value;return q},insert(value){changes.push({table,value});return Promise.resolve({error:null})},maybeSingle(){return Promise.resolve({data:{id:'row',legacy_id:'ts',location_id:'loc',record_data:record},error:null})},then(resolve,reject){if(patch)changes.push({table,patch});return Promise.resolve({data:table==='locations'?[location]:[],error:null}).then(resolve,reject)}};return q}};
+ globalThis.__timesheetAuth={admin,profile:{full_name:name,organization_id:'org',locations:['Halcom','Lara Family Childcare']},user:{id:'actor'},isOwner:/Danielle|Jennifer/.test(name),isLicensee:/Dynasty/.test(name)};
 }
-const post=body=>api.POST(new Request('https://hub.test/api/timesheets',{method:'POST',body:JSON.stringify(body)}));
+const post=body=>api.POST(new Request('https://hub.test/api/timesheets',{method:'POST',body:JSON.stringify({servicePeriod:'October 2026',locationSlug:'halcom',timesheetType:'CCRC Stage 1',...body})}));
 test('Jennifer and Anthony cannot fill or scan; Danielle cannot record company email',async()=>{
  setup('Jennifer Thomason');assert.equal((await post({action:'fillOut',id:'ts'})).status,403);assert.equal((await post({action:'scanBatch'})).status,403);
  setup('Anthony');assert.equal((await post({action:'scanBatch'})).status,403);
@@ -36,4 +39,8 @@ test('Danielle completion still requires certificate and tuition checks after ha
 test('individual scan and email cannot bypass batch controls',async()=>{
  setup('Danielle Moore');assert.equal((await post({action:'scan',id:'ts'})).status,400);
  setup('Jennifer Thomason');assert.equal((await post({action:'email',id:'ts'})).status,400);
+});
+test('employee accounts cannot enter timesheets by using a leadership name',async()=>{
+ setup('Danielle Moore');globalThis.__timesheetAuth.isOwner=false;globalThis.__timesheetAuth.isLicensee=false;
+ assert.equal((await post({action:'fillOut',id:'ts'})).status,403);
 });

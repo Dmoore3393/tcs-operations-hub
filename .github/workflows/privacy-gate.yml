@@ -28,6 +28,8 @@ jobs:
         run: npm run app:check
       - name: Verify staff setup, contact editing, and birthday privacy
         run: node --test scripts/test-staff-contact.mjs
+      - name: Verify timesheet workflow, accountability, and database locks
+        run: node --test scripts/test-timesheet-workflow.mjs scripts/test-timesheet-api.mjs scripts/test-timesheet-controls.mjs scripts/test-timesheet-database.mjs
       - name: Typecheck application
         run: npx tsc --noEmit
       - name: Build application

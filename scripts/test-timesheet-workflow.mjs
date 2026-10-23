@@ -7,17 +7,17 @@ const {outputText} = ts.transpileModule(source,{compilerOptions:{target:ts.Scrip
 const w = await import('data:text/javascript;base64,'+Buffer.from(outputText).toString('base64'));
 const handed = {collectorSigned:true,dynastyStatus:'Accounted For',dynastyHandedToDanielleAt:'2026-10-14T00:00:00Z'};
 const filled = {...handed,completedAt:'2026-10-14T00:01:00Z'};
-const sent = {...filled,scannedAt:'2026-10-14T00:02:00Z',sentToJenniferAt:'2026-10-14T00:02:00Z'};
+const sent = {...filled,scannedAt:'2026-10-14T00:02:00Z',sentToJenniferAt:'2026-10-14T00:02:00Z',scanDocumentId:'scan'};
 test('collection and Dynasty review still precede handoff',()=>{
  assert.equal(w.timesheetStage({}),'Location Sign-Off');
  assert.equal(w.timesheetStage({collectorSigned:true}),'Dynasty Review');
  assert.equal(w.timesheetStage({collectorSigned:true,dynastyStatus:'Accounted For'}),'Personal Handoff');
  assert.equal(w.timesheetStage(handed),'Danielle Fill Out');
 });
-test('legacy Jennifer handoffs and completed receipts retain progress',()=>{
+test('legacy handoffs remain, while old email checkmarks require documented controls',()=>{
  const old={collectorSigned:true,dynastyStatus:'Accounted For',dynastyHandedToJenniferAt:'old'};
  assert.equal(w.timesheetHandoff(old),'old');assert.equal(w.timesheetStage(old),'Danielle Fill Out');
- assert.equal(w.timesheetStage({...sent,emailedByJenniferAt:'old'}),'Complete');
+ assert.equal(w.timesheetStage({...sent,emailedByJenniferAt:'old'}),'Licensee Approval');
 });
 test('location, program, CCRC stage and month each define separate batches',()=>{
  const base=w.timesheetBatchKey('October 2026','halcom','CCRC Stage 1');
@@ -33,5 +33,5 @@ test('company email requires every form sent to Jen',()=>{
 });
 test('duplicate batch recording is rejected',()=>{
  assert.match(w.validateTimesheetBatch([sent],'scanBatch'),/already/);
- assert.match(w.validateTimesheetBatch([{...sent,emailedAt:'done'}],'emailBatch'),/already/);
+ assert.match(w.validateTimesheetBatch([{...sent,emailedAt:'done',emailEvidenceDocumentId:'proof'}],'emailBatch'),/already/);
 });
