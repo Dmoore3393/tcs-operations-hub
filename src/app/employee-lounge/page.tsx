@@ -3,7 +3,6 @@
 import Link from "next/link";
 import {
   BookOpen,
-  CakeSlice,
   CalendarDays,
   Coffee,
   Heart,
@@ -12,7 +11,6 @@ import {
   Lightbulb,
   LoaderCircle,
   Megaphone,
-  PartyPopper,
   RefreshCw,
   Send,
   Sparkles,
@@ -22,6 +20,7 @@ import {
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import LoungeSafety from "@/components/LoungeSafety";
+import StaffBirthdayBoard from "@/components/StaffBirthdayBoard";
 import MainLayout from "@/components/layout/MainLayout";
 import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
 
@@ -239,22 +238,7 @@ export default function EmployeeLoungePage() {
             <p className="mt-4 text-[11px] font-bold text-slate-400">Shared shout-outs save to the TCS database and refresh automatically across staff devices.</p>
           </section>
 
-          <section className="rounded-3xl border border-[#e8dcc8] bg-white p-5 shadow-lg">
-            <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fff0c9] text-[#b77713]"><CakeSlice className="h-5 w-5" /></span>
-              <div><h2 className="text-lg font-black text-[#0b3153]">Birthdays This Month</h2><p className="text-xs font-semibold text-slate-500">Celebrate our amazing team.</p></div>
-            </div>
-            <div className="mt-5 rounded-2xl border border-dashed border-[#d8c49c] bg-[#fffaf1] p-5 text-center">
-              <PartyPopper className="mx-auto h-9 w-9 text-[#d89a23]" />
-              <p className="mt-3 text-sm font-black text-[#0b3153]">Birthday board ready</p>
-              <p className="mt-1 text-sm leading-6 text-slate-600">Team birthdays can populate here from employee profiles once the birthday field is connected.</p>
-            </div>
-            {canAccessRoute(profile, "/employees") && (
-              <Link href="/employees" className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#d89a23] px-4 py-3 text-sm font-black text-[#0b3153]">
-                <Users className="h-4 w-4" /> Open Our People
-              </Link>
-            )}
-          </section>
+          <StaffBirthdayBoard />
 
           <section className="rounded-3xl border border-[#e8dcc8] bg-white p-5 shadow-lg">
             <div className="flex items-center gap-3">

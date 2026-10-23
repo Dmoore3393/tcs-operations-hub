@@ -455,7 +455,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (loading || checkingFamilyAccess) return <AppLoadingScreen />;
+  // Keep the invitation form mounted while updating the password refreshes Auth.
+  // This preserves entered contact details and lets save errors remain visible.
+  const completingInvitation = pathname === "/accept-invite" && session && profile?.user_id === session.user.id;
+  if ((loading && !completingInvitation) || checkingFamilyAccess) return <AppLoadingScreen />;
 
   if (!session) return null;
 

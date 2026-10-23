@@ -1,6 +1,7 @@
 "use client";
 
 import MainLayout from "@/components/layout/MainLayout";
+import StaffContactEditor from "@/components/StaffContactEditor";
 import { PageIntro, PrimaryButton, SectionCard, StatCard, StatusBadge, inputClass } from "@/components/hub/HubUI";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { careLocations } from "@/lib/location-config";
@@ -221,7 +222,7 @@ export default function TeamAccessPage() {
       <StatCard label="Paused" value={stats.paused} icon={<PauseCircle className="h-5 w-5" />} tone="slate" />
     </section>
 
-    <SectionCard title="Invite a New Staff Member" description="They receive an email, click the secure link, create their own password, and enter the Hub with the access chosen here." action={<div className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white"><MailPlus className="h-4 w-4" /> Email Invite</div>}>
+    <SectionCard title="Invite a New Staff Member" description="Staff confirm their first name, last name, and phone number using the invited email, then create a password. Birthday is optional and can be added by an admin later." action={<div className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white"><MailPlus className="h-4 w-4" /> Email Invite</div>}>
       <div className="grid gap-4 lg:grid-cols-2">
         <Field label="Full name"><input className={inputClass} value={invite.full_name} onChange={(event) => setInvite({ ...invite, full_name: event.target.value })} placeholder="Staff member’s name" /></Field>
         <Field label="Email address"><input type="email" className={inputClass} value={invite.email} onChange={(event) => setInvite({ ...invite, email: event.target.value })} placeholder="name@example.com" /></Field>
@@ -252,6 +253,9 @@ export default function TeamAccessPage() {
       </SectionCard>
 
       {editing && <div className="space-y-6">
+        <SectionCard title="Contact Details & Birthday" description="Review the details provided at setup. Add or correct a birthday here whenever it is available.">
+          <StaffContactEditor key={editing.user_id} userId={editing.user_id} email={editing.email} contact={editing.contact} onChange={(contact) => setEditing({ ...editing, contact })} onSaved={() => loadAccounts(editing.user_id)} />
+        </SectionCard>
         <SectionCard title={`${editing.full_name}'s Access`} description="Changes take effect the next time this account loads or refreshes the Hub.">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Staff name"><input className={inputClass} value={editing.full_name} onChange={(event) => setEditing({ ...editing, full_name: event.target.value })} /></Field>
