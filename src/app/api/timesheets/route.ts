@@ -1,6 +1,7 @@
-import { randomUUID } from "node:crypto";
-import { TIMESHEET_TYPES, timesheetType as normalizeType, signedTimesheet as signed, timesheetStage as stage, timesheetHandoff, timesheetBatchKey, validateTimesheetBatch } from "@/lib/timesheet-workflow";
+import { TIMESHEET_TYPES, timesheetType as normalizeType, signedTimesheet as signed, timesheetStage as stage, timesheetHandoff, timesheetRouteKey } from "@/lib/timesheet-workflow";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
+import { tcsLocationSlug } from "@/lib/server/location-slug";
+import { BATCH_ACTIONS, controlledTimesheetBatch } from "@/lib/server/timesheet-batch-controls";
 
 export const runtime = "nodejs";
 
@@ -61,33 +62,44 @@ async function liveLocations(admin: Awaited<ReturnType<typeof requireStaff>>["ad
   return (result.data ?? []) as unknown as DbRow[];
 }
 
-async function liveRoutes(admin: Awaited<ReturnType<typeof requireStaff>>["admin"], organizationId: string) {
+async function liveRoutes(admin: Awaited<ReturnType<typeof requireStaff>>["admin"], organizationId: string, locations: DbRow[]) {
   const result = await admin
     .from("timesheet_submission_routes")
-    .select("funding_source,department,department_email,deadline,file_name_format,record_data")
+    .select("id,location_id,funding_source,department,department_email,deadline,file_name_format,record_data,updated_at")
     .eq("organization_id", organizationId);
   if (result.error) throw result.error;
   const routes: Record<string, DbRow> = {};
-  for (const type of COMMAND_TYPES) routes[type] = { department: "", email: "", deadline: "", fileNameFormat: DEFAULT_FILE_NAME };
+  for (const location of locations) for (const type of COMMAND_TYPES) routes[timesheetRouteKey(asText(location.slug), type)] = { department: "", email: "", deadline: "", fileNameFormat: DEFAULT_FILE_NAME, revision: "", verified: false };
   for (const row of (result.data ?? []) as unknown as DbRow[]) {
     const record = asObject(row.record_data);
     const type = normalizeType(record.timesheetType ?? record.fundingSource ?? row.funding_source);
     if (!COMMAND_TYPES.some((item) => item === type)) continue;
+    const location = locations.find(item => item.id === row.location_id);
+    if (!location) continue;
+    const key = timesheetRouteKey(asText(location.slug), type);
     const next = {
       department: asText(row.department) || asText(record.department),
       email: asText(row.department_email) || asText(record.email),
       deadline: asText(row.deadline) || asText(record.deadline),
       fileNameFormat: asText(row.file_name_format) || asText(record.fileNameFormat) || DEFAULT_FILE_NAME,
+      revision: `${asText(row.id)}:${asText(row.updated_at)}`,
+      id: asText(row.id), updatedAt: asText(row.updated_at),
+      verified: record.routingVerified === true,
     };
-    if (!asText(routes[type].department) || next.department) routes[type] = next;
+    // A canonical location route supersedes old imports. Ambiguous duplicates cannot be used.
+    const canonical = asText(record.id).startsWith("command-route:");
+    if (!routes[key].revision || canonical) routes[key] = { ...next, canonical };
+    else if (!routes[key].canonical) routes[key] = { ...routes[key], verified: false, department: "Ambiguous routes — resave the location route" };
   }
   return routes;
 }
 
 export async function GET(request: Request) {
   try {
-    const { admin, profile, isOwner } = await requireStaff(request);
+    const { admin, profile, isOwner, isLicensee, user } = await requireStaff(request);
+    if (!isOwner && !isLicensee) return new Response("Timesheets require Owner/Admin or Licensee access.", { status: 403 });
     const actor = actorFor(profile.full_name, isOwner);
+    if (!isOwner && actor.collectorSlug && !profile.locations.some(name => tcsLocationSlug(name) === actor.collectorSlug)) actor.collectorSlug = null;
     if (!actor.canViewAll && !actor.collectorSlug) return new Response("This account is not assigned to the Timesheet Command Center.", { status: 403 });
 
     const locations = await liveLocations(admin, profile.organization_id);
@@ -153,6 +165,21 @@ export async function GET(request: Request) {
         emailedAt,
         notes: asText(record.notes),
         updatedAt: asText(row.updated_at),
+        submissionDueDate: asText(record.submissionDueDate),
+        scanDocumentId: asText(record.scanDocumentId),
+        licenseeApprovedAt: asText(record.licenseeApprovedAt),
+        licenseeApprovedBy: asText(record.licenseeApprovedBy),
+        licenseeApprovalFingerprint: asText(record.licenseeApprovalFingerprint),
+        approvedRouteRevision: asText(record.approvedRouteRevision),
+        emailEvidenceDocumentId: asText(record.emailEvidenceDocumentId),
+        emailedByUserId: asText(record.emailedByUserId),
+        licenseeVerifiedAt: asText(record.licenseeVerifiedAt),
+        licenseeVerifiedBy: asText(record.licenseeVerifiedBy),
+        agencyReceiptAt: asText(record.agencyReceiptAt),
+        agencyReceiptReference: asText(record.agencyReceiptReference),
+        receiptDocumentId: asText(record.receiptDocumentId),
+        submissionIssue: record.submissionIssue || null,
+        submissionHistory: Array.isArray(record.submissionHistory) ? record.submissionHistory : [],
       });
     }
 
@@ -167,11 +194,12 @@ export async function GET(request: Request) {
 
     return Response.json({
       records,
-      routes: await liveRoutes(admin, profile.organization_id),
+      routes: await liveRoutes(admin, profile.organization_id, locations.filter(location => actor.canViewAll || actor.collectorSlug === asText(location.slug))),
       types: COMMAND_TYPES,
       collectors,
       actor: {
         name: actor.name,
+        userId: user.id,
         collectorSlug: actor.collectorSlug,
         canViewAll: actor.canViewAll,
         canCreateBatch: actor.isDanielle || actor.isJennifer || actor.isOwner,
@@ -190,8 +218,10 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { admin, profile, user, isOwner } = await requireStaff(request);
+    const { admin, profile, user, isOwner, isLicensee } = await requireStaff(request);
+    if (!isOwner && !isLicensee) return new Response("Timesheets require Owner/Admin or Licensee access.", { status: 403 });
     const actor = actorFor(profile.full_name, isOwner);
+    if (!isOwner && actor.collectorSlug && !profile.locations.some(name => tcsLocationSlug(name) === actor.collectorSlug)) actor.collectorSlug = null;
     if (!actor.canViewAll && !actor.collectorSlug) return new Response("This account is not assigned to the Timesheet Command Center.", { status: 403 });
 
     const body = asObject(await request.json().catch(() => ({})));
@@ -297,7 +327,7 @@ export async function POST(request: Request) {
       }
 
       if (rows.length) {
-        const insertResult = await admin.from("timesheets").upsert(rows, { onConflict: "organization_id,legacy_id" });
+        const insertResult = await admin.from("timesheets").upsert(rows, { onConflict: "organization_id,legacy_id", ignoreDuplicates: true });
         if (insertResult.error) throw insertResult.error;
       }
       return Response.json({ ok: true, created: rows.length });
@@ -309,11 +339,14 @@ export async function POST(request: Request) {
       if (!COMMAND_TYPES.some((item) => item === timesheetType)) return Response.json({ error: "Choose CCRC Stage 1, CCRC Stage 2, CCCC, DCFS, or Respite." }, { status: 400 });
       const department = asText(body.department).trim();
       const email = asText(body.email).trim();
+      if (!department || department.length > 200 || !/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(email) || email.length > 254 || !asBool(body.routingVerified)) return Response.json({ error: "Enter the verified department and a single exact submission email, then confirm the route against the agency instructions." }, { status: 400 });
       const deadline = asText(body.deadline).trim();
       const fileNameFormat = asText(body.fileNameFormat).trim() || DEFAULT_FILE_NAME;
       const typeSlug = timesheetType.toLowerCase().replace(/[^a-z0-9]+/g, "-");
       const locations = await liveLocations(admin, profile.organization_id);
-      const rows = locations.map((location) => {
+      const selectedLocation = locations.find(location => location.slug === body.locationSlug);
+      if (!selectedLocation) return Response.json({ error: "Choose the specific location for this route." }, { status: 400 });
+      const rows = [selectedLocation].map((location) => {
         const legacyId = `command-route:${asText(location.slug)}:${typeSlug}`;
         return {
           organization_id: profile.organization_id,
@@ -333,6 +366,7 @@ export async function POST(request: Request) {
             email,
             deadline,
             fileNameFormat,
+            routingVerified: true, routingVerifiedBy: actor.name, routingVerifiedByUserId: user.id, routingVerifiedAt: new Date().toISOString(),
           },
           created_by: user.id,
           updated_by: user.id,
@@ -345,48 +379,9 @@ export async function POST(request: Request) {
       return Response.json({ ok: true });
     }
 
-    if (action === "scanBatch" || action === "emailBatch") {
-      if (action === "scanBatch" && !actor.isDanielle) return Response.json({ error: "Only Danielle can record scanned batches sent to Jen." }, { status: 403 });
-      if (action === "emailBatch" && !actor.isJennifer) return Response.json({ error: "Only Jen can record batches emailed to each company." }, { status: 403 });
-      const servicePeriod = asText(body.servicePeriod).trim();
-      const type = normalizeType(body.timesheetType);
-      if (!servicePeriod || !COMMAND_TYPES.some(item => item === type)) return Response.json({ error: "Choose a service month and a specific program, including CCRC Stage 1 or Stage 2." }, { status: 400 });
+    if (BATCH_ACTIONS.includes(action)) {
       const locations = await liveLocations(admin, profile.organization_id);
-      const location = locations.find(item => asText(item.slug) === asText(body.locationSlug));
-      if (!location) return Response.json({ error: "Batch location not found." }, { status: 400 });
-      const result = await admin.from("timesheets").select("*").eq("organization_id", profile.organization_id).eq("location_id", location.id).eq("service_period", servicePeriod);
-      if (result.error) throw result.error;
-      const rows = ((result.data ?? []) as unknown as DbRow[]).filter(row => {
-        const record = asObject(row.record_data);
-        return normalizeType(record.timesheetType ?? record.fundingSource ?? row.funding_source) === type;
-      });
-      const batchError = validateTimesheetBatch(rows.map(row => asObject(row.record_data)), action);
-      if (batchError) return Response.json({ error: batchError }, { status: 400 });
-      if (action === "scanBatch" && !asBool(body.scanQualityChecked)) return Response.json({ error: "Confirm every scan is readable and all pages in this batch were sent to Jen." }, { status: 400 });
-      if (action === "emailBatch" && !asBool(body.attachmentConfirmed)) return Response.json({ error: "Confirm this complete batch was attached and emailed to the company." }, { status: 400 });
-      const routes = await liveRoutes(admin, profile.organization_id);
-      const route = routes[type];
-      if (action === "emailBatch" && (!route || !asText(route.department) || !asText(route.email))) return Response.json({ error: `Department routing for ${type} is not configured yet.` }, { status: 400 });
-      const now = new Date().toISOString();
-      const batchId = randomUUID();
-      const batchKey = timesheetBatchKey(servicePeriod, asText(location.slug), type);
-      const updates = rows.map(row => {
-        const current = asObject(row.record_data);
-        const alreadyRecorded = action === "scanBatch" ? Boolean(asText(current.sentToJenniferAt)) : stage(current) === "Complete";
-        const patch = alreadyRecorded ? {} : action === "scanBatch" ? {
-          scanQualityChecked: true, scannedBy: actor.name, scannedAt: now, sentToJenniferAt: now, scanBatchId: batchId, submissionBatchKey: batchKey,
-        } : {
-          department: asText(route.department), departmentEmail: asText(route.email), attachmentConfirmed: true, emailedBy: actor.name, emailedAt: now, emailedByJenniferAt: now, emailBatchId: batchId, submissionBatchKey: batchKey,
-        };
-        const record = { ...current, ...patch };
-        return { id: row.id, expected_updated_at: row.updated_at, record_data: record, workflow_stage: stage(record), changed: !alreadyRecorded };
-      });
-      const saved = await admin.rpc("record_timesheet_submission_batch", {
-        p_organization_id: profile.organization_id, p_location_id: location.id, p_service_period: servicePeriod, p_type: type, p_actor_id: user.id,
-        p_action: action, p_batch_id: batchId, p_updates: updates,
-      });
-      if (saved.error) return Response.json({ error: "The batch changed or could not be saved. Refresh and try again." }, { status: 409 });
-      return Response.json({ ok: true, recorded: saved.data, batchId });
+      return await controlledTimesheetBatch({ admin, organizationId: profile.organization_id, userId: user.id, actor, locations, routes: await liveRoutes(admin, profile.organization_id, locations), body });
     }
 
     const id = asText(body.id);
@@ -414,35 +409,21 @@ export async function POST(request: Request) {
       merged.timesheetType = type;
       merged.fundingSource = type;
       merged.stage = stage(merged);
-      const updateResult = await admin
-        .from("timesheets")
-        .update({
-          workflow_stage: asText(merged.stage),
-          funding_source: type,
-          record_data: merged,
-          updated_by: user.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", row.id);
-      if (updateResult.error) throw updateResult.error;
-      const auditResult = await admin.from("audit_log").insert({
-        organization_id: profile.organization_id,
-        location_id: row.location_id,
-        actor_user_id: user.id,
-        action: "REVIEW",
-        table_name: "timesheets",
-        row_id: row.id,
-        metadata: { command_action: auditAction, stage: asText(merged.stage) },
+      const saved = await admin.rpc("record_timesheet_controlled_action", {
+        p_organization_id: profile.organization_id, p_row_id: row.id, p_actor_id: user.id,
+        p_expected_updated_at: row.updated_at, p_action: auditAction, p_record: merged,
+        p_funding_source: type, p_stage: asText(merged.stage),
       });
-      if (auditResult.error) throw auditResult.error;
+      if (saved.error) throw Response.json({ error: "This form changed or could not be saved. Refresh and try again." }, { status: 409 });
     }
 
     if (action === "setType") {
       if (!(actor.collectorSlug === slug || actor.isDynasty || actor.isDanielle || actor.isJennifer)) return Response.json({ error: "You cannot classify this timesheet." }, { status: 403 });
-      if (asText(current.sentToJenniferAt) || stage(current) === "Complete") return Response.json({ error: "A submitted batch cannot be reclassified." }, { status: 400 });
+      if (asText(current.sentToJenniferAt) || asText(current.licenseeApprovalFingerprint) || stage(current) === "Complete") return Response.json({ error: "Flag and reopen a submitted batch before reclassifying it." }, { status: 400 });
       const type = normalizeType(body.timesheetType);
       if (!COMMAND_TYPES.some((item) => item === type)) return Response.json({ error: "Choose CCRC Stage 1, CCRC Stage 2, CCCC, DCFS, or Respite." }, { status: 400 });
-      await save({ timesheetType: type, fundingSource: type }, "SET_TYPE");
+      const changedCompletedForm = type !== normalizeType(current.timesheetType ?? current.fundingSource ?? row.funding_source) && asText(current.completedAt);
+      await save({ timesheetType: type, fundingSource: type, ...(changedCompletedForm ? { certificateVerified: false, completedAt: "", completedBy: "" } : {}) }, "SET_TYPE");
       return Response.json({ ok: true });
     }
 
