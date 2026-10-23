@@ -7,6 +7,7 @@ import {
   type TeamAccessAccount,
 } from "@/lib/team-access";
 import { requireOwner, responseFromThrown } from "@/lib/server/require-owner";
+import { readStaffContact } from "@/lib/staff-contact";
 
 export const runtime = "nodejs";
 
@@ -54,7 +55,7 @@ export async function GET(request: Request) {
     if (staffError) throw staffError;
     if (lanesError) throw lanesError;
 
-    const authUsers = new Map<string, { last_sign_in_at: string | null; created_at: string | null }>();
+    const authUsers = new Map<string, { last_sign_in_at: string | null; created_at: string | null; metadata: unknown }>();
     let page = 1;
     while (page <= 10) {
       const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 100 });
@@ -63,6 +64,7 @@ export async function GET(request: Request) {
         authUsers.set(user.id, {
           last_sign_in_at: user.last_sign_in_at ?? null,
           created_at: user.created_at ?? null,
+          metadata: user.user_metadata,
         });
       }
       if (data.users.length < 100) break;
@@ -80,6 +82,7 @@ export async function GET(request: Request) {
         user_id: row.user_id,
         email: row.email,
         full_name: row.full_name,
+        contact: readStaffContact(auth?.metadata, row.full_name),
         role: canonicalAccessRole(row.role),
         lane_profile_id: lane?.id ?? null,
         job_title: lane?.job_title ?? null,

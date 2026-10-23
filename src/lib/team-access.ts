@@ -295,6 +295,7 @@ export function employeeCanWriteState(permissions: string[], stateKey: string) {
 }
 
 export type TeamAccessAccount = {
+  contact: import("@/lib/staff-contact").StaffContactDetails;
   user_id: string;
   email: string;
   full_name: string;

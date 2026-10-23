@@ -26,6 +26,8 @@ jobs:
         run: npm run security:check
       - name: Verify native app readiness foundation
         run: npm run app:check
+      - name: Verify staff setup, contact editing, and birthday privacy
+        run: node --test scripts/test-staff-contact.mjs
       - name: Typecheck application
         run: npx tsc --noEmit
       - name: Build application

@@ -7,11 +7,13 @@ import { deriveFamiliesFromChildren } from "@/lib/family-derived";
 import { emergencyCardReadiness } from "@/lib/emergency-cards";
 import { sendHubNotificationEvent } from "@/lib/notification-client";
 import { applyChildAgeProfile, deriveChildAgeProfile, emptyForm, locations as childLocationOptions, type ChildFormState, type ChildRecord } from "@/lib/children";
+import { birthdayMonthNow, birthdayMonths, birthdaysInMonth, formatBirthday } from "@/lib/staff-contact";
 import {
   Archive,
   Baby,
   CalendarClock,
   Camera,
+  CakeSlice,
   Download,
   FileWarning,
   HeartPulse,
@@ -259,6 +261,13 @@ export default function ChildrenCenterLivePage() {
     (payFilter === "All Pay Sources" || child.subsidy === payFilter)
   ).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
 
+  const birthdayMonth = birthdayMonthNow();
+  // The current roster is already authorized by /api/children and narrowed by the view filters.
+  const childBirthdays = birthdaysInMonth(filtered.filter((child) => child.enrollmentStatus === "Active" && deriveChildAgeProfile(child.dateOfBirth)).map((child) => {
+    const [, month, day] = child.dateOfBirth.split("-").map(Number);
+    return { id: String(child.id), name: nameOf(child), month, day };
+  }), birthdayMonth);
+
   const flash = (message: string) => {
     setNotice(message);
     window.setTimeout(() => setNotice(""), 2600);
@@ -439,6 +448,11 @@ export default function ChildrenCenterLivePage() {
       </div>
 
       <aside className="space-y-3">
+        <section className="rounded-xl border border-[#e7dfd3] bg-[#fff8ed] p-4 shadow-sm">
+          <h2 className="flex items-center gap-2 font-black"><CakeSlice className="h-5 w-5 text-[#b95d3b]" />{birthdayMonths[birthdayMonth - 1]} Birthdays</h2>
+          <p className="mt-1 text-xs text-slate-600">Celebrate children in the current roster view.</p>
+          {loading ? <p className="mt-3 text-sm text-slate-500">Loading birthdays…</p> : error ? <p className="mt-3 text-sm text-slate-500">Refresh the roster to load birthdays.</p> : childBirthdays.length ? <ul className="mt-3 space-y-2">{childBirthdays.map((birthday) => <li key={birthday.id} className="flex items-center justify-between gap-3 rounded-lg bg-white p-3 text-sm"><span className="font-bold">{birthday.name}</span><span className="shrink-0 font-semibold text-[#80523b]">{formatBirthday(birthday.month, birthday.day)}</span></li>)}</ul> : <p className="mt-3 text-sm text-slate-500">No birthdays listed this month.</p>}
+        </section>
         <section className="rounded-xl border border-[#e7dfd3] bg-[#fffdf8] p-4 shadow-sm"><h2 className="font-black">Enrollment Snapshot</h2><div className="mt-4 flex items-center gap-4"><div className="grid h-32 w-32 place-items-center rounded-full" style={{ background: `conic-gradient(#5d7557 ${capacityPct}%, #f1d2a5 0)` }}><div className="grid h-[86px] w-[86px] place-items-center rounded-full bg-[#fffdf8] text-center"><div><p className="text-2xl font-black">{enrolledInVisibleSites}</p><p className="text-[10px] font-semibold">Enrolled<br />({capacityPct}% capacity)</p></div></div></div><div className="space-y-2 text-sm"><p><i className="mr-2 inline-block h-3 w-3 rounded-full bg-[#5d7557]" />Enrolled <strong>{enrolledInVisibleSites}</strong></p><p><i className="mr-2 inline-block h-3 w-3 rounded-full bg-[#f1d2a5]" />Open Spots <strong>{openSpots}</strong></p><p className="pt-2 text-xs text-slate-500">Licensed Capacity</p><p className="text-lg font-black">{totalCapacity}</p></div></div></section>
         <section className="rounded-xl border border-[#e7dfd3] bg-[#fffdf8] p-4 shadow-sm"><h2 className="font-black">Capacity by Location</h2><div className="mt-3 space-y-3">{siteRows.map((site) => <div key={site.key} className="grid grid-cols-[74px_1fr_48px] items-center gap-2 text-xs"><span className="font-semibold">{site.key}</span><div className="h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full" style={{ width: `${site.pct}%`, backgroundColor: site.colorPrimary || "#718164" }} /></div><span className="text-right font-black">{site.enrolled}/{site.capacity}</span></div>)}</div><p className="mt-6 text-center font-serif italic text-[#80523b]">More children.<br />Brighter communities.</p></section>
         <section className="rounded-xl border border-[#e7dfd3] bg-[#fff8ed] p-4 shadow-sm"><h2 className="font-black">Needs Attention</h2><div className="mt-3 space-y-3"><Action icon={<FileWarning />} n={fileAlerts} label="Missing Child Files" /><Action icon={<CalendarClock />} n={pending.length} label="Pending Enrollments" /><Action icon={<HeartPulse />} n={healthAlerts} label="Health / Allergy Alerts" /></div></section>
