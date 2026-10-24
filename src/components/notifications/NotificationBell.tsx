@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/components/providers/AuthProvider";
 import type { HubNotification } from "@/lib/notifications";
-import { enableHubPushNotifications, isStandaloneHubApp } from "@/lib/push-client";
+import { enableHubPushNotifications, hubNotificationPermission, isNativeHubApp, isStandaloneHubApp } from "@/lib/push-client";
 import { Bell, BellRing, CheckCheck, Smartphone, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -46,8 +46,14 @@ export default function NotificationBell() {
   const recent = useMemo(() => notifications.slice(0, 6), [notifications]);
 
   useEffect(() => {
+    const update = () => setPermission(hubNotificationPermission());
+    window.addEventListener("tcs-native-ready", update);
+    return () => window.removeEventListener("tcs-native-ready", update);
+  }, []);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
-    setPermission("Notification" in window ? Notification.permission : "unsupported");
+    setPermission(hubNotificationPermission());
   }, []);
 
   useEffect(() => {
@@ -130,7 +136,7 @@ export default function NotificationBell() {
         const newUnread = next.filter((item) => !item.readAt && !knownIds.current.has(item.id));
         next.forEach((item) => knownIds.current.add(item.id));
 
-        if (newUnread.length && "Notification" in window && Notification.permission === "granted") {
+        if (!isNativeHubApp() && newUnread.length && "Notification" in window && Notification.permission === "granted") {
           const registration = await navigator.serviceWorker?.ready;
           const newest = newUnread[0];
           if (registration) {
@@ -210,7 +216,7 @@ export default function NotificationBell() {
     if (!session?.access_token) return;
     const result = await enableHubPushNotifications(session.access_token);
     setPermission(result.permission === "unsupported" ? "unsupported" : result.permission);
-    if (result.ok) {
+    if (result.ok && !isNativeHubApp()) {
       const registration = await navigator.serviceWorker?.ready;
       await registration?.showNotification("The Hub notifications are on", {
         body: "Transportation, emergency, Tour Board, and schedule alerts can now reach this device.",
@@ -230,12 +236,12 @@ export default function NotificationBell() {
       aria-label="Notifications"
     >
       {unreadCount > 0 ? <BellRing className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
-      {unreadCount > 0 && <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-black text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>}
+      {unreadCount > 0 && <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1 text-base font-black text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>}
     </button>
 
     {open && <div className="absolute right-0 top-14 z-[80] w-[min(92vw,390px)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-        <div><p className="text-sm font-black text-slate-950">Notifications</p><p className="text-[11px] font-semibold text-slate-500">{unreadCount} unread</p></div>
+        <div><p className="text-sm font-black text-slate-950">Notifications</p><p className="text-base font-semibold text-slate-500">{unreadCount} unread</p></div>
         <div className="flex items-center gap-1">
           {unreadCount > 0 && <button onClick={() => void markAllRead()} className="rounded-lg p-2 text-slate-500 hover:bg-slate-50" title="Mark all read"><CheckCheck className="h-4 w-4" /></button>}
           <button onClick={() => setOpen(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-50"><X className="h-4 w-4" /></button>
@@ -245,7 +251,7 @@ export default function NotificationBell() {
       {permission === "default" && <div className="border-b border-amber-100 bg-amber-50 px-4 py-3">
         <button onClick={() => void enableAlerts()} className="flex w-full items-center gap-3 text-left">
           <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-amber-100 text-amber-800"><Smartphone className="h-4 w-4" /></span>
-          <span><strong className="block text-xs text-amber-950">Enable phone alerts</strong><small className="mt-0.5 block text-[10px] leading-4 text-amber-800">{isStandaloneHubApp() ? "Allow The Hub to send background alerts to this device." : "For iPhone, add The Hub to your Home Screen first, then enable alerts from the app."}</small></span>
+          <span><strong className="block text-xs text-amber-950">Enable phone alerts</strong><small className="mt-0.5 block text-base leading-4 text-amber-800">{isStandaloneHubApp() ? "Allow The Hub to send background alerts to this device." : "For iPhone, add The Hub to your Home Screen first, then enable alerts from the app."}</small></span>
         </button>
       </div>}
 
@@ -259,7 +265,7 @@ export default function NotificationBell() {
           >
             <div className="flex items-start gap-3">
               <span className={`mt-1 h-2.5 w-2.5 flex-none rounded-full ${item.severity === "urgent" ? "bg-red-500" : item.severity === "attention" ? "bg-amber-500" : "bg-blue-500"}`} />
-              <div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><strong className="text-xs text-slate-900">{item.title}</strong><span className="flex-none text-[9px] font-semibold text-slate-400">{timeAgo(item.createdAt)}</span></div><p className="mt-1 text-[11px] leading-4 text-slate-600">{item.body}</p>{item.location && item.location !== "All Locations" && <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-1 text-[9px] font-black text-slate-600">{item.location}</span>}</div>
+              <div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><strong className="text-xs text-slate-900">{item.title}</strong><span className="flex-none text-base font-semibold text-slate-600">{timeAgo(item.createdAt)}</span></div><p className="mt-1 text-base leading-4 text-slate-600">{item.body}</p>{item.location && item.location !== "All Locations" && <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-1 text-base font-black text-slate-600">{item.location}</span>}</div>
             </div>
           </Link>)}
       </div>

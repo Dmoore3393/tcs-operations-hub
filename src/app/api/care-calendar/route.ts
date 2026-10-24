@@ -1,3 +1,5 @@
+import { after } from "next/server";
+import { notifyAuthorizedFamily } from "@/lib/server/family-native-notifications";
 import {
   addIsoDays,
   defaultCareCalendarSettings,
@@ -443,6 +445,11 @@ export async function PATCH(request: Request) {
         childLegacyId: text(submission.child_legacy_id),
         reviewNote: note || null,
       },
+    });
+
+    after(async () => {
+      try { await notifyAuthorizedFamily({ admin, organizationId: profile.organization_id, childRowId: text(submission.child_id), event: "schedule", eventKey: `family-schedule:${submissionId}:${decision}` }); }
+      catch { console.error("Family schedule alert could not be delivered."); }
     });
 
     return Response.json({

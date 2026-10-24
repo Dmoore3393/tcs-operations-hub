@@ -12,6 +12,7 @@ import {
   normalizeAccessRole,
 } from "@/lib/team-access";
 import { readAccessCheck } from "@/lib/access-check";
+import { unregisterCurrentNativeDevice } from "@/lib/push-client";
 import { signOutWithLocalRecovery } from "@/lib/supabase/sign-out";
 import type { Session, User } from "@supabase/supabase-js";
 import { AlertTriangle, Database, LockKeyhole, LogOut } from "lucide-react";
@@ -74,7 +75,7 @@ function isParentPortalRoute(pathname: string) {
 }
 
 function isPublicInfoRoute(pathname: string) {
-  return pathname === "/privacy" || pathname === "/support" || pathname === "/account";
+  return pathname === "/privacy" || pathname === "/terms" || pathname === "/support" || pathname === "/account";
 }
 
 function isTrainingAdminProfile(profile: StaffAccessProfile | null) {
@@ -354,12 +355,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [loading, pathname, profile, router, session]);
 
+  const signedInAccessToken = session?.access_token;
   const signOut = useCallback(async () => {
     if (signingOutRef.current) return;
     signingOutRef.current = true;
     setLoading(true);
     try {
       if (supabase) {
+        if (signedInAccessToken) await unregisterCurrentNativeDevice(signedInAccessToken);
         const auth = supabase.auth;
         await signOutWithLocalRecovery(
           (options) => auth.signOut(options),
@@ -377,7 +380,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       setAccessError("The Hub could not clear this device's sign-in. Please close the app and retry.");
     }
-  }, []);
+  }, [signedInAccessToken]);
 
   useEffect(() => {
     if (!session || !profile || pathname === "/login") return;

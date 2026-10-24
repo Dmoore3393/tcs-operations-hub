@@ -1,5 +1,6 @@
 "use client";
 
+import { greetingForHour, useLocalDateTime } from "@/hooks/useLocalDateTime";
 import { FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
 import { TcsKidsScene } from "@/components/brand/TcsKidsScene";
 import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
@@ -9,24 +10,18 @@ import { Bot, CalendarDays, ClipboardCheck, ShieldCheck, Sparkles, UserPlus } fr
 import Image from "next/image";
 import Link from "next/link";
 
-function greetingForHour(hour: number) {
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
-}
-
 export default function DashboardHero() {
   const { profile } = useAuth();
   const { location, theme } = useHubLocation();
-  const now = new Date();
+  const now = useLocalDateTime();
   const firstName = profile?.full_name?.trim().split(/\s+/)[0] || "TCS Team";
-  const greeting = greetingForHour(now.getHours());
-  const dateLabel = new Intl.DateTimeFormat("en-US", {
+  const greeting = now ? greetingForHour(now.getHours()) : "Welcome";
+  const dateLabel = now ? new Intl.DateTimeFormat("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric",
-  }).format(now);
+  }).format(now) : "Today at TCS";
 
   const actions = [
     canAccessRoute(profile, "/children")

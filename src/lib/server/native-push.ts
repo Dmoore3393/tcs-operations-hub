@@ -134,8 +134,8 @@ export async function sendApplePush(
     ? "https://api.sandbox.push.apple.com"
     : "https://api.push.apple.com";
 
-  const client = connect(host);
   const token = providerToken(config);
+  const client = connect(host);
   const body = JSON.stringify({
     aps: {
       alert: {
@@ -145,17 +145,29 @@ export async function sendApplePush(
       sound: "default",
       "thread-id": "tcs-hub",
     },
-    href: payload.href.startsWith("/") ? payload.href : "/notifications",
+    href: payload.href.startsWith("/") && !payload.href.startsWith("//") ? payload.href : "/notifications",
     tag: payload.tag,
   });
 
   return await new Promise<{ ok: boolean; status: number; stale: boolean; unavailable: boolean }>((resolve) => {
+    let settled = false;
+    const finish = (result: { ok: boolean; status: number; stale: boolean; unavailable: boolean }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      client.close();
+      resolve(result);
+    };
+    const timer = setTimeout(() => {
+      client.destroy();
+      finish({ ok: false, status: 0, stale: false, unavailable: false });
+    }, 8000);
     let status = 0;
     let responseBody = "";
 
     client.on("error", () => {
       client.close();
-      resolve({ ok: false, status, stale: false, unavailable: false });
+      finish({ ok: false, status, stale: false, unavailable: false });
     });
 
     const request = client.request({
@@ -179,7 +191,7 @@ export async function sendApplePush(
     request.on("end", () => {
       client.close();
       const stale = status === 410 || (status === 400 && /BadDeviceToken|DeviceTokenNotForTopic|Unregistered/i.test(responseBody));
-      resolve({
+      finish({
         ok: status === 200,
         status,
         stale,
@@ -188,7 +200,7 @@ export async function sendApplePush(
     });
     request.on("error", () => {
       client.close();
-      resolve({ ok: false, status, stale: false, unavailable: false });
+      finish({ ok: false, status, stale: false, unavailable: false });
     });
 
     request.end(body);

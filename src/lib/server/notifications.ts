@@ -92,7 +92,7 @@ async function deliverPushChannels(args: {
 
   for (const device of nativeDevices) {
     try {
-      const result = await sendApplePush(device, args.payload);
+      const result = await sendApplePush(device, { ...args.payload, title: "The Hub", body: "A TCS update is ready. Open The Hub to view it." });
       if (!result.stale) activeNative.push(device);
     } catch {
       activeNative.push(device);

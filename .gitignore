@@ -44,3 +44,15 @@ next-env.d.ts
 /native/ios/TheHub.xcodeproj/
 /native/ios/TheHub/Info.plist
 /native/ios/TheHub/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
+
+# Capacitor dependencies and local signing/build output
+**/node_modules/
+/native/capacitor/build/
+/native/capacitor/artifacts/
+*.xcarchive/
+*.ipa
+*.p12
+*.mobileprovision
+
+/native/capacitor/www-native/
+/.native-export-work/

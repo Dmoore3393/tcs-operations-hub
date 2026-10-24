@@ -1,5 +1,11 @@
+import { Capacitor } from "@capacitor/core";
+import { withRequestTimeout } from "@/lib/request-timeout";
+
+const NATIVE_DEVICE_KEY = "tcs-native-current-device";
+
 type NativeHubBridge = {
   platform?: string;
+  notificationPermission?: NotificationPermission;
   version?: string;
   bundleId?: string;
   pushEnvironment?: "production" | "sandbox";
@@ -13,7 +19,13 @@ function nativeBridge() {
 }
 
 export function isNativeHubApp() {
-  return Boolean(nativeBridge());
+  return Boolean(nativeBridge()) || Capacitor.isNativePlatform();
+}
+
+export function hubNotificationPermission(): NotificationPermission | "unsupported" {
+  if (typeof window === "undefined") return "default";
+  if (isNativeHubApp()) return nativeBridge()?.notificationPermission || "default";
+  return "Notification" in window ? Notification.permission : "unsupported";
 }
 
 export function isStandaloneHubApp() {
@@ -33,6 +45,7 @@ function applicationServerKey(value: string) {
 }
 
 async function registerNativePush(accessToken: string) {
+  if (!nativeBridge()) await import("@/lib/native-device").then((module) => module.initializeNativeDevice());
   const bridge = nativeBridge();
   if (!bridge?.requestPushNotifications) {
     return {
@@ -86,7 +99,7 @@ async function registerNativePush(accessToken: string) {
     }),
   });
 
-  const result = await response.json().catch(() => ({})) as { error?: string };
+  const result = await response.json().catch(() => ({})) as { error?: string; deviceId?: string };
   if (!response.ok) {
     return {
       ok: false,
@@ -95,7 +108,27 @@ async function registerNativePush(accessToken: string) {
     };
   }
 
+  if (bridge) bridge.notificationPermission = "granted";
+  window.dispatchEvent(new Event("tcs-native-ready"));
+  if (result.deviceId) {
+    try { window.localStorage.setItem(NATIVE_DEVICE_KEY, result.deviceId); } catch { /* Device settings still control notifications. */ }
+  }
+
   return { ok: true, permission: "granted" as const, reason: "" };
+}
+
+export async function unregisterCurrentNativeDevice(accessToken: string) {
+  if (!isNativeHubApp() || !accessToken) return;
+  try {
+    const deviceId = window.localStorage.getItem(NATIVE_DEVICE_KEY);
+    if (!deviceId) return;
+    const response = await withRequestTimeout((signal) => fetch("/api/notifications/native-subscription", {
+      method: "DELETE", signal,
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceId }),
+    }), 2000);
+    if (response.ok) window.localStorage.removeItem(NATIVE_DEVICE_KEY);
+  } catch { /* Signing out must still complete if the phone is offline. */ }
 }
 
 export async function enableHubPushNotifications(accessToken: string) {
