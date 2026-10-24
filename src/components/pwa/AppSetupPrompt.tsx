@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
-import { enableHubPushNotifications, isStandaloneHubApp } from "@/lib/push-client";
+import { enableHubPushNotifications, hubNotificationPermission, isStandaloneHubApp } from "@/lib/push-client";
 import { BellRing, CheckCircle2, Download, MapPin, Smartphone, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -28,11 +28,17 @@ export default function AppSetupPrompt() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    const update = () => setPermission(hubNotificationPermission());
+    window.addEventListener("tcs-native-ready", update);
+    return () => window.removeEventListener("tcs-native-ready", update);
+  }, []);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const completed = window.localStorage.getItem(STORAGE_KEY) === "complete";
     const standalone = isStandaloneHubApp();
     setInstalled(standalone);
-    setPermission("Notification" in window ? Notification.permission : "unsupported");
+    setPermission(hubNotificationPermission());
 
     const mobile = window.matchMedia("(max-width: 900px)").matches;
     if (!completed && mobile) {
@@ -96,7 +102,7 @@ export default function AppSetupPrompt() {
           <div className="flex min-w-0 items-start gap-3">
             <img src="/app-icon-192.png" alt="" className="h-12 w-12 flex-none rounded-2xl object-cover shadow-lg" aria-hidden="true" />
             <div>
-            <p className="text-[10px] font-black uppercase tracking-[.18em] text-yellow-200">The Hub App Setup</p>
+            <p className="text-base font-black uppercase tracking-[.18em] text-yellow-200">The Hub App Setup</p>
             <h2 className="mt-1 text-2xl font-black">Set up this device</h2>
             <p className="mt-1 text-xs font-semibold leading-5 text-emerald-50/80">One quick setup gives this phone app-style navigation, background alerts, and the correct TCS access.</p>
             </div>
@@ -148,7 +154,7 @@ function SetupStep({ icon, title, helper, complete, action }: { icon: React.Reac
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-slate-200 p-3">
       <span className={`grid h-11 w-11 flex-none place-items-center rounded-2xl ${complete ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{complete ? <CheckCircle2 className="h-5 w-5" /> : icon}</span>
-      <div className="min-w-0 flex-1"><strong className="block text-sm text-slate-950">{title}</strong><p className="mt-0.5 text-[11px] leading-4 text-slate-500">{helper}</p></div>
+      <div className="min-w-0 flex-1"><strong className="block text-sm text-slate-950">{title}</strong><p className="mt-0.5 text-base leading-4 text-slate-500">{helper}</p></div>
       {action}
     </div>
   );

@@ -38,7 +38,7 @@ export default function SmartAlertsPanel({ alerts }: { alerts: SmartAlert[] }) {
               <div className="flex items-start gap-3">
                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${config.badge}`}><Icon className="h-5 w-5" /></div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2"><p className="font-black">{alert.title}</p><span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${config.badge}`}>{alert.category}</span></div>
+                  <div className="flex flex-wrap items-center gap-2"><p className="font-black">{alert.title}</p><span className={`rounded-full px-2 py-0.5 text-base font-black uppercase tracking-wider ${config.badge}`}>{alert.category}</span></div>
                   <p className="mt-1 text-sm leading-6 opacity-85">{alert.detail}</p>
                   <p className="mt-1 text-xs font-bold opacity-65">{alert.location}</p>
                 </div>

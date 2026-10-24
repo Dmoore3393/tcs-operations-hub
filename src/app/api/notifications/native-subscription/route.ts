@@ -3,7 +3,8 @@ import {
   saveNativePushRegistrations,
   upsertNativePushRegistration,
 } from "@/lib/server/native-push";
-import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
+import { staffErrorResponse } from "@/lib/server/require-staff";
+import { requireNotificationAccount } from "@/lib/server/require-notification-account";
 
 function clean(value: unknown, max: number) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -11,7 +12,7 @@ function clean(value: unknown, max: number) {
 
 export async function GET(request: Request) {
   try {
-    const { admin, user } = await requireStaff(request);
+    const { admin, user } = await requireNotificationAccount(request);
     const state = await admin.auth.admin.getUserById(user.id);
     if (state.error || !state.data.user) throw state.error || new Error("Could not load native notification devices.");
 
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { admin, user } = await requireStaff(request);
+    const { admin, user } = await requireNotificationAccount(request);
     const body = await request.json() as Record<string, unknown>;
 
     const deviceToken = clean(body.deviceToken, 300).toLowerCase();
@@ -44,6 +45,10 @@ export async function POST(request: Request) {
 
     if (!/^[a-f0-9]{64,256}$/i.test(deviceToken)) {
       throw new Response("Invalid native push token.", { status: 400 });
+    }
+
+    if (bundleId !== "com.thomasonchildcaresolutions.thehub") {
+      throw new Response("This notification device is not registered for The Hub.", { status: 400 });
     }
 
     const state = await admin.auth.admin.getUserById(user.id);
@@ -70,7 +75,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const { admin, user } = await requireStaff(request);
+    const { admin, user } = await requireNotificationAccount(request);
     const body = await request.json() as Record<string, unknown>;
     const deviceId = clean(body.deviceId, 80);
     if (!deviceId) throw new Response("Choose a native device to remove.", { status: 400 });

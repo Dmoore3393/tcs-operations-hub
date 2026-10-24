@@ -27,7 +27,7 @@ export default function AppLoadingScreen() {
           <GatorGuide size="md" />
         </div>
         <TcsKidsScene variant="playtime" compact className="-mb-4 -mt-3 opacity-95" />
-        <p className="mt-1 text-[10px] font-black uppercase tracking-[.22em] text-emerald-200">The Hub</p>
+        <p className="mt-1 text-base font-black uppercase tracking-[.22em] text-emerald-200">The Hub</p>
         <h1 className="mt-2 text-3xl font-black">Getting everything ready ✨</h1>
         <p className="mx-auto mt-3 max-w-sm text-sm font-semibold leading-6 text-emerald-50/80">Schedules, care updates, team tools, and all the little things that keep TCS moving.</p>
         <div className="mx-auto mt-6 h-2 w-44 overflow-hidden rounded-full bg-white/10">

@@ -1,3 +1,5 @@
+import { after } from "next/server";
+import { notifyAuthorizedFamily } from "@/lib/server/family-native-notifications";
 import { scryptSync, timingSafeEqual } from "node:crypto";
 import { locationSlug, normalizeLocation } from "@/lib/location-config";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
@@ -51,7 +53,7 @@ function verifyPickupPin(pin: string, digest: string) {
 
 export async function POST(request: Request) {
   try {
-    const { userClient, profile, isOwner, isLicensee } = await requireStaff(request);
+    const { admin, userClient, profile, isOwner, isLicensee } = await requireStaff(request);
     const permissions = Array.isArray(profile.permissions) ? profile.permissions : [];
     if (!isOwner && !isLicensee && !["children_basic", "schedules"].some((permission) => permissions.includes(permission))) {
       throw new Response("This staff account cannot check children in or out.", { status: 403 });
@@ -277,6 +279,11 @@ export async function POST(request: Request) {
       p_row_id: current.data.id,
       p_location_id: text(next.attendanceLocationId) || current.data.location_id,
       p_metadata: auditMetadata,
+    });
+
+    if (action === "checkout") after(async () => {
+      try { await notifyAuthorizedFamily({ admin, organizationId: profile.organization_id, childRowId: String(current.data!.id), event: "pickup", eventKey: `family-pickup:${current.data!.id}:${now}` }); }
+      catch { console.error("Family pickup alert could not be delivered."); }
     });
 
     return Response.json({

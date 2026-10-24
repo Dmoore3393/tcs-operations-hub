@@ -24,7 +24,7 @@ export function GatorGuide({ message, size = "md", className = "", tone = "light
 
 export function FunDoodles({ className = "", soft = false }: { className?: string; soft?: boolean }) {
   const base = soft ? "opacity-20" : "opacity-45";
-  return <div aria-hidden="true" className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`}>
+  return <div aria-hidden="true" className={`tcs-doodles pointer-events-none absolute inset-0 overflow-hidden ${className}`}>
     <Star className={`tcs-doodle-float absolute left-[7%] top-[12%] h-5 w-5 rotate-12 text-yellow-400 ${base}`} fill="currentColor" />
     <Heart className={`tcs-doodle-bob absolute left-[18%] top-[70%] h-5 w-5 -rotate-12 text-rose-400 ${base}`} fill="currentColor" />
     <Pencil className={`tcs-doodle-float absolute right-[18%] top-[14%] h-6 w-6 rotate-[20deg] text-orange-400 ${base}`} />
@@ -35,7 +35,7 @@ export function FunDoodles({ className = "", soft = false }: { className?: strin
 }
 
 export function CelebrationBits({ className = "" }: { className?: string }) {
-  return <span aria-hidden="true" className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`}>
+  return <span aria-hidden="true" className={`tcs-doodles pointer-events-none absolute inset-0 overflow-hidden ${className}`}>
     <span className="tcs-confetti absolute left-[10%] top-2 h-2 w-2 rounded-full bg-rose-400" />
     <span className="tcs-confetti tcs-delay-1 absolute left-[30%] top-0 h-2 w-2 rotate-45 bg-yellow-400" />
     <span className="tcs-confetti tcs-delay-2 absolute right-[28%] top-1 h-2 w-2 rounded-full bg-sky-400" />

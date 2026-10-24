@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { Capacitor } from "@capacitor/core";
 
 const VERSION_KEY = "tcs-hub-active-deployment";
 const RELOAD_GUARD_KEY = "tcs-hub-reload-guard";
@@ -12,6 +13,9 @@ const CURRENT_DEPLOYMENT_URL =
 
 export default function PwaUpdater() {
   useEffect(() => {
+    // Packaged screens update through a new iOS build; reloading cannot install
+    // newer web code. Keep the existing updater for the website and live shell.
+    if (Capacitor.isNativePlatform()) return;
     if (!("serviceWorker" in navigator)) return;
 
     void navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then((registration) => {

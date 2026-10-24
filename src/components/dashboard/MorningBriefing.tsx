@@ -7,7 +7,7 @@ import { Bot, CheckCircle2, LoaderCircle, RefreshCw, Sparkles, TriangleAlert } f
 import { useMemo, useState } from "react";
 
 export default function MorningBriefing({ snapshot }: { snapshot: OperationsBriefingSnapshot }) {
-  const { session, profile } = useAuth();
+  const { session } = useAuth();
   const fallback = useMemo(() => buildLocalBriefing(snapshot), [snapshot]);
   const [answer, setAnswer] = useState("");
   const [connected, setConnected] = useState<boolean | null>(null);
@@ -47,8 +47,8 @@ export default function MorningBriefing({ snapshot }: { snapshot: OperationsBrie
         <div className="absolute bottom-0 right-24 h-20 w-20 rotate-12 rounded-3xl bg-white/8" />
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
-            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] opacity-80"><Sparkles className="h-4 w-4" /> AI Morning Command Center</div>
-            <h2 className="mt-3 text-2xl font-black sm:text-3xl">Good morning, {profile?.full_name?.split(" ")[0] || "TCS Team"}!</h2>
+            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] opacity-80"><Sparkles className="h-4 w-4" /> AI Daily Command Center</div>
+            <h2 className="mt-3 text-2xl font-black sm:text-3xl">Your daily operations briefing</h2>
             {answer ? (
               <div className="mt-4 whitespace-pre-line text-sm font-semibold leading-7 opacity-95 sm:text-base">{answer}</div>
             ) : (
@@ -69,7 +69,7 @@ export default function MorningBriefing({ snapshot }: { snapshot: OperationsBrie
               {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : answer ? <RefreshCw className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
               {loading ? "Building briefing…" : answer ? "Refresh briefing" : "Ask TCS AI"}
             </button>
-            {connected !== null && <p className="mt-2 text-center text-[11px] font-bold opacity-75">{connected ? "Live AI connected" : "Local smart summary"}</p>}
+            {connected !== null && <p className="mt-2 text-center text-base font-bold opacity-75">{connected ? "Live AI connected" : "Local smart summary"}</p>}
           </div>
         </div>
       </div>
@@ -86,5 +86,5 @@ export default function MorningBriefing({ snapshot }: { snapshot: OperationsBrie
 }
 
 function BriefStat({ label, value, danger = false, warning = false }: { label: string; value: number; danger?: boolean; warning?: boolean }) {
-  return <div className="bg-white px-5 py-4"><p className="text-xs font-black uppercase tracking-wider text-slate-400">{label}</p><p className={`mt-1 text-2xl font-black ${danger ? "text-red-700" : warning ? "text-amber-700" : "text-slate-950"}`}>{value}</p></div>;
+  return <div className="bg-white px-5 py-4"><p className="text-xs font-black uppercase tracking-wider text-slate-600">{label}</p><p className={`mt-1 text-2xl font-black ${danger ? "text-red-700" : warning ? "text-amber-700" : "text-slate-950"}`}>{value}</p></div>;
 }

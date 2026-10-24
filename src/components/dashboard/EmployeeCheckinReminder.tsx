@@ -95,7 +95,7 @@ export default function EmployeeCheckinReminder() {
 
   return <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
     <div className="flex flex-col gap-3 border-b border-slate-100 bg-gradient-to-r from-violet-50 via-white to-emerald-50 p-5 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-700 text-white"><UserRoundCheck className="h-5 w-5" /></span><div><p className="text-[10px] font-black uppercase tracking-wider text-violet-700">30/60/90 Check-In Reminder</p><h2 className="text-lg font-black text-slate-950">{data.viewer.canManage ? "Upcoming employee conversations" : "Your next check-in"}</h2></div></div>
+      <div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-700 text-white"><UserRoundCheck className="h-5 w-5" /></span><div><p className="text-base font-black uppercase tracking-wider text-violet-700">30/60/90 Check-In Reminder</p><h2 className="text-lg font-black text-slate-950">{data.viewer.canManage ? "Upcoming employee conversations" : "Your next check-in"}</h2></div></div>
       <Link href="/employee-checkins" className="inline-flex items-center gap-1 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white">Open Check-Ins <ChevronRight className="h-4 w-4" /></Link>
     </div>
     <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">{reminders.map((item) => {
@@ -105,10 +105,10 @@ export default function EmployeeCheckinReminder() {
       const tone = overdue ? "border-red-200 bg-red-50" : shared ? "border-violet-200 bg-violet-50" : submitted ? "border-blue-200 bg-blue-50" : item.days <= 7 ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-slate-50";
       const icon = overdue ? <AlertTriangle className="h-5 w-5 text-red-700" /> : shared ? <CheckCircle2 className="h-5 w-5 text-violet-700" /> : <Clock3 className="h-5 w-5 text-amber-700" />;
       return <Link href="/employee-checkins" key={item.id} className={`tcs-joy-card rounded-2xl border p-4 ${tone}`}>
-        <div className="flex items-start justify-between gap-3"><div>{icon}</div><span className="rounded-full bg-white/80 px-2 py-1 text-[9px] font-black text-slate-600">{item.milestoneDays}-Day</span></div>
+        <div className="flex items-start justify-between gap-3"><div>{icon}</div><span className="rounded-full bg-white/80 px-2 py-1 text-base font-black text-slate-600">{item.milestoneDays}-Day</span></div>
         <p className="mt-3 text-sm font-black text-slate-950">{data.viewer.canManage ? item.employeeName : `${item.milestoneDays}-Day Check-In`}</p>
         <p className={`mt-1 text-xs font-black ${overdue ? "text-red-700" : item.days <= 7 ? "text-amber-800" : "text-slate-600"}`}>{dueLabel(item.dueDate)}</p>
-        <p className="mt-2 text-[10px] font-semibold text-slate-500">{shared ? "Review shared — employee acknowledgment needed." : submitted ? "Employee reflection submitted — leadership review is ready." : item.status === "Leadership Draft" ? "Leadership draft is waiting to be shared." : "Time to prepare for the next support conversation."}</p>
+        <p className="mt-2 text-base font-semibold text-slate-500">{shared ? "Review shared — employee acknowledgment needed." : submitted ? "Employee reflection submitted — leadership review is ready." : item.status === "Leadership Draft" ? "Leadership draft is waiting to be shared." : "Time to prepare for the next support conversation."}</p>
       </Link>;
     })}</div>
   </section>;

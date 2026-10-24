@@ -9,6 +9,7 @@ import { migratePersistentValue } from "@/lib/storage-migrations";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { dayNames } from "@/lib/location-config";
+import { withRequestTimeout } from "@/lib/request-timeout";
 
 type HubStateRow = {
   state_key: string;
@@ -100,6 +101,8 @@ export function usePersistentState<T>(key: string, initialValue: T) {
   const [productionInitial] = useState<T>(() => getProductionInitialValue(key, initialValue));
   const [value, setValue] = useState<T>(productionInitial);
   const [hydrated, setHydrated] = useState(() => !hasStateAccess);
+  const [loadError, setLoadError] = useState("");
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const versionRef = useRef(0);
   const skipNextSaveRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -113,17 +116,22 @@ export function usePersistentState<T>(key: string, initialValue: T) {
 
     async function loadRelational(message = `Loading ${config!.label}…`) {
       announceHubSync({ state: "loading", key, message });
-      const { data, error } = await supabase!
+      const { data, error } = await withRequestTimeout(async (signal) => await supabase!
         .from(config!.table)
-        .select("*")
-        .order("created_at", { ascending: true });
+        .select(config!.table === "child_schedules" ? "legacy_id,record_data,updated_at,is_primary" : "legacy_id,record_data,updated_at")
+        .eq("organization_id", profile!.organization_id)
+        .order("created_at", { ascending: true })
+        .abortSignal(signal));
 
       if (!active) return;
       if (error) {
+        setLoadError(error.message);
         announceHubSync({ state: "error", key, message: `Could not load ${config!.label}: ${error.message}` });
         setHydrated(true);
         return;
       }
+
+      setLoadError("");
 
       const rows = (data ?? []) as unknown as RelationalRow[];
       if (rows.length) {
@@ -135,11 +143,12 @@ export function usePersistentState<T>(key: string, initialValue: T) {
       }
 
       if (canWrite && Array.isArray(productionInitial) && productionInitial.length > 0) {
-        const { error: seedError } = await supabase!.rpc("sync_tcs_collection", {
+        const { error: seedError } = await withRequestTimeout(async (signal) => await supabase!.rpc("sync_tcs_collection", {
           p_collection_key: key,
           p_items: productionInitial,
-        });
+        }).abortSignal(signal));
         if (seedError) {
+          setLoadError(seedError.message);
           announceHubSync({ state: "error", key, message: `Could not initialize ${config!.label}: ${seedError.message}` });
         } else {
           skipNextSaveRef.current = true;
@@ -154,7 +163,14 @@ export function usePersistentState<T>(key: string, initialValue: T) {
       setHydrated(true);
     }
 
-    void loadRelational();
+    function failed(error: unknown) {
+      if (!active) return;
+      const message = error instanceof Error ? error.message : "Could not load this information. Please try again.";
+      setLoadError(message);
+      setHydrated(true);
+      announceHubSync({ state: "error", key, message });
+    }
+    void loadRelational().catch(failed);
 
     const channel = supabase
       .channel(`relational-${config.table}-${user.id}`)
@@ -164,7 +180,7 @@ export function usePersistentState<T>(key: string, initialValue: T) {
         () => {
           if (relationalRefreshTimerRef.current) clearTimeout(relationalRefreshTimerRef.current);
           relationalRefreshTimerRef.current = setTimeout(() => {
-            void loadRelational(`Refreshing ${config.label}…`);
+            void loadRelational(`Refreshing ${config.label}…`).catch(failed);
           }, 180);
         },
       )
@@ -176,7 +192,7 @@ export function usePersistentState<T>(key: string, initialValue: T) {
       if (relationalRefreshTimerRef.current) clearTimeout(relationalRefreshTimerRef.current);
       void supabase?.removeChannel(channel);
     };
-  }, [canWrite, config, hasStateAccess, key, productionInitial, profile, user]);
+  }, [canWrite, config, hasStateAccess, key, productionInitial, profile, user, retryAttempt]);
 
   // Legacy organization-level configuration that is not location-owned stays
   // in hub_state. Sensitive operational data no longer uses this path.
@@ -186,18 +202,23 @@ export function usePersistentState<T>(key: string, initialValue: T) {
 
     async function load() {
       announceHubSync({ state: "loading", key, message: "Loading shared data…" });
-      const { data, error } = await supabase!
+      const { data, error } = await withRequestTimeout(async (signal) => await supabase!
         .from("hub_state")
         .select("state_key,state_value,version,updated_by,updated_at")
+        .eq("organization_id", profile!.organization_id)
         .eq("state_key", key)
-        .maybeSingle();
+        .abortSignal(signal)
+        .maybeSingle());
 
       if (!active) return;
       if (error) {
+        setLoadError(error.message);
         announceHubSync({ state: "error", key, message: `Could not load ${key}: ${error.message}` });
         setHydrated(true);
         return;
       }
+
+      setLoadError("");
 
       if (data) {
         const row = data as HubStateRow;
@@ -216,14 +237,15 @@ export function usePersistentState<T>(key: string, initialValue: T) {
         return;
       }
 
-      const { data: created, error: createError } = await supabase!.rpc("save_hub_state", {
+      const { data: created, error: createError } = await withRequestTimeout(async (signal) => await supabase!.rpc("save_hub_state", {
         p_state_key: key,
         p_state_value: productionInitial,
         p_expected_version: 0,
-      });
+      }).abortSignal(signal));
 
       if (!active) return;
       if (createError) {
+        setLoadError(createError.message);
         announceHubSync({ state: "error", key, message: `Could not initialize ${key}: ${createError.message}` });
         setHydrated(true);
         return;
@@ -242,7 +264,13 @@ export function usePersistentState<T>(key: string, initialValue: T) {
       announceHubSync({ state: "saved", key, message: "Shared data initialized" });
     }
 
-    void load();
+    void load().catch((error: unknown) => {
+      if (!active) return;
+      const message = error instanceof Error ? error.message : "Could not load this information. Please try again.";
+      setLoadError(message);
+      setHydrated(true);
+      announceHubSync({ state: "error", key, message });
+    });
 
     const channel = supabase
       .channel(`hub-state-${key}-${user.id}`)
@@ -266,10 +294,11 @@ export function usePersistentState<T>(key: string, initialValue: T) {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       void supabase?.removeChannel(channel);
     };
-  }, [canWrite, config, hasStateAccess, key, productionInitial, profile, user]);
+  }, [canWrite, config, hasStateAccess, key, productionInitial, profile, user, retryAttempt]);
 
   useEffect(() => {
-    if (!hydrated || !supabase || !user || !profile || !hasStateAccess || !canWrite) return;
+    // A failed read must never turn the empty initial state into a database save.
+    if (loadError || !hydrated || !supabase || !user || !profile || !hasStateAccess || !canWrite) return;
     if (skipNextSaveRef.current) {
       skipNextSaveRef.current = false;
       return;
@@ -338,7 +367,7 @@ export function usePersistentState<T>(key: string, initialValue: T) {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [canWrite, config, hasStateAccess, hydrated, key, profile, user, value]);
+  }, [canWrite, config, hasStateAccess, hydrated, key, loadError, profile, user, value]);
 
   const exposedSetter: Dispatch<SetStateAction<T>> = canWrite
     ? setValue
@@ -346,5 +375,9 @@ export function usePersistentState<T>(key: string, initialValue: T) {
         announceHubSync({ state: "error", key, message: "This account has read-only access to this section." });
       };
 
-  return [value, exposedSetter, hydrated] as const;
+  return [value, exposedSetter, hydrated, {
+    loading: hasStateAccess && !hydrated,
+    error: loadError,
+    retry: () => { setLoadError(""); setHydrated(false); setRetryAttempt((attempt) => attempt + 1); },
+  }] as const;
 }

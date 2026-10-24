@@ -1,0 +1,17 @@
+{
+  "appId": "com.thomasonchildcaresolutions.thehub",
+  "appName": "The Hub",
+  "webDir": "www-native",
+  "server": {
+    "hostname": "localhost",
+    "iosScheme": "capacitor",
+    "errorPath": "offline.html"
+  },
+  "ios": {
+    "scheme": "TheHub",
+    "preferredContentMode": "mobile",
+    "contentInset": "automatic",
+    "backgroundColor": "#0b5d35",
+    "appendUserAgent": "TheHubIOS/1.0 Capacitor"
+  }
+}

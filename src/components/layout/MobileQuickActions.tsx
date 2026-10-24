@@ -136,14 +136,14 @@ export default function MobileQuickActions() {
             <div className="sticky top-0 z-10 border-b border-slate-200/80 bg-[#f7f8f5]/95 px-5 pb-4 pt-3 backdrop-blur">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: theme.primary }}>The Hub • {location}</p>
+                  <p className="text-base font-black uppercase tracking-[0.18em]" style={{ color: theme.primary }}>The Hub • {location}</p>
                   <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">All your tools</h2>
                   <p className="mt-1 text-xs font-semibold text-slate-500">Only tools approved for your account are shown.</p>
                 </div>
                 <button type="button" onClick={() => setOpen(false)} className="grid h-10 w-10 place-items-center rounded-2xl bg-white text-slate-700 shadow-sm" aria-label="Close tools"><X className="h-5 w-5" /></button>
               </div>
               <label className="relative mt-4 block">
-                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
@@ -156,7 +156,7 @@ export default function MobileQuickActions() {
             <div className="max-h-[calc(86dvh-138px)] overflow-y-auto px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4">
               {groups.map((group) => (
                 <div key={group.title} className="mb-6">
-                  <p className="mb-2 px-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{group.title}</p>
+                  <p className="mb-2 px-1 text-base font-black uppercase tracking-[0.16em] text-slate-600">{group.title}</p>
                   <div className="grid grid-cols-3 gap-2.5">
                     {group.items.map((item) => {
                       const Icon = item.icon;
@@ -170,7 +170,7 @@ export default function MobileQuickActions() {
                           style={selected ? { background: `linear-gradient(145deg, ${theme.primary}, ${theme.primaryDark})` } : undefined}
                         >
                           <span className={`grid h-9 w-9 place-items-center rounded-xl ${selected ? "bg-white/15" : "bg-slate-100"}`}><Icon className="h-5 w-5" /></span>
-                          <span className="text-[11px] font-black leading-4">{item.label}</span>
+                          <span className="text-base font-black leading-4">{item.label}</span>
                         </Link>
                       );
                     })}
@@ -193,20 +193,20 @@ export default function MobileQuickActions() {
             const selected = active(item.href);
             if (item.featured) {
               return (
-                <Link key={item.href} href={item.href} className="relative flex min-h-[66px] flex-col items-center justify-end gap-1 pb-1 text-[10px] font-black text-slate-700">
+                <Link key={item.href} href={item.href} className="relative flex min-h-[66px] flex-col items-center justify-end gap-1 pb-1 text-base font-black text-slate-700">
                   <span className="-mt-5 grid h-14 w-14 place-items-center rounded-[20px] border-4 border-white text-white shadow-lg" style={{ background: `linear-gradient(145deg, ${theme.primary}, ${theme.primaryDark})` }}><Icon className="h-6 w-6" /></span>
                   <span>{item.label}</span>
                 </Link>
               );
             }
             return (
-              <Link key={item.href} href={item.href} className={`flex min-h-[66px] flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-black transition ${selected ? "text-slate-950" : "text-slate-400"}`}>
+              <Link key={item.href} href={item.href} className={`flex min-h-[66px] flex-col items-center justify-center gap-1 rounded-xl px-1 text-base font-black transition ${selected ? "text-slate-950" : "text-slate-600"}`}>
                 <span className={`grid h-8 w-8 place-items-center rounded-xl ${selected ? "bg-slate-100" : ""}`}><Icon className="h-4.5 w-4.5" /></span>
                 {item.label}
               </Link>
             );
           })}
-          <button type="button" onClick={() => setOpen(true)} className={`flex min-h-[66px] flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-black ${open ? "text-slate-950" : "text-slate-400"}`}>
+          <button type="button" onClick={() => setOpen(true)} className={`flex min-h-[66px] flex-col items-center justify-center gap-1 rounded-xl px-1 text-base font-black ${open ? "text-slate-950" : "text-slate-600"}`}>
             <span className={`grid h-8 w-8 place-items-center rounded-xl ${open ? "bg-slate-100" : ""}`}><Menu className="h-4.5 w-4.5" /></span>
             More
           </button>

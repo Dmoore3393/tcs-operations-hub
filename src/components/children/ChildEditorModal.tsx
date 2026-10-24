@@ -25,7 +25,7 @@ import { useEffect, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 const inputClass =
-  "w-full rounded-xl border border-[#d7c9ad] bg-white px-3.5 py-2.5 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#5f7b50] focus:ring-4 focus:ring-[#dfe9d8] disabled:bg-[#f4f1ea] disabled:text-slate-500";
+  "w-full rounded-xl border border-[#d7c9ad] bg-white px-3.5 py-2.5 text-sm text-slate-950 outline-none transition placeholder:text-slate-600 focus:border-[#5f7b50] focus:ring-4 focus:ring-[#dfe9d8] disabled:bg-[#f4f1ea] disabled:text-slate-500";
 
 type Props = {
   title: string;
@@ -72,7 +72,7 @@ export default function ChildEditorModal({
         <header className="shrink-0 border-b border-[#d8cdb1] bg-gradient-to-r from-[#294d31] via-[#3f663f] to-[#6f8751] px-4 py-4 text-white sm:px-6">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-[11px] font-black uppercase tracking-[.2em] text-[#dce8cb]">Children Center • Secure Record</p>
+              <p className="text-base font-black uppercase tracking-[.2em] text-[#dce8cb]">Children Center • Secure Record</p>
               <h2 className="mt-1 truncate text-xl font-black sm:text-2xl">{title}</h2>
               <p className="mt-1 hidden text-sm text-white/75 sm:block">Complete the child, family, and care information below. You can scroll each section without losing the Save button.</p>
             </div>
@@ -235,7 +235,7 @@ function SectionCard({ icon, title, subtitle, children }: { icon: ReactNode; tit
 function SectionNav({ icon, title, note }: { icon: ReactNode; title: string; note: string }) {
   return <div className="flex items-start gap-2 rounded-xl bg-white/70 p-3">
     <span className="mt-0.5 text-[#426245]">{icon}</span>
-    <div><p className="text-sm font-black text-[#314531]">{title}</p><p className="text-[11px] text-[#7c826f]">{note}</p></div>
+    <div><p className="text-sm font-black text-[#314531]">{title}</p><p className="text-base text-[#7c826f]">{note}</p></div>
   </div>;
 }
 
@@ -244,5 +244,5 @@ function Grid({ children }: { children: ReactNode }) {
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label className="block"><span className="mb-1.5 block text-[11px] font-black uppercase tracking-[.12em] text-[#65705d]">{label}</span>{children}</label>;
+  return <label className="block"><span className="mb-1.5 block text-base font-black uppercase tracking-[.12em] text-[#65705d]">{label}</span>{children}</label>;
 }
