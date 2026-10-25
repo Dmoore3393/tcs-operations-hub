@@ -134,12 +134,18 @@ export type WorkTask = {
   id: number;
   title: string;
   owner: string;
-  category: "Admin" | "Licensing" | "Cleaning" | "Enrollment" | "Transportation" | "Marketing";
+  category: "Admin" | "Licensing" | "Cleaning" | "Enrollment" | "Transportation" | "Marketing" | "Daily Care" | "Supervision" | "Communication";
   due: string;
   priority: "Urgent" | "High" | "Normal";
   completed: boolean;
   initials: string;
   completedAt?: string;
+  dueAt?: string;
+  completionCriteria?: string;
+  checkpoint?: "Opening" | "Midday" | "Closing" | "";
+  acknowledgedAt?: string;
+  acknowledgedBy?: string;
+  completedBy?: string;
   location: string;
 };
 

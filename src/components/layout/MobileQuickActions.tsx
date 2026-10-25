@@ -44,6 +44,8 @@ const toolGroups: Array<{ title: string; items: ToolItem[] }> = [
   {
     title: "My Work",
     items: [
+      { href: "/communications", label: "Communications", icon: Bell },
+      { href: "/family-communications", label: "Family Messages", icon: Users },
       { href: "/employee-lounge", label: "Employee Lounge", icon: Coffee },
       { href: "/time-off", label: "Time Off", icon: CalendarOff },
       { href: "/employee-bulletin", label: "Bulletin Board", icon: Bell },

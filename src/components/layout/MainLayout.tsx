@@ -41,6 +41,7 @@ import {
   PackageCheck,
   Printer,
   Settings,
+  Search,
   ScrollText,
   ShieldCheck,
   Sparkles,
@@ -51,7 +52,7 @@ import {
   Users,
   UserRound,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { type LocationKey } from "@/lib/location-config";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { canAccessRoute, staffInitials, useAuth } from "@/components/providers/AuthProvider";
@@ -67,6 +68,7 @@ const navItems = [
   { label: "Time Clock", href: "/time-clock", icon: CalendarClock },
   { label: "Time Off & Availability", href: "/time-off", icon: CalendarOff },
   { label: "My Schedule", href: "/my-schedule", icon: CalendarDays },
+  { label: "Communications", href: "/communications", icon: MessageCircleHeart },
   { label: "Employee Bulletin Board", href: "/employee-bulletin", icon: Pin },
   { label: "Notifications", href: "/notifications", icon: HeartPulse },
   { label: "Families", href: "/families", icon: Users },
@@ -132,6 +134,7 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/time-off": { title: "Time Off & Availability", subtitle: "Requests, blocked dates, approvals, and attendance accountability rules" },
   "/my-schedule": { title: "My Schedule", subtitle: "Published shifts, location assignments, and schedule acknowledgement" },
   "/employee-bulletin": { title: "Employee Bulletin Board", subtitle: "Announcements, reminders, policy updates, training, recognition, and pinned notes" },
+  "/communications": { title: "TCS Communications", subtitle: "Team conversations, announcements, family messages and follow-through" },
   "/notifications": { title: "Notification Center", subtitle: "Transportation, emergency, Tour Board, and staff schedule alerts" },
   "/families": { title: "Family Accounts", subtitle: "Guardians, billing, subsidies, and communication" },
   "/family-access": { title: "Family Access & Privacy", subtitle: "Separate households, custody-aware portal permissions, and private billing access" },
@@ -206,6 +209,16 @@ type ThemeStyle = CSSProperties & {
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = useHubPathname();
+  const [toolQuery, setToolQuery] = useState("");
+  const toolSearch = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k" && window.innerWidth >= 1024) { event.preventDefault(); toolSearch.current?.focus(); }
+      if (event.key === "Escape" && document.activeElement === toolSearch.current) { setToolQuery(""); toolSearch.current?.blur(); }
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, []);
   const [showLocationHelp, setShowLocationHelp] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [sync, setSync] = useState<HubSyncDetail>({ state: "idle", message: "Secure shared data" });
@@ -303,8 +316,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {visibleNavItems.map((item) => {
+        <label className="relative mx-3 mt-4 block"><span className="sr-only">Find a Hub tool</span><Search className="pointer-events-none absolute left-3 top-4 h-5 w-5 text-emerald-950" aria-hidden="true" /><input ref={toolSearch} value={toolQuery} onChange={(event) => setToolQuery(event.target.value)} placeholder="Find a tool…" className="min-h-12 w-full rounded-xl border border-white/30 bg-white py-3 pl-11 pr-3 text-base text-slate-950 placeholder:text-slate-600" /><span className="mt-2 block text-sm font-semibold text-white">⌘ / Ctrl K to search</span></label>
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="Hub tools">
+          {visibleNavItems.filter((item) => `${item.label} ${item.href}`.toLowerCase().includes(toolQuery.trim().toLowerCase())).map((item) => {
             const active = pathname === item.href;
             const Icon = item.icon;
             return (
