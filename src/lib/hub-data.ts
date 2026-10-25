@@ -1,9 +1,11 @@
+import { TEHACHAPI_LOCATION_NAME } from "@/lib/location-config";
+
 export const hubLocations = [
   { id: "halcom", name: "Moore Family Childcare", shortName: "Halcom", type: "Family Childcare", capacity: 14, enrolled: 0, present: 0, color: "emerald", hours: "Mon–Thu 6:00 AM–11:00 PM • Fri 6:00 AM–6:00 PM • Sat–Sun 6:00 AM–11:00 PM" },
   { id: "cathers", name: "Cathers Family Childcare", shortName: "21st Street", type: "Family Childcare", capacity: 14, enrolled: 0, present: 0, color: "slate", hours: "Mon–Sun 6:00 AM–11:00 PM" },
   { id: "division", name: "The School Age Center", shortName: "Division", type: "School Age Center", capacity: 17, enrolled: 0, present: 0, color: "red", hours: "Mon–Fri 6:00 AM–7:00 PM • Sat–Sun Closed" },
   { id: "cornejo-33rd", name: "Cornejo Family Childcare", shortName: "33rd Street", type: "Family Childcare", capacity: 14, enrolled: 0, present: 0, color: "amber", hours: "Mon–Sun 6:00 AM–11:00 PM" },
-  { id: "tehachapi", name: "Tehachapi Transportation Hub", shortName: "Tehachapi", type: "Transportation / Care Hub", capacity: 14, enrolled: 0, present: 0, color: "blue", hours: "Mon–Fri 6:00 AM–7:00 PM • Sat–Sun Closed" },
+  { id: "tehachapi", name: TEHACHAPI_LOCATION_NAME, shortName: "Tehachapi", type: "Family Childcare", capacity: 14, enrolled: 0, present: 0, color: "blue", hours: "Mon–Fri 6:00 AM–7:00 PM • Sat–Sun Closed" },
   { id: "lara-42nd", name: "Lara Family Childcare", shortName: "42nd Street", type: "Family Childcare", capacity: 14, enrolled: 0, present: 0, color: "purple", hours: "Mon–Sun 6:00 AM–11:00 PM" },
 ] as const;
 

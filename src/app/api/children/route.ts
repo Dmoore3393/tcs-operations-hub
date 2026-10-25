@@ -1,4 +1,5 @@
 import { safeFamilyAccess } from "@/lib/family-access";
+import { isTehachapiLocation, locationDisplayName, TEHACHAPI_LOCATION_LABEL } from "@/lib/location-config";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 
 export const runtime = "nodejs";
@@ -157,7 +158,7 @@ function locationSlug(value: unknown) {
   if (source.includes("division") || source.includes("school age center")) return "division";
   if (source.includes("33rd") || source.includes("cornejo")) return "33rd-street";
   if (source.includes("42nd") || source.includes("lara")) return "42nd-street";
-  if (source.includes("tehachapi")) return "tehachapi";
+  if (isTehachapiLocation(source)) return "tehachapi";
   return "";
 }
 
@@ -186,7 +187,7 @@ function normalizeChild(row: DbRow) {
     age: text(record.age) || "Age not entered",
     dateOfBirth: text(record.dateOfBirth) || text(row.date_of_birth),
     ageGroup: text(record.ageGroup) || text(row.age_group) || "Infant",
-    location: text(record.location),
+    location: locationDisplayName(text(record.location)),
     classroom: text(record.classroom),
     primaryGuardian: text(record.primaryGuardian) || text(row.guardian_name),
     secondaryGuardian: text(record.secondaryGuardian) || undefined,
@@ -252,8 +253,8 @@ function normalizeLocation(row: DbRow) {
   return {
     id: text(row.id),
     slug: text(row.slug),
-    name: text(row.name),
-    fullName: text(row.full_name),
+    name: text(row.slug) === "tehachapi" ? TEHACHAPI_LOCATION_LABEL : text(row.name),
+    fullName: locationDisplayName(text(row.full_name)),
     capacity: Number.isFinite(parsedCapacity) && parsedCapacity >= 0 ? parsedCapacity : 0,
     programType: text(row.program_type) || "Family Childcare",
     colorPrimary: text(row.color_primary) || "#506447",

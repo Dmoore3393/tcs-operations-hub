@@ -53,7 +53,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { type LocationKey } from "@/lib/location-config";
+import { locationOptionLabel, type LocationKey } from "@/lib/location-config";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { canAccessRoute, staffInitials, useAuth } from "@/components/providers/AuthProvider";
 import { HUB_SYNC_EVENT, type HubSyncDetail } from "@/lib/sync-events";
@@ -366,7 +366,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               <label className="relative min-w-0 flex-1">
                 <span className="sr-only">Selected location</span>
                 <select value={location} disabled={availableLocations.length === 1} onChange={(event) => setLocation(event.target.value as LocationKey)} className="h-9 w-full appearance-none truncate rounded-xl border border-slate-200 bg-slate-50 py-1.5 pl-3 pr-8 text-base font-black text-slate-700 outline-none">
-                  {availableLocations.map((item) => <option key={item}>{item}</option>)}
+                  {availableLocations.map((item) => <option key={item} value={item}>{locationOptionLabel(item)}</option>)}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
               </label>
@@ -387,7 +387,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 <label className="relative block">
                   <span className="sr-only">Selected location</span>
                   <select value={location} disabled={availableLocations.length === 1} onChange={(event) => setLocation(event.target.value as LocationKey)} className="appearance-none rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-3.5 pr-9 text-sm font-bold text-slate-700 outline-none hover:bg-slate-100" title="Changes the Hub colors and sets the active location for schedules, ratios, and printable tools">
-                    {availableLocations.map((item) => <option key={item}>{item}</option>)}
+                    {availableLocations.map((item) => <option key={item} value={item}>{locationOptionLabel(item)}</option>)}
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 </label>

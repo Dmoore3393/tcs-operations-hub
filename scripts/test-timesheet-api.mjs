@@ -6,7 +6,8 @@ const compile=source=>ts.transpileModule(source,{compilerOptions:{target:ts.Scri
 const url=source=>'data:text/javascript;base64,'+Buffer.from(compile(source)).toString('base64');
 const helper=url(await readFile(new URL('../src/lib/timesheet-workflow.ts',import.meta.url),'utf8'));
 const control=url((await readFile(new URL('../src/lib/server/timesheet-batch-controls.ts',import.meta.url),'utf8')).replace('\"@/lib/timesheet-workflow\"',JSON.stringify(helper)));
-const locationHelper=url((await readFile(new URL('../src/lib/server/location-slug.ts',import.meta.url),'utf8')).replace('import \"server-only\";',''));
+const locationConfig=url(await readFile(new URL('../src/lib/location-config.ts',import.meta.url),'utf8'));
+const locationHelper=url((await readFile(new URL('../src/lib/server/location-slug.ts',import.meta.url),'utf8')).replace('import \"server-only\";','').replace('\"@/lib/location-config\"',JSON.stringify(locationConfig)));
 let source=await readFile(new URL('../src/app/api/timesheets/route.ts',import.meta.url),'utf8');
 source=source.replace('\"@/lib/server/timesheet-batch-controls\"',JSON.stringify(control)).replace('\"@/lib/server/location-slug\"',JSON.stringify(locationHelper));
 source=source.replace('"@/lib/timesheet-workflow"',JSON.stringify(helper)).replace(/import \{ requireStaff, staffErrorResponse \} from .*?;/,'const requireStaff=async()=>globalThis.__timesheetAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');

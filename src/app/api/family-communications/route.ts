@@ -1,3 +1,4 @@
+import { locationDisplayName } from "@/lib/location-config";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 import { uuidPattern } from "@/lib/communications";
 
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
     if (result.error) throw result.error;
     const children = (result.data ?? []).map((row) => {
       const record = row.record_data || {};
-      return { id: row.legacy_id, firstName: row.first_name, lastName: row.last_name, primaryGuardian: row.guardian_name || "", location: text(record.location, 160), guardianEmail: text(record.guardianEmail, 254), familyMessages: Array.isArray(record.familyMessages) ? record.familyMessages : [] };
+      return { id: row.legacy_id, firstName: row.first_name, lastName: row.last_name, primaryGuardian: row.guardian_name || "", location: locationDisplayName(text(record.location, 160)), guardianEmail: text(record.guardianEmail, 254), familyMessages: Array.isArray(record.familyMessages) ? record.familyMessages : [] };
     });
     return Response.json({ children }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { return staffErrorResponse(error); }

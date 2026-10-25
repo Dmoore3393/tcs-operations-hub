@@ -1,6 +1,7 @@
 import type { ChildFileAudit } from "@/lib/child-file-audits";
 import type { ImmunizationRecord } from "@/lib/immunization-tracker";
 import type { FamilyAdultAccess } from "@/lib/family-access";
+import { TEHACHAPI_LOCATION_NAME } from "@/lib/location-config";
 export type LicensingStatus = "Complete" | "Missing Documents";
 export type EnrollmentStatus = "Active" | "Pending" | "Archived";
 export type AttendanceStatus = "Present" | "Checked Out" | "Not Scheduled" | "Absent";
@@ -228,7 +229,7 @@ export const locations = [
   "The School Age Center • Division",
   "Cornejo Family Childcare • 33rd Street",
   "Lara Family Childcare • 42nd Street",
-  "Tehachapi Transportation Hub",
+  TEHACHAPI_LOCATION_NAME,
 ] as const;
 
 /**

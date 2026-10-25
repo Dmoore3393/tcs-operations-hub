@@ -1,13 +1,6 @@
-import { initialChildren } from "@/lib/children";
+import { initialChildren, locations } from "@/lib/children";
 
-export const programLocations = [
-  "Moore Family Childcare • Halcom",
-  "Cathers Family Childcare • 21st Street",
-  "The School Age Center • Division",
-  "Cornejo Family Childcare • 33rd Street",
-  "Lara Family Childcare • 42nd Street",
-  "Tehachapi Transportation Hub",
-] as const;
+export const programLocations = locations;
 
 export type ProgramLocation = (typeof programLocations)[number];
 

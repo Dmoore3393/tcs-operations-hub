@@ -31,7 +31,7 @@ values
   ('00000000-0000-4000-8000-000000000001', '21st-street', '21st Street', 'Cathers Family Childcare • 21st Street', '#111827', '#d1d5db', 14, 'Family Childcare'),
   ('00000000-0000-4000-8000-000000000001', 'division', 'Division', 'The School Age Center • Division', '#dc2626', '#111827', 17, 'School Age Center'),
   ('00000000-0000-4000-8000-000000000001', '33rd-street', '33rd Street', 'Cornejo Family Childcare • 33rd Street', '#ca8a04', '#111827', 14, 'Family Childcare'),
-  ('00000000-0000-4000-8000-000000000001', 'tehachapi', 'Tehachapi', 'Tehachapi Transportation Hub', '#1e3a8a', '#fbbf24', 14, 'Transportation / Care Hub'),
+  ('00000000-0000-4000-8000-000000000001', 'tehachapi', 'D Street (Tehachapi)', 'Thomason Family Childcare • D Street, Tehachapi', '#1e3a8a', '#fbbf24', 14, 'Family Childcare'),
   ('00000000-0000-4000-8000-000000000001', '42nd-street', '42nd Street', 'Lara Family Childcare • 42nd Street', '#7e22ce', '#fbbf24', 14, 'Family Childcare')
 on conflict (organization_id, slug) do update
 set name = excluded.name,

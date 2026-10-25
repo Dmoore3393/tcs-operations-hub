@@ -4,6 +4,7 @@ import {
   locations as childLocationOptions,
 } from "@/lib/children";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
+import { isTehachapiLocation, locationDisplayName, TEHACHAPI_LOCATION_NAME } from "@/lib/location-config";
 
 export const runtime = "nodejs";
 
@@ -138,7 +139,7 @@ function canonicalLocation(value: string) {
   if (/division|school age|astor/.test(source)) return "The School Age Center • Division";
   if (/33rd|cornejo/.test(source)) return "Cornejo Family Childcare • 33rd Street";
   if (/42nd|lara/.test(source)) return "Lara Family Childcare • 42nd Street";
-  if (/tehachapi/.test(source)) return "Tehachapi Transportation Hub";
+  if (isTehachapiLocation(source)) return TEHACHAPI_LOCATION_NAME;
   return "";
 }
 
@@ -149,7 +150,7 @@ function locationSlug(value: string) {
   if (/division|school age|astor/.test(source)) return "division";
   if (/33rd|cornejo/.test(source)) return "33rd-street";
   if (/42nd|lara/.test(source)) return "42nd-street";
-  if (/tehachapi/.test(source)) return "tehachapi";
+  if (isTehachapiLocation(source)) return "tehachapi";
   return "";
 }
 
@@ -291,7 +292,8 @@ function safeFunding(value: string) {
 }
 
 function safeLocation(value: string) {
-  return (childLocationOptions as readonly string[]).includes(value) ? value : "";
+  const canonical = locationDisplayName(value);
+  return (childLocationOptions as readonly string[]).includes(canonical) ? canonical : "";
 }
 
 export async function POST(request: Request) {

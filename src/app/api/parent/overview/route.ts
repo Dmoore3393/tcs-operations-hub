@@ -1,3 +1,4 @@
+import { locationDisplayName } from "@/lib/location-config";
 import { auditSummary, type ChildFileAudit } from "@/lib/child-file-audits";
 import { familyAccessSummary } from "@/lib/family-access";
 import { defaultImmunizationProgram, immunizationStatus, normalizeImmunizationRecord } from "@/lib/immunization-tracker";
@@ -241,7 +242,7 @@ export async function GET(request: Request) {
         id: String(record.id ?? ""),
         weekOf: text(record.weekOf),
         familyName: text(record.familyName),
-        location: text(record.location),
+        location: locationDisplayName(text(record.location)),
         expectedAmount: Number(record.expectedAmount) || 0,
         chargedAmount: Number(record.chargedAmount) || 0,
         paymentStatus: text(record.paymentStatus),
@@ -326,7 +327,7 @@ export async function GET(request: Request) {
           childIds: linkedChildIds,
           locationId,
           weekOf: text(row.week_of),
-          location: text(record.location),
+          location: locationDisplayName(text(record.location)),
           imageName: text(record.menuImageName),
           uploadedAt: text(record.menuImageUploadedAt),
           imageUrl: await signedMenuImageUrl(admin, objectPath),
@@ -440,7 +441,7 @@ export async function GET(request: Request) {
         firstName: text(record.firstName),
         lastName: text(record.lastName),
         ageGroup: permissions.viewProfile ? text(record.ageGroup) : "",
-        location: permissions.viewProfile ? text(record.location) : "",
+        location: permissions.viewProfile ? locationDisplayName(text(record.location)) : "",
         classroom: permissions.viewProfile ? text(record.classroom) : "",
         weeklySchedule: permissions.viewSchedule ? text(record.weeklySchedule) : "",
         transportation: permissions.viewTransportation ? text(record.transportation) : "",
