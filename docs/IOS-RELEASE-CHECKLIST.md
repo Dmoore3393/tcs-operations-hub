@@ -49,30 +49,41 @@ have already been added. No real staff or family data was changed.
   incident alerts. Do not use real families for this test. Synthetic review
   records intentionally do not send alerts. Check denial, app settings, sign-out,
   and notification taps. Lock-screen alerts must contain no sensitive child text.
-- [ ] Confirm the TCS icon, green launch screen, The Hub display name, version
-  1.0/build 3, correct bundle ID/team, and iPhone layout in Xcode.
+- [x] Confirm the TCS icon, green launch screen, The Hub display name, version
+  1.0/build 4, correct bundle ID/team, and iPhone layout in Xcode.
 
 ## Steps requiring the owner
 
 - [x] Authorize publishing the prepared branch to the existing public GitHub
   repository and deploying it to Vercel. The owner provided explicit approval.
 - [x] Reconnect Danielle's MacBook Air; Xcode builds and Simulator checks ran.
-- [ ] Sign into the Apple Developer account in Xcode if needed, accept any
-  agreements, and approve signing/provisioning. Confirm build number 3 is unused.
+- [x] Sign into App Store Connect and accept the October 13 Apple Developer
+  Program agreement on October 25 with the owner's explicit approval. The
+  existing Xcode account signed and uploaded builds 3 and 4 successfully.
 - [ ] Configure/confirm the APNs key in Vercel server environment and enable the
   matching App ID capability/provisioning profile. Do not add signing keys to git.
-- [ ] Review marked Terms with counsel and confirm the privacy manifest and App
-  Store Connect privacy answers against enabled TCS features and processors.
-- [x] Create the version 1.0/build 3 archive (October 25) using the existing
+- [ ] Review marked Terms with counsel.
+- [x] Align the privacy manifest and App Store Connect's sixteen declared data
+  categories against existing stored fields. All are linked, used for App
+  Functionality and not used for tracking. Source mapping:
+  `docs/IOS-PRIVACY-DATA-MAP.md`. No collection behavior or records were changed.
+- [x] Create the version 1.0/build 4 archive (October 25) using the existing
   development identity. Artifact:
-  `native/capacitor/artifacts/TheHub-1.0-build3-20261025-103001.xcarchive`.
+  `native/capacitor/artifacts/TheHub-1.0-build4-20261025-112135.xcarchive`.
 - [x] Export the App Store IPA with the existing Apple Distribution identity;
   verify its signature and production APNs entitlements. Export:
-  `native/capacitor/artifacts/AppStore-build3/The Hub.ipa`.
-- [ ] Complete Apple-side validation, the remaining device checks, and upload
-  through Xcode Organizer to TestFlight/App Store Connect.
-  Check the current review status before replacing a queued submission.
-- [ ] Update App Store Connect Privacy, Support, and Terms URLs and review notes.
+  `native/capacitor/artifacts/AppStore-build4/The Hub.ipa`.
+- [x] Upload build 4 to App Store Connect and confirm it processed and can be
+  selected for the app version. Existing queued build 2 was withdrawn for this
+  replacement. The existing manual-release choice is preserved.
+- [x] Submit version 1.0/build 4 to App Review. Apple confirms one item submitted
+  October 25, 2026 at 11:39 AM Pacific and status **Waiting for Review**.
+- [ ] Complete the remaining signed-in and physical-device checks above.
+- [x] Update App Store Connect Privacy, Support, and Terms URLs and review notes.
   Explain invite-only access, demo staff/parent credentials, earned-only points,
   native camera/alerts/unlock, and the in-app account deletion location. Native
   features strengthen the submission; Apple makes the final Guideline 4.2 decision.
+
+After approval, the account holder still controls manual release and any remaining
+Unlisted App distribution steps. This release does not automatically publish the
+app to customers.

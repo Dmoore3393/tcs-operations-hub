@@ -83,13 +83,15 @@ privacy answers together before submission.
 ## Identity, simulator, and archive
 
 Display name **The Hub**; bundle ID
-`com.thomasonchildcaresolutions.thehub`; version **1.0**, build **3**; existing
+`com.thomasonchildcaresolutions.thehub`; version **1.0**, build **4**; existing
 team **6Y2923TFK5**. The existing approved TCS icon is used, with a green launch
-screen. Confirm build 3 is unused in App Store Connect before uploading.
+screen. Build 4 was uploaded, processed and submitted to App Review on October 25
+at 11:39 AM Pacific. App Store Connect confirms **Waiting for Review**. The
+existing manual-release choice and Unlisted App intent are preserved.
 
 After the matching Vercel API release is live and the simulator/device checks
 pass, run `bash scripts/build-ios.sh archive`. The script checks native API CORS
-before archiving and creates `artifacts/TheHub-1.0-build3.xcarchive`. It does not
+before archiving and creates `artifacts/TheHub-1.0-build4.xcarchive`. It does not
 upload to Apple. Xcode Organizer can validate and distribute it; the supplied
 `ExportOptions.plist` can export an App Store Connect package after signing.
 
@@ -104,12 +106,18 @@ upgrades construct the Capacitor bridge. Route comparisons normalize trailing
 slashes used by exported pages, including login and role restrictions. The
 build script supports Xcode's Device Hub as well as older Simulator windows.
 
-An archive was created at
-`artifacts/TheHub-1.0-build3-20261025-103001.xcarchive`, initially signed with the
-existing development identity. Xcode also exported `artifacts/AppStore-build3/The Hub.ipa`
-with the existing Apple Distribution identity. Its signature verifies, production
-APNs is enabled, and debugging is disabled. Apple-side validation and upload are
-separate steps; no new submission has been sent. Signed-in native flows,
-physical-device camera/Face ID/APNs checks, and App Store Connect build-number
-availability still require verification. The full phone checklist is in
+Build 3 first uploaded successfully. The final package is build 4, archived at
+`artifacts/TheHub-1.0-build4-20261025-112135.xcarchive` and exported to
+`artifacts/AppStore-build4/The Hub.ipa` with the existing Apple Distribution
+identity. Its signature verifies, production APNs is enabled, and debugging is
+disabled. Build 4 adds the three privacy categories already disclosed in App
+Store Connect but missing from the manifest; the App Store form also includes
+the four additional source-verified categories in the manifest. All sixteen use
+App Functionality, identity linkage and no tracking. See
+`docs/IOS-PRIVACY-DATA-MAP.md` for the storage evidence and Apple definitions.
+
+The interface is unchanged from the Simulator-tested build 3. Build 4's property
+lists, archive, exported signature, entitlements and upload were verified.
+Signed-in native flows and physical-device camera/Face ID/APNs checks remain.
+The full phone checklist and submission status are in
 `docs/IOS-RELEASE-CHECKLIST.md` at the repository root.
