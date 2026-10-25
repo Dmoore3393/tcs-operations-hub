@@ -39,7 +39,7 @@ case "$hub_build_mode" in
       exit 2
     fi
     mkdir -p artifacts
-    xcodebuild -project ios/App/App.xcodeproj -scheme TheHub -configuration Release -destination 'generic/platform=iOS' -archivePath artifacts/TheHub-1.0-build3.xcarchive -allowProvisioningUpdates archive
+    xcodebuild -project ios/App/App.xcodeproj -scheme TheHub -configuration Release -destination 'generic/platform=iOS' -archivePath artifacts/TheHub-1.0-build4.xcarchive -allowProvisioningUpdates archive
     echo "Archive prepared. Review its privacy report and signing in Xcode Organizer before uploading."
     ;;
   *) echo "Usage: bash scripts/build-ios.sh simulator|archive"; exit 2 ;;

@@ -87,7 +87,7 @@ existing app feature.
 
 `native/capacitor` contains the new Xcode project with bundled screens, a native
 QR/photo camera, APNs bridge, Face ID/device-passcode session unlock, permission
-text, TCS assets, and a privacy manifest. Version 1.0/build 3 and the existing
+text, TCS assets, and a privacy manifest. Version 1.0/build 4 and the existing
 bundle ID/team are configured. The old native shell remains available.
 
 The owner explicitly authorized publication to the existing public GitHub
@@ -102,15 +102,26 @@ startup issue and trailing-slash login/route comparisons were fixed, with route
 permission regressions added to CI. Debug-only test sessions use temporary web
 storage and cannot expose existing signed-in sessions.
 
-Xcode created version 1.0/build 3 at
-`native/capacitor/artifacts/TheHub-1.0-build3-20261025-103001.xcarchive` using the
-existing development signing identity. Xcode exported an App Store IPA under
-`native/capacitor/artifacts/AppStore-build3/` using the Apple Distribution identity;
-its signature verifies and its entitlements use production APNs with debugging
-disabled. Apple-side validation and upload are separate steps. Signed-in native
-flows and physical-device features remain
-unchecked. Apple rejected the supplied account sign-in, so current submission
-status and build-number availability could not yet be read. No submission was
-cancelled or sent. See
+Build 3 uploaded first. The final package is version 1.0/build 4 at
+`native/capacitor/artifacts/TheHub-1.0-build4-20261025-112135.xcarchive`, exported
+under `native/capacitor/artifacts/AppStore-build4/` with the Apple Distribution
+identity. Its signature verifies, its entitlements use production APNs, and
+debugging is disabled. The UI is unchanged from the Simulator-tested build 3.
+Build 4 aligns the native manifest with the App Store privacy disclosures:
+sixteen categories, linked, for App Functionality, without tracking. The source
+evidence is documented in `docs/IOS-PRIVACY-DATA-MAP.md`; no collection behavior
+or real records were changed.
+
+The owner completed secure Apple verification and explicitly authorized accepting
+the October 13 Developer Program agreement; Apple confirms acceptance October 25.
+The old build 2 submission was withdrawn, build 4 attached, and review notes were
+updated with public links, synthetic demo instructions, native feature entry
+points, earned-only points, and Account & Privacy. Existing review credentials,
+Unlisted App intent, and manual release were preserved.
+
+**Submitted October 25, 2026 at 11:39 AM Pacific.** App Store Connect confirms
+one item submitted, **1.0 (4)**, with status **Waiting for Review**. Apple decides
+the review outcome. Signed-in native flows and physical-device features remain
+unchecked. See
 `native/capacitor/README.md` for reproducible build commands and
 `docs/IOS-RELEASE-CHECKLIST.md` for every phone check and owner step.
