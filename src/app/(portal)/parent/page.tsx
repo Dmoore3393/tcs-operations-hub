@@ -3,6 +3,9 @@
 import { unregisterCurrentNativeDevice } from "@/lib/push-client";
 import NativeAlertsButton from "@/components/native/NativeAlertsButton";
 
+import { newCommunicationId } from "@/lib/communications";
+import ParentToday from "@/components/parent/ParentToday";
+import { hubRequest } from "@/lib/hub-request";
 import LegalFooter from "@/components/LegalFooter";
 
 import { CelebrationBits, FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
@@ -13,6 +16,7 @@ import type { Session } from "@supabase/supabase-js";
 import {
   AlertTriangle,
   Bell,
+  MessageSquareText,
   BriefcaseBusiness,
   Camera,
   Coins,
@@ -38,7 +42,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useHubPathname } from "@/hooks/useHubPathname";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type ParentChild = {
   id: string;
@@ -306,7 +310,7 @@ function todayPacific() {
 export default function ParentPortalPage() {
   const router = useRouter();
   const pathname = useHubPathname();
-  const activeView = pathname === "/parent/care" ? "care" : pathname === "/parent/forms" ? "forms" : "home";
+  const activeView = pathname === "/parent/care" ? "care" : pathname === "/parent/forms" ? "forms" : pathname === "/parent/messages" ? "messages" : "home";
   const [session, setSession] = useState<Session | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [selectedChildId, setSelectedChildId] = useState("");
@@ -316,9 +320,13 @@ export default function ParentPortalPage() {
   const [typedName, setTypedName] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
   const [savingForm, setSavingForm] = useState(false);
-  const [replySubject, setReplySubject] = useState("");
-  const [replyBody, setReplyBody] = useState("");
+  const [messageDrafts, setMessageDrafts] = useState<Record<string, { subject: string; body: string }>>({});
+  const replySubject = messageDrafts[selectedChildId]?.subject || "";
+  const replyBody = messageDrafts[selectedChildId]?.body || "";
+  const setReplySubject = (value: string) => setMessageDrafts((current) => ({ ...current, [selectedChildId]: { subject: value, body: current[selectedChildId]?.body || "" } }));
+  const setReplyBody = (value: string) => setMessageDrafts((current) => ({ ...current, [selectedChildId]: { body: value, subject: current[selectedChildId]?.subject || "" } }));
   const [sendingMessage, setSendingMessage] = useState(false);
+  const messageRequestId = useRef("");
   const [notice, setNotice] = useState("");
   const [pickupPin, setPickupPin] = useState("");
   const [savingPickupPin, setSavingPickupPin] = useState(false);
@@ -482,6 +490,9 @@ export default function ParentPortalPage() {
   const profilePhoto = selectedMedia.find((item) => item.kind === "Profile") ?? null;
   const recentPhotos = selectedMedia.filter((item) => item.kind === "Daily Photo").slice(0, 9);
 
+  const unreadMessages = selectedChild?.messages.filter((message) => message.direction === "TCS to Family" && !message.readAt).length || 0;
+  const allUnreadMessages = overview?.children.reduce((sum, child) => sum + child.messages.filter((message) => message.direction === "TCS to Family" && !message.readAt).length, 0) || 0;
+
   const openForms = overview?.forms.filter((form) => !["Signed", "Archived"].includes(form.status)) ?? [];
   const signedForms = overview?.forms.filter((form) => form.status === "Signed") ?? [];
   const canUseFamilyAttendance = overview?.children.some((child) => child.access.permissions.managePickup) ?? false;
@@ -513,34 +524,26 @@ export default function ParentPortalPage() {
   }
 
   async function sendFamilyMessage() {
-    if (!selectedChild || !session || !replySubject.trim() || !replyBody.trim()) return;
-    setSendingMessage(true);
-    setError("");
+    if (!selectedChild || !session || !replySubject.trim() || !replyBody.trim() || sendingMessage) return;
+    setSendingMessage(true); setError("");
+    messageRequestId.current ||= newCommunicationId();
     try {
-      const response = await fetch("/api/parent/messages", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          childId: selectedChild.id,
-          subject: replySubject,
-          body: replyBody,
-        }),
-      });
-      const payload = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(payload.error || "Could not send your message.");
-      await loadOverview(session);
-      setReplySubject("");
-      setReplyBody("");
+      await hubRequest("/api/parent/messages", session.access_token, { method: "POST", body: JSON.stringify({ id: messageRequestId.current, childId: selectedChild.id, subject: replySubject, body: replyBody }) });
+      messageRequestId.current = ""; setReplySubject(""); setReplyBody("");
       setNotice("Your message was sent to TCS.");
-      window.setTimeout(() => setNotice(""), 3200);
-    } catch (messageError) {
-      setError(messageError instanceof Error ? messageError.message : "Could not send your message.");
-    } finally {
-      setSendingMessage(false);
-    }
+      await loadOverview(session);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not send. Your draft is still here; please try again."); }
+    finally { setSendingMessage(false); }
+  }
+
+  async function markFamilyMessagesRead() {
+    if (!selectedChild || !session || sendingMessage) return;
+    setSendingMessage(true); setError("");
+    try {
+      await hubRequest("/api/parent/messages", session.access_token, { method: "PATCH", body: JSON.stringify({ childId: selectedChild.id, ids: selectedChild.messages.filter((message) => message.direction === "TCS to Family" && !message.readAt).map((message) => message.id) }) });
+      await loadOverview(session); setNotice("Your messages were marked read.");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not save the read receipt."); }
+    finally { setSendingMessage(false); }
   }
 
   async function updatePickupPin(action: "set" | "clear") {
@@ -665,8 +668,10 @@ export default function ParentPortalPage() {
         >
           <ScanLine className="h-5 w-5" /> Scan to Check In / Out
         </button>}
-        {overview && overview.children.length > 1 && <div className="relative isolate z-10 mt-5 flex flex-wrap gap-2">{overview.children.map((child) => <button key={child.id} onClick={() => setSelectedChildId(child.id)} className={`rounded-xl px-3 py-2 text-xs font-black ${selectedChild?.id === child.id ? "bg-white text-emerald-950 shadow-lg" : "bg-white/10 text-white"}`}>{childName(child)}</button>)}</div>}
+        {overview && overview.children.length > 1 && <div className="relative isolate z-10 mt-5 flex flex-wrap gap-2">{overview.children.map((child) => <button key={child.id} disabled={sendingMessage} onClick={() => { setSelectedChildId(child.id); messageRequestId.current = ""; }} className={`rounded-xl px-3 py-2 text-xs font-black ${selectedChild?.id === child.id ? "bg-white text-emerald-950 shadow-lg" : "bg-white/10 text-white"}`}>{childName(child)}</button>)}</div>}
       </section>
+
+      {selectedChild && activeView === "home" && <ParentToday firstName={selectedChild.firstName} today={todayPacific()} entries={care} unread={unreadMessages} forms={openForms.length} viewCare={selectedChild.access.permissions.viewProfile || selectedChild.access.permissions.viewMeals || selectedChild.access.permissions.viewAttendance} viewMessages={selectedChild.access.permissions.viewMessages} viewForms={selectedChild.access.permissions.viewDocuments} viewSchedule={selectedChild.access.permissions.viewSchedule || selectedChild.access.permissions.submitSchedule} />}
 
       {selectedChild && <section className={`${activeView === "home" ? "" : "hidden"} rounded-3xl border border-violet-200 bg-gradient-to-br from-white to-violet-50 p-5 shadow-sm`}>
         <div className="grid gap-5 md:grid-cols-[120px_1fr] md:items-start">
@@ -700,10 +705,11 @@ export default function ParentPortalPage() {
       </section>}
 
       {selectedChild && <>
+        {activeView === "messages" && !selectedChild.access.permissions.viewMessages && <p className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-lg text-amber-950">Family messaging is not enabled for your access to this child. Contact your location for help.</p>}
         {activeView !== "home" && <section className="rounded-[28px] border border-emerald-200 bg-gradient-to-br from-white via-emerald-50 to-sky-50 p-5 shadow-sm">
-          <p className="text-base font-black uppercase tracking-[.18em] text-emerald-700">{activeView === "care" ? "Care & daily updates" : "Forms & family records"}</p>
+          <p className="text-base font-black uppercase tracking-[.18em] text-emerald-700">{activeView === "care" ? "Care & daily updates" : activeView === "messages" ? "Your family conversation" : "Forms & family records"}</p>
           <div className="mt-2 flex items-start justify-between gap-4">
-            <div><h2 className="text-2xl font-black text-slate-950">{activeView === "care" ? `${selectedChild.firstName}’s Care` : `${selectedChild.firstName}’s Forms`}</h2><p className="mt-1 text-xs font-semibold leading-5 text-slate-600">{activeView === "care" ? "Meals, attendance, weekly progress, photos, and recent care updates in one place." : "Review family forms, acknowledgments, and file items that need attention."}</p></div>
+            <div><h2 className="text-2xl font-black text-slate-950">{activeView === "care" ? `${selectedChild.firstName}’s Care` : activeView === "messages" ? "Messages with TCS" : `${selectedChild.firstName}’s Forms`}</h2><p className="mt-1 text-xs font-semibold leading-5 text-slate-600">{activeView === "care" ? "Meals, attendance, weekly progress, photos, and recent care updates in one place." : activeView === "messages" ? "Your authorized family messages stay together here." : "Review family forms, acknowledgments, and file items that need attention."}</p></div>
             <GatorGuide size="sm" />
           </div>
         </section>}
@@ -845,12 +851,14 @@ export default function ParentPortalPage() {
               {selectedChild.pickupPinConfigured && <div className="mt-3 flex items-center justify-between gap-3"><p className="text-base font-semibold text-slate-600">Last updated {selectedChild.pickupPinUpdatedAt ? new Date(selectedChild.pickupPinUpdatedAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "recently"}</p><button disabled={savingPickupPin} onClick={() => void updatePickupPin("clear")} className="text-xs font-black text-red-700">Remove PIN</button></div>}
             </section>
 
-            <section className={`${activeView === "home" ? "" : "hidden"} rounded-3xl border border-slate-200 bg-white p-5 shadow-sm`}>
+            <section className={`${activeView === "messages" && selectedChild.access.permissions.viewMessages ? "" : "hidden"} rounded-3xl border border-slate-200 bg-white p-5 shadow-sm`}>
               <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><Bell className="h-5 w-5 text-emerald-700" /><h2 className="font-black text-slate-950">Messages with TCS</h2></div><p className="mt-1 text-xs text-slate-600">Secure family thread for {selectedChild.firstName}.</p></div><span className="rounded-full bg-emerald-50 px-2 py-1 text-base font-black text-emerald-800">{selectedChild.messages?.length || 0}</span></div>
-              <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">{!selectedChild.messages?.length ? <p className="rounded-xl bg-slate-50 p-4 text-xs font-semibold text-slate-600">No family messages yet.</p> : selectedChild.messages.slice(-12).map((message) => <div key={message.id} className={`flex ${message.direction === "Family to TCS" ? "justify-end" : "justify-start"}`}><div className={`max-w-[90%] rounded-2xl p-3 ${message.direction === "Family to TCS" ? "bg-emerald-700 text-white" : "border border-slate-200 bg-slate-50 text-slate-900"}`}><p className="text-base font-black uppercase tracking-wider opacity-65">{message.direction}</p><p className="mt-1 text-xs font-black">{message.subject || "Message"}</p><p className="mt-1 whitespace-pre-wrap text-xs leading-5 opacity-90">{message.body}</p><p className="mt-2 text-base font-semibold opacity-55">{message.createdAt ? new Date(message.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""}</p></div></div>)}</div>
-              <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
-                <input value={replySubject} onChange={(event) => setReplySubject(event.target.value)} maxLength={160} placeholder="Subject" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-bold" />
-                <textarea value={replyBody} onChange={(event) => setReplyBody(event.target.value)} maxLength={5000} placeholder="Write a message to your TCS team…" className="min-h-20 w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-semibold leading-5" />
+              {unreadMessages > 0 && <button disabled={sendingMessage} onClick={() => void markFamilyMessagesRead()} className="mt-4 min-h-11 rounded-xl border border-emerald-400 px-4 py-2 text-base font-bold text-emerald-950">Mark messages read ({unreadMessages})</button>}
+              <p className="mt-3 text-base leading-7 text-slate-700">Contact your location directly for emergencies or time-sensitive pickup changes.</p>
+              <div className="mt-4 max-h-[600px] space-y-3 overflow-y-auto">{!selectedChild.messages?.length ? <p className="rounded-xl bg-slate-50 p-4 text-xs font-semibold text-slate-600">No family messages yet.</p> : selectedChild.messages.slice(-12).map((message) => <div key={message.id} className={`flex ${message.direction === "Family to TCS" ? "justify-end" : "justify-start"}`}><div className={`max-w-[90%] rounded-2xl p-3 ${message.direction === "Family to TCS" ? "bg-emerald-700 text-white" : "border border-slate-200 bg-slate-50 text-slate-900"}`}><p className="text-base font-black uppercase tracking-wider opacity-65">{message.direction}</p><p className="mt-1 text-xs font-black">{message.subject || "Message"}</p><p className="mt-1 whitespace-pre-wrap text-xs leading-5 opacity-90">{message.body}</p><p className="mt-2 text-base font-semibold opacity-55">{message.createdAt ? new Date(message.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""}</p></div></div>)}</div>
+              <div className={`${selectedChild.access.permissions.messageStaff ? "" : "hidden"} mt-4 space-y-2 border-t border-slate-100 pt-4`}>
+                <input value={replySubject} disabled={sendingMessage} aria-label="Message subject" onChange={(event) => { setReplySubject(event.target.value); messageRequestId.current = ""; }} maxLength={160} placeholder="Subject" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-bold" />
+                <textarea value={replyBody} disabled={sendingMessage} aria-label="Message to TCS" onChange={(event) => { setReplyBody(event.target.value); messageRequestId.current = ""; }} maxLength={5000} placeholder="Write a message to your TCS team…" className="min-h-20 w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-semibold leading-5" />
                 <button disabled={!replySubject.trim() || !replyBody.trim() || sendingMessage} onClick={() => void sendFamilyMessage()} className="w-full rounded-xl bg-emerald-700 px-3 py-2.5 text-xs font-black text-white disabled:opacity-40">{sendingMessage ? "Sending…" : "Send Message"}</button>
               </div>
             </section>
@@ -892,7 +900,7 @@ export default function ParentPortalPage() {
     <div className="mx-auto max-w-6xl px-4 pb-24"><LegalFooter /></div>
 
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 pb-[max(.4rem,env(safe-area-inset-bottom))] pt-1 shadow-[0_-8px_28px_rgba(15,23,42,.10)] backdrop-blur">
-      <div className="mx-auto grid max-w-md grid-cols-3 px-4"><Bottom icon={<Home className="h-5 w-5" />} label="Home" active={activeView === "home"} onClick={() => router.push("/parent")} /><Bottom icon={<CalendarDays className="h-5 w-5" />} label="Care" active={activeView === "care"} onClick={() => router.push("/parent/care")} /><Bottom icon={<FileSignature className="h-5 w-5" />} label="Forms" active={activeView === "forms"} onClick={() => router.push("/parent/forms")} /></div>
+      <div className="mx-auto grid max-w-xl grid-cols-4 px-2"><Bottom icon={<Home className="h-5 w-5" />} label="Home" active={activeView === "home"} onClick={() => router.push("/parent")} /><Bottom icon={<CalendarDays className="h-5 w-5" />} label="Care" active={activeView === "care"} onClick={() => router.push("/parent/care")} /><Bottom icon={<MessageSquareText className="h-5 w-5" />} label={allUnreadMessages ? `Messages · ${allUnreadMessages}` : "Messages"} active={activeView === "messages"} onClick={() => router.push("/parent/messages")} /><Bottom icon={<FileSignature className="h-5 w-5" />} label="Forms" active={activeView === "forms"} onClick={() => router.push("/parent/forms")} /></div>
     </nav>
 
     {formToSign && <div className="fixed inset-0 z-[10000] overflow-y-auto bg-slate-950/70 p-3 backdrop-blur-sm">

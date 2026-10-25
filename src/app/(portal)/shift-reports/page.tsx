@@ -20,7 +20,7 @@ import {
 import { starterEmployees } from "@/lib/hub-data";
 import { careLocations, type LocationKey } from "@/lib/location-config";
 import { Check, Eye, FileText, Lock, MessageSquareText, ShieldCheck } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { localIsoDate } from "@/lib/date-utils";
 import { recordAuditEvent } from "@/lib/audit";
 
@@ -56,6 +56,11 @@ export default function ShiftReportsPage() {
   const [careLogs] = usePersistentState<CareLogEntry[]>("tcs-daily-care-v1", starterCareLogs);
   const [healthRecords] = usePersistentState<HealthSafetyRecord[]>("tcs-health-safety-v1", starterHealthSafety);
   const [tab, setTab] = useState<"New Report" | "Report History" | "Pickup Handoff">("New Report");
+  useEffect(() => {
+    const selectTab = () => { if (window.location.hash === "#pickup-handoff") setTab("Pickup Handoff"); else if (window.location.hash === "#report-history") setTab("Report History"); };
+    selectTab(); window.addEventListener("hashchange", selectTab);
+    return () => window.removeEventListener("hashchange", selectTab);
+  }, []);
   const [form, setForm] = useState<ReportForm>(() => createForm("Opening", selectedLocation));
   const [message, setMessage] = useState("");
   const [reviewInitials, setReviewInitials] = useState<Record<string, string>>({});

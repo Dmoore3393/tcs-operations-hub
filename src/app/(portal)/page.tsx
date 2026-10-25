@@ -6,6 +6,7 @@ import { SectionCard, StatCard, StatusBadge } from "@/components/hub/HubUI";
 import DashboardHero from "@/components/dashboard/Hero";
 import MorningBriefing from "@/components/dashboard/MorningBriefing";
 import SmartAlertsPanel from "@/components/dashboard/SmartAlertsPanel";
+import NeedsAttention from "@/components/dashboard/NeedsAttention";
 import TodayAtTCS from "@/components/dashboard/TodayAtTCS";
 import EmployeeCheckinReminder from "@/components/dashboard/EmployeeCheckinReminder";
 import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
@@ -54,7 +55,7 @@ export default function Home() {
   const visibleCareLocations = careLocations.filter((item) => availableLocations.includes(item));
   const [children] = usePersistentState<ChildRecord[]>("tcs-children-v1", canUseChildren ? initialChildren : []);
   const [childSchedules] = usePersistentState<ChildScheduleRecord[]>("tcs-child-schedules-v2", (canUseChildren || canUseMeals || canUseTransportation || canUseRatios) ? starterChildSchedules : []);
-  const [tasks] = usePersistentState<WorkTask[]>("tcs-work-tasks", canUseWorkPlans ? starterTasks : []);
+  const [tasks, , , taskState] = usePersistentState<WorkTask[]>("tcs-work-tasks", canUseWorkPlans ? starterTasks : []);
   const [routes] = usePersistentState<TransportationRoute[]>("tcs-routes", (canUseTransportation || canUseTransportationFees) ? starterRoutes : []);
   const [kidKareRecords] = usePersistentState<KidKareEnrollment[]>("tcs-kidkare-enrollments-v1", canUseKidKare ? starterKidKareEnrollments : []);
   const [timesheets] = usePersistentState<TimesheetRecord[]>("tcs-timesheets-v1", canUseTimesheets ? starterTimesheets : []);
@@ -214,6 +215,8 @@ export default function Home() {
           {canUseKidKare && <StatCard label="KidKare Actions" value={kidKareNeedsAction.length} helper="Child-location records not confirmed" icon={<ShieldCheck className="h-5 w-5" />} tone="amber" />}
           {canUseTimesheets && <StatCard label="Timesheets Moving" value={timesheetsInProgress.length} helper="Across the submission workflow" icon={<FileCheck2 className="h-5 w-5" />} tone="blue" />}
         </section>
+
+        <NeedsAttention tasks={canUseWorkPlans ? tasks : []} taskState={canUseWorkPlans ? taskState : undefined} familyReplies={canAccessRoute(profile, "/family-communications") ? children.filter((child) => location === "All Locations" || child.location.toLowerCase().includes(location.toLowerCase())).reduce((sum, child) => sum + (child.familyMessages || []).filter((message) => message.direction === "Family to TCS" && !message.readAt).length, 0) : 0} />
 
         <SmartAlertsPanel alerts={smartAlerts} />
 

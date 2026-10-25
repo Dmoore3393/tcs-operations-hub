@@ -34,5 +34,7 @@ jobs:
         run: node --test scripts/test-account-deletion.mjs scripts/test-request-timeout.mjs scripts/test-native-api.mjs scripts/test-native-family-notifications.mjs scripts/test-route-access.mjs
       - name: Typecheck application
         run: npx tsc --noEmit
+      - name: Verify communications isolation and daily follow-through
+        run: node --test scripts/test-communications-database.mjs scripts/test-communications-api.mjs scripts/test-daily-follow-through.mjs
       - name: Build application
         run: npm run build
