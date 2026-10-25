@@ -30,6 +30,9 @@ public final class TCSDevicePlugin: CAPPlugin, CAPBridgedPlugin, UIImagePickerCo
 
     public override func load() {
         super.load()
+        #if DEBUG
+        if HubNativeQA.startPath != nil { return }
+        #endif
         locked = UserDefaults.standard.bool(forKey: self.signedInKey)
         DispatchQueue.main.async { [weak self] in if self?.locked == true { self?.showCover() } }
         let center = NotificationCenter.default
@@ -95,6 +98,9 @@ public final class TCSDevicePlugin: CAPPlugin, CAPBridgedPlugin, UIImagePickerCo
     }
 
     @objc func sessionChanged(_ call: CAPPluginCall) {
+        #if DEBUG
+        if HubNativeQA.startPath != nil { call.resolve(); return }
+        #endif
         DispatchQueue.main.async {
             guard self.trusted(call) else { return }
             let signedIn = call.getBool("authenticated") ?? false
@@ -201,7 +207,7 @@ public final class TCSDevicePlugin: CAPPlugin, CAPBridgedPlugin, UIImagePickerCo
     }
 
     @objc func registerPush(_ call: CAPPluginCall) {
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [self] in
             guard self.trusted(call) else { return }
             guard !self.locked else { call.reject("Unlock The Hub before using this feature."); return }
             guard self.pushCall == nil else { call.reject("Notification registration is already in progress."); return }

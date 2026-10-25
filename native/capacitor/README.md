@@ -93,8 +93,23 @@ before archiving and creates `artifacts/TheHub-1.0-build3.xcarchive`. It does no
 upload to Apple. Xcode Organizer can validate and distribute it; the supplied
 `ExportOptions.plist` can export an App Store Connect package after signing.
 
-**Current verification limit:** the connected Mac was offline. The web export,
-TypeScript, authorization tests, Xcode project structure, XML, and plists were
-checked here. Swift compilation, Simulator execution, physical-device features,
-signing, an actual archive, and TestFlight upload remain pending. The full phone
-checklist is in `docs/IOS-RELEASE-CHECKLIST.md` at the repository root.
+**Verified on October 25, 2026:** Xcode 27 compiled and ran the packaged app on
+the iPhone 18 Pro Simulator. Both login forms render, and Privacy, Terms, and
+Support passed signed-out checks with content JavaScript both enabled and
+disabled. The shared scheme includes these isolated `TheHubUITests` checks;
+their temporary web storage and test launch paths exist only in Debug builds.
+
+The native entry point preserves the previous app's SwiftUI scene identity so
+upgrades construct the Capacitor bridge. Route comparisons normalize trailing
+slashes used by exported pages, including login and role restrictions. The
+build script supports Xcode's Device Hub as well as older Simulator windows.
+
+An archive was created at
+`artifacts/TheHub-1.0-build3-20261025-103001.xcarchive`, initially signed with the
+existing development identity. Xcode also exported `artifacts/AppStore-build3/The Hub.ipa`
+with the existing Apple Distribution identity. Its signature verifies, production
+APNs is enabled, and debugging is disabled. Apple-side validation and upload are
+separate steps; no new submission has been sent. Signed-in native flows,
+physical-device camera/Face ID/APNs checks, and App Store Connect build-number
+availability still require verification. The full phone checklist is in
+`docs/IOS-RELEASE-CHECKLIST.md` at the repository root.

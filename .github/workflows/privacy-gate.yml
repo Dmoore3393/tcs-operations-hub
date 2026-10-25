@@ -31,7 +31,7 @@ jobs:
       - name: Verify timesheet workflow, accountability, and database locks
         run: node --test scripts/test-timesheet-workflow.mjs scripts/test-timesheet-api.mjs scripts/test-timesheet-controls.mjs scripts/test-timesheet-database.mjs
       - name: Verify account deletion, bounded loading, native API access, and family alert authorization
-        run: node --test scripts/test-account-deletion.mjs scripts/test-request-timeout.mjs scripts/test-native-api.mjs scripts/test-native-family-notifications.mjs
+        run: node --test scripts/test-account-deletion.mjs scripts/test-request-timeout.mjs scripts/test-native-api.mjs scripts/test-native-family-notifications.mjs scripts/test-route-access.mjs
       - name: Typecheck application
         run: npx tsc --noEmit
       - name: Build application

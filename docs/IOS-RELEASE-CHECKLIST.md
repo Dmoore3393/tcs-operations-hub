@@ -5,8 +5,8 @@ the original parent-demo family, and earned-only Gator Cash are preserved.
 
 ## What changed and how to check on your phone
 
-Web changes must be deployed before these checks use the live URL. The isolated
-synthetic database records have already been added.
+The initial web fixes are live on Vercel. The isolated synthetic database records
+have already been added. No real staff or family data was changed.
 
 | Fix | What changed | Phone check |
 | --- | --- | --- |
@@ -23,12 +23,15 @@ synthetic database records have already been added.
 | 11. Doodles | Decorative icons are behind the welcome text, hidden from assistive technology, and ignore taps. | Read login/portal welcome text and tap nearby controls; doodles must not cover words or intercept taps. |
 | 12. Discovery files | Added exact public allowlist robots.txt and a four-page sitemap. Protected layouts are noindex. | Open `/robots.txt` and `/sitemap.xml`; only `/`, `/privacy`, `/terms`, and `/support` are public. Authentication still protects portal data. |
 
-## Native checks after the Mac reconnects
+## Native checks
 
-- [ ] Build/install with `bash native/capacitor/scripts/build-ios.sh simulator`.
-  Confirm existing email/password staff and parent login work with the live API.
-- [ ] Sign out and open Privacy, Support, and Terms inside the packaged app.
-  Repeat with network access off; bundled public text must remain available.
+- [x] Build/install on the iPhone 18 Pro Simulator with Xcode 27. Both login
+  forms render in the packaged app.
+- [x] Signed-out Privacy, Support, and Terms render in the packaged app with
+  content JavaScript enabled and disabled (`TheHubUITests`).
+- [ ] Confirm successful staff and parent email/password sign-in and the live
+  Parent Portal inside the packaged app.
+- [ ] Repeat public page checks in Airplane Mode on a physical iPhone.
 - [ ] Open Account & Privacy. Complete a deletion request only with a dedicated
   disposable test account; do not request deletion of the Apple review account
   or any real staff/family account. Automated checks used mocks, not live deletion.
@@ -53,17 +56,22 @@ synthetic database records have already been added.
 
 - [x] Authorize publishing the prepared branch to the existing public GitHub
   repository and deploying it to Vercel. The owner provided explicit approval.
-- [ ] Wake/reconnect Danielle's Air in Desktop Commander so Xcode builds and
-  simulator checks can continue.
+- [x] Reconnect Danielle's MacBook Air; Xcode builds and Simulator checks ran.
 - [ ] Sign into the Apple Developer account in Xcode if needed, accept any
   agreements, and approve signing/provisioning. Confirm build number 3 is unused.
 - [ ] Configure/confirm the APNs key in Vercel server environment and enable the
   matching App ID capability/provisioning profile. Do not add signing keys to git.
 - [ ] Review marked Terms with counsel and confirm the privacy manifest and App
   Store Connect privacy answers against enabled TCS features and processors.
-- [ ] After device checks, create and validate the archive with
-  `bash native/capacitor/scripts/build-ios.sh archive`, then upload through Xcode
-  Organizer to TestFlight/App Store Connect. Archive and upload have not run.
+- [x] Create the version 1.0/build 3 archive (October 25) using the existing
+  development identity. Artifact:
+  `native/capacitor/artifacts/TheHub-1.0-build3-20261025-103001.xcarchive`.
+- [x] Export the App Store IPA with the existing Apple Distribution identity;
+  verify its signature and production APNs entitlements. Export:
+  `native/capacitor/artifacts/AppStore-build3/The Hub.ipa`.
+- [ ] Complete Apple-side validation, the remaining device checks, and upload
+  through Xcode Organizer to TestFlight/App Store Connect.
+  Check the current review status before replacing a queued submission.
 - [ ] Update App Store Connect Privacy, Support, and Terms URLs and review notes.
   Explain invite-only access, demo staff/parent credentials, earned-only points,
   native camera/alerts/unlock, and the in-app account deletion location. Native

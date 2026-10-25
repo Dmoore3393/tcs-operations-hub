@@ -20,6 +20,8 @@
 		36910BB0466E53DC8FDDA52D /* TCSDevicePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E79837E23C625E11A23C0E29 /* TCSDevicePlugin.swift */; };
 		4BDBCE7AD0435CAA85E6713F /* HubQRScannerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B720F7339B056C18AB92187 /* HubQRScannerViewController.swift */; };
 		1D36A869CD715E1EBBAEE36D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9F64E58D63C45D4A970898B2 /* PrivacyInfo.xcprivacy */; };
+		F41C0FBF0EFA4BFD9F6095F6 /* TheHubUITests.mdimporter in Copy Files */ = {isa = PBXBuildFile; fileRef = F2872466BF314F53808B72B7 /* TheHubUITests.mdimporter */; };
+		70454A08C876474DBD642E62 /* PublicReviewPagesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B91E1DE68F44926BEFBC8F9 /* PublicReviewPagesTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -39,6 +41,8 @@
 		1B720F7339B056C18AB92187 /* HubQRScannerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubQRScannerViewController.swift; sourceTree = "<group>"; };
 		9F64E58D63C45D4A970898B2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		18F1842257265CCF9A146137 /* TheHub.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TheHub.entitlements; sourceTree = "<group>"; };
+		F2872466BF314F53808B72B7 /* TheHubUITests.mdimporter */ = {isa = PBXFileReference; name = "TheHubUITests.mdimporter"; path = "TheHubUITests.mdimporter"; sourceTree = BUILT_PRODUCTS_DIR; fileEncoding = undefined; lastKnownFileType = undefined; explicitFileType = "wrapper.cfbundle"; includeInIndex = 0; };
+		7B91E1DE68F44926BEFBC8F9 /* PublicReviewPagesTests.swift */ = {isa = PBXFileReference; name = "PublicReviewPagesTests.swift"; path = "TheHubUITests/PublicReviewPagesTests.swift"; sourceTree = SOURCE_ROOT; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -47,6 +51,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6B9E3119667E41B19192951F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -59,6 +70,7 @@
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
 				504EC3051FED79650016851F /* Products */,
+				7B91E1DE68F44926BEFBC8F9 /* PublicReviewPagesTests.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -66,6 +78,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+				F2872466BF314F53808B72B7 /* TheHubUITests.mdimporter */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -114,19 +127,41 @@
 			productReference = 504EC3041FED79650016851F /* App.app */;
 			productType = "com.apple.product-type.application";
 		};
+		91DE08515B5F4A0691F47F5E /* "TheHubUITests" */ = {
+			isa = PBXNativeTarget;
+			name = "TheHubUITests";
+			productName = "TheHubUITests";
+			productReference = F2872466BF314F53808B72B7;
+			productType = "com.apple.product-type.bundle.ui-testing";
+			buildConfigurationList = 7D5354D14AE24572B1FC5623;
+			buildPhases = (
+				A8AD8CAE22704A15865A6086 /* Sources */,
+				6B9E3119667E41B19192951F /* Frameworks */,
+				1E05098DB71447C88DB03430 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BC7322844F35475383F4EF83 /* PBXTargetDependency */,
+			);
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
 		504EC2FC1FED79650016851F /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastSwiftUpdateCheck = 0920;
-				LastUpgradeCheck = 0920;
+				LastSwiftUpdateCheck = 920;
+				LastUpgradeCheck = 920;
 				TargetAttributes = {
 					504EC3031FED79650016851F = {
 						CreatedOnToolsVersion = 9.2;
 						LastSwiftMigration = 1100;
 						ProvisioningStyle = Automatic;
+					};
+					91DE08515B5F4A0691F47F5E = {
+						TestTargetID = 504EC3031FED79650016851F;
+						CreatedOnToolsVersion = 27.0;
 					};
 				};
 			};
@@ -147,6 +182,7 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+				91DE08515B5F4A0691F47F5E /* "TheHubUITests" */,
 			);
 		};
 /* End PBXProject section */
@@ -166,6 +202,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		1E05098DB71447C88DB03430 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -178,6 +221,14 @@
 				4BDBCE7AD0435CAA85E6713F /* HubQRScannerViewController.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A8AD8CAE22704A15865A6086 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				70454A08C876474DBD642E62 /* PublicReviewPagesTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -364,6 +415,50 @@
 			};
 			name = Release;
 		};
+		32564253393C456A95616283 /* Debug */ = {
+			name = Debug;
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_NAME = "TheHubUITests";
+				SKIP_INSTALL = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.thomasonchildcaresolutions.thehub.uitests";
+				GENERATE_INFOPLIST_FILE = YES;
+				ENABLE_TESTING_SEARCH_PATHS = YES;
+				TEST_TARGET_NAME = App;
+				SWIFT_VERSION = 5.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 6Y2923TFK5;
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 1.0;
+			};
+		};
+		2D5BEB7768FE4B3FAFE6F89B /* Release */ = {
+			name = Release;
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_NAME = "TheHubUITests";
+				SKIP_INSTALL = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.thomasonchildcaresolutions.thehub.uitests";
+				GENERATE_INFOPLIST_FILE = YES;
+				ENABLE_TESTING_SEARCH_PATHS = YES;
+				TEST_TARGET_NAME = App;
+				SWIFT_VERSION = 5.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 6Y2923TFK5;
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 1.0;
+			};
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -385,6 +480,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		7D5354D14AE24572B1FC5623 /* Build configuration list for PBXNativeTarget "TheHubUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				32564253393C456A95616283 /* Debug */,
+				2D5BEB7768FE4B3FAFE6F89B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -401,6 +505,36 @@
 			productName = "CapApp-SPM";
 		};
 /* End XCSwiftPackageProductDependency section */
+
+/* Begin PBXTargetDependency section */
+		9DBEF43AAA7145D3B65E1BC0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 91DE08515B5F4A0691F47F5E /* "TheHubUITests" */;
+			targetProxy = F981406D6B30453B80081130 /* PBXContainerItemProxy */;
+		};
+		BC7322844F35475383F4EF83 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 504EC3031FED79650016851F /* App */;
+			targetProxy = E6266FC62A3246DE8216C728 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXContainerItemProxy section */
+		F981406D6B30453B80081130 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 91DE08515B5F4A0691F47F5E;
+			remoteInfo = "TheHubUITests";
+		};
+		E6266FC62A3246DE8216C728 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 504EC3031FED79650016851F;
+			remoteInfo = App;
+		};
+/* End PBXContainerItemProxy section */
 	};
 	rootObject = 504EC2FC1FED79650016851F /* Project object */;
 }
