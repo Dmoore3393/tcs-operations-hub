@@ -17,7 +17,9 @@ import { signOutWithLocalRecovery } from "@/lib/supabase/sign-out";
 import type { Session, User } from "@supabase/supabase-js";
 import { AlertTriangle, Database, LockKeyhole, LogOut } from "lucide-react";
 import AppLoadingScreen from "@/components/pwa/AppLoadingScreen";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useHubPathname } from "@/hooks/useHubPathname";
+import { normalizeHubPathname } from "@/lib/route-pathname";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 export type StaffAccessProfile = {
@@ -115,7 +117,8 @@ export function isApprovedPilotRole(role = "") {
   return isSupportedAccessRole(role);
 }
 
-export function canAccessRoute(profile: StaffAccessProfile | null, pathname: string) {
+export function canAccessRoute(profile: StaffAccessProfile | null, routePathname: string) {
+  const pathname = normalizeHubPathname(routePathname);
   if (!profile) return false;
   if (pathname === "/timesheets" && isAssignedTimesheetStaff(profile)) return true;
   if (isOwnerRole(profile.role)) return true;
@@ -172,7 +175,7 @@ function withTimeout<T>(operation: PromiseLike<T>, label: string) {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  const pathname = useHubPathname();
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<StaffAccessProfile | null>(null);

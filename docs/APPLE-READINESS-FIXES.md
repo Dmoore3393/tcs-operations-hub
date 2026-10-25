@@ -1,4 +1,4 @@
-# Apple readiness fixes — October 23, 2026
+# Apple readiness fixes — updated October 25, 2026
 
 The app remains The Hub by Thomason Childcare Solutions. Existing account deletion,
 family demo access, green/gator branding, and earned-only rewards are preserved.
@@ -61,9 +61,10 @@ needed fields. A read failure prevents autosaving empty initial state. Meals can
 retry failed reads and has a rendering error boundary.
 
 Validation: production build, native static screen export, and TypeScript pass;
-all 115 automated tests pass (account deletion, sign-out, access checks,
+all 119 automated tests pass (account deletion, sign-out, access checks,
 notification state, moderation, staff contact, timesheet workflow/database,
-request timeout, native API CORS, and family alert permissions).
+request timeout, native API CORS, family alert permissions, and native trailing-slash
+route permissions).
 The repository has pre-existing full-lint errors; these are recorded separately
 from new-file lint checks rather than represented as a clean lint run.
 
@@ -94,7 +95,22 @@ repository and deployment to Vercel. Release status is tracked by the branch's
 pull request and deployment checks. The synthetic inserts above are the only
 database changes applied.
 
-The connected Mac was offline. Swift compilation, iPhone Simulator/device checks,
-signing, an actual archive, and TestFlight upload are pending. See
+The Mac reconnected. Xcode 27 compiled the app and ran it on the iPhone 18 Pro
+Simulator. Both packaged login forms render. Privacy, Terms, and Support passed
+signed-out native tests with JavaScript enabled and disabled. A restored scene
+startup issue and trailing-slash login/route comparisons were fixed, with route
+permission regressions added to CI. Debug-only test sessions use temporary web
+storage and cannot expose existing signed-in sessions.
+
+Xcode created version 1.0/build 3 at
+`native/capacitor/artifacts/TheHub-1.0-build3-20261025-103001.xcarchive` using the
+existing development signing identity. Xcode exported an App Store IPA under
+`native/capacitor/artifacts/AppStore-build3/` using the Apple Distribution identity;
+its signature verifies and its entitlements use production APNs with debugging
+disabled. Apple-side validation and upload are separate steps. Signed-in native
+flows and physical-device features remain
+unchecked. Apple rejected the supplied account sign-in, so current submission
+status and build-number availability could not yet be read. No submission was
+cancelled or sent. See
 `native/capacitor/README.md` for reproducible build commands and
 `docs/IOS-RELEASE-CHECKLIST.md` for every phone check and owner step.

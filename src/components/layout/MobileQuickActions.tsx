@@ -31,7 +31,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useHubPathname } from "@/hooks/useHubPathname";
 import { useMemo, useState } from "react";
 
 type ToolItem = {
@@ -97,7 +97,7 @@ const toolGroups: Array<{ title: string; items: ToolItem[] }> = [
 export default function MobileQuickActions() {
   const { profile } = useAuth();
   const { location, theme } = useHubLocation();
-  const pathname = usePathname();
+  const pathname = useHubPathname();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 

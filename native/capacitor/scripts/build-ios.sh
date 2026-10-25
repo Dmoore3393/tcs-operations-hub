@@ -17,11 +17,18 @@ case "$hub_build_mode" in
     hub_simulator_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys;d=json.load(sys.stdin)["devices"];v=[x for k in sorted(d,reverse=True) for x in d[k] if x.get("isAvailable") and "iPhone" in x.get("name","")];v.sort(key=lambda x:x.get("state")!="Booted");print(v[0]["udid"] if v else "")')"
     [[ -n "$hub_simulator_id" ]] || { echo "Install an iPhone Simulator runtime in Xcode Settings → Components."; exit 2; }
     xcrun simctl boot "$hub_simulator_id" 2>/dev/null || true
-    open -a Simulator
+    hub_developer_directory="$(xcode-select -p)"
+    hub_simulator_window="$hub_developer_directory/Applications/Simulator.app"
+    if [[ -d "$(dirname "$hub_developer_directory")/Applications/DeviceHub.app" ]]; then
+      hub_simulator_window="$(dirname "$hub_developer_directory")/Applications/DeviceHub.app"
+    fi
+    if ! open -a "$hub_simulator_window"; then
+      echo "Simulator window unavailable; continuing with the installed runtime through simctl."
+    fi
     xcrun simctl bootstatus "$hub_simulator_id" -b
     xcodebuild -project ios/App/App.xcodeproj -scheme TheHub -configuration Debug -destination "id=$hub_simulator_id" -derivedDataPath build/simulator CODE_SIGNING_ALLOWED=NO build
     xcrun simctl install "$hub_simulator_id" "build/simulator/Build/Products/Debug-iphonesimulator/The Hub.app"
-    xcrun simctl launch "$hub_simulator_id" com.thomasonchildcaresolutions.thehub
+    xcrun simctl launch --terminate-running-process "$hub_simulator_id" com.thomasonchildcaresolutions.thehub
     echo "Simulator launched. Complete the login, Parent Portal, public-page, and disposable-account deletion checks before archiving."
     ;;
   archive)

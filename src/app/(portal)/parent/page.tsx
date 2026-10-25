@@ -36,7 +36,8 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useHubPathname } from "@/hooks/useHubPathname";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ParentChild = {
@@ -304,7 +305,7 @@ function todayPacific() {
 
 export default function ParentPortalPage() {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = useHubPathname();
   const activeView = pathname === "/parent/care" ? "care" : pathname === "/parent/forms" ? "forms" : "home";
   const [session, setSession] = useState<Session | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);

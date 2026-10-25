@@ -1,18 +1,41 @@
 import UIKit
 import UserNotifications
+import SwiftUI
+
+// Preserve the existing app's SwiftUI scene identity across upgrades. UIKit
+// otherwise restores its old SwiftUI scene without constructing the new bridge.
+@main
+struct TheHubNativeApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
+    var body: some Scene {
+        WindowGroup {
+            HubNativeRoot()
+                .background(Color(red: 11.0 / 255, green: 93.0 / 255, blue: 53.0 / 255))
+                .ignoresSafeArea()
+        }
+    }
+}
+
+private struct HubNativeRoot: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> HubBridgeViewController { HubBridgeViewController() }
+    func updateUIViewController(_ controller: HubBridgeViewController, context: Context) {}
+}
 
 extension Notification.Name {
     static let hubNativePushToken = Notification.Name("tcs.hub.nativePushToken")
     static let hubOpenPath = Notification.Name("tcs.hub.openPath")
 }
 
-@UIApplicationMain
 final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     static var pendingHubPath: String?
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        #if DEBUG
+        NSLog("TCS native application started")
+        #endif
         UNUserNotificationCenter.current().delegate = self
         return true
     }
@@ -70,10 +93,4 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         NotificationCenter.default.post(name: .hubOpenPath, object: nil, userInfo: ["path": path])
         completionHandler()
     }
-    func application(_ application: UIApplication, configurationForConnecting session: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
-        let config = UISceneConfiguration(name: "Default Configuration", sessionRole: session.role)
-        config.delegateClass = SceneDelegate.self
-        return config
-    }
-
 }

@@ -4,7 +4,7 @@ import LegalFooter from "@/components/LegalFooter";
 
 import { GatorGuide } from "@/components/brand/HubJoy";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useHubPathname } from "@/hooks/useHubPathname";
 import {
   BarChart3,
   Bot,
@@ -205,7 +205,7 @@ type ThemeStyle = CSSProperties & {
 };
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  const pathname = useHubPathname();
   const [showLocationHelp, setShowLocationHelp] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [sync, setSync] = useState<HubSyncDetail>({ state: "idle", message: "Secure shared data" });
