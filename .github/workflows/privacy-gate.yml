@@ -38,3 +38,5 @@ jobs:
         run: node --test scripts/test-communications-database.mjs scripts/test-communications-api.mjs scripts/test-daily-follow-through.mjs
       - name: Build application
         run: npm run build
+      - name: Verify location labels and stable location identities
+        run: node --test scripts/test-location-labels.mjs

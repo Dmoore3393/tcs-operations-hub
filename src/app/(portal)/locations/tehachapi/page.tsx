@@ -150,7 +150,7 @@ export default function ThomasonFamilyChildcareHomePage() {
             </div>
 
             <div className="relative z-10 text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 rounded-full bg-[#eef4e8] px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-[#155b3b]"><Sparkles className="h-4 w-4" /> TCS • Tehachapi</div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-[#eef4e8] px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-[#155b3b]"><Sparkles className="h-4 w-4" /> TCS • D Street, Tehachapi</div>
               <h1 className="mt-5 text-4xl font-black tracking-[-0.045em] text-[#155b3b] sm:text-6xl">THOMASON</h1>
               <p className="mt-1 text-2xl font-black tracking-[0.22em] text-[#d6a23d] sm:text-3xl">FAMILY CHILDCARE</p>
               <p className="mt-5 text-sm font-black uppercase tracking-[0.22em] text-[#315b43]">Nurturing Minds. Building Futures.</p>
@@ -166,7 +166,7 @@ export default function ThomasonFamilyChildcareHomePage() {
         <section className="flex flex-col gap-4 rounded-3xl bg-white px-5 py-5 shadow-sm ring-1 ring-[#e3ddcf] sm:flex-row sm:items-center sm:justify-between sm:px-7">
           <div className="flex items-center gap-4">
             <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[#eef4e8] text-[#155b3b]"><MapPin className="h-7 w-7" /></span>
-            <div><h2 className="text-2xl font-black text-[#155b3b]">Thomason Family Childcare</h2><p className="mt-1 font-semibold text-slate-500">Tehachapi • Licensed Family Childcare Home</p></div>
+            <div><h2 className="text-2xl font-black text-[#155b3b]">Thomason Family Childcare</h2><p className="mt-1 font-semibold text-slate-500">D Street, Tehachapi • Licensed Family Childcare Home</p></div>
           </div>
           <div className="rounded-2xl bg-[#fbf4df] px-5 py-3 text-sm font-bold text-[#5b4a20]"><strong>{todayName}:</strong> {todayHours.closed ? "Closed" : `${formatClock(todayHours.open)}–${formatClock(todayHours.close)}`} • {siteLocation.status}</div>
         </section>

@@ -1,5 +1,7 @@
 "use client";
 
+import { locationDisplayName } from "@/lib/location-config";
+
 import type { FamilyRecord } from "@/lib/hub-data";
 import {
   deriveChildAgeProfile,
@@ -118,7 +120,7 @@ export default function ChildEditorModal({
                     }} /></Field>
                     <Field label="Current age"><input readOnly className={inputClass} placeholder="Calculated from date of birth" value={form.age} /></Field>
                     <Field label="Age group"><select disabled className={inputClass} value={form.ageGroup} onChange={(e) => setForm({ ...form, ageGroup: e.target.value as AgeGroup })}><option>Infant</option><option>Toddler</option><option>Preschool</option><option>School Age</option></select></Field>
-                    <Field label="Location"><select className={inputClass} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })}>{locations.map((location) => <option key={location}>{location}</option>)}</select></Field>
+                    <Field label="Location"><select className={inputClass} value={locationDisplayName(form.location)} onChange={(e) => setForm({ ...form, location: e.target.value })}>{locations.map((location) => <option key={location}>{location}</option>)}</select></Field>
                     <Field label="Classroom"><input readOnly className={inputClass} value={form.classroom} /></Field>
                     <Field label="Enrollment status"><select className={inputClass} value={form.enrollmentStatus} onChange={(e) => setForm({ ...form, enrollmentStatus: e.target.value as EnrollmentStatus })}><option>Active</option><option>Pending</option><option>Archived</option></select></Field>
                     <Field label="Planned start date"><input type="date" className={inputClass} value={form.plannedStartDate} onChange={(e) => setForm({ ...form, plannedStartDate: e.target.value })} /></Field>

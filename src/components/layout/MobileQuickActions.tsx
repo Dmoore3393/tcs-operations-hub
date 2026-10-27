@@ -1,6 +1,7 @@
 "use client";
 
 import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
+import { locationOptionLabel } from "@/lib/location-config";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import {
   BadgeDollarSign,
@@ -138,7 +139,7 @@ export default function MobileQuickActions() {
             <div className="sticky top-0 z-10 border-b border-slate-200/80 bg-[#f7f8f5]/95 px-5 pb-4 pt-3 backdrop-blur">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-base font-black uppercase tracking-[0.18em]" style={{ color: theme.primary }}>The Hub • {location}</p>
+                  <p className="text-base font-black uppercase tracking-[0.18em]" style={{ color: theme.primary }}>The Hub • {locationOptionLabel(location)}</p>
                   <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">All your tools</h2>
                   <p className="mt-1 text-xs font-semibold text-slate-500">Only tools approved for your account are shown.</p>
                 </div>

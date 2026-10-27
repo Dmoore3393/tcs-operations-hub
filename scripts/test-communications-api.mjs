@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ts from "typescript";
 const url = (source) => "data:text/javascript;base64," + Buffer.from(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText).toString("base64");
+const locationModule = url(await readFile(new URL("../src/lib/location-config.ts", import.meta.url), "utf8"));
 const childId="synthetic-child", rowId="00000000-0000-4000-8000-000000000030", actor="00000000-0000-4000-8000-000000000010", messageId="00000000-0000-4000-8000-000000000050";
 let scenario = 0;
 async function load(kind, options={}) {
@@ -15,7 +16,7 @@ async function load(kind, options={}) {
   let source=await readFile(new URL(`../src/app/api/${kind==="parent"?"parent/messages":"family-communications"}/route.ts`,import.meta.url),"utf8");
   source=source.replace(/^import .*require-(staff|parent).*;$/m,`const require${kind==="parent"?"Parent":"Staff"}=globalThis.__hubCommTest.requireUser; const ${kind==="parent"?"parent":"staff"}ErrorResponse=(error)=>error instanceof Response?error:Response.json({error:String(error)},{status:500});`)
     .replace(/^import .*uuidPattern.*;$/m,`const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;`);
-  return {route:await import(url(source + `\n// scenario ${scenario++}`)),calls};
+  return {route:await import(url(source.replace('"@/lib/location-config"', JSON.stringify(locationModule)) + `\n// scenario ${scenario++}`)),calls};
 }
 const request=(body,method="POST")=>new Request("https://hub.example.invalid/api/messages",{method,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
 test("anonymous and ordinary employee staff requests never reach family data",async()=>{
