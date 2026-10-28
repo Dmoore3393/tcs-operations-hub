@@ -38,8 +38,10 @@ case "$hub_build_mode" in
       echo "Publish the tested Hub web/API changes before creating a distribution archive."
       exit 2
     fi
+    hub_build_number="$(xcodebuild -project ios/App/App.xcodeproj -scheme TheHub -configuration Release -showBuildSettings | sed -n 's/^[[:space:]]*CURRENT_PROJECT_VERSION = //p' | head -n 1)"
+    [[ "$hub_build_number" =~ ^[0-9]+$ ]] || { echo "Could not determine the app build number."; exit 2; }
     mkdir -p artifacts
-    xcodebuild -project ios/App/App.xcodeproj -scheme TheHub -configuration Release -destination 'generic/platform=iOS' -archivePath artifacts/TheHub-1.0-build4.xcarchive -allowProvisioningUpdates archive
+    xcodebuild -project ios/App/App.xcodeproj -scheme TheHub -configuration Release -destination 'generic/platform=iOS' -archivePath "artifacts/TheHub-1.0-build${hub_build_number}.xcarchive" -allowProvisioningUpdates archive
     echo "Archive prepared. Review its privacy report and signing in Xcode Organizer before uploading."
     ;;
   *) echo "Usage: bash scripts/build-ios.sh simulator|archive"; exit 2 ;;

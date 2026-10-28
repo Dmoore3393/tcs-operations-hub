@@ -82,6 +82,8 @@ privacy answers together before submission.
 
 ## Identity, simulator, and archive
 
+Next package: **1.0/build 5**, with the latest website screens and import review. Build 5 still needs its own Xcode, signing and device verification; the following build 4 information is the prior submission record.
+
 Display name **The Hub**; bundle ID
 `com.thomasonchildcaresolutions.thehub`; version **1.0**, build **4**; existing
 team **6Y2923TFK5**. The existing approved TCS icon is used, with a green launch
@@ -91,7 +93,7 @@ existing manual-release choice and Unlisted App intent are preserved.
 
 After the matching Vercel API release is live and the simulator/device checks
 pass, run `bash scripts/build-ios.sh archive`. The script checks native API CORS
-before archiving and creates `artifacts/TheHub-1.0-build4.xcarchive`. It does not
+before archiving and creates `artifacts/TheHub-1.0-build5.xcarchive`. It does not
 upload to Apple. Xcode Organizer can validate and distribute it; the supplied
 `ExportOptions.plist` can export an App Store Connect package after signing.
 

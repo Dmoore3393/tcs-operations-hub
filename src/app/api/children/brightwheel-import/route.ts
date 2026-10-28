@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { importedEnrollmentStatus, normalizedBirthDate, normalizedChildName, resolveImportIdentity, repeatedImportRows } from "@/lib/brightwheel-identity";
+import { tcsLocationSlug } from "@/lib/server/location-slug";
 import {
   deriveChildAgeProfile,
   fundingSources,
@@ -15,6 +18,7 @@ type ImportOverride = {
   include?: boolean;
   location?: string;
   funding?: string;
+  matchId?: string;
 };
 
 function object(value: unknown): DbRow {
@@ -108,29 +112,7 @@ function firstValue(row: CsvRow, exactAliases: string[], patterns: Array<{ requi
   return "";
 }
 
-function parseDate(value: string) {
-  const source = value.trim();
-  if (!source) return "";
-
-  const iso = source.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (iso) {
-    const [, year, month, day] = iso;
-    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-  }
-
-  const us = source.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
-  if (us) {
-    const [, month, day, year] = us;
-    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-  }
-
-  const parsed = new Date(source);
-  if (Number.isNaN(parsed.getTime())) return "";
-  const year = parsed.getUTCFullYear();
-  const month = String(parsed.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(parsed.getUTCDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+const parseDate = normalizedBirthDate;
 
 function canonicalLocation(value: string) {
   const source = value.toLowerCase();
@@ -167,13 +149,7 @@ function inferFunding(value: string) {
   return "";
 }
 
-function enrollmentStatus(value: string) {
-  const source = value.toLowerCase();
-  if (!source || /active|enrolled|current/.test(source)) return "Active";
-  if (/pending|prospect|wait|future/.test(source)) return "Pending";
-  if (/inactive|withdraw|graduat|archiv|former/.test(source)) return "Archived";
-  return "Active";
-}
+const enrollmentStatus = importedEnrollmentStatus;
 
 function childSource(row: CsvRow, index: number) {
   const firstName = firstValue(row, ["first_name", "firstname", "studentfirstname", "childfirstname"], [
@@ -241,9 +217,8 @@ function childSource(row: CsvRow, index: number) {
     { required: ["funding"] },
   ]);
 
-  const keySeed = brightwheelId || studentId || `${firstName}|${lastName}|${dateOfBirth}|${index + 1}`;
   return {
-    rowKey: `bw-${Buffer.from(keySeed).toString("base64url").slice(0, 48)}`,
+    rowKey: `bw-row-${index + 2}`,
     rowNumber: index + 2,
     brightwheelId,
     studentId,
@@ -269,14 +244,7 @@ function childSource(row: CsvRow, index: number) {
   };
 }
 
-function sourceIdFromRecord(record: DbRow) {
-  const brightwheel = object(record.brightwheel);
-  return text(brightwheel.id) || text(record.brightwheelId);
-}
-
-function normalizedName(value: string) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-}
+const normalizedName = normalizedChildName;
 
 function mergeDefined(existing: DbRow, incoming: DbRow) {
   const merged = { ...existing };
@@ -319,42 +287,44 @@ export async function POST(request: Request) {
     const rows = parseCsv(csvText);
     if (!rows.length) throw new Response("No roster rows were found in that CSV.", { status: 400 });
 
-    const [existingResult, locationsResult] = await Promise.all([
-      admin
-        .from("children")
-        .select("id,legacy_id,location_id,first_name,last_name,date_of_birth,guardian_name,record_data")
-        .eq("organization_id", profile.organization_id),
-      admin
-        .from("locations")
-        .select("id,slug,name,full_name")
-        .eq("organization_id", profile.organization_id)
-        .eq("is_active", true),
-    ]);
-    if (existingResult.error) throw existingResult.error;
+    const locationsResult = await admin.from("locations").select("id,slug,name,full_name").eq("organization_id", profile.organization_id).eq("is_active", true);
     if (locationsResult.error) throw locationsResult.error;
+    const assignedSlugs = new Set<string | null>(profile.locations.map(tcsLocationSlug).filter(Boolean));
+    const liveLocations = ((locationsResult.data ?? []) as unknown as DbRow[]).filter(row => isOwner || assignedSlugs.has(text(row.slug)));
+    const allowedIds = liveLocations.map(row=>text(row.id));
+    if (!allowedIds.length) throw new Response("No active TCS location is assigned to this account.", { status: 403 });
+    const locationIdBySlug = new Map(liveLocations.map(row => [text(row.slug), text(row.id)]));
+    const existingRows: DbRow[] = [];
+    for (let offset=0; ; offset+=1000) {
+      const existingResult = await admin.from("children").select("id,legacy_id,location_id,first_name,last_name,date_of_birth,guardian_name,record_data,updated_at").eq("organization_id", profile.organization_id).in("location_id", allowedIds).order("id").range(offset,offset+999);
+      if (existingResult.error) throw existingResult.error;
+      const page = (existingResult.data ?? []) as unknown as DbRow[];
+      existingRows.push(...page);
+      if (page.length < 1000) break;
+      if (existingRows.length >= 10000) throw new Response("This roster needs a smaller location scope. Contact TCS support before importing.", {status:413});
+    }
+    const snapshot = existingRows.map(row=>({id:text(row.id),updatedAt:text(row.updated_at)})).sort((a,b)=>a.id.localeCompare(b.id));
+    const previewToken = createHash("sha256").update(JSON.stringify({csvText,snapshot,allowedIds:allowedIds.sort()})).digest("hex");
+    if (mode === "commit" && text(body.previewToken) !== previewToken) throw new Response("Children or location access changed since this preview. Refresh Preview before importing. Nothing was saved.", {status:409});
+    const sources = rows.map(childSource).filter(source => !activeOnly || source.enrollmentStatus === "Active" || source.enrollmentStatus === "Needs review");
+    if (sources.length > 1000) throw new Response("Import up to 1,000 children at a time. Export a smaller roster and try again.", {status:413});
+    const identities = sources.map(source=>resolveImportIdentity(source,existingRows,text(overrides.get(source.rowKey)?.matchId)));
+    const repeats = repeatedImportRows(sources,identities.map(identity=>identity.existingRowId));
 
-    const existingRows = (existingResult.data ?? []) as unknown as DbRow[];
-    const liveLocations = (locationsResult.data ?? []) as unknown as DbRow[];
-    const locationIdBySlug = new Map(liveLocations.map((row) => [text(row.slug), text(row.id)]));
-
-    const sources = rows.map(childSource).filter((source) => !activeOnly || source.enrollmentStatus === "Active");
-
-    const preview = sources.map((source) => {
+    const preview = sources.map((source, index) => {
       const override = overrides.get(source.rowKey);
       const selectedLocation = safeLocation(text(override?.location)) || source.detectedLocation || defaultLocation;
       const selectedFunding = safeFunding(text(override?.funding)) || source.detectedFunding || defaultFunding;
-      const nameKey = `${normalizedName(source.firstName)}|${normalizedName(source.lastName)}|${source.dateOfBirth}`;
-
-      const match = existingRows.find((row) => {
-        const record = object(row.record_data);
-        if (source.brightwheelId && sourceIdFromRecord(record) === source.brightwheelId) return true;
-        const existingKey = `${normalizedName(text(row.first_name))}|${normalizedName(text(row.last_name))}|${text(row.date_of_birth)}`;
-        return Boolean(source.dateOfBirth && source.firstName && source.lastName && existingKey === nameKey);
-      });
+      const identity = repeats.has(index) ? { ...identities[index], matchType: "duplicate" as const, existingRowId: "", identityWarning: "This child appears more than once in the CSV or targets the same profile twice. Keep one row and refresh the preview." } : identities[index];
+      const match = existingRows.find(row=>text(row.id) === identity.existingRowId);
+      const blocked = repeats.has(index) || source.enrollmentStatus === "Needs review" || !deriveChildAgeProfile(source.dateOfBirth);
 
       const warnings: string[] = [];
       if (!source.firstName || !source.lastName) warnings.push("Missing child name");
-      if (!source.dateOfBirth) warnings.push("Missing birth date");
+      if (!deriveChildAgeProfile(source.dateOfBirth)) warnings.push("Missing or invalid birth date");
+      if (source.enrollmentStatus === "Needs review") warnings.push("Unrecognized enrollment status — check the CSV");
+      if (identity.identityWarning) warnings.push(identity.identityWarning);
+      if (selectedLocation && !locationIdBySlug.has(locationSlug(selectedLocation))) warnings.push("This location is not assigned to your account");
       if (!selectedLocation) warnings.push("Choose a TCS location");
       if (!selectedFunding) warnings.push("Choose a funding source");
       if (!source.primaryGuardian) warnings.push("Parent/guardian contact not found in export");
@@ -363,22 +333,25 @@ export async function POST(request: Request) {
         ...source,
         selectedLocation,
         selectedFunding,
-        matchType: match ? "update" : "new",
+        ...identity,
+        blocked,
         existingLegacyId: match ? text(match.legacy_id) : "",
         existingRowId: match ? text(match.id) : "",
-        include: override?.include !== false,
+        include: override?.include !== false && identity.matchType !== "duplicate",
         warnings,
-        ready: warnings.filter((warning) => warning !== "Parent/guardian contact not found in export").length === 0,
+        ready: !blocked && identity.matchType !== "review" && warnings.filter((warning) => warning !== "Parent/guardian contact not found in export").length === 0,
       };
     });
 
     if (mode === "preview") {
       return Response.json({
         ok: true,
+        previewToken,
         rows: preview,
         totals: {
           fileRows: rows.length,
           activeRows: sources.length,
+          excludedRows: rows.length - sources.length,
           newRows: preview.filter((row) => row.matchType === "new").length,
           updateRows: preview.filter((row) => row.matchType === "update").length,
           needsAttention: preview.filter((row) => !row.ready).length,
@@ -388,8 +361,7 @@ export async function POST(request: Request) {
       }, { headers: { "Cache-Control": "no-store" } });
     }
 
-    let inserted = 0;
-    let updated = 0;
+    const changes: DbRow[] = [];
     let skipped = 0;
     const imported: Array<{ rowKey: string; childName: string; result: string }> = [];
 
@@ -435,7 +407,7 @@ export async function POST(request: Request) {
         allergies: row.allergies || undefined,
         medicalNotes: medicationNote || undefined,
         enrollmentStatus: row.enrollmentStatus,
-        attendanceToday: "Not Scheduled",
+        attendanceToday: text(existingRecord.attendanceToday) || "Not Scheduled",
         medicalProvider: row.doctorName || undefined,
         medicalProviderPhone: row.doctorPhone || undefined,
         emergencyContact1Name: row.emergencyName || undefined,
@@ -443,7 +415,7 @@ export async function POST(request: Request) {
         emergencyContact1Relationship: row.emergencyRelationship || undefined,
         weeklySchedule: text(existingRecord.weeklySchedule) || "Schedule not entered",
         transportation: text(existingRecord.transportation) || "No transportation",
-        licensingStatus: text(existingRecord.licensingStatus) || "Complete",
+        licensingStatus: text(existingRecord.licensingStatus) || "Missing Documents",
         familyAccess: Array.isArray(existingRecord.familyAccess) ? existingRecord.familyAccess : [],
         familyMessages: Array.isArray(existingRecord.familyMessages) ? existingRecord.familyMessages : [],
         brightwheel: {
@@ -483,34 +455,19 @@ export async function POST(request: Request) {
         updated_by: user.id,
       };
 
-      if (matched?.id) {
-        const save = await admin.from("children").update(payload).eq("id", text(matched.id));
-        if (save.error) throw save.error;
-        updated += 1;
-        imported.push({ rowKey: row.rowKey, childName: `${row.firstName} ${row.lastName}`.trim(), result: "Updated" });
-      } else {
-        const save = await admin.from("children").insert({ ...payload, created_by: user.id });
-        if (save.error) throw save.error;
-        inserted += 1;
-        imported.push({ rowKey: row.rowKey, childName: `${row.firstName} ${row.lastName}`.trim(), result: "Added" });
-      }
+      changes.push({ targetId: text(matched?.id), payload });
+      imported.push({rowKey:row.rowKey,childName:`${row.firstName} ${row.lastName}`.trim(),result:matched ? "Updated" : "Added"});
     }
 
-    await admin.from("audit_log").insert({
-      organization_id: profile.organization_id,
-      actor_user_id: user.id,
-      action: "INSERT",
-      table_name: "children",
-      row_id: null,
-      metadata: {
-        kind: "brightwheel_roster_import",
-        inserted,
-        updated,
-        skipped,
-        parentInvitationsSent: 0,
-      },
-    });
-
+    let inserted = 0, updated = 0;
+    if (changes.length) {
+      const saved = await admin.rpc("hub_import_brightwheel_roster", {p_actor:user.id,p_organization:profile.organization_id,p_snapshot:snapshot,p_rows:changes});
+      if (saved.error) {
+        if (saved.error.code === "40001" || saved.error.code === "55P03") throw new Response("Children changed or another save is running. Refresh Preview and try again. Nothing from this import was saved.", {status:409});
+        throw saved.error;
+      }
+      const counts = object(saved.data); inserted = Number(counts.inserted) || 0; updated = Number(counts.updated) || 0;
+    }
     return Response.json({
       ok: true,
       inserted,
