@@ -36,6 +36,8 @@ jobs:
         run: npx tsc --noEmit
       - name: Verify communications isolation and daily follow-through
         run: node --test scripts/test-communications-database.mjs scripts/test-communications-api.mjs scripts/test-daily-follow-through.mjs
+      - name: Verify reviewed and atomic Brightwheel imports
+        run: node --test scripts/test-brightwheel-import.mjs scripts/test-brightwheel-database.mjs
       - name: Build application
         run: npm run build
       - name: Verify location labels and stable location identities
