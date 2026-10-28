@@ -86,6 +86,7 @@ const toolGroups: Array<{ title: string; items: ToolItem[] }> = [
     title: "Leadership & Admin",
     items: [
       { href: "/employees", label: "Employees", icon: BriefcaseBusiness },
+      { href: "/staff-onboarding", label: "New-Hire Onboarding", icon: ClipboardCheck },
       { href: "/staff-performance", label: "Staff Performance", icon: Trophy },
       { href: "/team-access", label: "Team Access", icon: Lock },
       { href: "/timesheets", label: "Timesheets", icon: FileText },

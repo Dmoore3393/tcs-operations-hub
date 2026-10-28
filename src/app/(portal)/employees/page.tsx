@@ -71,6 +71,8 @@ export default function EmployeesPage() {
       actions={isSystemOwner ? <Link href="/team-access" className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white"><ShieldCheck className="h-4 w-4" /> Manage Hub Access</Link> : undefined}
     />
 
+    <Link href="/staff-onboarding" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-800 px-5 py-3 text-base font-bold text-white"><Users className="h-5 w-5" /> New-Hire Onboarding</Link>
+
     {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-900">{error}</div>}
 
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
