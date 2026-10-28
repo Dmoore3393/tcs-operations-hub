@@ -458,3 +458,27 @@ test("new-hire creation IDs work in WebViews without crypto.randomUUID", () => {
   );
   assert.notEqual(first, second);
 });
+
+test("creation retries reuse the same record and reject changed details instead of silently dropping edits", async () => {
+  const original = { ...plan(), created_by: actor };
+  const body = {
+    id: planId,
+    fullName: original.full_name,
+    email: original.email,
+    jobTitle: original.job_title,
+    startDate: original.start_date,
+    locationId: original.location_id,
+    supervisor: original.supervisor,
+    staffUserId: employee,
+  };
+  const retry = await api({ plan: original });
+  assert.equal((await retry.request("POST", body)).status, 200);
+  assert.ok(!retry.calls.some((c) => c[0] === "insert"));
+  const changed = await api({ plan: original });
+  assert.equal(
+    (await changed.request("POST", { ...body, jobTitle: "Changed role" }))
+      .status,
+    409,
+  );
+  assert.ok(!changed.calls.some((c) => c[0] === "insert"));
+});

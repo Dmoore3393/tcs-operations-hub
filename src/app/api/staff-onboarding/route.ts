@@ -227,7 +227,9 @@ export async function POST(request: Request) {
     if (staffId) await linkedStaff(auth, staffId, locationId);
     const existing = await auth.admin
       .from("staff_onboarding_plans")
-      .select("id,created_by,full_name,location_id")
+      .select(
+        "id,created_by,full_name,location_id,email,job_title,start_date,supervisor,staff_user_id",
+      )
       .eq("organization_id", auth.profile.organization_id)
       .eq("id", id)
       .maybeSingle();
@@ -236,7 +238,12 @@ export async function POST(request: Request) {
       if (
         existing.data.created_by !== auth.user.id ||
         existing.data.full_name !== fullName ||
-        existing.data.location_id !== locationId
+        existing.data.location_id !== locationId ||
+        existing.data.email !== email ||
+        existing.data.job_title !== jobTitle ||
+        existing.data.start_date !== startDate ||
+        existing.data.supervisor !== supervisor ||
+        (existing.data.staff_user_id || "") !== staffId
       )
         fail("This creation request changed. Reload before retrying.", 409);
       return Response.json({ ok: true, id });
