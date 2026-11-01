@@ -83,6 +83,8 @@ const toForm = (child: ChildRecord): ChildFormState => {
   classroom: normalized.classroom,
   primaryGuardian: normalized.primaryGuardian,
   secondaryGuardian: normalized.secondaryGuardian ?? "",
+  secondaryGuardianPhone: normalized.secondaryGuardianPhone ?? "",
+  secondaryGuardianEmail: normalized.secondaryGuardianEmail ?? "",
   phone: normalized.phone,
   familyName: normalized.familyName ?? "",
   guardianEmail: normalized.guardianEmail ?? "",
@@ -327,6 +329,8 @@ export default function ChildrenCenterLivePage() {
       classroom: ageProfile.classroom,
       primaryGuardian: family?.primaryGuardian ?? form.primaryGuardian.trim(),
       secondaryGuardian: (family?.secondaryGuardian ?? form.secondaryGuardian.trim()) || undefined,
+      secondaryGuardianPhone: form.secondaryGuardianPhone.trim() || undefined,
+      secondaryGuardianEmail: form.secondaryGuardianEmail.trim() || undefined,
       phone: family?.phone ?? form.phone.trim(),
       familyId: family?.id ?? editing?.familyId ?? Date.now() + 1,
       familyName: family?.familyName ?? (form.familyName.trim() || `${form.lastName.trim()} Family`),
@@ -481,6 +485,9 @@ export default function ChildrenCenterLivePage() {
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           <Detail l="Parent / Guardian" v={selected.primaryGuardian} />
+          <Detail l="Second Parent / Guardian" v={selected.secondaryGuardian || "Not entered"} />
+          <Detail l="Second Parent Phone" v={selected.secondaryGuardianPhone || "Not entered"} />
+          <Detail l="Second Parent Email" v={selected.secondaryGuardianEmail || "Not entered"} />
           <Detail l="Phone" v={selected.phone} />
           <Detail l="Schedule" v={selected.weeklySchedule} />
           <Detail l="Planned Start" v={selected.plannedStartDate || "Not entered"} />

@@ -64,6 +64,8 @@ export type ChildRecord = {
   classroom: string;
   primaryGuardian: string;
   secondaryGuardian?: string;
+  secondaryGuardianPhone?: string;
+  secondaryGuardianEmail?: string;
   phone: string;
   familyId?: number;
   familyName?: string;
@@ -129,6 +131,8 @@ export type ChildFormState = {
   classroom: string;
   primaryGuardian: string;
   secondaryGuardian: string;
+  secondaryGuardianPhone: string;
+  secondaryGuardianEmail: string;
   phone: string;
   familyName: string;
   guardianEmail: string;
@@ -251,6 +255,8 @@ export const emptyForm: ChildFormState = {
   classroom: "Infant Room",
   primaryGuardian: "",
   secondaryGuardian: "",
+  secondaryGuardianPhone: "",
+  secondaryGuardianEmail: "",
   phone: "",
   familyName: "",
   guardianEmail: "",

@@ -47,6 +47,25 @@ async function api(options={}) {
  return {request,calls};
 }
 const csv='First Name,Last Name,Birthday,Enrollment Status,Room,Subsidy\nSynthetic,Avery,01/02/2020,Active,Division,Cash\nSynthetic,Inactive,01/02/2020,Inactive,Division,Cash';
+test('possible spelling changes with same birthday require existing-profile review instead of silent duplicates',()=>{
+ const changed={...base,firstName:'SyntheticChanged'};
+ assert.equal(identity.resolveImportIdentity(changed,[existing()]).matchType,'review');
+ assert.equal(identity.resolveImportIdentity(changed,[existing()],'child-1').matchType,'update');
+});
+test('both parents import into the same existing child and blanks retain second-parent details',async()=>{
+ const roster='First Name,Last Name,Birthday,Enrollment Status,Room,Subsidy,Parent 1 First Name,Parent 1 Last Name,Parent 2 First Name,Parent 2 Last Name,Parent 2 Email,Parent 2 Mobile Phone\nSynthetic,Avery,01/02/2020,Active,Division,Cash,First,Guardian,Second,Guardian,synthetic@example.invalid,555-010-0200';
+ const t=await api({rows:[existing()]});const preview=await(await t.request({csvText:roster})).json();
+ assert.equal(preview.rows[0].matchType,'update');assert.equal(preview.rows[0].secondaryGuardian,'Second Guardian');
+ const result=await t.request({mode:'commit',csvText:roster,previewToken:preview.previewToken});assert.equal(result.status,200);
+ const row=t.calls.find(c=>c[0]==='rpc')[2].p_rows[0];assert.equal(row.targetId,'child-1');assert.equal(row.payload.legacy_id,'existing-1');
+ assert.equal(row.payload.record_data.primaryGuardian,'First Guardian');assert.equal(row.payload.record_data.secondaryGuardianEmail,'synthetic@example.invalid');assert.equal(row.payload.record_data.secondaryGuardianPhone,'555-010-0200');
+ assert.deepEqual(row.payload.record_data.familyAccess,[{synthetic:true}]);
+ const old=existing();old.record_data.secondaryGuardian='Keep Second';old.record_data.secondaryGuardianPhone='keep-phone';old.record_data.secondaryGuardianEmail='keep@example.invalid';old.record_data.brightwheel={id:'existing-bw',studentId:'existing-student'};
+ const blank=await api({rows:[old]});const p=await(await blank.request({csvText:csv})).json();await blank.request({mode:'commit',csvText:csv,previewToken:p.previewToken});
+ const saved=blank.calls.find(c=>c[0]==='rpc')[2].p_rows[0].payload.record_data;
+ assert.equal(saved.secondaryGuardian,'Keep Second');assert.equal(saved.secondaryGuardianPhone,'keep-phone');assert.equal(saved.secondaryGuardianEmail,'keep@example.invalid');
+ assert.equal(saved.brightwheel.id,'existing-bw');assert.equal(saved.brightwheel.studentId,'existing-student');
+});
 test('actual preview is read-only, excludes inactive students and returns a unique row key',async()=>{
  const {request,calls}=await api();const response=await request({csvText:csv});assert.equal(response.status,200);const result=await response.json();assert.equal(result.rows.length,1);assert.equal(result.totals.excludedRows,1);assert.equal(result.rows[0].rowKey,'bw-row-2');assert.equal(calls.filter(c=>c[0]==='rpc').length,0);
 });

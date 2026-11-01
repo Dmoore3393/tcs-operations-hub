@@ -173,13 +173,23 @@ function childSource(row: CsvRow, index: number) {
   const enrollment = firstValue(row, ["enrollment_status", "enrollmentstatus", "status"], [
     { required: ["enrollment", "status"] },
   ]);
-  const primaryGuardian = firstValue(row, ["parent_name", "parentname", "parent1name", "guardianname", "primaryparent"], [
-    { required: ["parent", "name"], excluded: ["2", "second"] },
-    { required: ["guardian", "name"], excluded: ["2", "second"] },
+  const splitParentName = (number: number) => [
+    exactValue(row, [`parent${number}firstname`, `guardian${number}firstname`, ...(number === 1 ? ["parentfirstname", "guardianfirstname"] : ["secondparentfirstname"])]),
+    exactValue(row, [`parent${number}lastname`, `guardian${number}lastname`, ...(number === 1 ? ["parentlastname", "guardianlastname"] : ["secondparentlastname"])]),
+  ].filter(Boolean).join(" ");
+  const primaryGuardian = exactValue(row, ["parentname", "parent1name", "guardianname", "primaryparent", "parent1fullname"]) || splitParentName(1) || firstValue(row, [], [
+    { required: ["parent", "name"], excluded: ["2", "second", "first", "last"] },
+    { required: ["guardian", "name"], excluded: ["2", "second", "first", "last"] },
   ]);
-  const secondaryGuardian = firstValue(row, ["parent2name", "secondparentname", "secondaryparent"], [
-    { required: ["parent", "2", "name"] },
-    { required: ["second", "parent", "name"] },
+  const secondaryGuardian = exactValue(row, ["parent2name", "secondparentname", "secondaryparent", "guardian2name", "parent2fullname"]) || splitParentName(2) || firstValue(row, [], [
+    { required: ["parent", "2", "name"], excluded: ["first", "last"] },
+    { required: ["second", "parent", "name"], excluded: ["first", "last"] },
+  ]);
+  const secondaryGuardianEmail = firstValue(row, ["parent2email", "secondparentemail", "secondaryparentemail", "guardian2email"], [
+    {required:["parent", "2", "email"]}, {required:["second", "parent", "email"]},
+  ]);
+  const secondaryGuardianPhone = firstValue(row, ["parent2phone", "parent2mobilephone", "secondparentphone", "secondaryparentphone", "guardian2phone"], [
+    {required:["parent", "2", "phone"]}, {required:["second", "parent", "phone"]},
   ]);
   const guardianEmail = firstValue(row, ["parent_email", "parentemail", "parent1email", "guardianemail"], [
     { required: ["parent", "email"], excluded: ["2", "second"] },
@@ -229,6 +239,8 @@ function childSource(row: CsvRow, index: number) {
     enrollmentStatus: enrollmentStatus(enrollment),
     primaryGuardian,
     secondaryGuardian,
+    secondaryGuardianPhone,
+    secondaryGuardianEmail,
     guardianEmail,
     guardianPhone,
     allergies: allergies || allergyMedicationCombined,
@@ -400,6 +412,8 @@ export async function POST(request: Request) {
         classroom: row.room || ageProfile.classroom,
         primaryGuardian: row.primaryGuardian,
         secondaryGuardian: row.secondaryGuardian || undefined,
+        secondaryGuardianPhone: row.secondaryGuardianPhone || undefined,
+        secondaryGuardianEmail: row.secondaryGuardianEmail || undefined,
         phone: row.guardianPhone,
         familyName: row.lastName ? `${row.lastName} Family` : undefined,
         guardianEmail: row.guardianEmail || undefined,
@@ -419,8 +433,9 @@ export async function POST(request: Request) {
         familyAccess: Array.isArray(existingRecord.familyAccess) ? existingRecord.familyAccess : [],
         familyMessages: Array.isArray(existingRecord.familyMessages) ? existingRecord.familyMessages : [],
         brightwheel: {
-          id: row.brightwheelId,
-          studentId: row.studentId,
+          ...object(existingRecord.brightwheel),
+          id: row.brightwheelId || text(object(existingRecord.brightwheel).id),
+          studentId: row.studentId || text(object(existingRecord.brightwheel).studentId),
           room: row.room,
           source: "Brightwheel roster CSV",
           importedAt: new Date().toISOString(),
