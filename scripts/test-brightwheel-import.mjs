@@ -47,6 +47,22 @@ async function api(options={}) {
  return {request,calls};
 }
 const csv='First Name,Last Name,Birthday,Enrollment Status,Room,Subsidy\nSynthetic,Avery,01/02/2020,Active,Division,Cash\nSynthetic,Inactive,01/02/2020,Inactive,Division,Cash';
+test('stale Brightwheel Active status never reactivates a known inactive profile',async()=>{
+ const t=await api({rows:[existing({enrollment_status:'Archived'})]});const p=await(await t.request({csvText:csv})).json();
+ assert.equal(p.rows[0].enrollmentStatus,'Archived');
+ assert.equal((await t.request({mode:'commit',csvText:csv,previewToken:p.previewToken})).status,200);
+ assert.equal(t.calls.find(c=>c[0]==='rpc')[2].p_rows[0].payload.enrollment_status,'Archived');
+});
+test('consolidated roster keeps third parents and multiple emergency contacts',async()=>{
+ const roster='First Name,Last Name,Birthday,Student status,Homeroom,Subsidy,Parent name,Parent 2 name,Parent 3 name,Parent 3 phone,Parent 3 email,Emergency contact 2 name,Emergency contact 2 phone,Emergency contact 3 name,Emergency contact 3 relationship\nSynthetic,Avery,01/02/2020,Active,Division,Cash,First,Second,Third,555-0100,third@example.invalid,Emergency Two,555-0200,Emergency Three,Aunt';
+ const t=await api({rows:[existing()]});const preview=await(await t.request({csvText:roster})).json();
+ assert.equal(preview.rows.length,1);assert.equal(preview.rows[0].matchType,'update');
+ assert.equal((await t.request({mode:'commit',csvText:roster,previewToken:preview.previewToken})).status,200);
+ const row=t.calls.find(c=>c[0]==='rpc')[2].p_rows[0];assert.equal(row.targetId,'child-1');
+ assert.equal(row.payload.record_data.emergencyContact2Name,'Emergency Two');assert.equal(row.payload.record_data.emergencyContact2Phone,'555-0200');
+ assert.deepEqual(row.payload.record_data.additionalGuardianContacts,[{name:'Third',phone:'555-0100',email:'third@example.invalid'}]);
+ assert.deepEqual(row.payload.record_data.additionalEmergencyContacts,[{name:'Emergency Three',phone:'',relationship:'Aunt'}]);
+});
 test('possible spelling changes with same birthday require existing-profile review instead of silent duplicates',()=>{
  const changed={...base,firstName:'SyntheticChanged'};
  assert.equal(identity.resolveImportIdentity(changed,[existing()]).matchType,'review');

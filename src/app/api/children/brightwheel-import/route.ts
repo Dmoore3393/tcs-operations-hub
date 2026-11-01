@@ -170,7 +170,7 @@ function childSource(row: CsvRow, index: number) {
     { required: ["homeroom"] },
     { required: ["room"], excluded: ["bathroom"] },
   ]);
-  const enrollment = firstValue(row, ["enrollment_status", "enrollmentstatus", "status"], [
+  const enrollment = firstValue(row, ["enrollment_status", "enrollmentstatus", "studentstatus", "status"], [
     { required: ["enrollment", "status"] },
   ]);
   const splitParentName = (number: number) => [
@@ -222,6 +222,10 @@ function childSource(row: CsvRow, index: number) {
   const emergencyRelationship = firstValue(row, ["emergency_contact_relationship", "emergencycontactrelationship"], [
     { required: ["emergency", "relationship"] },
   ]);
+  const numberedContact = (prefix: string, number: number, field: string) => exactValue(row, [`${prefix}${number}${field}`, `${prefix}${field}${number}`]);
+  const emergency2 = { name: numberedContact("emergencycontact", 2, "name"), phone: numberedContact("emergencycontact", 2, "phone"), relationship: numberedContact("emergencycontact", 2, "relationship") };
+  const additionalGuardianContacts = Array.from({length:8}, (_,i) => ({name: numberedContact("parent",i+3,"name"), phone: numberedContact("parent",i+3,"phone"), email: numberedContact("parent",i+3,"email")})).filter(c => c.name || c.phone || c.email);
+  const additionalEmergencyContacts = Array.from({length:8}, (_,i) => ({name: numberedContact("emergencycontact",i+3,"name"), phone: numberedContact("emergencycontact",i+3,"phone"), relationship: numberedContact("emergencycontact",i+3,"relationship")})).filter(c => c.name || c.phone || c.relationship);
   const subsidy = firstValue(row, ["subsidy", "subsidy_details", "subsidydetails", "funding", "paysource"], [
     { required: ["subsid"] },
     { required: ["funding"] },
@@ -250,6 +254,9 @@ function childSource(row: CsvRow, index: number) {
     emergencyName,
     emergencyPhone,
     emergencyRelationship,
+    emergency2,
+    additionalGuardianContacts,
+    additionalEmergencyContacts,
     subsidyRaw: subsidy,
     detectedFunding: inferFunding(subsidy),
     detectedLocation: canonicalLocation(room),
@@ -265,6 +272,12 @@ function mergeDefined(existing: DbRow, incoming: DbRow) {
     merged[key] = value;
   }
   return merged;
+}
+
+function mergeAdditionalContacts(existing: unknown, incoming: DbRow[]) {
+  if (!incoming.length) return undefined;
+  const rows = [...(Array.isArray(existing) ? existing : []), ...incoming];
+  return [...new Map(rows.map(row => [JSON.stringify(row), row])).values()];
 }
 
 function safeFunding(value: string) {
@@ -308,7 +321,7 @@ export async function POST(request: Request) {
     const locationIdBySlug = new Map(liveLocations.map(row => [text(row.slug), text(row.id)]));
     const existingRows: DbRow[] = [];
     for (let offset=0; ; offset+=1000) {
-      const existingResult = await admin.from("children").select("id,legacy_id,location_id,first_name,last_name,date_of_birth,guardian_name,record_data,updated_at").eq("organization_id", profile.organization_id).in("location_id", allowedIds).order("id").range(offset,offset+999);
+      const existingResult = await admin.from("children").select("id,legacy_id,location_id,first_name,last_name,date_of_birth,guardian_name,enrollment_status,record_data,updated_at").eq("organization_id", profile.organization_id).in("location_id", allowedIds).order("id").range(offset,offset+999);
       if (existingResult.error) throw existingResult.error;
       const page = (existingResult.data ?? []) as unknown as DbRow[];
       existingRows.push(...page);
@@ -329,6 +342,8 @@ export async function POST(request: Request) {
       const selectedFunding = safeFunding(text(override?.funding)) || source.detectedFunding || defaultFunding;
       const identity = repeats.has(index) ? { ...identities[index], matchType: "duplicate" as const, existingRowId: "", identityWarning: "This child appears more than once in the CSV or targets the same profile twice. Keep one row and refresh the preview." } : identities[index];
       const match = existingRows.find(row=>text(row.id) === identity.existingRowId);
+      const existingEnrollment = text(match?.enrollment_status) || text(object(match?.record_data).enrollmentStatus);
+      const enrollmentStatus = /^(archived|inactive)$/i.test(existingEnrollment) && source.enrollmentStatus === "Active" ? "Archived" : source.enrollmentStatus;
       const blocked = repeats.has(index) || source.enrollmentStatus === "Needs review" || !deriveChildAgeProfile(source.dateOfBirth);
 
       const warnings: string[] = [];
@@ -347,6 +362,7 @@ export async function POST(request: Request) {
         selectedFunding,
         ...identity,
         blocked,
+        enrollmentStatus,
         existingLegacyId: match ? text(match.legacy_id) : "",
         existingRowId: match ? text(match.id) : "",
         include: override?.include !== false && identity.matchType !== "duplicate",
@@ -427,6 +443,11 @@ export async function POST(request: Request) {
         emergencyContact1Name: row.emergencyName || undefined,
         emergencyContact1Phone: row.emergencyPhone || undefined,
         emergencyContact1Relationship: row.emergencyRelationship || undefined,
+        emergencyContact2Name: row.emergency2.name || undefined,
+        emergencyContact2Phone: row.emergency2.phone || undefined,
+        emergencyContact2Relationship: row.emergency2.relationship || undefined,
+        additionalGuardianContacts: mergeAdditionalContacts(existingRecord.additionalGuardianContacts, row.additionalGuardianContacts),
+        additionalEmergencyContacts: mergeAdditionalContacts(existingRecord.additionalEmergencyContacts, row.additionalEmergencyContacts),
         weeklySchedule: text(existingRecord.weeklySchedule) || "Schedule not entered",
         transportation: text(existingRecord.transportation) || "No transportation",
         licensingStatus: text(existingRecord.licensingStatus) || "Missing Documents",
