@@ -38,7 +38,7 @@ test('CSV duplicates and different rows targeting the same child are held; row i
 let sequence=0;
 async function api(options={}) {
  const calls=[]; const rows=options.rows||[];
- const admin={from(table){const query={select(){return query},order(){return query},range(){return query},eq(...args){calls.push(['eq',table,...args]);return query},in(...args){calls.push(['in',table,...args]);return query},then(resolve,reject){return Promise.resolve({data:table==='locations'?[{id:'location-1',slug:'division'},{id:'location-2',slug:'halcom'}]:rows,error:null}).then(resolve,reject)}};return query;},async rpc(name,args){calls.push(['rpc',name,args]);return {data:{inserted:args.p_rows.filter(r=>!r.targetId).length,updated:args.p_rows.filter(r=>r.targetId).length},error:options.rpcError||null};}};
+ const admin={from(table){const query={select(){return query},order(){return query},range(){return query},eq(...args){calls.push(['eq',table,...args]);return query},in(...args){calls.push(['in',table,...args]);return query},then(resolve,reject){return Promise.resolve({data:table==='locations'?[{id:'location-1',slug:'division'},{id:'location-2',slug:'halcom'}]:rows,error:options.queryError||null}).then(resolve,reject)}};return query;},async rpc(name,args){calls.push(['rpc',name,args]);return {data:{inserted:args.p_rows.filter(r=>!r.targetId).length,updated:args.p_rows.filter(r=>r.targetId).length},error:options.rpcError||null};}};
  globalThis.__bwStaff=async()=>{if(options.anonymous)throw new Response('Sign in',{status:401});return {admin,user:{id:'synthetic-actor'},profile:{organization_id:'synthetic-org',locations:['Division']},isOwner:!options.licensee&&!options.employee,isLicensee:!!options.licensee};};
  let source=await read('src/app/api/children/brightwheel-import/route.ts');
  source=source.replace(/import \{ requireStaff, staffErrorResponse \} from .*?;/,'const requireStaff=globalThis.__bwStaff; const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});').replace('"@/lib/brightwheel-identity"',JSON.stringify(identityUrl)).replace('"@/lib/children"',JSON.stringify(childrenUrl)).replace('"@/lib/location-config"',JSON.stringify(configUrl)).replace('"@/lib/server/location-slug"',JSON.stringify(slugUrl));
@@ -184,4 +184,12 @@ test('explicit checked-row list is an allowlist and unchecked overrides always w
  const t=await api();const p=await(await t.request({csvText:roster})).json();const result=await(await t.request({mode:'commit',csvText:roster,previewToken:p.previewToken,selectedRowKeys,overrides})).json();assert.equal(result.inserted,expected);
  const changes=t.calls.find(c=>c[0]==='rpc')?.[2].p_rows||[];assert.equal(changes.length,expected);if(expected)assert.equal(changes[0].payload.last_name,'Selected');
  }
+});
+
+test('plain database errors show a useful reference without disclosing private row or SQL details',async()=>{
+ for(const [code,status] of [['23514',500],['23505',409],['42501',403],['PGRST202',503]]){
+ const t=await api({rpcError:{code,message:'private synthetic details',details:'synthetic private row',hint:'private SQL'}});const p=await(await t.request({csvText:csv})).json();
+ const response=await t.request({mode:'commit',csvText:csv,previewToken:p.previewToken});assert.equal(response.status,status);const body=await response.text();assert.ok(body.includes(code));assert.ok(!body.includes('private'));
+ }
+ const t=await api({queryError:{code:'XX000',message:'private synthetic query'}});const response=await t.request({csvText:csv});assert.equal(response.status,500);assert.match((await response.json()).error,/Reference: XX000/);assert.equal(t.calls.some(c=>c[0]==='rpc'),false);
 });

@@ -6,11 +6,13 @@ const db=new PGlite();
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const org=id(1),otherOrg=id(2),loc=id(3),otherLoc=id(4),foreignLoc=id(5),owner=id(10),licensee=id(11),employee=id(12);
 before(async()=>{
- await db.exec(`create role anon;create role authenticated;create role service_role bypassrls; create table organizations(id uuid primary key);create table locations(id uuid primary key,organization_id uuid,is_active boolean);create table staff_access(user_id uuid primary key,organization_id uuid,role text,is_active boolean);create table staff_location_assignments(user_id uuid,location_id uuid);create table children(id uuid primary key default gen_random_uuid(),organization_id uuid,location_id uuid,legacy_id text,first_name text,last_name text,date_of_birth date,age_group text,enrollment_status text,attendance_status text,guardian_name text,record_data jsonb,created_by uuid,updated_by uuid,updated_at timestamptz not null default now(),unique(organization_id,legacy_id));create table audit_log(organization_id uuid,actor_user_id uuid,action text,table_name text,row_id uuid,metadata jsonb);grant all on all tables in schema public to service_role;`);
+ await db.exec(`create role anon;create role authenticated;create role service_role bypassrls; create table organizations(id uuid primary key);create table locations(id uuid primary key,organization_id uuid,is_active boolean);create table staff_access(user_id uuid primary key,organization_id uuid,role text,is_active boolean);create table staff_location_assignments(user_id uuid,location_id uuid);create table children(id uuid primary key default gen_random_uuid(),organization_id uuid,location_id uuid,legacy_id text,first_name text,last_name text,date_of_birth date,age_group text,enrollment_status text,attendance_status text,guardian_name text,record_data jsonb,created_by uuid,updated_by uuid,updated_at timestamptz not null default now(),unique(organization_id,legacy_id));create table audit_log(organization_id uuid,actor_user_id uuid,action text constraint audit_log_action_check check (action in ('CREATE','UPDATE','REVIEW','EXPORT','DELETE')),table_name text,row_id uuid,metadata jsonb);grant all on all tables in schema public to service_role;`);
  const folder=new URL('../supabase/migrations/',import.meta.url);const name=(await readdir(folder)).find(name=>name.endsWith('_safe_brightwheel_import.sql'));assert.ok(name);
  await db.exec(await readFile(new URL(name,folder),'utf8'));
  const optional=(await readdir(folder)).find(name=>name.endsWith('_optional_roster_birthdays.sql'));assert.ok(optional);
  await db.exec(await readFile(new URL(optional,folder),'utf8'));
+ const audit=(await readdir(folder)).find(name=>name.endsWith('_brightwheel_import_audit_actions.sql'));assert.ok(audit);
+ await db.exec(await readFile(new URL(audit,folder),'utf8'));
 });
 beforeEach(async()=>{
  await db.exec('reset role; truncate children,audit_log,staff_location_assignments,staff_access,locations,organizations;drop trigger if exists fail_import_audit on audit_log;');
@@ -54,4 +56,11 @@ test('blank and null birthdays are accepted without a fabricated age group',asyn
  assert.deepEqual(await save([a,b]),{inserted:2,updated:0});
  const saved=(await db.query('select date_of_birth,age_group from children')).rows;
  assert.deepEqual(saved,[{date_of_birth:null,age_group:'Unknown'},{date_of_birth:null,age_group:'Unknown'}]);
+});
+
+test('import audit uses production-allowed CREATE for additions and UPDATE for existing-only imports',async()=>{
+ await save([row()]);assert.equal((await db.query('select action from audit_log')).rows[0].action,'CREATE');
+ const before=await snapshot();const change=row();change.targetId=before[0].id;await save([change],owner,before);
+ assert.deepEqual((await db.query('select action from audit_log order by action')).rows.map(r=>r.action),['CREATE','UPDATE']);
+ assert.equal((await db.query('select count(*)::int n from children')).rows[0].n,1);
 });
