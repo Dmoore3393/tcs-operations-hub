@@ -6,12 +6,12 @@ import ts from "typescript";
 const compile = source => "data:text/javascript;base64," + Buffer.from(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText).toString("base64");
 const workflowURL = compile(await readFile(new URL("../src/lib/timesheet-workflow.ts", import.meta.url), "utf8"));
 const workflow = await import(workflowURL);
-const source = (await readFile(new URL("../src/lib/server/timesheet-batch-controls.ts", import.meta.url), "utf8")).replace('"@/lib/timesheet-workflow"', JSON.stringify(workflowURL));
+const source = (await readFile(new URL("../src/lib/server/timesheet-batch-controls.ts", import.meta.url), "utf8")).replace('"@/lib/timesheet-workflow"', JSON.stringify(workflowURL)).replace('"@/lib/timesheet-policy"',JSON.stringify(compile(await readFile(new URL('../src/lib/timesheet-policy.ts',import.meta.url),'utf8'))));
 const { controlledTimesheetBatch } = await import(compile(source));
 const scan = "00000000-0000-4000-8000-000000000001", email = "00000000-0000-4000-8000-000000000002", receipt = "00000000-0000-4000-8000-000000000003";
 function fixture() {
   const data = { collectorSigned: true, dynastyStatus: "Accounted For", dynastyHandedToDanielleAt: "2026-10-01T00:00:00Z", completedAt: "2026-10-01T01:00:00Z", timesheetType: "CCRC Stage 1", submissionDueDate: "2026-11-05" };
-  const rows = [1, 2].map(id => ({ id: `form-${id}`, organization_id: "org", location_id: "halcom", service_period: "October 2026", funding_source: "CCRC Stage 1", updated_at: `v${id}`, record_data: { ...data } }));
+  const rows = [1, 2].map(id => ({ id: `form-${id}`, organization_id: "org", location_id: "halcom", service_period: "September 2026", funding_source: "CCRC Stage 1", updated_at: `v${id}`, record_data: { ...data } }));
   const documents = [scan, email, receipt].map((id, i) => ({ id, organization_id: "org", location_id: "halcom", document_type: ["Timesheet Batch Scan", "Timesheet Sent Email Proof", "Timesheet Agency Receipt"][i], status: "Active" }));
   const route = { id: "route", updatedAt: "revision-1", revision: "route:revision-1", department: "Test Department", email: "submissions@example.com", verified: true };
   const calls = []; let sequence = 0; let rpcError = null;
@@ -27,7 +27,7 @@ function fixture() {
   };
   async function act(action, extras = {}, person = "Danielle") {
     const actor = { name: person, isDanielle: person === "Danielle", isJennifer: person === "Jennifer", isOwner: ["Danielle", "Jennifer"].includes(person), collectorSlug: person === "Latrice" ? "halcom" : person === "Noah" ? "tehachapi" : null, canViewAll: ["Danielle", "Jennifer"].includes(person) };
-    const body = { action, servicePeriod: "October 2026", locationSlug: "halcom", timesheetType: "CCRC Stage 1", routeRevision: route.revision, expectedRows: rows.map(row => ({ id: row.id, updatedAt: row.updated_at })), ...extras };
+    const body = { action, servicePeriod: "September 2026", locationSlug: "halcom", timesheetType: "CCRC Stage 1", routeRevision: route.revision, expectedRows: rows.map(row => ({ id: row.id, updatedAt: row.updated_at })), ...extras };
     try { return await controlledTimesheetBatch({ admin, organizationId: "org", userId: person, actor, locations: [{ id: "halcom", slug: "halcom" }], routes: { [workflow.timesheetRouteKey("halcom", "CCRC Stage 1")]: route }, body }); }
     catch (error) { if (error instanceof Response) return error; throw error; }
   }

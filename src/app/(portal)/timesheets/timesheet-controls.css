@@ -18,3 +18,22 @@
 .tscc-control-footnote { color:#6c655f; font-size:16px!important; }
 .tscc-route-card .tscc-check input { width:18px; height:18px; margin-top:2px; }
 .tscc-route-card .tscc-check { font-size:16px; text-transform:none; letter-spacing:normal; display:flex; }
+
+.tscc-simple-workflow {display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;padding:18px;background:#edf6ed;color:#143e28;}
+.tscc-simple-workflow div {background:white;border:1px solid #bdd6c0;border-radius:12px;padding:14px;font-size:17px;}
+.tscc-simple-workflow span {display:block;font-size:16px;margin-top:6px;}
+.tscc-child-checklist .tscc-table {min-width:1100px;font-size:16px;}
+.tscc-child-checklist p {font-size:16px;line-height:1.5;margin:6px 0;}
+.tscc-checklist-check {display:flex;align-items:center;gap:8px;min-height:44px;font-size:16px;}
+.tscc-checklist-check input {width:22px;height:22px;accent-color:#24613c;}
+.tscc-checklist-missing {color:#8a2824!important;}
+.tscc-checklist-actions {display:grid;gap:8px;}
+.tscc-checklist-actions button {min-height:44px;font-size:16px;}
+.tscc-workflow-details>summary {padding:18px;background:#eef3ec;border:1px solid #b8cdb8;border-radius:12px;cursor:pointer;font-size:17px;font-weight:800;color:#18472d;margin-bottom:18px;}
+.tscc-toolbar label {font-size:16px;font-weight:700;}
+@media(max-width:900px){.tscc-simple-workflow{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:520px){.tscc-simple-workflow{grid-template-columns:repeat(2,minmax(0,1fr));}}
+
+.tscc-deadline-flag {background:#fff0ed;}
+.tscc-deadline-policy {padding:18px;border:2px solid #a32c2c;background:#fff2ed;color:#702020;border-radius:14px;font-size:17px;margin:16px 0;}
+.tscc-deadline-policy p {font-size:16px;line-height:1.5;}

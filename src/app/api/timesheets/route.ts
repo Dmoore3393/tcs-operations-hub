@@ -2,6 +2,8 @@ import { TIMESHEET_TYPES, timesheetType as normalizeType, signedTimesheet as sig
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 import { tcsLocationSlug } from "@/lib/server/location-slug";
 import { BATCH_ACTIONS, controlledTimesheetBatch } from "@/lib/server/timesheet-batch-controls";
+import { scanTimesheetAlerts } from "@/lib/server/timesheet-alerts";
+import { applyTimesheetPolicy, timesheetPolicyApplies } from "@/lib/timesheet-policy";
 import { directIntakePatch } from "@/lib/timesheet-direct-intake";
 
 export const runtime = "nodejs";
@@ -120,8 +122,9 @@ export async function GET(request: Request) {
       if (!location) continue;
       const slug = asText(location.slug);
       if (!actor.canViewAll && actor.collectorSlug !== slug) continue;
-      const record = asObject(row.record_data);
-      const type = normalizeType(record.timesheetType ?? record.fundingSource ?? row.funding_source);
+      const rawRecord = asObject(row.record_data);
+      const type = normalizeType(rawRecord.timesheetType ?? rawRecord.fundingSource ?? row.funding_source);
+      const record = applyTimesheetPolicy(rawRecord, asText(row.service_period), type);
       const handoffAt = timesheetHandoff(record);
       const emailedAt = asText(record.emailedAt) || asText(record.emailedByJenniferAt);
       records.push({
@@ -132,7 +135,7 @@ export async function GET(request: Request) {
         servicePeriod: asText(row.service_period),
         location: asText(location.full_name) || asText(location.name),
         locationSlug: slug,
-        collector: COLLECTOR_LABELS[slug] || "Assigned staff",
+        collector: timesheetPolicyApplies(asText(row.service_period)) ? "Danielle Moore" : COLLECTOR_LABELS[slug] || "Assigned staff",
         timesheetType: type,
         needsCcrcStage: type === "CCRC",
         stage: stage(record),
@@ -141,6 +144,10 @@ export async function GET(request: Request) {
         collectorSignedBy: asText(record.collectorSignedBy) || asText(record.licenseeInitials),
         collectorNotes: asText(record.collectorNotes),
         directReceivedAt: asText(record.directReceivedAt),
+        jenReviewedAt: asText(record.jenReviewedAt),
+        submissionControlVersion: record.submissionControlVersion,
+        workflowOwner: asText(record.workflowOwner),
+        workflowReviewer: asText(record.workflowReviewer),
         directSignaturesAt: asText(record.directSignaturesAt),
         directDatesAt: asText(record.directDatesAt),
         directReviewAt: asText(record.directReviewAt),
@@ -209,14 +216,15 @@ export async function GET(request: Request) {
         userId: user.id,
         collectorSlug: actor.collectorSlug,
         canViewAll: actor.canViewAll,
-        canCreateBatch: actor.isDanielle || actor.isJennifer || actor.isOwner,
-        canDynastyReview: actor.isDynasty,
-        canDynastyHandoff: actor.isDynasty,
+        canCreateBatch: actor.isOwner && actor.isDanielle,
+        canDynastyReview: false,
+        canDynastyHandoff: false,
         canDirectIntake: actor.isOwner && actor.isDanielle,
-        canFillOut: actor.isDanielle,
-        canScan: actor.isDanielle,
-        canEmail: actor.isJennifer,
-        canManageRoutes: actor.isDanielle || actor.isJennifer || actor.isOwner,
+        canFillOut: actor.isOwner && actor.isDanielle,
+        canScan: actor.isOwner && actor.isDanielle,
+        canEmail: actor.isOwner && actor.isDanielle,
+        canReview: actor.isOwner && actor.isJennifer,
+        canManageRoutes: actor.isOwner && actor.isDanielle,
       },
     });
   } catch (error) {
@@ -235,8 +243,13 @@ export async function POST(request: Request) {
     const body = asObject(await request.json().catch(() => ({})));
     const action = asText(body.action);
 
+    if (action === "checkAlerts") {
+      if (!actor.isOwner || (!actor.isDanielle && !actor.isJennifer)) return Response.json({error:"Timesheet leadership access required."},{status:403});
+      return Response.json({ok:true,...await scanTimesheetAlerts(admin,profile.organization_id)});
+    }
+
     if (action === "createBatch") {
-      if (!(actor.isDanielle || actor.isJennifer || actor.isOwner)) return Response.json({ error: "Only Danielle or Jennifer can create the monthly timesheet batch." }, { status: 403 });
+      if (!actor.isOwner || !actor.isDanielle) return Response.json({ error: "Only Danielle manages the monthly timesheet batch." }, { status: 403 });
       const servicePeriod = asText(body.servicePeriod).trim();
       if (!servicePeriod) return Response.json({ error: "Choose a service period before creating the batch." }, { status: 400 });
 
@@ -301,6 +314,7 @@ export async function POST(request: Request) {
           careLocationId: asText(child.location_id),
           timesheetType,
           fundingSource: timesheetType,
+          ...applyTimesheetPolicy({},servicePeriod,timesheetType),
           stage: "Location Sign-Off",
           collectorSigned: false,
           collectorSignedAt: "",
@@ -352,7 +366,7 @@ export async function POST(request: Request) {
     }
 
     if (action === "saveRoute") {
-      if (!(actor.isDanielle || actor.isJennifer || actor.isOwner)) return Response.json({ error: "Only Danielle or Jennifer can change department routing." }, { status: 403 });
+      if (!actor.isOwner || !actor.isDanielle) return Response.json({ error: "Danielle manages the agency routing; Jennifer reviews submissions." }, { status: 403 });
       const timesheetType = normalizeType(body.timesheetType);
       if (!COMMAND_TYPES.some((item) => item === timesheetType)) return Response.json({ error: "Choose CCRC Stage 1, CCRC Stage 2, CCCC, DCFS, or Respite." }, { status: 400 });
       const department = asText(body.department).trim();
@@ -419,13 +433,15 @@ export async function POST(request: Request) {
     if (!location) return Response.json({ error: "Timesheet location not found." }, { status: 404 });
     const slug = asText(location.slug);
     if (!actor.canViewAll && actor.collectorSlug !== slug) return Response.json({ error: "You cannot access this timesheet." }, { status: 403 });
-    const current = asObject(row.record_data);
+    const current = applyTimesheetPolicy(asObject(row.record_data),asText(row.service_period),normalizeType(asObject(row.record_data).timesheetType ?? row.funding_source));
+    if (timesheetPolicyApplies(asText(row.service_period)) && (!actor.isOwner || !actor.isDanielle)) return Response.json({error:"Danielle manages the forms. Jennifer reviews completed submissions in the batch controls."},{status:403});
 
     async function save(patch: DbRow, auditAction: string) {
-      const merged: DbRow = { ...current, ...patch, updatedAt: new Date().toISOString() };
+      let merged: DbRow = { ...current, ...patch, updatedAt: new Date().toISOString() };
       const type = normalizeType(merged.timesheetType ?? merged.fundingSource ?? row.funding_source);
       merged.timesheetType = type;
       merged.fundingSource = type;
+      merged = applyTimesheetPolicy(merged,asText(row.service_period),type);
       merged.stage = stage(merged);
       const saved = await admin.rpc("record_timesheet_controlled_action", {
         p_organization_id: profile.organization_id, p_row_id: row.id, p_actor_id: user.id,
@@ -542,8 +558,8 @@ export async function POST(request: Request) {
     }
 
     if (action === "fillOut") {
-      if (!actor.isDanielle) return Response.json({ error: "Only Danielle can fill out timesheets from the child's certificate." }, { status: 403 });
-      if (!timesheetHandoff(current)) return Response.json({ error: "Dynasty's personal handoff must be recorded first." }, { status: 400 });
+      if (!actor.isOwner || !actor.isDanielle) return Response.json({ error: "Only Danielle can fill out timesheets from the child's certificate." }, { status: 403 });
+      if (!timesheetHandoff(current) || (current.submissionControlVersion === 3 && (!current.directReceivedAt || !current.directSignaturesAt || !current.directDatesAt))) return Response.json({ error: "Record receipt and check the signatures and dates before filling out this form." }, { status: 400 });
       if (asText(current.completedAt)) return Response.json({ error: "Completion has already been recorded." }, { status: 400 });
       if (!asBool(body.certificateVerified) || !asBool(body.tuitionPolicyAcknowledged)) return Response.json({ error: "Verify the child certificate and acknowledge tuition is charged regardless of attendance." }, { status: 400 });
       await save({ certificateVerified: true, tuitionPolicyAcknowledged: true, completedBy: actor.name, completedAt: new Date().toISOString() }, "TIMESHEET_FILLED_FROM_CERTIFICATE");

@@ -458,3 +458,9 @@ export async function dispatchFileAuditOversightNotification(args: {
 
   return { delivered, senderUserId: args.senderUserId };
 }
+
+/** Deliver an already-stored, server-generated alert using the existing push channels. */
+export async function deliverStoredTimesheetAlert(admin: SupabaseClient, userId: string, notification: HubNotification) {
+  const state = await loadNotificationState(admin,userId);
+  if (state.preferences.enabled && !quietHoursActive(state.preferences)) await deliverPushChannels({admin,user:state.user,payload:{title:notification.title,body:notification.body,href:notification.href,tag:notification.eventKey}});
+}

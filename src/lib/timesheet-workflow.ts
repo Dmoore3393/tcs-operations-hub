@@ -26,11 +26,19 @@ export function timesheetHandoff(record: TimesheetData) {
 }
 export function timesheetStage(record: TimesheetData) {
   if (record.submissionIssue && typeof record.submissionIssue === "object") return "Correction Required";
+  if (record.submissionControlVersion === 3) {
+    if (!text(record.directReceivedAt) || !signedTimesheet(record) || !text(record.directDatesAt)) return "Location Sign-Off";
+    if (!text(record.completedAt)) return "Danielle Fill Out";
+    if (!text(record.scannedAt) || !text(record.scanDocumentId)) return "Scan & Send to Jennifer";
+    if (!text(record.emailedAt) || !text(record.emailEvidenceDocumentId)) return "Jennifer Email";
+    if (!text(record.jenReviewedAt)) return "Licensee Verification";
+    return "Complete";
+  }
   if (!signedTimesheet(record)) return "Location Sign-Off";
   if (record.dynastyStatus !== "Accounted For" && !text(record.directReviewAt)) return "Dynasty Review";
   if (!timesheetHandoff(record)) return "Personal Handoff";
   if (!text(record.completedAt)) return "Danielle Fill Out";
-  if (!text(record.scannedAt) || !text(record.sentToJenniferAt) || !text(record.scanDocumentId)) return "Scan & Send to Jennifer";
+  if (!text(record.scannedAt) || (record.submissionControlVersion !== 3 && !text(record.sentToJenniferAt)) || !text(record.scanDocumentId)) return "Scan & Send to Jennifer";
   if (!text(record.licenseeApprovalFingerprint)) return "Licensee Approval";
   if ((!text(record.emailedAt) && !text(record.emailedByJenniferAt)) || !text(record.emailEvidenceDocumentId)) return "Jennifer Email";
   if (!text(record.licenseeVerifiedAt)) return "Licensee Verification";
@@ -43,8 +51,8 @@ export function timesheetBatchKey(period: string, location: string, type: string
 export function validateTimesheetBatch(records: TimesheetData[], action: "scanBatch" | "emailBatch") {
   if (!records.length) return "This batch has no timesheets.";
   if (records.some(record => record.submissionIssue)) return "Resolve the flagged issue and reopen this batch first.";
-  if (records.some(record => !signedTimesheet(record) || (record.dynastyStatus !== "Accounted For" && !text(record.directReviewAt)) || !timesheetHandoff(record) || !text(record.completedAt))) return "Every timesheet in this batch must be signed, reviewed, handed off, and filled out before submission.";
-  if (action === "emailBatch" && records.some(record => !text(record.sentToJenniferAt) || !text(record.scanDocumentId))) return "Every timesheet in this batch must be scanned and sent to Jen before recording the company email.";
+  if (records.some(record => !signedTimesheet(record) || (record.submissionControlVersion === 3 && (!text(record.directReceivedAt) || !text(record.directDatesAt))) || (record.submissionControlVersion !== 3 && record.dynastyStatus !== "Accounted For" && !text(record.directReviewAt)) || (record.submissionControlVersion !== 3 && !timesheetHandoff(record)) || !text(record.completedAt))) return "Every timesheet in this batch must be signed, reviewed, handed off, and filled out before submission.";
+  if (action === "emailBatch" && records.some(record => (record.submissionControlVersion !== 3 && !text(record.sentToJenniferAt)) || !text(record.scanDocumentId))) return "Every timesheet in this batch must be scanned and sent to Jen before recording the company email.";
   if (records.every(record => action === "scanBatch" ? Boolean(text(record.scanDocumentId)) : Boolean(text(record.emailEvidenceDocumentId)))) return "This batch has already been recorded. Flag an issue to correct a submitted batch.";
   return "";
 }
