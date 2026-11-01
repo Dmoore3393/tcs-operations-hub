@@ -150,3 +150,27 @@ test('funding location imports independently and persists through an ordinary ro
  assert.equal(saved.location_id,'location-2');assert.equal(saved.record_data.fundingLocationId,'location-1');assert.equal(saved.record_data.subsidy,'CCRC Stage 2');
  const row=existing({location_id:'location-2',record_data:saved.record_data});const next=await api({rows:[row]});const np=await(await next.request({csvText:csv})).json();assert.equal(np.rows[0].selectedFundingLocation,'The School Age Center • Division');
 });
+
+test('multiple exact profiles offer an explicit choice with status and location, never an extra copy',async()=>{
+ const active=existing({enrollment_status:'Active',record_data:{...existing().record_data,location:'Synthetic Care Site'}});
+ const archived=existing({id:'child-archived',legacy_id:'existing-archived',enrollment_status:'Archived',record_data:{location:'Synthetic Care Site'}});
+ const t=await api({rows:[active,archived]});const p=await(await t.request({csvText:csv})).json();const item=p.rows[0];
+ assert.equal(item.matchType,'review');assert.equal(item.ready,false);assert.equal(item.allowNew,false);assert.equal(item.candidates.length,2);
+ assert.match(item.candidates[0].label,/Active.*Synthetic Care Site/);assert.match(item.candidates[1].label,/Archived.*Synthetic Care Site/);
+ assert.equal(identity.importIdentityReady(item,'child-1'),true);assert.equal(identity.importIdentityReady(item,'new'),false);
+ for(const selection of ['','new','forged-child']){
+ const match=identity.resolveImportIdentity(base,[active,archived],selection);assert.equal(match.matchType,'review');assert.equal(match.existingRowId,'');
+ }
+ const response=await t.request({mode:'commit',csvText:csv,previewToken:p.previewToken,overrides:[{rowKey:'bw-row-2',matchId:'child-1'}]});assert.equal(response.status,200);
+ const changes=t.calls.find(c=>c[0]==='rpc')[2].p_rows;assert.equal(changes.length,1);assert.equal(changes[0].targetId,'child-1');assert.equal(changes[0].payload.legacy_id,'existing-1');assert.deepEqual(changes[0].payload.record_data.familyAccess,[{synthetic:true}]);
+ const archivedChoice=identity.resolveImportIdentity(base,[active,archived],'child-archived');assert.equal(archivedChoice.existingRowId,'child-archived');
+});
+test('multiple identifier matches do not permit conflicting names, birthdays or student IDs',()=>{
+ const source={...base,brightwheelId:'shared-bw',studentId:'source-student'};
+ const first=existing({record_data:{brightwheel:{id:'shared-bw',studentId:'source-student'}}});
+ for(const extra of [{last_name:'Different'},{date_of_birth:'2021-01-02'},{record_data:{brightwheel:{id:'shared-bw',studentId:'other-student'}}}]){
+ const other=existing({id:'child-other',record_data:{brightwheel:{id:'shared-bw',studentId:'source-student'}},...extra});
+ const match=identity.resolveImportIdentity(source,[first,other],'child-other');assert.equal(match.matchType,'review');assert.equal(match.candidates.find(c=>c.id==='child-other').canUpdate,false);
+ assert.equal(identity.resolveImportIdentity(source,[first,other],'child-1').existingRowId,'child-1');
+ }
+});

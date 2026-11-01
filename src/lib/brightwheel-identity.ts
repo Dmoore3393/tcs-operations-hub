@@ -26,7 +26,7 @@ export function importedEnrollmentStatus(value: string): "Active" | "Pending" | 
 }
 export function childIdentity(row: Row) {
   const record = object(row.record_data), bw = object(record.brightwheel);
-  return { id: text(row.id), firstName: text(row.first_name) || text(record.firstName), lastName: text(row.last_name) || text(record.lastName), dateOfBirth: normalizedBirthDate(row.date_of_birth) || normalizedBirthDate(record.dateOfBirth), brightwheelId: text(bw.id) || text(record.brightwheelId), studentId: text(bw.studentId), legacyId: text(row.legacy_id) };
+  return { id: text(row.id), firstName: text(row.first_name) || text(record.firstName), lastName: text(row.last_name) || text(record.lastName), dateOfBirth: normalizedBirthDate(row.date_of_birth) || normalizedBirthDate(record.dateOfBirth), brightwheelId: text(bw.id) || text(record.brightwheelId), studentId: text(bw.studentId), legacyId: text(row.legacy_id), location: text(record.location), enrollmentStatus: text(row.enrollment_status) || text(record.enrollmentStatus) };
 }
 export function resolveImportIdentity(source: IdentitySource, rows: Row[], selected = ""): ImportIdentity {
   const identities = rows.map(childIdentity);
@@ -38,7 +38,23 @@ export function resolveImportIdentity(source: IdentitySource, rows: Row[], selec
   const definite = byBw.length ? byBw : byStudent.length ? byStudent : exact;
   const base: ImportIdentity = { matchType: "new", existingRowId: "", candidates: [], allowNew: false, identityWarning: "" };
   const blocked = (warning: string): ImportIdentity => ({ ...base, matchType: "review", identityWarning: warning });
-  if (definite.length > 1) return blocked("More than one existing profile matches. Review the Children Center before importing this child.");
+  const candidateFor = (row: ReturnType<typeof childIdentity>): ImportCandidate => ({
+    id: row.id,
+    label: [`${row.firstName} ${row.lastName}`, row.enrollmentStatus, row.location].filter(Boolean).join(" · "),
+    dateOfBirth: row.dateOfBirth,
+    canUpdate: (!source.dateOfBirth || !row.dateOfBirth || row.dateOfBirth === source.dateOfBirth)
+      && (!source.brightwheelId || !row.brightwheelId || source.brightwheelId === row.brightwheelId)
+      && (!source.studentId || !row.studentId || source.studentId === row.studentId),
+  });
+  if (definite.length > 1) {
+    // Active and archived profiles can have the same identity. Let staff choose
+    // exactly one authorized, compatible target; never guess or add another copy.
+    const candidates = definite.map(row => ({ ...candidateFor(row), canUpdate: candidateFor(row).canUpdate && fullName(row) === fullName(source) }));
+    if (candidates.some(row => row.id === selected && row.canUpdate)) {
+      return { ...base, matchType: "update", existingRowId: selected, candidates };
+    }
+    return { ...base, matchType: "review", candidates, identityWarning: "Several existing profiles match. Choose the profile to update; only that profile will be changed." };
+  }
   if (definite.length === 1) {
     const row = definite[0];
     if ((source.brightwheelId && row.brightwheelId && row.brightwheelId !== source.brightwheelId) || (source.dateOfBirth && row.dateOfBirth && row.dateOfBirth !== source.dateOfBirth) || fullName(row) !== fullName(source)) return blocked("The existing identifier, name or birthday conflicts. Correct the CSV or existing profile and refresh the preview.");
@@ -54,7 +70,7 @@ export function resolveImportIdentity(source: IdentitySource, rows: Row[], selec
     if (selected && selected !== "new") return blocked("That existing profile is not a valid match. Refresh the preview.");
     return base;
   }
-  const candidates = possible.map(row => ({ id: row.id, label: `${row.firstName} ${row.lastName}`, dateOfBirth: row.dateOfBirth, canUpdate: (!source.dateOfBirth || !row.dateOfBirth || row.dateOfBirth === source.dateOfBirth) && (!source.brightwheelId || !row.brightwheelId || source.brightwheelId === row.brightwheelId) && (!source.studentId || !row.studentId || source.studentId === row.studentId) }));
+  const candidates = possible.map(candidateFor);
   if (selected === "new") return { ...base, allowNew: true, candidates };
   if (candidates.some(row => row.id === selected && row.canUpdate)) return { ...base, matchType: "update", existingRowId: selected, candidates, allowNew: true };
   return { ...base, matchType: "review", candidates, allowNew: true, identityWarning: "An existing profile may match this child. Choose the existing profile to update, or confirm this is a separate child." };
