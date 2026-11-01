@@ -31,7 +31,7 @@ export function timesheetStage(record: TimesheetData) {
     if (!text(record.completedAt)) return "Danielle Fill Out";
     if (!text(record.scannedAt) || !text(record.scanDocumentId)) return "Scan & Send to Jennifer";
     if (!text(record.emailedAt) || !text(record.emailEvidenceDocumentId)) return "Jennifer Email";
-    if (!text(record.jenReviewedAt)) return "Licensee Verification";
+    if (!(record.workflowOwner === "Jennifer" && record.workflowReviewer === "") && !text(record.jenReviewedAt)) return "Licensee Verification";
     return "Complete";
   }
   if (!signedTimesheet(record)) return "Location Sign-Off";

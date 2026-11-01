@@ -26,6 +26,7 @@ before(async () => {
   await db.exec(await readFile(new URL("../supabase/migrations/20261023000100_timesheet_accountability.sql", import.meta.url), "utf8"));
   const folder=new URL('../supabase/migrations/',import.meta.url);const name=(await readdir(folder)).find(name=>name.endsWith('_timesheet_danielle_jen_workflow.sql'));assert.ok(name);await db.exec(await readFile(new URL(name,folder),'utf8'));
   const assignmentName=(await readdir(folder)).find(name=>name.endsWith('_timesheet_assignment_editor.sql'));assert.ok(assignmentName);await db.exec(await readFile(new URL(assignmentName,folder),'utf8'));
+  const tehachapiName=(await readdir(folder)).find(name=>name.endsWith('_timesheet_tehachapi_processor.sql'));assert.ok(tehachapiName);await db.exec(await readFile(new URL(tehachapiName,folder),'utf8'));
 });
 beforeEach(async () => {
   await db.exec("reset role; select set_config('request.jwt.claims','{}',false); truncate timesheets,timesheet_submission_routes,staff_access,locations,staff_location_assignments,document_records,audit_log,user_notification_state,children; drop trigger if exists fail_audit on audit_log;");
@@ -95,7 +96,7 @@ test('assignment changes selected month and profile atomically, preserving other
 });
 test('form-only and profile-only changes have separate scopes, including future Cash Pay',async()=>{
  await assignment({scope:'form'});assert.equal((await db.query('select record_data from children')).rows[0].record_data.subsidy,'CCRC Stage 1');
- const before=await rows();await assignment({scope:'profile',type:'Cash Pay',care:otherLoc});assert.deepEqual(await rows(),before);assert.equal((await db.query('select record_data from children')).rows[0].record_data.subsidy,'Cash Pay');
+ const before=await rows();await assignment({actor:jen,scope:'profile',type:'Cash Pay',care:otherLoc});assert.deepEqual(await rows(),before);assert.equal((await db.query('select record_data from children')).rows[0].record_data.subsidy,'Cash Pay');
 });
 test('assignment rejects unauthorized actors, cross-organization sites, stale writes, and scanned routing changes',async()=>{
  await assert.rejects(assignment({actor:jen}),/Unauthorized/);await assert.rejects(assignment({funding:id(999)}),/Invalid funding/);await assert.rejects(assignment({childAt:'2000-01-01Z'}),/Child changed/);await assert.rejects(assignment({formAt:'2000-01-01Z'}),/Timesheet changed/);
@@ -107,4 +108,23 @@ test('assignment rolls back the form and profile together when auditing fails',a
  const before=await rows();const childBefore=(await db.query('select * from children')).rows;
  await db.exec("create function reject_assignment_audit() returns trigger language plpgsql as $$ begin if new.table_name='children' then raise exception 'synthetic audit failure'; end if; return new; end $$;create trigger fail_audit before insert on audit_log for each row execute function reject_assignment_audit();");
  await assert.rejects(assignment(),/synthetic audit failure/);assert.deepEqual(await rows(),before);assert.deepEqual((await db.query('select * from children')).rows,childBefore);assert.equal(await auditCount(),0);
+});
+
+test('Jennifer alone processes Tehachapi; neither processor can impersonate the other location owner',async()=>{
+ for(const action of ['DANIELLE_DIRECT_INTAKE','TIMESHEET_FILLED_FROM_CERTIFICATE','scanBatch','emailBatch','SET_TYPE']){
+  assert.equal((await db.query('select timesheet_actor_can($1,$2,$3,$4) allowed',[jen,org,otherLoc,action])).rows[0].allowed,true);
+  assert.equal((await db.query('select timesheet_actor_can($1,$2,$3,$4) allowed',[danielle,org,otherLoc,action])).rows[0].allowed,false);
+  assert.equal((await db.query('select timesheet_actor_can($1,$2,$3,$4) allowed',[jen,org,loc,action])).rows[0].allowed,false);
+ }
+ assert.equal((await db.query("select timesheet_actor_can($1,$2,$3,'verifyBatch') allowed",[jen,org,otherLoc])).rows[0].allowed,false);
+ await assignment();assert.equal((await rows())[0].record_data.workflowOwner,'Jennifer');assert.equal((await rows())[0].record_data.workflowReviewer,'');
+ await assert.rejects(assignment({type:'CCCC'}),/Unauthorized/);
+ await assignment({actor:jen,type:'CCCC'});assert.equal((await rows())[0].record_data.submissionDueDate,'2026-11-01');
+});
+test('database accepts Jennifer’s Tehachapi submission only with the verified destination and evidence',async()=>{
+ await db.query('update timesheets set location_id=$1',[otherLoc]);await db.query('update timesheet_submission_routes set location_id=$1',[otherLoc]);await db.query('update document_records set location_id=$1',[otherLoc]);
+ const patch={submissionControlVersion:3,workflowOwner:'Jennifer',workflowReviewer:'',scanDocumentId:scan,emailEvidenceDocumentId:email,departmentEmail:'submissions@example.com',emailedByUserId:jen,emailedAt:'2026-11-01T20:00:00Z'};
+ await assert.rejects(batch('emailBatch',danielle,patch,{loc:otherLoc}),/Unauthorized/);
+ await assert.rejects(batch('emailBatch',jen,{...patch,departmentEmail:'wrong@example.com'},{loc:otherLoc}),/recipient/);
+ await batch('emailBatch',jen,patch,{loc:otherLoc});assert.ok((await rows()).every(row=>row.record_data.emailedByUserId===jen));
 });

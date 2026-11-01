@@ -12,17 +12,22 @@ export function timesheetDeadline(period: string, type: string) {
   if (!day) return '';
   return new Date(Date.UTC(Number(year),MONTHS.indexOf(month)+1,day,12)).toISOString().slice(0,10);
 }
-export function applyTimesheetPolicy(record: Record<string, unknown>, period: string, type: string) {
+export function applyTimesheetPolicy(record: Record<string, unknown>, period: string, type: string, locationSlug = "") {
   if (!timesheetPolicyApplies(period)) return record;
   const due = timesheetDeadline(period,type);
-  return {...record,submissionControlVersion:3,workflowOwner:'Danielle',workflowReviewer:'Jennifer',...(due ? {submissionDueDate:due} : {})};
+  return {...record,submissionControlVersion:3,workflowOwner:locationSlug==='tehachapi'?'Jennifer':'Danielle',workflowReviewer:locationSlug==='tehachapi'?'':'Jennifer',...(due ? {submissionDueDate:due} : {})};
 }
 export function timesheetDeadlineFlag(due: string, submitted: boolean, today: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(due) || submitted || today < due) return '';
   return today === due ? 'Due today' : 'Overdue';
 }
 
-export function timesheetStepLabel(stage:string,currentWorkflow=true) {
+export function timesheetStepLabel(stage:string,currentWorkflow=true, owner="Danielle", reviewer="Jennifer") {
   if(!currentWorkflow)return stage;
-  return ({'Location Sign-Off':'Receipt, signatures and dates','Danielle Fill Out':'Danielle: fill out','Scan & Send to Jennifer':'Danielle: scan','Jennifer Email':'Danielle: submit to agency','Licensee Verification':'Jen: final review','Complete':'Reviewed by Jen'} as Record<string,string>)[stage] || stage;
+  return ({'Location Sign-Off':'Receipt, signatures and dates','Danielle Fill Out':`${owner}: fill out`,'Scan & Send to Jennifer':`${owner}: scan`,'Jennifer Email':`${owner}: submit to agency`,'Licensee Verification':`${reviewer || owner}: final review`,'Complete':reviewer?'Reviewed by Jen':'Submission recorded'} as Record<string,string>)[stage] || stage;
+}
+
+export function timesheetProcessor(locationSlug:string) { return locationSlug==='tehachapi'?'Jennifer':'Danielle'; }
+export function canProcessTimesheet(actor:{isOwner:boolean;isDanielle:boolean;isJennifer?:boolean},locationSlug:string) {
+ return actor.isOwner && (locationSlug==='tehachapi' ? actor.isJennifer===true : actor.isDanielle);
 }

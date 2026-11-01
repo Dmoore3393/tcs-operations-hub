@@ -30,14 +30,29 @@ test('deadline red flags include missing eligible forms and do not guess Respite
 });
 test('scheduled alerts reach only same-organization Danielle and Jen, once daily per program',async()=>{
  const people=[{user_id:'dan',organization_id:'org',full_name:'Danielle Moore',role:'Owner / Admin'},{user_id:'jen',organization_id:'org',full_name:'Jennifer Thomason',role:'Owner / Admin'},{user_id:'other',organization_id:'org',full_name:'Other Owner',role:'Owner / Admin'}];
- const delivered=[],seen=new Set();
- const admin={from(table){const filters=[];const q={select(){return q},eq(k,v){filters.push([k,v]);return q},in(k,values){filters.push([k,values]);return q},then(resolve,reject){const rows=table==='staff_access'?people.map(p=>({...p,is_active:true})):table==='timesheets'?[{...form('one','CCCC'),organization_id:'org'}]:[];return Promise.resolve({data:rows.filter(row=>filters.every(([k,v])=>Array.isArray(v)?v.includes(row[k]):row[k]===v)),error:null}).then(resolve,reject)}};return q},async rpc(name,args){assert.equal(name,'append_timesheet_alert');assert.equal(args.p_org,'org');const key=args.p_user+args.p_event_key;const fresh=!seen.has(key);seen.add(key);if(fresh)delivered.push(args);return {data:fresh,error:null}}};
+ const delivered=[],seen=new Set();const forms=[{...form('one','CCCC'),organization_id:'org'}];const sites=[];
+ const admin={from(table){const filters=[];const q={select(){return q},eq(k,v){filters.push([k,v]);return q},in(k,values){filters.push([k,values]);return q},then(resolve,reject){const rows=table==='staff_access'?people.map(p=>({...p,is_active:true})):table==='timesheets'?forms:table==='locations'?sites:[];return Promise.resolve({data:rows.filter(row=>filters.every(([k,v])=>Array.isArray(v)?v.includes(row[k]):row[k]===v)),error:null}).then(resolve,reject)}};return q},async rpc(name,args){assert.equal(name,'append_timesheet_alert');assert.equal(args.p_org,'org');const key=args.p_user+args.p_event_key;const fresh=!seen.has(key);seen.add(key);if(fresh)delivered.push(args);return {data:fresh,error:null}}};
  await alerts.scanTimesheetAlerts(admin,'org',new Date('2026-11-01T21:00:00Z'));assert.deepEqual(delivered.map(d=>d.p_user).sort(),['dan','jen']);assert.ok(delivered.every(d=>!d.p_notification.body.includes('one')));
  await alerts.scanTimesheetAlerts(admin,'org',new Date('2026-11-01T22:00:00Z'));assert.equal(delivered.length,2);
  await alerts.scanTimesheetAlerts(admin,'other-org',new Date('2026-11-01T22:00:00Z'));assert.equal(delivered.length,2);
- people.push({...people[0],user_id:'duplicate-name'});await alerts.scanTimesheetAlerts(admin,'org',new Date('2026-11-02T22:00:00Z'));assert.equal(delivered.length,2);
+ forms.push({...form('teh','CCCC'),location_id:'teh',organization_id:'org'});sites.push({id:'teh',slug:'tehachapi',organization_id:'org'});await alerts.scanTimesheetAlerts(admin,'org',new Date('2026-11-01T22:00:00Z'));assert.equal(delivered.length,3);assert.equal(delivered[2].p_user,'jen');assert.ok(delivered[2].p_event_key.includes(':tehachapi:'));
+ people.push({...people[0],user_id:'duplicate-name'});await alerts.scanTimesheetAlerts(admin,'org',new Date('2026-11-02T22:00:00Z'));assert.equal(delivered.length,3);
 });
 test('scheduled endpoint requires its server secret, including non-ASCII malformed headers',async()=>{
  let routeSource=await read('src/app/api/cron/timesheets/route.ts');routeSource=routeSource.replace(/import \{createSupabaseAdminClient\}[^;]+;/,'const createSupabaseAdminClient=()=>({});').replace(/import \{scanTimesheetAlerts\}[^;]+;/,'const scanTimesheetAlerts=async()=>({flagged:2,delivered:2});');const route=await import(url(routeSource));const old=process.env.CRON_SECRET;process.env.CRON_SECRET='synthetic-secret';
  try{for(const authorization of ['', 'Bearer wrong', 'Bearer synthetic-secret-extra'])assert.equal((await route.GET(new Request('https://synthetic.invalid',{headers:{authorization}}))).status,401);assert.equal((await route.GET(new Request('https://synthetic.invalid',{headers:{authorization:'Bearer synthetic-secret'}}))).status,200);}finally{if(old===undefined)delete process.env.CRON_SECRET;else process.env.CRON_SECRET=old;}
+});
+test('Tehachapi assigns Jennifer all processing steps and closes on actual submission proof, with the same deadlines',()=>{
+ let r=p.applyTimesheetPolicy({},'October 2026','CCRC Stage 1','tehachapi');
+ assert.equal(r.workflowOwner,'Jennifer');assert.equal(r.workflowReviewer,'');assert.equal(r.submissionDueDate,'2026-11-01');
+ assert.equal(p.canProcessTimesheet({isOwner:true,isDanielle:false,isJennifer:true},'tehachapi'),true);
+ assert.equal(p.canProcessTimesheet({isOwner:true,isDanielle:true,isJennifer:false},'tehachapi'),false);
+ assert.equal(p.canProcessTimesheet({isOwner:false,isDanielle:false,isJennifer:true},'tehachapi'),false);
+ Object.assign(r,{directReceivedAt:'time',collectorSigned:true,directDatesAt:'time',completedAt:'time',scanDocumentId:'scan',scannedAt:'time',emailedAt:'time'});
+ assert.equal(w.timesheetStage(r),'Jennifer Email');r.emailEvidenceDocumentId='proof';assert.equal(w.timesheetStage(r),'Complete');assert.equal(r.jenReviewedAt,undefined);
+ assert.equal(p.timesheetStepLabel('Danielle Fill Out',true,'Jennifer',''),'Jennifer: fill out');
+ assert.equal(p.timesheetStepLabel('Complete',true,'Jennifer',''),'Submission recorded');
+ assert.equal(p.applyTimesheetPolicy({},'October 2026','CCRC Stage 2','halcom').workflowOwner,'Danielle');
+ const flags=alerts.timesheetAlertsForRows([{...form('teh','CCCC',{emailedAt:'time',emailEvidenceDocumentId:'proof'}),locationSlug:'tehachapi'}],[],'2026-11-01','October 2026');assert.equal(flags.length,0);
+ const missing=alerts.timesheetAlertsForRows([],[{id:'teh',locationSlug:'tehachapi',enrollment_status:'Active',record_data:{subsidy:'CCCC'}}],'2026-11-01','October 2026');assert.equal(missing[0].owner,'Jennifer');
 });
