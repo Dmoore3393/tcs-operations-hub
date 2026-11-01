@@ -1,4 +1,4 @@
-import { applyTimesheetPolicy, timesheetPolicyApplies, timesheetDeadline } from "@/lib/timesheet-policy";
+import { applyTimesheetPolicy, timesheetPolicyApplies, timesheetDeadline, canProcessTimesheet } from "@/lib/timesheet-policy";
 import { createHash, randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { batchFingerprint, timesheetBatchKey, timesheetRouteKey, timesheetStage, timesheetType, TIMESHEET_TYPES, validSubmissionDate, validateTimesheetBatch } from "@/lib/timesheet-workflow";
@@ -25,12 +25,14 @@ export async function controlledTimesheetBatch({ admin, organizationId, userId, 
   const currentWorkflow = timesheetPolicyApplies(period);
   const danielle = actor.isOwner && actor.isDanielle;
   const jen = actor.isOwner && actor.isJennifer;
+  const processor = canProcessTimesheet(actor,slug);
+  const tehachapi = slug === "tehachapi";
   if (currentWorkflow && !danielle && !jen) fail("Danielle handles timesheets; Jennifer reviews the completed submissions.",403);
   const manager = actor.isDanielle || actor.isJennifer || actor.isOwner;
   if (!actor.canViewAll && !isCollector) fail("You cannot access this location's batch.", 403);
-  if (action === "scanBatch" && !actor.isDanielle) fail("Only Danielle records scans sent to Jen.", 403);
-  if (action === "emailBatch" && !(currentWorkflow ? danielle : actor.isJennifer)) fail("Danielle records the agency submission; Jennifer reviews it afterward.", 403);
-  if (["approveBatch", "verifyBatch"].includes(action) && !(currentWorkflow ? (action === "verifyBatch" ? jen : danielle) : isCollector)) fail("Jennifer must review the submitted packet after Danielle finishes it.", 403);
+  if (action === "scanBatch" && !(currentWorkflow ? processor : actor.isDanielle)) fail("The assigned processor records this location’s scans.", 403);
+  if (action === "emailBatch" && !(currentWorkflow ? processor : actor.isJennifer)) fail("Only this location’s assigned processor can record its submission.", 403);
+  if (["approveBatch", "verifyBatch"].includes(action) && !(currentWorkflow ? (action === "verifyBatch" ? jen && !tehachapi : processor) : isCollector)) fail("Jennifer must review the submitted packet after Danielle finishes it.", 403);
   if (["setDeadline", "reopenBatch", "receiptBatch"].includes(action) && !manager) fail("Danielle or Jennifer must complete this step.", 403);
 
   const result = await admin.from("timesheets").select("*").eq("organization_id", organizationId).eq("location_id", location.id).eq("service_period", period);
@@ -39,7 +41,7 @@ export async function controlledTimesheetBatch({ admin, organizationId, userId, 
   if (!rows.length) fail("This batch has no timesheets.");
   const expected = Array.isArray(body.expectedRows) ? body.expectedRows.map(object) : [];
   if (expected.length !== rows.length || new Set(expected.map(row => row.id)).size !== rows.length || rows.some(row => !expected.some(item => item.id === row.id && item.updatedAt === row.updated_at))) fail("The batch changed since you opened it. Refresh and review every form again.", 409);
-  const records = rows.map(row => applyTimesheetPolicy(object(row.record_data),period,type));
+  const records = rows.map(row => applyTimesheetPolicy(object(row.record_data),period,type,slug));
   const route = routes[timesheetRouteKey(slug, type)];
   const routeRevision = text(route?.revision);
   const fingerprint = createHash("sha256").update(batchFingerprint(rows.map(row => ({ id: row.id, record_data: row.record_data })), routeRevision)).digest("hex");
@@ -71,7 +73,7 @@ export async function controlledTimesheetBatch({ admin, organizationId, userId, 
   } else if (action === "scanBatch") {
     const error = validateTimesheetBatch(records, "scanBatch"); if (error) fail(error);
     if (records.some(record => text(record.emailEvidenceDocumentId))) fail("Flag the submitted batch before replacing scans.");
-    confirmed("scanQualityChecked", "Confirm every page is readable, complete, and sent to Jen.");
+    confirmed("scanQualityChecked", "Confirm every page is readable and complete.");
     const scanDocumentId = await evidence(body.documentId, "Timesheet Batch Scan");
     patch = { scanDocumentId, scanQualityChecked: true, scannedBy: actor.name, scannedAt: now, ...(currentWorkflow ? {} : {sentToJenniferAt:now}), scanBatchId: batchId, licenseeApprovalFingerprint: "", licenseeApprovedAt: "" };
   } else if (action === "approveBatch") {
@@ -101,7 +103,7 @@ export async function controlledTimesheetBatch({ admin, organizationId, userId, 
     for (const id of new Set(records.map(record => record.emailEvidenceDocumentId))) await evidence(id, "Timesheet Sent Email Proof");
     patch = currentWorkflow ? {jenReviewedAt:now,jenReviewedBy:actor.name,jenReviewedByUserId:userId} : {licenseeVerifiedAt:now,licenseeVerifiedBy:actor.name,licenseeVerifiedByUserId:userId};
   } else if (action === "receiptBatch") {
-    if (records.some(record => !(currentWorkflow ? text(record.jenReviewedAt) : text(record.licenseeVerifiedAt)) || !text(record.emailEvidenceDocumentId))) fail("The assigned licensee must independently verify the sent submission first.");
+    if (records.some(record => !(currentWorkflow ? (tehachapi ? text(record.emailedAt) : text(record.jenReviewedAt)) : text(record.licenseeVerifiedAt)) || !text(record.emailEvidenceDocumentId))) fail("The assigned licensee must independently verify the sent submission first.");
     const reference = text(body.reference);
     if (reference.length < 3 || reference.length > 300) fail("Record the agency's receipt/reference or who confirmed receipt.");
     confirmed("agencyAccepted", "Confirm the correct agency acknowledged receipt of this packet. An email sent checkmark alone is not a receipt.");
@@ -119,7 +121,7 @@ export async function controlledTimesheetBatch({ admin, organizationId, userId, 
   } else fail("Unknown batch action.");
 
   const updates = rows.map(row => {
-    const record = { ...applyTimesheetPolicy(object(row.record_data),period,type), ...patch, submissionControlVersion: currentWorkflow ? 3 : 2, submissionBatchKey: timesheetBatchKey(period, slug, type) };
+    const record = { ...applyTimesheetPolicy(object(row.record_data),period,type,slug), ...patch, submissionControlVersion: currentWorkflow ? 3 : 2, submissionBatchKey: timesheetBatchKey(period, slug, type) };
     return { id: row.id, expected_updated_at: row.updated_at, record_data: record, workflow_stage: timesheetStage(record) };
   });
   const saved = await admin.rpc("record_timesheet_controlled_batch", {

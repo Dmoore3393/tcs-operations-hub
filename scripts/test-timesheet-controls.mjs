@@ -9,10 +9,12 @@ const workflow = await import(workflowURL);
 const source = (await readFile(new URL("../src/lib/server/timesheet-batch-controls.ts", import.meta.url), "utf8")).replace('"@/lib/timesheet-workflow"', JSON.stringify(workflowURL)).replace('"@/lib/timesheet-policy"',JSON.stringify(compile(await readFile(new URL('../src/lib/timesheet-policy.ts',import.meta.url),'utf8'))));
 const { controlledTimesheetBatch } = await import(compile(source));
 const scan = "00000000-0000-4000-8000-000000000001", email = "00000000-0000-4000-8000-000000000002", receipt = "00000000-0000-4000-8000-000000000003";
-function fixture() {
+function fixture({current=false,site="halcom"}={}) {
   const data = { collectorSigned: true, dynastyStatus: "Accounted For", dynastyHandedToDanielleAt: "2026-10-01T00:00:00Z", completedAt: "2026-10-01T01:00:00Z", timesheetType: "CCRC Stage 1", submissionDueDate: "2026-11-05" };
-  const rows = [1, 2].map(id => ({ id: `form-${id}`, organization_id: "org", location_id: "halcom", service_period: "September 2026", funding_source: "CCRC Stage 1", updated_at: `v${id}`, record_data: { ...data } }));
-  const documents = [scan, email, receipt].map((id, i) => ({ id, organization_id: "org", location_id: "halcom", document_type: ["Timesheet Batch Scan", "Timesheet Sent Email Proof", "Timesheet Agency Receipt"][i], status: "Active" }));
+  if(current)Object.assign(data,{directReceivedAt:"2026-11-01Z",directSignaturesAt:"2026-11-01Z",directDatesAt:"2026-11-01Z",directReviewAt:"2026-11-01Z"});
+  const period=current?"October 2026":"September 2026";
+  const rows = [1, 2].map(id => ({ id: `form-${id}`, organization_id: "org", location_id: site, service_period: period, funding_source: "CCRC Stage 1", updated_at: `v${id}`, record_data: { ...data } }));
+  const documents = [scan, email, receipt].map((id, i) => ({ id, organization_id: "org", location_id: site, document_type: ["Timesheet Batch Scan", "Timesheet Sent Email Proof", "Timesheet Agency Receipt"][i], status: "Active" }));
   const route = { id: "route", updatedAt: "revision-1", revision: "route:revision-1", department: "Test Department", email: "submissions@example.com", verified: true };
   const calls = []; let sequence = 0; let rpcError = null;
   const admin = {
@@ -27,8 +29,8 @@ function fixture() {
   };
   async function act(action, extras = {}, person = "Danielle") {
     const actor = { name: person, isDanielle: person === "Danielle", isJennifer: person === "Jennifer", isOwner: ["Danielle", "Jennifer"].includes(person), collectorSlug: person === "Latrice" ? "halcom" : person === "Noah" ? "tehachapi" : null, canViewAll: ["Danielle", "Jennifer"].includes(person) };
-    const body = { action, servicePeriod: "September 2026", locationSlug: "halcom", timesheetType: "CCRC Stage 1", routeRevision: route.revision, expectedRows: rows.map(row => ({ id: row.id, updatedAt: row.updated_at })), ...extras };
-    try { return await controlledTimesheetBatch({ admin, organizationId: "org", userId: person, actor, locations: [{ id: "halcom", slug: "halcom" }], routes: { [workflow.timesheetRouteKey("halcom", "CCRC Stage 1")]: route }, body }); }
+    const body = { action, servicePeriod: period, locationSlug: site, timesheetType: "CCRC Stage 1", routeRevision: route.revision, expectedRows: rows.map(row => ({ id: row.id, updatedAt: row.updated_at })), ...extras };
+    try { return await controlledTimesheetBatch({ admin, organizationId: "org", userId: person, actor, locations: [{ id: site, slug: site }], routes: { [workflow.timesheetRouteKey(site, "CCRC Stage 1")]: route }, body }); }
     catch (error) { if (error instanceof Response) return error; throw error; }
   }
   const scans = () => act("scanBatch", { documentId: scan, scanQualityChecked: true });
@@ -86,3 +88,14 @@ test("issues prevent closing; reopening requires a manager and preserves initial
 });
 test("a database conflict reports failure without changing the batch", async () => { const f = fixture(); f.setRpcError(new Error("concurrent change")); await error(f.scans(), 409); assert.equal(f.rows[0].record_data.scanDocumentId, undefined); });
 test("deadline validation and overdue tracking use valid calendar dates", () => { assert.equal(workflow.validSubmissionDate("2026-02-30"), false); assert.equal(workflow.validSubmissionDate("2028-02-29"), true); assert.equal(workflow.batchOverdue([{ submissionDueDate: "2026-10-20" }], "2026-10-21"), true); assert.equal(workflow.pacificToday(new Date("2026-10-22T01:00:00Z")), "2026-10-21"); });
+
+test('Jennifer scans and submits Tehachapi with actual proof, without a separate review of her own submission',async()=>{
+ const f=fixture({current:true,site:'tehachapi'});
+ await error(f.act('scanBatch',{documentId:scan,scanQualityChecked:true},'Danielle'),403);
+ await ok(f.act('scanBatch',{documentId:scan,scanQualityChecked:true},'Jennifer'));
+ assert.equal(workflow.timesheetStage(f.rows[0].record_data),'Jennifer Email');
+ await ok(f.act('emailBatch',{documentId:email,actualRecipient:f.route.email,sentAt:'2026-11-01T20:00:00Z',attachmentConfirmed:true},'Jennifer'));
+ assert.equal(workflow.timesheetStage(f.rows[0].record_data),'Complete');assert.equal(f.rows[0].record_data.workflowOwner,'Jennifer');assert.equal(f.rows[0].record_data.jenReviewedAt,undefined);assert.equal(f.rows[0].record_data.emailedByUserId,'Jennifer');
+ await error(f.act('verifyBatch',{submissionChecked:true},'Jennifer'),403);
+ await ok(f.act('receiptBatch',{documentId:receipt,reference:'Synthetic agency acknowledgment',agencyAccepted:true},'Jennifer'));
+});

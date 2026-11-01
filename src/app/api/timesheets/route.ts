@@ -3,7 +3,7 @@ import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 import { tcsLocationSlug } from "@/lib/server/location-slug";
 import { BATCH_ACTIONS, controlledTimesheetBatch } from "@/lib/server/timesheet-batch-controls";
 import { scanTimesheetAlerts } from "@/lib/server/timesheet-alerts";
-import { applyTimesheetPolicy, timesheetPolicyApplies } from "@/lib/timesheet-policy";
+import { applyTimesheetPolicy, timesheetPolicyApplies, canProcessTimesheet, timesheetProcessor } from "@/lib/timesheet-policy";
 import { directIntakePatch } from "@/lib/timesheet-direct-intake";
 
 export const runtime = "nodejs";
@@ -127,7 +127,7 @@ export async function GET(request: Request) {
       if (!actor.canViewAll && actor.collectorSlug !== slug) continue;
       const rawRecord = asObject(row.record_data);
       const type = normalizeType(rawRecord.timesheetType ?? rawRecord.fundingSource ?? row.funding_source);
-      const record = applyTimesheetPolicy(rawRecord, asText(row.service_period), type);
+      const record = applyTimesheetPolicy(rawRecord, asText(row.service_period), type, slug);
       const handoffAt = timesheetHandoff(record);
       const emailedAt = asText(record.emailedAt) || asText(record.emailedByJenniferAt);
       records.push({
@@ -146,7 +146,9 @@ export async function GET(request: Request) {
         servicePeriod: asText(row.service_period),
         location: asText(location.full_name) || asText(location.name),
         locationSlug: slug,
-        collector: timesheetPolicyApplies(asText(row.service_period)) ? "Danielle Moore" : COLLECTOR_LABELS[slug] || "Assigned staff",
+        canProcess: canProcessTimesheet(actor,slug),
+        canReviewSubmission: actor.isOwner && actor.isJennifer && slug !== "tehachapi",
+        collector: timesheetPolicyApplies(asText(row.service_period)) ? `${timesheetProcessor(slug)} ${slug === "tehachapi" ? "Thomason" : "Moore"}` : COLLECTOR_LABELS[slug] || "Assigned staff",
         timesheetType: type,
         needsCcrcStage: type === "CCRC",
         stage: stage(record),
@@ -228,15 +230,16 @@ export async function GET(request: Request) {
         userId: user.id,
         collectorSlug: actor.collectorSlug,
         canViewAll: actor.canViewAll,
-        canCreateBatch: actor.isOwner && actor.isDanielle,
+        managedLocations: locations.filter(site=>canProcessTimesheet(actor,asText(site.slug))).map(site=>asText(site.slug)),
+        canCreateBatch: actor.isOwner && (actor.isDanielle || actor.isJennifer),
         canDynastyReview: false,
         canDynastyHandoff: false,
-        canDirectIntake: actor.isOwner && actor.isDanielle,
-        canFillOut: actor.isOwner && actor.isDanielle,
-        canScan: actor.isOwner && actor.isDanielle,
-        canEmail: actor.isOwner && actor.isDanielle,
+        canDirectIntake: actor.isOwner && (actor.isDanielle || actor.isJennifer),
+        canFillOut: actor.isOwner && (actor.isDanielle || actor.isJennifer),
+        canScan: actor.isOwner && (actor.isDanielle || actor.isJennifer),
+        canEmail: actor.isOwner && (actor.isDanielle || actor.isJennifer),
         canReview: actor.isOwner && actor.isJennifer,
-        canManageRoutes: actor.isOwner && actor.isDanielle,
+        canManageRoutes: actor.isOwner && (actor.isDanielle || actor.isJennifer),
       },
     });
   } catch (error) {
@@ -261,7 +264,7 @@ export async function POST(request: Request) {
     }
 
     if (action === "createBatch") {
-      if (!actor.isOwner || !actor.isDanielle) return Response.json({ error: "Only Danielle manages the monthly timesheet batch." }, { status: 403 });
+      if (!actor.isOwner || (!actor.isDanielle && !actor.isJennifer)) return Response.json({ error: "Timesheet processor access is required." }, { status: 403 });
       const servicePeriod = asText(body.servicePeriod).trim();
       if (!servicePeriod) return Response.json({ error: "Choose a service period before creating the batch." }, { status: 400 });
 
@@ -312,7 +315,7 @@ export async function POST(request: Request) {
         if ((fundingLocationId || fundingLocation) && !location) {
           return Response.json({ error: "A child's funding authorization location is unavailable. Update the child profile before creating the batch." }, { status: 400 });
         }
-        if (!location) continue;
+        if (!location || !canProcessTimesheet(actor,asText(location.slug))) continue;
         const legacyId = `ts-${servicePeriod.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${asText(child.legacy_id)}`;
         const childName = `${asText(child.first_name)} ${asText(child.last_name)}`.trim();
         const familyName = `${asText(child.last_name)} Family`;
@@ -326,7 +329,7 @@ export async function POST(request: Request) {
           careLocationId: asText(child.location_id),
           timesheetType,
           fundingSource: timesheetType,
-          ...applyTimesheetPolicy({},servicePeriod,timesheetType),
+          ...applyTimesheetPolicy({},servicePeriod,timesheetType,asText(location.slug)),
           stage: "Location Sign-Off",
           collectorSigned: false,
           collectorSignedAt: "",
@@ -378,7 +381,6 @@ export async function POST(request: Request) {
     }
 
     if (action === "saveRoute") {
-      if (!actor.isOwner || !actor.isDanielle) return Response.json({ error: "Danielle manages the agency routing; Jennifer reviews submissions." }, { status: 403 });
       const timesheetType = normalizeType(body.timesheetType);
       if (!COMMAND_TYPES.some((item) => item === timesheetType)) return Response.json({ error: "Choose CCRC Stage 1, CCRC Stage 2, CCCC, DCFS, or Respite." }, { status: 400 });
       const department = asText(body.department).trim();
@@ -389,6 +391,7 @@ export async function POST(request: Request) {
       const typeSlug = timesheetType.toLowerCase().replace(/[^a-z0-9]+/g, "-");
       const locations = await liveLocations(admin, profile.organization_id);
       const selectedLocation = locations.find(location => location.slug === body.locationSlug);
+      if (selectedLocation && !canProcessTimesheet(actor,asText(selectedLocation.slug))) return Response.json({error:"Only the assigned processor manages this location’s routing."},{status:403});
       if (!selectedLocation) return Response.json({ error: "Choose the specific location for this route." }, { status: 400 });
       const rows = [selectedLocation].map((location) => {
         const legacyId = `command-route:${asText(location.slug)}:${typeSlug}`;
@@ -445,15 +448,15 @@ export async function POST(request: Request) {
     if (!location) return Response.json({ error: "Timesheet location not found." }, { status: 404 });
     const slug = asText(location.slug);
     if (!actor.canViewAll && actor.collectorSlug !== slug) return Response.json({ error: "You cannot access this timesheet." }, { status: 403 });
-    const current = applyTimesheetPolicy(asObject(row.record_data),asText(row.service_period),normalizeType(asObject(row.record_data).timesheetType ?? row.funding_source));
-    if (timesheetPolicyApplies(asText(row.service_period)) && (!actor.isOwner || !actor.isDanielle)) return Response.json({error:"Danielle manages the forms. Jennifer reviews completed submissions in the batch controls."},{status:403});
+    const current = applyTimesheetPolicy(asObject(row.record_data),asText(row.service_period),normalizeType(asObject(row.record_data).timesheetType ?? row.funding_source),slug);
+    if (timesheetPolicyApplies(asText(row.service_period)) && (!canProcessTimesheet(actor,slug))) return Response.json({error:"Jennifer processes Tehachapi forms; Danielle processes the other locations."},{status:403});
 
     async function save(patch: DbRow, auditAction: string) {
       let merged: DbRow = { ...current, ...patch, updatedAt: new Date().toISOString() };
       const type = normalizeType(merged.timesheetType ?? merged.fundingSource ?? row.funding_source);
       merged.timesheetType = type;
       merged.fundingSource = type;
-      merged = applyTimesheetPolicy(merged,asText(row.service_period),type);
+      merged = applyTimesheetPolicy(merged,asText(row.service_period),type,slug);
       merged.stage = stage(merged);
       const saved = await admin.rpc("record_timesheet_controlled_action", {
         p_organization_id: profile.organization_id, p_row_id: row.id, p_actor_id: user.id,
@@ -464,16 +467,16 @@ export async function POST(request: Request) {
     }
 
     if (action === "directIntake") {
-      if (!actor.isOwner || !actor.isDanielle) return Response.json({ error: "Danielle's Owner/Admin account is required." }, { status: 403 });
+      if (!canProcessTimesheet(actor,slug)) return Response.json({ error: "The assigned processor’s Owner/Admin account is required." }, { status: 403 });
       let patch: DbRow;
-      try { patch = directIntakePatch(current, body, actor, new Date().toISOString()); }
+      try { patch = directIntakePatch(current, body, actor, new Date().toISOString(),slug); }
       catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Check the direct receipt details." }, { status: 400 }); }
       await save(patch, "DANIELLE_DIRECT_INTAKE");
       return Response.json({ ok: true });
     }
 
     if (action === "setAssignment") {
-      if (!actor.isOwner || !actor.isDanielle) return Response.json({error:"Only Danielle can change timesheet assignments."},{status:403});
+      if (!canProcessTimesheet(actor,slug)) return Response.json({error:"Only the assigned processor can change timesheet assignments."},{status:403});
       const scope = asText(body.scope);
       const type = asText(body.timesheetType);
       if (!["both","form","profile"].includes(scope) || !(COMMAND_TYPES.some(item => item === type) || (scope === "profile" && type === "Cash Pay"))) return Response.json({error:"Choose the scope and a valid funding program."},{status:400});
@@ -586,7 +589,7 @@ export async function POST(request: Request) {
     }
 
     if (action === "fillOut") {
-      if (!actor.isOwner || !actor.isDanielle) return Response.json({ error: "Only Danielle can fill out timesheets from the child's certificate." }, { status: 403 });
+      if (!canProcessTimesheet(actor,slug)) return Response.json({ error: "Only the assigned processor can fill out this timesheet." }, { status: 403 });
       if (!timesheetHandoff(current) || (current.submissionControlVersion === 3 && (!current.directReceivedAt || !current.directSignaturesAt || !current.directDatesAt))) return Response.json({ error: "Record receipt and check the signatures and dates before filling out this form." }, { status: 400 });
       if (asText(current.completedAt)) return Response.json({ error: "Completion has already been recorded." }, { status: 400 });
       if (!asBool(body.certificateVerified) || !asBool(body.tuitionPolicyAcknowledged)) return Response.json({ error: "Verify the child certificate and acknowledge tuition is charged regardless of attendance." }, { status: 400 });

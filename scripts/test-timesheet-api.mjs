@@ -76,3 +76,11 @@ test('assignment API validates scope and active sites, and sends server-resolved
  assert.equal((await post(body)).status,200);
  assert.equal((await post({...body,scope:'profile',timesheetType:'Cash Pay'})).status,200);
 });
+
+test('Jennifer can receive and fill Tehachapi forms, while Danielle and other location processors cannot',async()=>{
+ const site={...location,slug:'tehachapi'};
+ setup('Danielle Moore',{},[],[site]);assert.equal((await post({action:'directIntake',id:'ts',received:true,reason:'Physical Tehachapi form.'})).status,403);
+ setup('Jennifer Thomason',{},[],[site]);assert.equal((await post({action:'directIntake',id:'ts',received:true,signaturesChecked:true,datesChecked:true,reason:'Physical Tehachapi form.'})).status,200);
+ const checked=changes[0].patch.record_data;assert.equal(checked.directReceivedBy,'Jennifer Thomason');assert.equal(checked.collectorSignedBy,'Jennifer Thomason');
+ setup('Jennifer Thomason',checked,[],[site]);assert.equal((await post({action:'fillOut',id:'ts',certificateVerified:true,tuitionPolicyAcknowledged:true})).status,200);assert.equal(changes[0].patch.record_data.completedBy,'Jennifer Thomason');
+});
