@@ -542,6 +542,21 @@ export async function POST(request: Request) {
       message: `Brightwheel import complete: ${inserted} added, ${updated} updated, ${skipped} skipped. No Parent Portal invitations were sent.`,
     });
   } catch (error) {
+    if (!(error instanceof Response) && text(object(error).code)) {
+      // Database errors are plain objects. Never log or return row details,
+      // CSV contents, SQL statements, or private contact information.
+      const rawCode = text(object(error).code);
+      const code = /^[A-Z0-9]{5,12}$/.test(rawCode) ? rawCode : "IMPORT_DATABASE";
+      console.error("Brightwheel import database failure", { code });
+      const failures: Record<string, {status:number;message:string}> = {
+        "23514": {status:500,message:"The import was stopped by a database validation rule. No changes from this import were saved. Your review choices are still available; contact TCS support."},
+        "23505": {status:409,message:"An existing child record conflicts with this import. Refresh Preview and choose the existing profile. No changes from this import were saved."},
+        "42501": {status:403,message:"Your staff access could not authorize this import. No changes were saved. Ask a TCS Owner/Admin to check your location access."},
+        "PGRST202": {status:503,message:"The roster import service needs a database update. Your review choices are still available; contact TCS support."},
+      };
+      const failure = failures[code] || {status:500,message:"The database could not finish this import. Your review choices are still available. Please try again or contact TCS support."};
+      return Response.json({error:`${failure.message} Reference: ${code}.`}, {status:failure.status});
+    }
     return staffErrorResponse(error);
   }
 }
