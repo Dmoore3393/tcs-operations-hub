@@ -5,10 +5,12 @@ import ts from 'typescript';
 const compile=source=>ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
 const url=source=>'data:text/javascript;base64,'+Buffer.from(compile(source)).toString('base64');
 const helper=url(await readFile(new URL('../src/lib/timesheet-workflow.ts',import.meta.url),'utf8'));
-const control=url((await readFile(new URL('../src/lib/server/timesheet-batch-controls.ts',import.meta.url),'utf8')).replace('\"@/lib/timesheet-workflow\"',JSON.stringify(helper)));
+const policy=url(await readFile(new URL('../src/lib/timesheet-policy.ts',import.meta.url),'utf8'));
+const control=url((await readFile(new URL('../src/lib/server/timesheet-batch-controls.ts',import.meta.url),'utf8')).replace('\"@/lib/timesheet-workflow\"',JSON.stringify(helper)).replace('"@/lib/timesheet-policy"',JSON.stringify(policy)));
 const locationConfig=url(await readFile(new URL('../src/lib/location-config.ts',import.meta.url),'utf8'));
 const locationHelper=url((await readFile(new URL('../src/lib/server/location-slug.ts',import.meta.url),'utf8')).replace('import \"server-only\";','').replace('\"@/lib/location-config\"',JSON.stringify(locationConfig)));
 let source=await readFile(new URL('../src/app/api/timesheets/route.ts',import.meta.url),'utf8');
+source=source.replace('"@/lib/timesheet-policy"',JSON.stringify(url(await readFile(new URL('../src/lib/timesheet-policy.ts',import.meta.url),'utf8')))).replace(/import \{ scanTimesheetAlerts \} from .*?;/,'const scanTimesheetAlerts=async()=>({flagged:0,delivered:0});');
 source=source.replace('"@/lib/timesheet-direct-intake"',JSON.stringify(url(await readFile(new URL('../src/lib/timesheet-direct-intake.ts',import.meta.url),'utf8'))));
 source=source.replace('\"@/lib/server/timesheet-batch-controls\"',JSON.stringify(control)).replace('\"@/lib/server/location-slug\"',JSON.stringify(locationHelper));
 source=source.replace('"@/lib/timesheet-workflow"',JSON.stringify(helper)).replace(/import \{ requireStaff, staffErrorResponse \} from .*?;/,'const requireStaff=async()=>globalThis.__timesheetAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
@@ -30,10 +32,11 @@ test('direct receipt is Danielle-only, audited and allows reviewed forms to prog
  assert.equal(changes[0].patch.record_data.stage,'Danielle Fill Out');
  assert.equal(changes[0].patch.record_data.dynastyReviewedBy,undefined);
 });
-test('Jennifer and Anthony cannot fill or scan; Danielle cannot record company email',async()=>{
+test('Jennifer and Anthony cannot fill or scan; Danielle submission still requires a complete packet',async()=>{
  setup('Jennifer Thomason');assert.equal((await post({action:'fillOut',id:'ts'})).status,403);assert.equal((await post({action:'scanBatch'})).status,403);
  setup('Anthony');assert.equal((await post({action:'scanBatch'})).status,403);
- setup('Danielle Moore');assert.equal((await post({action:'emailBatch'})).status,403);
+ setup('Jennifer Thomason');assert.equal((await post({action:'emailBatch'})).status,403);
+ setup('Danielle Moore');assert.equal((await post({action:'emailBatch'})).status,400);
 });
 test('Dynasty handoff records Danielle as recipient without overwriting old Jennifer handoff',async()=>{
  setup('Dynasty Lara');assert.equal((await post({action:'dynastyHandoff',id:'ts',handoffDate:'2026-10-13'})).status,200);

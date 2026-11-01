@@ -35,7 +35,7 @@ function updateAppBadge(count: number) {
 }
 
 export default function NotificationBell() {
-  const { session, isSystemOwner, isLocationLicensee } = useAuth();
+  const { session, profile, isSystemOwner, isLocationLicensee } = useAuth();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<HubNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -53,13 +53,14 @@ export default function NotificationBell() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setPermission(hubNotificationPermission());
+    const timer = window.setTimeout(() => setPermission(hubNotificationPermission()),0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
     if (!session?.access_token || !("Notification" in window) || Notification.permission !== "granted") return;
     void enableHubPushNotifications(session.access_token);
-  }, [session?.access_token]);
+  }, [session, profile?.full_name]);
 
   useEffect(() => {
     if (!session?.access_token || (!isSystemOwner && !isLocationLicensee) || typeof window === "undefined") return;
@@ -154,7 +155,8 @@ export default function NotificationBell() {
       }
     }
 
-    void load();
+    if (["Danielle Moore","Jennifer Thomason"].includes(profile?.full_name || "")) void fetch("/api/timesheets/alerts", {method:"POST",headers:{Authorization:`Bearer ${session.access_token}`},cache:"no-store"}).catch(()=>{}).finally(()=>void load());
+    else void load();
     const timer = window.setInterval(() => void load(), 60000);
     const visibility = () => {
       if (document.visibilityState === "visible") void load();
@@ -168,7 +170,7 @@ export default function NotificationBell() {
       document.removeEventListener("visibilitychange", visibility);
       window.removeEventListener("focus", visibility);
     };
-  }, [session?.access_token]);
+  }, [session, profile?.full_name]);
 
   async function markRead(item: HubNotification) {
     if (!session?.access_token || item.readAt) return;
