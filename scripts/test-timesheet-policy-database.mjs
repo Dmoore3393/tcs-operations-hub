@@ -10,10 +10,11 @@ before(async () => {
   await db.exec(`
     create role anon; create role authenticated; create role service_role;
     create table staff_access(user_id uuid primary key,organization_id uuid,full_name text,role text,is_active boolean);
-    create table locations(id uuid primary key,organization_id uuid,slug text,is_active boolean);
+    create table locations(id uuid primary key,organization_id uuid,slug text,is_active boolean,name text,full_name text);
     create table staff_location_assignments(user_id uuid,organization_id uuid,location_id uuid);
-    create table timesheets(id uuid primary key,organization_id uuid,location_id uuid,service_period text,funding_source text,record_data jsonb,workflow_stage text,updated_by uuid,updated_at timestamptz);
+    create table timesheets(id uuid primary key,organization_id uuid,location_id uuid,service_period text,funding_source text,record_data jsonb,workflow_stage text,updated_by uuid,updated_at timestamptz,child_id uuid);
     create table timesheet_submission_routes(id uuid primary key,organization_id uuid,location_id uuid,funding_source text,department_email text,record_data jsonb,updated_at timestamptz);
+    create table children(id uuid primary key,organization_id uuid,location_id uuid,record_data jsonb,updated_at timestamptz);
     create table document_records(id uuid primary key,organization_id uuid,location_id uuid,document_type text,status text);
     create table user_notification_state(user_id uuid primary key,inbox jsonb not null default '[]',preferences jsonb not null default '{}',updated_at timestamptz default now());
     create table audit_log(organization_id uuid,location_id uuid,actor_user_id uuid,action text,table_name text,row_id uuid,metadata jsonb);
@@ -24,15 +25,19 @@ before(async () => {
   `);
   await db.exec(await readFile(new URL("../supabase/migrations/20261023000100_timesheet_accountability.sql", import.meta.url), "utf8"));
   const folder=new URL('../supabase/migrations/',import.meta.url);const name=(await readdir(folder)).find(name=>name.endsWith('_timesheet_danielle_jen_workflow.sql'));assert.ok(name);await db.exec(await readFile(new URL(name,folder),'utf8'));
+  const assignmentName=(await readdir(folder)).find(name=>name.endsWith('_timesheet_assignment_editor.sql'));assert.ok(assignmentName);await db.exec(await readFile(new URL(assignmentName,folder),'utf8'));
 });
 beforeEach(async () => {
-  await db.exec("reset role; select set_config('request.jwt.claims','{}',false); truncate timesheets,timesheet_submission_routes,staff_access,locations,staff_location_assignments,document_records,audit_log,user_notification_state; drop trigger if exists fail_audit on audit_log;");
-  await db.query("insert into locations values ($1,$2,'halcom',true),($3,$2,'tehachapi',true)", [loc, org, otherLoc]);
+  await db.exec("reset role; select set_config('request.jwt.claims','{}',false); truncate timesheets,timesheet_submission_routes,staff_access,locations,staff_location_assignments,document_records,audit_log,user_notification_state,children; drop trigger if exists fail_audit on audit_log;");
+  await db.query("insert into locations(id,organization_id,slug,is_active) values ($1,$2,'halcom',true),($3,$2,'tehachapi',true)", [loc, org, otherLoc]);
   for (const [user, name, role] of [[danielle, "Danielle Moore", "Owner / Admin"], [jen, "Jennifer Thomason", "Owner / Admin"], [latrice, "Latrice Test", "Location Licensee"], [unassigned, "Latrice Unassigned", "Location Licensee"]]) await db.query("insert into staff_access values ($1,$2,$3,$4,true)", [user, org, name, role]);
   await db.query("insert into staff_location_assignments values($1,$2,$3)", [latrice, org, loc]);
   await db.query("insert into timesheet_submission_routes values($1,$2,$3,'CCRC Stage 1','submissions@example.com',$4,'2026-10-01Z')", [routeId, org, loc, JSON.stringify({ routingVerified: true })]);
   for (const [key, type] of [[scan, "Timesheet Batch Scan"], [email, "Timesheet Sent Email Proof"], [receipt, "Timesheet Agency Receipt"]]) await db.query("insert into document_records values($1,$2,$3,$4,'Active')", [key, org, loc, type]);
-  for (let n = 1; n <= 2; n++) await db.query("insert into timesheets values($1,$2,$3,'October 2026','CCRC Stage 1',$4,'Scan & Send to Jennifer',null,'2026-10-01Z')", [id(100+n), org, loc, JSON.stringify({ timesheetType: "CCRC Stage 1", completedAt: "2026-10-01T00:00:00Z" })]);
+  for (let n = 1; n <= 2; n++) await db.query("insert into timesheets(id,organization_id,location_id,service_period,funding_source,record_data,workflow_stage,updated_by,updated_at) values($1,$2,$3,'October 2026','CCRC Stage 1',$4,'Scan & Send to Jennifer',null,'2026-10-01Z')", [id(100+n), org, loc, JSON.stringify({ timesheetType: "CCRC Stage 1", completedAt: "2026-10-01T00:00:00Z" })]);
+  await db.query("insert into children values($1,$2,$3,$4,'2026-10-01Z')",[id(60),org,loc,JSON.stringify({subsidy:'CCRC Stage 1',primaryGuardian:'Preserve guardian',secondaryGuardian:'Preserve second guardian',dateOfBirth:'2022-01-01'})]);
+  await db.query("update timesheets set child_id=$1",[id(60)]);
+  await db.exec("update locations set name=slug,full_name=slug");
 });
 after(() => db.close());
 async function rows() { return (await db.query("select * from timesheets order by id")).rows; }
@@ -75,4 +80,31 @@ test('first deadline alert preserves a legacy inbox and notification preferences
  const key='timesheet-alert:seeded';const notification={id:'new',eventKey:key,href:'/timesheets'};
  await db.exec('set role service_role');await db.query('select append_timesheet_alert($1,$2,$3,$4,$5,$6)',[org,danielle,key,JSON.stringify(notification),JSON.stringify([{id:'previous',eventKey:'previous'}]),JSON.stringify({enabled:false,quietHoursEnabled:true})]);await db.exec('reset role');
  const saved=(await db.query('select inbox,preferences from user_notification_state where user_id=$1',[danielle])).rows[0];assert.deepEqual(saved.inbox.map(n=>n.id),['new','previous']);assert.equal(saved.preferences.enabled,false);assert.equal(saved.preferences.quietHoursEnabled,true);
+});
+
+async function assignment(overrides={}){
+ const row=(await rows())[0];const c=(await db.query('select * from children')).rows[0];
+ const args={org,actor:danielle,row:row.id,formAt:row.updated_at,childAt:c.updated_at,care:loc,funding:otherLoc,type:'CCRC Stage 2',scope:'both',...overrides};
+ return db.query('select change_timesheet_assignment($1,$2,$3,$4,$5,$6,$7,$8,$9)',[args.org,args.actor,args.row,args.formAt,args.childAt,args.care,args.funding,args.type,args.scope]);
+}
+test('assignment changes selected month and profile atomically, preserving other months and contacts',async()=>{
+ await assignment();const changed=(await rows())[0],untouched=(await rows())[1];
+ assert.equal(changed.location_id,otherLoc);assert.equal(changed.funding_source,'CCRC Stage 2');assert.equal(changed.record_data.submissionDueDate,'2026-11-05');assert.equal(changed.record_data.completedAt,'');
+ assert.equal(untouched.location_id,loc);assert.equal(untouched.funding_source,'CCRC Stage 1');
+ const child=(await db.query('select * from children')).rows[0];assert.equal(child.location_id,loc);assert.equal(child.record_data.fundingLocationId,otherLoc);assert.equal(child.record_data.subsidy,'CCRC Stage 2');assert.equal(child.record_data.secondaryGuardian,'Preserve second guardian');assert.equal(child.record_data.dateOfBirth,'2022-01-01');assert.equal(await auditCount(),2);
+});
+test('form-only and profile-only changes have separate scopes, including future Cash Pay',async()=>{
+ await assignment({scope:'form'});assert.equal((await db.query('select record_data from children')).rows[0].record_data.subsidy,'CCRC Stage 1');
+ const before=await rows();await assignment({scope:'profile',type:'Cash Pay',care:otherLoc});assert.deepEqual(await rows(),before);assert.equal((await db.query('select record_data from children')).rows[0].record_data.subsidy,'Cash Pay');
+});
+test('assignment rejects unauthorized actors, cross-organization sites, stale writes, and scanned routing changes',async()=>{
+ await assert.rejects(assignment({actor:jen}),/Unauthorized/);await assert.rejects(assignment({funding:id(999)}),/Invalid funding/);await assert.rejects(assignment({childAt:'2000-01-01Z'}),/Child changed/);await assert.rejects(assignment({formAt:'2000-01-01Z'}),/Timesheet changed/);
+ await db.query("update timesheets set record_data=record_data||$1",[JSON.stringify({scanDocumentId:scan})]);
+ await assert.rejects(assignment(),/Reopen/);assert.equal(await auditCount(),0);
+ await assignment({scope:'profile'});assert.equal(await auditCount(),1);
+});
+test('assignment rolls back the form and profile together when auditing fails',async()=>{
+ const before=await rows();const childBefore=(await db.query('select * from children')).rows;
+ await db.exec("create function reject_assignment_audit() returns trigger language plpgsql as $$ begin if new.table_name='children' then raise exception 'synthetic audit failure'; end if; return new; end $$;create trigger fail_audit before insert on audit_log for each row execute function reject_assignment_audit();");
+ await assert.rejects(assignment(),/synthetic audit failure/);assert.deepEqual(await rows(),before);assert.deepEqual((await db.query('select * from children')).rows,childBefore);assert.equal(await auditCount(),0);
 });

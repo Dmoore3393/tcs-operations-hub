@@ -4,6 +4,7 @@ import "./timesheet-command.css";
 import "./timesheet-controls.css";
 import { timesheetBatchKey, timesheetRouteKey, batchOverdue } from "@/lib/timesheet-workflow";
 import SubmissionBatchControls, { type SubmissionRecord, type SubmissionRoute } from "@/components/timesheets/SubmissionBatchControls";
+import TimesheetAssignmentEditor, {type AssignmentRecord} from "@/components/timesheets/TimesheetAssignmentEditor";
 import ChildTimesheetChecklist from "@/components/timesheets/ChildTimesheetChecklist";
 import { CHECKLIST_STEPS, timesheetChecklist, previousTimesheetMonth } from "@/lib/timesheet-checklist";
 import { timesheetStepLabel } from "@/lib/timesheet-policy";
@@ -58,7 +59,7 @@ const STAGES: Array<{ key: CommandStage; title: string; helper: string }> = [
   { key: "Complete", title: "Submission Closed", helper: "Verified submission and documented agency receipt" },
 ];
 
-type RecordItem = SubmissionRecord & {
+type RecordItem = SubmissionRecord & AssignmentRecord & {
   id: string;
   rowId: string;
   childName: string;
@@ -128,6 +129,7 @@ type ActorCaps = {
   canManageRoutes: boolean;
 };
 type ApiData = {
+  locations: {id:string;name:string}[];
   records: RecordItem[];
   routes: Record<string, RouteConfig>;
   types: readonly CommandType[];
@@ -408,7 +410,7 @@ export default function TimesheetCommandCenterPage() {
         </section>
 
         {loading && !data && <div className="tscc-modal-backdrop"><div className="tscc-modal" style={{maxWidth:420}}><div className="tscc-modal-body" style={{textAlign:"center",padding:35}}><RefreshCw className="animate-spin" style={{margin:"0 auto"}}/><h2 style={{marginTop:12}}>Loading the live timesheet database…</h2></div></div></div>}
-        {selected && data && <RecordModal error={error} record={selected} actor={data.actor} routes={data.routes} saving={saving} onClose={() => setSelected(null)} onAction={runAction} />}
+        {selected && data && <RecordModal locations={data.locations} error={error} record={selected} actor={data.actor} routes={data.routes} saving={saving} onClose={() => setSelected(null)} onAction={runAction} />}
         {focusedBatch && data && (()=>{const rows=records.filter(record=>timesheetBatchKey(record.servicePeriod,record.locationSlug,record.timesheetType)===focusedBatch);return rows.length ? <div className="tscc-modal-backdrop"><div className="tscc-modal" role="dialog" aria-modal="true" aria-label="Scan and submit timesheet batch"><div className="tscc-modal-head"><div><h2>Scan and submit this batch</h2><p>{rows[0].servicePeriod} • {rows[0].location} • {rows[0].timesheetType}</p></div><button className="tscc-close" aria-label="Close submission batch" onClick={()=>setFocusedBatch(null)}><X size={16}/></button></div><div className="tscc-modal-body">{error && <div role="alert" className="tscc-control-error">{error}</div>}<SubmissionBatchControls key={`${focusedBatch}:${rows.map(row=>row.updatedAt).join("|")}`} rows={rows} actor={data.actor} routes={data.routes} saving={saving} onAction={runAction}/></div></div></div> : null;})()}
         {showRoutes && data && <RouteModal collectors={data.collectors} routes={data.routes} saving={saving} onClose={() => setShowRoutes(false)} onSave={(locationSlug, type, route) => runAction({ action: "saveRoute", locationSlug, timesheetType: type, ...route }, `${type} routing saved for this location.`)} />}
       </div>
@@ -424,7 +426,7 @@ function QueuePanel({ title, helper, icon, rows, onOpen }: { title: string; help
   return <section className="tscc-panel"><div className="tscc-panel-head"><div><h2 style={{display:"flex",alignItems:"center",gap:7}}>{icon}{title}</h2><p>{helper}</p></div><span className="tscc-count" style={{background:"#e7d7c1",color:"#5c4639"}}>{rows.length}</span></div><div className="tscc-panel-body"><div className="tscc-queue">{rows.slice(0,8).map((record) => <div className="tscc-queue-row" key={record.id}><div><strong>{record.childName}</strong><span>{record.location} • {record.timesheetType}</span></div><button className="tscc-btn light" style={{minHeight:30}} onClick={() => onOpen(record)}>Open</button></div>)}{rows.length === 0 && <div className="tscc-empty">Nothing waiting here right now.</div>}{rows.length > 8 && <div className="tscc-empty">+ {rows.length - 8} more in the master ledger</div>}</div></div></section>;
 }
 
-function RecordModal({ record, actor, routes, saving, error, onClose, onAction }: { error:string; record: RecordItem; actor: ActorCaps; routes: Record<string, RouteConfig>; saving: boolean; onClose: () => void; onAction: (body: Record<string, unknown>, successText: string) => Promise<unknown> }) {
+function RecordModal({ record, actor, routes, saving, error, locations, onClose, onAction }: { error:string; record: RecordItem; locations:{id:string;name:string}[]; actor: ActorCaps; routes: Record<string, RouteConfig>; saving: boolean; onClose: () => void; onAction: (body: Record<string, unknown>, successText: string) => Promise<unknown> }) {
   const [handoffDate, setHandoffDate] = useState(record.dynastyHandoffDate || new Date().toISOString().slice(0,10));
   const [certificateVerified, setCertificateVerified] = useState(record.certificateVerified);
   const [tuitionAck, setTuitionAck] = useState(record.tuitionPolicyAcknowledged);
@@ -441,6 +443,7 @@ function RecordModal({ record, actor, routes, saving, error, onClose, onAction }
     <div className="tscc-modal-head"><div><h2>{record.childName}</h2><p>{record.location} • {record.servicePeriod} • {timesheetStepLabel(record.stage,ownerWorkflow)}</p></div><button className="tscc-close" onClick={onClose}><X size={16}/></button></div>
     <div className="tscc-modal-body">
       {error && <div role="alert" className="tscc-control-error">{error}</div>}
+      {actor.canFillOut && <TimesheetAssignmentEditor key={`${record.id}:${record.updatedAt}:${record.childAssignment?.updatedAt}`} record={record} locations={locations} saving={saving} onAction={onAction}/>}
       <section className="tscc-stage-card current" aria-label="Child timesheet checklist">
         <h3>Child Timesheet Checklist</h3>
         <div className="tscc-stage-actions">{[
@@ -465,7 +468,7 @@ function RecordModal({ record, actor, routes, saving, error, onClose, onAction }
           <button className="tscc-btn primary" style={{marginTop:12,minHeight:44}} disabled={saving || !directReceived || directReason.trim().length < 5} onClick={() => void onAction({action:"directIntake",id:record.id,received:directReceived,signaturesChecked:directSigned,datesChecked:directDated,reason:directReason},"Danielle's direct receipt and checks recorded.")}>Save My Receipt & Checks</button>
         </>}
       </section>
-      <div className="tscc-stage-card current"><h3><FileCheck2 size={16}/> Timesheet Type</h3><p>CCRC forms must be classified as Stage 1 or Stage 2 before Danielle submits them.</p><div className="tscc-stage-actions"><select className="tscc-select" style={{maxWidth:230}} value={record.timesheetType === "CCRC" ? "" : record.timesheetType} disabled={!actor.canFillOut || saving || Boolean(record.scanDocumentId || record.emailedAt)} onChange={(event) => event.target.value && void onAction({ action:"setType", id:record.id, timesheetType:event.target.value }, `${record.childName} classified as ${event.target.value}.`)}><option value="">Choose timesheet type</option>{COMMAND_TYPES.map((type) => <option key={type}>{type}</option>)}</select>{record.needsCcrcStage && <span className="tscc-chip red"><AlertTriangle size={11}/> CCRC stage required</span>}</div></div>
+      {!actor.canFillOut && <div className="tscc-stage-card current"><h3><FileCheck2 size={16}/> Timesheet Type</h3><p>CCRC forms must be classified as Stage 1 or Stage 2 before Danielle submits them.</p><div className="tscc-stage-actions"><select className="tscc-select" style={{maxWidth:230}} value={record.timesheetType === "CCRC" ? "" : record.timesheetType} disabled={!actor.canFillOut || saving || Boolean(record.scanDocumentId || record.emailedAt)} onChange={(event) => event.target.value && void onAction({ action:"setType", id:record.id, timesheetType:event.target.value }, `${record.childName} classified as ${event.target.value}.`)}><option value="">Choose timesheet type</option>{COMMAND_TYPES.map((type) => <option key={type}>{type}</option>)}</select>{record.needsCcrcStage && <span className="tscc-chip red"><AlertTriangle size={11}/> CCRC stage required</span>}</div></div>}
 
       {!ownerWorkflow && <StageCard number={1} title="Location Sign-Off" helper={`${record.collector} is assigned to get the form signed and check off this child.`} done={record.collectorSigned} current={step === 0} icon={<Signature size={16}/>}>
         <div className="tscc-stage-actions"><button className={`tscc-btn ${record.collectorSigned ? "light" : "green"}`} disabled={!canCollect || saving || step > 1} onClick={() => void onAction({ action:"markSigned", id:record.id, signed:!record.collectorSigned }, `${record.childName} ${record.collectorSigned ? "returned to unsigned" : "checked off as signed"}.`)}>{record.collectorSigned ? "Undo Signed Checkoff" : "✓ Check Off Signed Form"}</button><span className="tscc-chip">{record.collectorSignedAt ? formatStamp(record.collectorSignedAt) : "Not signed off yet"}</span></div>

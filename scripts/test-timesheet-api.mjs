@@ -67,3 +67,12 @@ test('timesheets use authorization location and retain care location separately'
  setup('Danielle Moore',{},[{...child,record_data:{subsidy:'CCCC'}}],sites);assert.equal((await post({action:'createBatch'})).status,200);assert.equal(changes.find(c=>c.table==='timesheets').value[0].location_id,'loc');
  setup('Danielle Moore',{},[{...child,record_data:{subsidy:'CCCC',fundingLocationId:'foreign-org-site'}}],sites);assert.equal((await post({action:'createBatch'})).status,400);assert.ok(!changes.some(c=>c.table==='timesheets'));
 });
+test('assignment API validates scope and active sites, and sends server-resolved actor and row',async()=>{
+ const body={action:'setAssignment',id:'ts',scope:'both',careLocationId:'loc',fundingLocationId:'loc',expectedUpdatedAt:'2026-11-01Z',expectedChildUpdatedAt:'2026-11-01Z'};
+ setup('Jennifer Thomason');assert.equal((await post(body)).status,403);
+ setup('Danielle Moore');assert.equal((await post({...body,fundingLocationId:'another-org'})).status,400);
+ assert.equal((await post({...body,scope:'all-months'})).status,400);
+ assert.equal((await post({...body,timesheetType:'Cash Pay'})).status,400);
+ assert.equal((await post(body)).status,200);
+ assert.equal((await post({...body,scope:'profile',timesheetType:'Cash Pay'})).status,200);
+});

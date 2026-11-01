@@ -116,6 +116,9 @@ export async function GET(request: Request) {
       .order("updated_at", { ascending: false });
     if (timesheetResult.error) throw timesheetResult.error;
 
+    const childResult = await admin.from("children").select("id,location_id,record_data,updated_at").eq("organization_id", profile.organization_id);
+    if (childResult.error) throw childResult.error;
+    const children = new Map(((childResult.data ?? []) as DbRow[]).map(child => [asText(child.id), child]));
     const records: DbRow[] = [];
     for (const row of (timesheetResult.data ?? []) as unknown as DbRow[]) {
       const location = locationById.get(asText(row.location_id));
@@ -130,6 +133,14 @@ export async function GET(request: Request) {
       records.push({
         id: asText(row.legacy_id),
         rowId: asText(row.id),
+        fundingLocationId: asText(row.location_id),
+        careLocationId: asText(record.careLocationId) || asText(children.get(asText(row.child_id))?.location_id),
+        childAssignment: children.has(asText(row.child_id)) ? {
+          updatedAt: asText(children.get(asText(row.child_id))?.updated_at),
+          careLocationId: asText(children.get(asText(row.child_id))?.location_id),
+          fundingLocationId: asText(asObject(children.get(asText(row.child_id))?.record_data).fundingLocationId) || asText(children.get(asText(row.child_id))?.location_id),
+          funding: asText(asObject(children.get(asText(row.child_id))?.record_data).subsidy),
+        } : null,
         childName: asText(row.child_name),
         familyName: asText(row.family_name) || asText(record.familyName),
         servicePeriod: asText(row.service_period),
@@ -211,6 +222,7 @@ export async function GET(request: Request) {
       routes: await liveRoutes(admin, profile.organization_id, locations.filter(location => actor.canViewAll || actor.collectorSlug === asText(location.slug))),
       types: COMMAND_TYPES,
       collectors,
+      locations: locations.map(site => ({id: asText(site.id), name: asText(site.full_name) || asText(site.name)})),
       actor: {
         name: actor.name,
         userId: user.id,
@@ -460,9 +472,25 @@ export async function POST(request: Request) {
       return Response.json({ ok: true });
     }
 
+    if (action === "setAssignment") {
+      if (!actor.isOwner || !actor.isDanielle) return Response.json({error:"Only Danielle can change timesheet assignments."},{status:403});
+      const scope = asText(body.scope);
+      const type = asText(body.timesheetType);
+      if (!["both","form","profile"].includes(scope) || !(COMMAND_TYPES.some(item => item === type) || (scope === "profile" && type === "Cash Pay"))) return Response.json({error:"Choose the scope and a valid funding program."},{status:400});
+      if (!locations.some(site => site.id === body.careLocationId) || !locations.some(site => site.id === body.fundingLocationId)) return Response.json({error:"Choose active TCS care and funding locations."},{status:400});
+      if (!body.expectedUpdatedAt || !body.expectedChildUpdatedAt) return Response.json({error:"Refresh the form before saving its assignment."},{status:409});
+      const result = await admin.rpc("change_timesheet_assignment", {
+        p_org:profile.organization_id,p_actor:user.id,p_row:row.id,
+        p_expected_form:body.expectedUpdatedAt,p_expected_child:body.expectedChildUpdatedAt,
+        p_care:body.careLocationId,p_funding:body.fundingLocationId,p_type:type,p_scope:scope,
+      });
+      if (result.error) return Response.json({error:result.error.message?.includes("Reopen") ? "Reopen the scanned or submitted batch before changing this month's funding or location. You can still update the child profile for future forms." : "The assignment changed or could not be saved. Refresh and try again."},{status:409});
+      return Response.json({ok:true});
+    }
+
     if (action === "setType") {
       if (!(actor.collectorSlug === slug || actor.isDynasty || actor.isDanielle || actor.isJennifer)) return Response.json({ error: "You cannot classify this timesheet." }, { status: 403 });
-      if (asText(current.sentToJenniferAt) || asText(current.licenseeApprovalFingerprint) || stage(current) === "Complete") return Response.json({ error: "Flag and reopen a submitted batch before reclassifying it." }, { status: 400 });
+      if (asText(current.scanDocumentId) || asText(current.emailedAt) || asText(current.sentToJenniferAt) || asText(current.licenseeApprovalFingerprint) || stage(current) === "Complete") return Response.json({ error: "Flag and reopen a submitted batch before reclassifying it." }, { status: 400 });
       const type = normalizeType(body.timesheetType);
       if (!COMMAND_TYPES.some((item) => item === type)) return Response.json({ error: "Choose CCRC Stage 1, CCRC Stage 2, CCCC, DCFS, or Respite." }, { status: 400 });
       const changedCompletedForm = type !== normalizeType(current.timesheetType ?? current.fundingSource ?? row.funding_source) && asText(current.completedAt);
