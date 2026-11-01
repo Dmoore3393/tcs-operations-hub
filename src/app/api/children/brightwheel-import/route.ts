@@ -315,6 +315,8 @@ export async function POST(request: Request) {
     const defaultLocation = safeLocation(text(body.defaultLocation));
     const defaultFunding = safeFunding(text(body.defaultFunding));
     const activeOnly = body.activeOnly !== false;
+    const selectedRowKeys = mode === "commit" && Array.isArray(body.selectedRowKeys)
+      ? new Set(body.selectedRowKeys.filter((key): key is string => typeof key === "string")) : null;
     const overrides = Array.isArray(body.overrides)
       ? new Map((body.overrides as ImportOverride[]).map((item) => [text(item.rowKey), item]))
       : new Map<string, ImportOverride>();
@@ -384,7 +386,7 @@ export async function POST(request: Request) {
         enrollmentStatus,
         existingLegacyId: match ? text(match.legacy_id) : "",
         existingRowId: match ? text(match.id) : "",
-        include: override?.include !== false && identity.matchType !== "duplicate",
+        include: override?.include !== false && identity.matchType !== "duplicate" && (!selectedRowKeys || selectedRowKeys.has(source.rowKey)),
         warnings,
         ready: !blocked && identity.matchType !== "review" && warnings.filter((warning) => warning !== "Parent/guardian contact not found in export").length === 0,
       };

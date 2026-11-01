@@ -16,7 +16,8 @@ import {
   UsersRound,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { readImportDraft, saveImportDraft, reconcileImportReview, type ImportRowSetting } from "@/lib/brightwheel-import-draft";
+import { useEffect, useMemo, useState } from "react";
 
 type PreviewRow = {
   rowKey: string;
@@ -64,28 +65,35 @@ type PreviewPayload = {
   message: string;
 };
 
-type RowSetting = {
-  include: boolean;
-  location: string;
-  funding: string;
-  fundingLocation: string;
-  fundingLocationChanged?: boolean;
-  matchId: string;
-};
+type RowSetting = ImportRowSetting;
 
 export default function BrightwheelImportPage() {
-  const { session } = useAuth();
-  const [fileName, setFileName] = useState("");
-  const [csvText, setCsvText] = useState("");
-  const [defaultLocation, setDefaultLocation] = useState("");
-  const [defaultFunding, setDefaultFunding] = useState("");
-  const [activeOnly, setActiveOnly] = useState(true);
+  const { session, profile } = useAuth();
+  const userId = session?.user.id || "";
+  const organizationId = profile?.organization_id || "";
+  const [recovered] = useState(() => { try { return typeof window !== "undefined" && userId && organizationId ? readImportDraft(window.sessionStorage, userId, organizationId) : null; } catch { return null; } });
+  const [draftError, setDraftError] = useState(false);
+  const [fileName, setFileName] = useState(recovered?.fileName ?? "");
+  const [csvText, setCsvText] = useState(recovered?.csvText ?? "");
+  const [defaultLocation, setDefaultLocation] = useState(recovered?.defaultLocation ?? "");
+  const [defaultFunding, setDefaultFunding] = useState(recovered?.defaultFunding ?? "");
+  const [activeOnly, setActiveOnly] = useState(recovered?.activeOnly ?? true);
   const [preview, setPreview] = useState<PreviewPayload | null>(null);
-  const [rowSettings, setRowSettings] = useState<Record<string, RowSetting>>({});
+  const [rowSettings, setRowSettings] = useState<Record<string, RowSetting>>(recovered?.rowSettings ?? {});
   const [loading, setLoading] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<{ inserted: number; updated: number; skipped: number; message: string } | null>(null);
+
+  useEffect(() => {
+    if (!userId || !organizationId) return;
+    let saved = false;
+    try { saved = saveImportDraft(window.sessionStorage, userId, organizationId, result ? null : {fileName,csvText,defaultLocation,defaultFunding,activeOnly,rowSettings}); } catch { /* Keep the import usable when tab storage is blocked. */ }
+    const timer = window.setTimeout(() => setDraftError(!saved), 0);
+    const guard = (event: BeforeUnloadEvent) => { if (csvText && !result) { event.preventDefault(); event.returnValue = ""; } };
+    window.addEventListener("beforeunload", guard);
+    return () => { window.clearTimeout(timer); window.removeEventListener("beforeunload", guard); };
+  }, [userId,organizationId,fileName,csvText,defaultLocation,defaultFunding,activeOnly,rowSettings,result]);
 
   const readyCount = useMemo(() => {
     if (!preview) return 0;
@@ -135,7 +143,7 @@ export default function BrightwheelImportPage() {
 
     return hubRequest<Record<string, unknown>>("/api/children/brightwheel-import", session.access_token, {
       method: "POST",
-      body: JSON.stringify({mode,previewToken:preview?.previewToken,csvText,defaultLocation,defaultFunding,activeOnly,overrides}),
+      body: JSON.stringify({mode,previewToken:preview?.previewToken,csvText,defaultLocation,defaultFunding,activeOnly,overrides, ...(mode === "commit" ? {selectedRowKeys:Object.entries(rowSettings).filter(([,setting])=>setting.include).map(([rowKey])=>rowKey)} : {})}),
     });
   }
 
@@ -146,16 +154,7 @@ export default function BrightwheelImportPage() {
     try {
       const payload = await callImport("preview") as unknown as PreviewPayload;
       setPreview(payload);
-      setRowSettings(Object.fromEntries(payload.rows.map((row) => [
-        row.rowKey,
-        {
-          include: row.include,
-          location: row.selectedLocation,
-          funding: row.selectedFunding,
-          fundingLocation: row.selectedFundingLocation,
-          matchId: rowSettings[row.rowKey]?.matchId || "",
-        },
-      ])));
+      setRowSettings(current => reconcileImportReview(payload.rows, current));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not preview the Brightwheel roster.");
     } finally {
@@ -213,6 +212,7 @@ export default function BrightwheelImportPage() {
       </div>
     </section>
 
+    {csvText && !result && <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-base font-semibold text-emerald-950">{draftError ? "This browser could not save recovery for this import. Keep this tab open until you finish." : recovered && !preview ? "Your unfinished import was recovered, including unchecked children and location choices. Click Preview to continue. Nothing has been imported automatically." : "Your import choices are saved temporarily in this browser tab. Unchecked children will be skipped. Recovery clears after import, sign-out, or closing this tab."}</div>}
     {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-900"><AlertTriangle className="mr-2 inline h-4 w-4" />{error}</div>}
     {result && <section className="rounded-3xl border border-emerald-200 bg-white p-6 shadow-sm">
       <div className="flex items-start gap-3"><CheckCircle2 className="mt-1 h-7 w-7 text-emerald-700" /><div><h2 className="text-xl font-black text-slate-950">Brightwheel roster imported</h2><p className="mt-1 text-sm font-semibold text-slate-600">{result.message}</p></div></div>
@@ -232,7 +232,7 @@ export default function BrightwheelImportPage() {
             <UploadCloud className="h-10 w-10 text-emerald-700" />
             <strong className="mt-3 text-sm text-slate-950">{fileName || "Choose Brightwheel roster CSV"}</strong>
             <span className="mt-1 text-xs font-semibold text-slate-500">CSV files up to 5 MB</span>
-            <input type="file" accept=".csv,text/csv" className="sr-only" onChange={(event) => void chooseFile(event.target.files?.[0] ?? null)} />
+            <input type="file" disabled={loading || committing} accept=".csv,text/csv" className="sr-only" onChange={(event) => void chooseFile(event.target.files?.[0] ?? null)} />
           </label>
         </div>
 
@@ -246,7 +246,7 @@ export default function BrightwheelImportPage() {
             <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={activeOnly} onChange={(event) => setActiveOnly(event.target.checked)} className="mt-1 h-4 w-4 accent-emerald-700" /><span><strong className="block text-sm text-slate-900">Import active students only</strong><span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">Recommended for your first Brightwheel import so old/withdrawn profiles do not come into The Hub.</span></span></label>
           </div>
 
-          <button disabled={!csvText || loading} onClick={() => void previewRoster()} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-black text-white shadow-lg disabled:opacity-40">{loading ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <UsersRound className="h-5 w-5" />}{loading ? "Reading roster…" : preview ? "Refresh Preview" : "Preview Brightwheel Import"}</button>
+          <button disabled={!csvText || loading || committing} onClick={() => void previewRoster()} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-black text-white shadow-lg disabled:opacity-40">{loading ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <UsersRound className="h-5 w-5" />}{loading ? "Reading roster…" : preview ? "Refresh Preview" : "Preview Brightwheel Import"}</button>
         </div>
       </div>
     </section>}
@@ -255,6 +255,7 @@ export default function BrightwheelImportPage() {
       <div className="border-b border-slate-100 p-5">
         <h2 className="text-xl font-black text-slate-950">3. Review before anything is saved</h2>
         <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Clear identifiers and name/birthday matches update existing children. Matching names with missing or different birthdays need your choice. Repeated CSV children and conflicting identities are held for review. Birthday and funding are optional. Blank fields preserve existing information. Choose a different funding authorization location when it differs from where the child attends.</p>
+        <p className="mt-3 text-base font-bold text-emerald-900">{preview.rows.filter(row => rowSettings[row.rowKey]?.include === false).length} unchecked children will be skipped.</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <PreviewStat label="Rows in File" value={preview.totals.fileRows} />
           <PreviewStat label="Rows to Review" value={preview.totals.activeRows} />
@@ -272,15 +273,15 @@ export default function BrightwheelImportPage() {
             const setting = rowSettings[row.rowKey] ?? { include: true, location: row.selectedLocation, funding: row.selectedFunding, fundingLocation: row.selectedFundingLocation, matchId: "" };
             const unresolved = !importIdentityReady(row,setting.matchId) || !row.firstName || !row.lastName || !setting.location;
             return <tr key={row.rowKey} className={unresolved ? "bg-amber-50/40" : ""}>
-              <td className="px-4 py-3"><input type="checkbox" aria-label={`Include ${row.firstName} ${row.lastName}`} disabled={row.blocked} checked={setting.include} onChange={(event) => updateRow(row.rowKey, { include: event.target.checked })} className="h-4 w-4 accent-emerald-700" /></td>
+              <td className="px-4 py-3"><input type="checkbox" aria-label={`Include ${row.firstName} ${row.lastName}`} disabled={row.blocked || loading || committing} checked={setting.include} onChange={(event) => updateRow(row.rowKey, { include: event.target.checked })} className="h-4 w-4 accent-emerald-700" /></td>
               <td className="px-4 py-3"><strong className="text-slate-950">{row.firstName || "Missing"} {row.lastName || "name"}</strong><p className="mt-1 text-base font-semibold text-slate-700">{row.enrollmentStatus}</p>{row.brightwheelId && <p className="mt-1 text-base text-slate-600">BW {row.brightwheelId}</p>}</td>
               <td className="px-4 py-3 font-semibold">{row.dateOfBirth || <span className="text-slate-600">Not entered (optional)</span>}</td>
               <td className="px-4 py-3"><strong className="text-slate-800">{row.primaryGuardian || "Not included"}</strong>{row.guardianEmail && <p className="mt-1 max-w-48 break-words text-base text-slate-600">{row.guardianEmail}</p>}{row.guardianPhone && <p>{row.guardianPhone}</p>}{(row.secondaryGuardian || row.secondaryGuardianPhone || row.secondaryGuardianEmail) && <div className="mt-3 border-t pt-2"><strong>Second parent: {row.secondaryGuardian || "Name not included"}</strong><p className="break-words">{row.secondaryGuardianPhone}</p><p className="break-words">{row.secondaryGuardianEmail}</p></div>}{row.additionalGuardianContacts?.map((contact,index) => <div key={index} className="mt-2 border-t pt-2"><strong>Additional parent {index + 3}: {contact.name}</strong><p>{contact.phone}</p><p className="break-words">{contact.email}</p></div>)}</td>
               <td className="px-4 py-3">{row.room || "—"}</td>
-              <td className="px-4 py-3"><select aria-label={`Location for ${row.firstName} ${row.lastName}`} value={setting.location} onChange={(event) => updateRow(row.rowKey, { location: event.target.value })} className="w-52 rounded-lg border border-slate-200 bg-white px-2 py-2 text-base font-bold"><option value="">Choose location…</option>{locations.map((location) => <option key={location}>{location}</option>)}</select></td>
-              <td className="px-4 py-3"><select aria-label={`Funding for ${row.firstName} ${row.lastName}`} value={setting.funding} onChange={(event) => updateRow(row.rowKey, { funding: event.target.value })} className="w-40 rounded-lg border border-slate-200 bg-white px-2 py-2 text-base font-bold"><option value="">Not entered (optional)</option>{fundingSources.map((source) => <option key={source}>{source}</option>)}</select></td>
-              <td className="px-4 py-3"><select aria-label={`Funding location for ${row.firstName} ${row.lastName}`} value={setting.fundingLocation} onChange={(event) => updateRow(row.rowKey, { fundingLocation: event.target.value })} className="min-h-11 w-56 rounded-lg border border-slate-200 bg-white px-2 py-2 text-base font-bold"><option value="">Same as care location</option>{locations.map((location) => <option key={location}>{location}</option>)}</select></td>
-              <td className="px-4 py-3">{row.candidates.length > 0 ? <label className="block min-w-64"><span className="mb-2 block text-base font-black text-amber-900">Confirm child identity</span><select aria-label={`Match for ${row.firstName} ${row.lastName}`} value={setting.matchId} onChange={event=>updateRow(row.rowKey,{matchId:event.target.value})} className="min-h-11 w-64 rounded-lg border border-amber-300 bg-white px-2 py-2 text-base font-bold"><option value="">Choose after reviewing…</option>{row.candidates.map(candidate=><option key={candidate.id} value={candidate.id} disabled={!candidate.canUpdate}>{candidate.label} · {candidate.dateOfBirth || "birthday missing"}{candidate.canUpdate ? " — update existing" : " — different details"}</option>)}{row.allowNew && <option value="new">Confirmed: this is a separate child</option>}</select></label> : <span className={`rounded-full px-2.5 py-1 text-base font-black ${row.matchType === "update" ? "bg-blue-100 text-blue-800" : row.matchType === "new" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"}`}>{row.matchType === "update" ? "Update existing" : row.matchType === "new" ? "Add new" : row.matchType === "duplicate" ? "Repeated CSV child" : "Review identity"}</span>}</td>
+              <td className="px-4 py-3"><select disabled={loading || committing} aria-label={`Location for ${row.firstName} ${row.lastName}`} value={setting.location} onChange={(event) => updateRow(row.rowKey, { location: event.target.value })} className="w-52 rounded-lg border border-slate-200 bg-white px-2 py-2 text-base font-bold"><option value="">Choose location…</option>{locations.map((location) => <option key={location}>{location}</option>)}</select></td>
+              <td className="px-4 py-3"><select disabled={loading || committing} aria-label={`Funding for ${row.firstName} ${row.lastName}`} value={setting.funding} onChange={(event) => updateRow(row.rowKey, { funding: event.target.value })} className="w-40 rounded-lg border border-slate-200 bg-white px-2 py-2 text-base font-bold"><option value="">Not entered (optional)</option>{fundingSources.map((source) => <option key={source}>{source}</option>)}</select></td>
+              <td className="px-4 py-3"><select disabled={loading || committing} aria-label={`Funding location for ${row.firstName} ${row.lastName}`} value={setting.fundingLocation} onChange={(event) => updateRow(row.rowKey, { fundingLocation: event.target.value })} className="min-h-11 w-56 rounded-lg border border-slate-200 bg-white px-2 py-2 text-base font-bold"><option value="">Same as care location</option>{locations.map((location) => <option key={location}>{location}</option>)}</select></td>
+              <td className="px-4 py-3">{row.candidates.length > 0 ? <label className="block min-w-64"><span className="mb-2 block text-base font-black text-amber-900">Confirm child identity</span><select disabled={loading || committing} aria-label={`Match for ${row.firstName} ${row.lastName}`} value={setting.matchId} onChange={event=>updateRow(row.rowKey,{matchId:event.target.value})} className="min-h-11 w-64 rounded-lg border border-amber-300 bg-white px-2 py-2 text-base font-bold"><option value="">Choose after reviewing…</option>{row.candidates.map(candidate=><option key={candidate.id} value={candidate.id} disabled={!candidate.canUpdate}>{candidate.label} · {candidate.dateOfBirth || "birthday missing"}{candidate.canUpdate ? " — update existing" : " — different details"}</option>)}{row.allowNew && <option value="new">Confirmed: this is a separate child</option>}</select></label> : <span className={`rounded-full px-2.5 py-1 text-base font-black ${row.matchType === "update" ? "bg-blue-100 text-blue-800" : row.matchType === "new" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"}`}>{row.matchType === "update" ? "Update existing" : row.matchType === "new" ? "Add new" : row.matchType === "duplicate" ? "Repeated CSV child" : "Review identity"}</span>}</td>
               <td className="px-4 py-3">{unresolved ? <span className="font-black text-amber-800">Needs review</span> : row.warnings.length ? <span className="font-semibold text-slate-500">{row.warnings.join(" • ")}</span> : <span className="font-black text-emerald-700">Ready</span>}</td>
             </tr>;
           })}</tbody>
@@ -289,7 +290,7 @@ export default function BrightwheelImportPage() {
 
       <div className="flex flex-col gap-3 border-t border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div><p className="text-sm font-black text-slate-950">{readyCount} child record{readyCount === 1 ? "" : "s"} ready to import</p><p className="mt-1 text-xs font-semibold text-slate-500">Unresolved identities, repeated CSV children, and missing required details are skipped. Birthday, funding and parent contact omissions do not block the import.</p></div>
-        <button disabled={readyCount === 0 || committing} onClick={() => void importRoster()} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#173d29] px-6 py-3 text-sm font-black text-white shadow-lg disabled:opacity-40">{committing ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <UploadCloud className="h-5 w-5" />}{committing ? "Importing securely…" : `Import ${readyCount} Children`}</button>
+        <button disabled={readyCount === 0 || loading || committing} onClick={() => void importRoster()} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#173d29] px-6 py-3 text-sm font-black text-white shadow-lg disabled:opacity-40">{committing ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <UploadCloud className="h-5 w-5" />}{committing ? "Importing securely…" : `Import ${readyCount} Children`}</button>
       </div>
     </section>}
   </div></MainLayout>;

@@ -11,6 +11,7 @@ import {
   isSupportedAccessRole,
   normalizeAccessRole,
 } from "@/lib/team-access";
+import { clearImportDrafts } from "@/lib/brightwheel-import-draft";
 import { readAccessCheck } from "@/lib/access-check";
 import { unregisterCurrentNativeDevice } from "@/lib/push-client";
 import { signOutWithLocalRecovery } from "@/lib/supabase/sign-out";
@@ -271,6 +272,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(nextSession);
 
       if (!nextSession) {
+        try { clearImportDrafts(window.sessionStorage); } catch { /* Storage may be unavailable. */ }
         setProfile(null);
         setLoading(false);
         return;
@@ -362,6 +364,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     if (signingOutRef.current) return;
     signingOutRef.current = true;
+    try { clearImportDrafts(window.sessionStorage); } catch { /* Sign-out still clears credentials. */ }
     setLoading(true);
     try {
       if (supabase) {
@@ -461,10 +464,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Keep the invitation form mounted while updating the password refreshes Auth.
-  // This preserves entered contact details and lets save errors remain visible.
-  const completingInvitation = pathname === "/accept-invite" && session && profile?.user_id === session.user.id;
-  if ((loading && !completingInvitation) || checkingFamilyAccess) return <AppLoadingScreen />;
+  // Token refresh and tab-focus SIGNED_IN events must not unmount staff forms.
+  // New accounts still wait for their own profile; denied access clears profile.
+  const verifiedSession = session && profile?.user_id === session.user.id;
+  if ((loading && !verifiedSession) || checkingFamilyAccess) return <AppLoadingScreen />;
 
   if (!session) return null;
 
