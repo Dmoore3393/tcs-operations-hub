@@ -174,3 +174,14 @@ test('multiple identifier matches do not permit conflicting names, birthdays or 
  assert.equal(identity.resolveImportIdentity(source,[first,other],'child-1').existingRowId,'child-1');
  }
 });
+test('unchecked rows are excluded from refreshed previews and every actual commit',async()=>{
+ const t=await api();const overrides=[{rowKey:'bw-row-2',include:false}];const p=await(await t.request({csvText:csv,overrides})).json();assert.equal(p.rows[0].include,false);
+ const result=await(await t.request({mode:'commit',csvText:csv,previewToken:p.previewToken,overrides})).json();assert.equal(result.inserted,0);assert.equal(t.calls.some(c=>c[0]==='rpc'),false);
+});
+test('explicit checked-row list is an allowlist and unchecked overrides always win',async()=>{
+ const roster=csv+'\nSynthetic,Selected,01/02/2020,Active,Division,Cash';
+ for(const [selectedRowKeys,overrides,expected] of [[['bw-row-4'],[],1],[[],[],0],[['bw-row-2'],[{rowKey:'bw-row-2',include:false}],0]]){
+ const t=await api();const p=await(await t.request({csvText:roster})).json();const result=await(await t.request({mode:'commit',csvText:roster,previewToken:p.previewToken,selectedRowKeys,overrides})).json();assert.equal(result.inserted,expected);
+ const changes=t.calls.find(c=>c[0]==='rpc')?.[2].p_rows||[];assert.equal(changes.length,expected);if(expected)assert.equal(changes[0].payload.last_name,'Selected');
+ }
+});
