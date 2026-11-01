@@ -1,0 +1,24 @@
+import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import ts from 'typescript';
+
+const source = readFileSync('src/app/api/staff-personnel/route.ts','utf8');
+const compiled = ts.transpileModule(source.replace(/^import .*;\n/, ''), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+let auth;
+const calls = [];
+const chain = { select() { return this; }, eq(key,value) { calls.push([key,value]); return this; }, order() { return this; }, limit() { return Promise.resolve({data:[{id:'synthetic'}],error:null}); } };
+const context = { exports: {}, Response, requireStaff: async () => { if (auth instanceof Response) throw auth; return auth; }, staffErrorResponse: e => e instanceof Response ? e : Response.json({error:'Error'},{status:500}) };
+vm.runInNewContext(compiled,context);
+auth = new Response('Missing session',{status:401});
+assert.equal((await context.exports.GET(new Request('https://example.test'))).status,401);
+auth = {isOwner:false};
+assert.equal((await context.exports.GET(new Request('https://example.test'))).status,403);
+assert.equal(calls.length,0);
+auth = {isOwner:true,profile:{organization_id:'synthetic-org'},admin:{from:()=>chain}};
+const response = await context.exports.GET(new Request('https://example.test'));
+assert.equal(response.status,200);
+assert.match(response.headers.get('Cache-Control'),/no-store/);
+assert.deepEqual(calls,[['organization_id','synthetic-org']]);
+assert.deepEqual(await response.json(),{records:[{id:'synthetic'}]});
+console.log('Personnel API: signed-out denied, non-owner denied, owner organization scoped, no-store verified.');
