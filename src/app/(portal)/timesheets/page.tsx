@@ -165,6 +165,11 @@ export default function TimesheetCommandCenterPage() {
   const [locationFilter, setLocationFilter] = useState("All Locations");
   const [typeFilter, setTypeFilter] = useState("All Types");
   const [periodFilter, setPeriodFilter] = useState(currentServicePeriod());
+  const [batchMonth, setBatchMonth] = useState(() => {
+    const parts = new Intl.DateTimeFormat("en-US", {timeZone:"America/Los_Angeles", year:"numeric", month:"2-digit"}).formatToParts(new Date());
+    return `${parts.find(p => p.type === "year")?.value}-${parts.find(p => p.type === "month")?.value}`;
+  });
+  const batchPeriod = /^\d{4}-(0[1-9]|1[0-2])$/.test(batchMonth) ? new Intl.DateTimeFormat("en-US", {month:"long",year:"numeric",timeZone:"UTC"}).format(new Date(`${batchMonth}-15T12:00:00Z`)) : "";
 
   const accessToken = session?.access_token;
   const request = useCallback(async (method: "GET" | "POST", body?: Record<string, unknown>) => {
@@ -281,7 +286,7 @@ export default function TimesheetCommandCenterPage() {
               <h1>Timesheet Command Center</h1>
               <p className="tscc-subtitle">From signatures to submission — one controlled chain of custody</p>
               <div className="tscc-hero-actions">
-                {data?.actor.canCreateBatch && <button className="tscc-btn primary" disabled={saving} onClick={() => void runAction({ action: "createBatch", servicePeriod: currentServicePeriod() }, `Current ${currentServicePeriod()} batch created from active subsidized children.`)}><Plus size={15}/> Create {currentServicePeriod()} Batch</button>}
+                {data?.actor.canCreateBatch && <><label style={{display:"grid",gap:4}}>Service month<input type="month" aria-label="Create batch service month" style={{fontSize:16,minHeight:44,color:"#132b20",background:"white",borderRadius:8,padding:8}} value={batchMonth} onChange={e => setBatchMonth(e.target.value)} /></label><button className="tscc-btn primary" disabled={saving || !batchPeriod} onClick={() => { setPeriodFilter(batchPeriod); void runAction({ action: "createBatch", servicePeriod: batchPeriod }, `${batchPeriod} checklist created from active subsidized children. Review the roster for missing former children.`); }}><Plus size={15}/> Create {batchPeriod || "Selected Month"} Batch</button></>}
                 {data?.actor.canManageRoutes && <button className="tscc-btn" onClick={() => setShowRoutes(true)}><Settings2 size={15}/> Department Routing</button>}
                 <button className="tscc-btn" disabled={loading} onClick={() => void load()}><RefreshCw size={15}/> Refresh Live Data</button>
               </div>
