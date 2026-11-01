@@ -80,6 +80,7 @@ const toForm = (child: ChildRecord): ChildFormState => {
   dateOfBirth: normalized.dateOfBirth,
   ageGroup: normalized.ageGroup,
   location: normalized.location,
+  fundingLocation: normalized.fundingLocation ?? "",
   classroom: normalized.classroom,
   primaryGuardian: normalized.primaryGuardian,
   secondaryGuardian: normalized.secondaryGuardian ?? "",
@@ -317,16 +318,17 @@ export default function ChildrenCenterLivePage() {
     const family = selectedFamilyId === "" ? undefined : families.find((item) => item.id === selectedFamilyId);
     const missingDocuments = form.licensingStatus === "Missing Documents" ? form.missingDocuments.split(",").map((item) => item.trim()).filter(Boolean) : [];
     const ageProfile = deriveChildAgeProfile(form.dateOfBirth);
-    if (!ageProfile) return setError("Enter a valid date of birth so The Hub can calculate age and room.");
+    if (form.dateOfBirth && !ageProfile) return setError("Correct the date of birth or leave it blank.");
     const child: ChildRecord = {
       id: editing?.id || Date.now(),
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
-      age: ageProfile.age,
+      age: ageProfile?.age || "Age not entered",
       dateOfBirth: form.dateOfBirth,
-      ageGroup: ageProfile.ageGroup,
+      ageGroup: ageProfile?.ageGroup || "Unknown",
       location: form.location,
-      classroom: ageProfile.classroom,
+      fundingLocation: form.fundingLocation,
+      classroom: ageProfile?.classroom || "Not assigned",
       primaryGuardian: family?.primaryGuardian ?? form.primaryGuardian.trim(),
       secondaryGuardian: (family?.secondaryGuardian ?? form.secondaryGuardian.trim()) || undefined,
       secondaryGuardianPhone: form.secondaryGuardianPhone.trim() || undefined,
@@ -479,7 +481,7 @@ export default function ChildrenCenterLivePage() {
           <div>
             <p className="text-xs font-black uppercase tracking-wider text-[#718164]">Child File</p>
             <h2 className="text-2xl font-black">{nameOf(selected)}</h2>
-            <p className="text-sm text-slate-500">{selected.age} • {keyFor(selected.location)} • {selected.ageGroup}</p>
+            <p className="text-sm text-slate-500">{selected.age} • Care: {keyFor(selected.location)} • {selected.ageGroup}</p><p className="mt-1 text-sm text-slate-700">Funding authorization: {selected.fundingLocation ? keyFor(selected.fundingLocation) : `Same as care location (${keyFor(selected.location)})`}</p>
           </div>
           <button onClick={() => setSelected(null)}><X /></button>
         </div>

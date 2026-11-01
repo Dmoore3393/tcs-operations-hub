@@ -15,9 +15,9 @@ source=source.replace('"@/lib/timesheet-workflow"',JSON.stringify(helper)).repla
 const api=await import(url(source));
 let changes=[];
 const location={id:'loc',slug:'halcom',name:'Halcom',full_name:'Halcom'};
-function setup(name,record={collectorSigned:true,dynastyStatus:'Accounted For'}){
+function setup(name,record={collectorSigned:true,dynastyStatus:'Accounted For'},children=[],sites=[location]){
  changes=[];
- const admin={async rpc(name,args){changes.push({table:'timesheets',patch:{record_data:args.p_record}});return {error:null}},from(table){let patch;const q={select(){return q},eq(){return q},order(){return q},update(value){patch=value;return q},insert(value){changes.push({table,value});return Promise.resolve({error:null})},maybeSingle(){return Promise.resolve({data:{id:'row',legacy_id:'ts',location_id:'loc',record_data:record},error:null})},then(resolve,reject){if(patch)changes.push({table,patch});return Promise.resolve({data:table==='locations'?[location]:[],error:null}).then(resolve,reject)}};return q}};
+ const admin={async rpc(name,args){changes.push({table:'timesheets',patch:{record_data:args.p_record}});return {error:null}},from(table){let patch;const q={select(){return q},eq(){return q},order(){return q},update(value){patch=value;return q},upsert(value){changes.push({table,value});return Promise.resolve({error:null})},insert(value){changes.push({table,value});return Promise.resolve({error:null})},maybeSingle(){return Promise.resolve({data:{id:'row',legacy_id:'ts',location_id:'loc',record_data:record},error:null})},then(resolve,reject){if(patch)changes.push({table,patch});return Promise.resolve({data:table==='locations'?sites:table==='children'?children:[],error:null}).then(resolve,reject)}};return q}};
  globalThis.__timesheetAuth={admin,profile:{full_name:name,organization_id:'org',locations:['Halcom','Lara Family Childcare']},user:{id:'actor'},isOwner:/Danielle|Jennifer/.test(name),isLicensee:/Dynasty/.test(name)};
 }
 const post=body=>api.POST(new Request('https://hub.test/api/timesheets',{method:'POST',body:JSON.stringify({servicePeriod:'October 2026',locationSlug:'halcom',timesheetType:'CCRC Stage 1',...body})}));
@@ -54,4 +54,13 @@ test('individual scan and email cannot bypass batch controls',async()=>{
 test('employee accounts cannot enter timesheets by using a leadership name',async()=>{
  setup('Danielle Moore');globalThis.__timesheetAuth.isOwner=false;globalThis.__timesheetAuth.isLicensee=false;
  assert.equal((await post({action:'fillOut',id:'ts'})).status,403);
+});
+
+test('timesheets use authorization location and retain care location separately',async()=>{
+ const child={id:'synthetic-child',legacy_id:'synthetic',first_name:'Synthetic',last_name:'Child',location_id:'loc',enrollment_status:'Active',record_data:{subsidy:'CCRC Stage 2',fundingLocation:'The School Age Center • Division',fundingLocationId:'funding-site'}};
+ const sites=[location,{id:'funding-site',slug:'division',name:'School Age Center',full_name:'School Age Center'}];
+ setup('Danielle Moore',{},[child],sites);const response=await post({action:'createBatch'});assert.equal(response.status,200,await response.text());
+ const saved=changes.find(c=>c.table==='timesheets').value[0];assert.equal(saved.location_id,'funding-site');assert.equal(saved.funding_source,'CCRC Stage 2');assert.equal(saved.record_data.location,'School Age Center');assert.equal(saved.record_data.careLocation,'Halcom');assert.equal(saved.record_data.careLocationId,'loc');assert.equal(child.location_id,'loc');
+ setup('Danielle Moore',{},[{...child,record_data:{subsidy:'CCCC'}}],sites);assert.equal((await post({action:'createBatch'})).status,200);assert.equal(changes.find(c=>c.table==='timesheets').value[0].location_id,'loc');
+ setup('Danielle Moore',{},[{...child,record_data:{subsidy:'CCCC',fundingLocationId:'foreign-org-site'}}],sites);assert.equal((await post({action:'createBatch'})).status,400);assert.ok(!changes.some(c=>c.table==='timesheets'));
 });

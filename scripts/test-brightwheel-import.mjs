@@ -122,3 +122,31 @@ if(process.env.HUB_IMPORT_PREVIEW_FIXTURE){test('generate isolated synthetic bro
  const csvText=csv+'\nSynthetic,Newchild,02/03/2021,Active,Division,Cash';
  await writeFile(process.env.HUB_IMPORT_PREVIEW_FIXTURE,JSON.stringify({csvText,preview:await(await t.request({csvText})).json()}));
 });}
+
+test('missing birthday and funding import as unknown, never as infant, resident or cash pay',async()=>{
+ const roster='First Name,Last Name,Birthday,Room,Subsidy\nSynthetic,Optional,,Halcom,';
+ const t=await api();const p=await(await t.request({csvText:roster})).json();assert.equal(p.rows[0].ready,true);
+ assert.equal((await t.request({mode:'commit',csvText:roster,previewToken:p.previewToken})).status,200);
+ const saved=t.calls.find(c=>c[0]==='rpc')[2].p_rows[0].payload;
+ assert.equal(saved.date_of_birth,null);assert.equal(saved.age_group,'Unknown');assert.equal(saved.record_data.age,'Age not entered');assert.equal(saved.record_data.subsidy,undefined);assert.equal(saved.record_data.resident,undefined);
+});
+test('blank imported birthday preserves existing DOB after an explicit identity choice',async()=>{
+ const roster='First Name,Last Name,Birthday,Room,Subsidy\nSynthetic,Avery,,Division,';
+ const row=existing();row.record_data.subsidy='CCCC';const t=await api({rows:[row]});
+ const p=await(await t.request({csvText:roster})).json();assert.equal(p.rows[0].matchType,'review');assert.equal(p.rows[0].candidates[0].canUpdate,true);
+ await t.request({mode:'commit',csvText:roster,previewToken:p.previewToken,overrides:[{rowKey:'bw-row-2',matchId:'child-1'}]});
+ const saved=t.calls.find(c=>c[0]==='rpc')[2].p_rows[0].payload;assert.equal(saved.date_of_birth,base.dateOfBirth);assert.equal(saved.record_data.subsidy,'CCCC');
+});
+test('invalid supplied birthdays and repeated children without birthdays remain blocked',async()=>{
+ const t=await api();for(const birthday of ['not-a-date','02/31/2020','2099-01-01']){
+ const p=await(await t.request({csvText:`First Name,Last Name,Birthday,Room\nSynthetic,Invalid,${birthday},Division`})).json();assert.equal(p.rows[0].ready,false,birthday);assert.equal(p.rows[0].blocked,true);
+ }
+ const p=await(await t.request({csvText:'First Name,Last Name,Room\nSynthetic,Repeated,Division\nSynthetic,Repeated,Division'})).json();assert.ok(p.rows.every(r=>r.matchType==='duplicate'));
+});
+test('funding location imports independently and persists through an ordinary roster update',async()=>{
+ const roster='First Name,Last Name,Birthday,Room,Subsidy,Funding location\nSynthetic,Avery,01/02/2020,Halcom,CCRC Stage 2,Division';
+ const t=await api();const p=await(await t.request({csvText:roster})).json();assert.equal(p.rows[0].ready,true);
+ await t.request({mode:'commit',csvText:roster,previewToken:p.previewToken});const saved=t.calls.find(c=>c[0]==='rpc')[2].p_rows[0].payload;
+ assert.equal(saved.location_id,'location-2');assert.equal(saved.record_data.fundingLocationId,'location-1');assert.equal(saved.record_data.subsidy,'CCRC Stage 2');
+ const row=existing({location_id:'location-2',record_data:saved.record_data});const next=await api({rows:[row]});const np=await(await next.request({csvText:csv})).json();assert.equal(np.rows[0].selectedFundingLocation,'The School Age Center • Division');
+});

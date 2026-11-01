@@ -275,10 +275,18 @@ export async function POST(request: Request) {
         if (subsidyLower.includes("dcfs")) timesheetType = "DCFS";
         else if (subsidyLower.includes("cccc")) timesheetType = "CCCC";
         else if (subsidyLower.includes("respite")) timesheetType = "Respite";
-        else if (subsidyLower.includes("ccrc")) timesheetType = "CCRC";
+        else if (subsidyLower.includes("ccrc")) timesheetType = normalizeType(subsidy);
         if (!timesheetType) continue;
 
-        const location = locationById.get(asText(child.location_id));
+        const careLocation = locationById.get(asText(child.location_id));
+        const fundingLocationId = asText(childData.fundingLocationId).trim();
+        const fundingLocation = asText(childData.fundingLocation).trim();
+        const location = fundingLocationId ? locationById.get(fundingLocationId)
+          : fundingLocation ? locations.find(site => asText(site.slug) === tcsLocationSlug(fundingLocation))
+          : careLocation;
+        if ((fundingLocationId || fundingLocation) && !location) {
+          return Response.json({ error: "A child's funding authorization location is unavailable. Update the child profile before creating the batch." }, { status: 400 });
+        }
         if (!location) continue;
         const legacyId = `ts-${servicePeriod.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${asText(child.legacy_id)}`;
         const childName = `${asText(child.first_name)} ${asText(child.last_name)}`.trim();
@@ -289,6 +297,8 @@ export async function POST(request: Request) {
           familyName,
           servicePeriod,
           location: asText(location.full_name) || asText(location.name),
+          careLocation: asText(careLocation?.full_name) || asText(careLocation?.name),
+          careLocationId: asText(child.location_id),
           timesheetType,
           fundingSource: timesheetType,
           stage: "Location Sign-Off",
@@ -320,7 +330,7 @@ export async function POST(request: Request) {
         };
         rows.push({
           organization_id: profile.organization_id,
-          location_id: child.location_id,
+          location_id: location.id,
           child_id: child.id,
           legacy_id: legacyId,
           child_name: childName,

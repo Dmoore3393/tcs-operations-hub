@@ -54,7 +54,7 @@ export function resolveImportIdentity(source: IdentitySource, rows: Row[], selec
     if (selected && selected !== "new") return blocked("That existing profile is not a valid match. Refresh the preview.");
     return base;
   }
-  const candidates = possible.map(row => ({ id: row.id, label: `${row.firstName} ${row.lastName}`, dateOfBirth: row.dateOfBirth, canUpdate: (!row.dateOfBirth || row.dateOfBirth === source.dateOfBirth) && (!source.brightwheelId || !row.brightwheelId || source.brightwheelId === row.brightwheelId) && (!source.studentId || !row.studentId || source.studentId === row.studentId) }));
+  const candidates = possible.map(row => ({ id: row.id, label: `${row.firstName} ${row.lastName}`, dateOfBirth: row.dateOfBirth, canUpdate: (!source.dateOfBirth || !row.dateOfBirth || row.dateOfBirth === source.dateOfBirth) && (!source.brightwheelId || !row.brightwheelId || source.brightwheelId === row.brightwheelId) && (!source.studentId || !row.studentId || source.studentId === row.studentId) }));
   if (selected === "new") return { ...base, allowNew: true, candidates };
   if (candidates.some(row => row.id === selected && row.canUpdate)) return { ...base, matchType: "update", existingRowId: selected, candidates, allowNew: true };
   return { ...base, matchType: "review", candidates, allowNew: true, identityWarning: "An existing profile may match this child. Choose the existing profile to update, or confirm this is a separate child." };
@@ -62,7 +62,7 @@ export function resolveImportIdentity(source: IdentitySource, rows: Row[], selec
 export function repeatedImportRows(sources: IdentitySource[], targets: string[] = []) {
   const groups = new Map<string, number[]>();
   sources.forEach((source,index) => {
-    const keys = [source.brightwheelId && `bw:${source.brightwheelId}`, source.studentId && `student:${source.studentId}`, source.firstName && source.lastName && source.dateOfBirth && `name:${normalizedChildName(source.firstName)}|${normalizedChildName(source.lastName)}|${source.dateOfBirth}`, targets[index] && `target:${targets[index]}`].filter(Boolean) as string[];
+    const keys = [source.brightwheelId && `bw:${source.brightwheelId}`, source.studentId && `student:${source.studentId}`, source.firstName && source.lastName && `name:${normalizedChildName(source.firstName)}|${normalizedChildName(source.lastName)}|${source.dateOfBirth}`, targets[index] && `target:${targets[index]}`].filter(Boolean) as string[];
     for (const key of keys) groups.set(key,[...(groups.get(key) || []),index]);
   });
   return new Set([...groups.values()].filter(group=>group.length>1).flat());

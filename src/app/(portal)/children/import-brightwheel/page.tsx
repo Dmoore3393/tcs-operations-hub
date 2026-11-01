@@ -39,6 +39,7 @@ type PreviewRow = {
   detectedFunding: string;
   selectedLocation: string;
   selectedFunding: string;
+  selectedFundingLocation: string;
   matchType: "new" | "update" | "review" | "duplicate";
   candidates: ImportCandidate[];
   allowNew: boolean;
@@ -67,6 +68,8 @@ type RowSetting = {
   include: boolean;
   location: string;
   funding: string;
+  fundingLocation: string;
+  fundingLocationChanged?: boolean;
   matchId: string;
 };
 
@@ -89,7 +92,7 @@ export default function BrightwheelImportPage() {
     return preview.rows.filter((row) => {
       const setting = rowSettings[row.rowKey];
       if (!setting?.include) return false;
-      return importIdentityReady(row,setting.matchId) && Boolean(row.firstName && row.lastName && row.dateOfBirth && setting.location && setting.funding);
+      return importIdentityReady(row,setting.matchId) && Boolean(row.firstName && row.lastName && setting.location);
     }).length;
   }, [preview, rowSettings]);
 
@@ -126,6 +129,7 @@ export default function BrightwheelImportPage() {
       include: setting.include,
       location: setting.location,
       funding: setting.funding,
+      ...(setting.fundingLocationChanged ? {fundingLocation: setting.fundingLocation} : {}),
       matchId: setting.matchId,
     }));
 
@@ -148,6 +152,7 @@ export default function BrightwheelImportPage() {
           include: row.include,
           location: row.selectedLocation,
           funding: row.selectedFunding,
+          fundingLocation: row.selectedFundingLocation,
           matchId: rowSettings[row.rowKey]?.matchId || "",
         },
       ])));
@@ -181,7 +186,7 @@ export default function BrightwheelImportPage() {
   function updateRow(rowKey: string, update: Partial<RowSetting>) {
     setRowSettings((current) => ({
       ...current,
-      [rowKey]: { ...current[rowKey], ...update },
+      [rowKey]: { ...current[rowKey], ...update, ...(update.fundingLocation !== undefined ? {fundingLocationChanged:true} : {}) },
     }));
   }
 
@@ -249,7 +254,7 @@ export default function BrightwheelImportPage() {
     {preview && !result && <section className="rounded-3xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 p-5">
         <h2 className="text-xl font-black text-slate-950">3. Review before anything is saved</h2>
-        <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Clear identifiers and name/birthday matches update existing children. Matching names with missing or different birthdays need your choice. Repeated CSV children and conflicting identities are held for review. Adjust location or funding before importing.</p>
+        <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Clear identifiers and name/birthday matches update existing children. Matching names with missing or different birthdays need your choice. Repeated CSV children and conflicting identities are held for review. Birthday and funding are optional. Blank fields preserve existing information. Choose a different funding authorization location when it differs from where the child attends.</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <PreviewStat label="Rows in File" value={preview.totals.fileRows} />
           <PreviewStat label="Rows to Review" value={preview.totals.activeRows} />
@@ -262,18 +267,19 @@ export default function BrightwheelImportPage() {
       <p className="px-5 py-3 text-base font-semibold text-slate-700" role="status">{preview.totals.excludedRows} inactive or pending row{preview.totals.excludedRows === 1 ? "" : "s"} excluded by the active-only filter. Nothing is saved until you choose Import.</p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1180px] text-left text-xs">
-          <thead className="bg-slate-50 text-base uppercase tracking-wider text-slate-500"><tr><th className="px-4 py-3">Import</th><th className="px-4 py-3">Child</th><th className="px-4 py-3">DOB</th><th className="px-4 py-3">Parent / Guardian</th><th className="px-4 py-3">Brightwheel Room</th><th className="px-4 py-3">TCS Location</th><th className="px-4 py-3">Funding</th><th className="px-4 py-3">Match</th><th className="px-4 py-3">Review</th></tr></thead>
+          <thead className="bg-slate-50 text-base uppercase tracking-wider text-slate-500"><tr><th className="px-4 py-3">Import</th><th className="px-4 py-3">Child</th><th className="px-4 py-3">DOB</th><th className="px-4 py-3">Parent / Guardian</th><th className="px-4 py-3">Brightwheel Room</th><th className="px-4 py-3">Care Location</th><th className="px-4 py-3">Funding (optional)</th><th className="px-4 py-3">Funding Authorization Location</th><th className="px-4 py-3">Match</th><th className="px-4 py-3">Review</th></tr></thead>
           <tbody className="divide-y divide-slate-100">{preview.rows.map((row) => {
-            const setting = rowSettings[row.rowKey] ?? { include: true, location: row.selectedLocation, funding: row.selectedFunding, matchId: "" };
-            const unresolved = !importIdentityReady(row,setting.matchId) || !row.firstName || !row.lastName || !row.dateOfBirth || !setting.location || !setting.funding;
+            const setting = rowSettings[row.rowKey] ?? { include: true, location: row.selectedLocation, funding: row.selectedFunding, fundingLocation: row.selectedFundingLocation, matchId: "" };
+            const unresolved = !importIdentityReady(row,setting.matchId) || !row.firstName || !row.lastName || !setting.location;
             return <tr key={row.rowKey} className={unresolved ? "bg-amber-50/40" : ""}>
               <td className="px-4 py-3"><input type="checkbox" aria-label={`Include ${row.firstName} ${row.lastName}`} disabled={row.blocked} checked={setting.include} onChange={(event) => updateRow(row.rowKey, { include: event.target.checked })} className="h-4 w-4 accent-emerald-700" /></td>
               <td className="px-4 py-3"><strong className="text-slate-950">{row.firstName || "Missing"} {row.lastName || "name"}</strong><p className="mt-1 text-base font-semibold text-slate-700">{row.enrollmentStatus}</p>{row.brightwheelId && <p className="mt-1 text-base text-slate-600">BW {row.brightwheelId}</p>}</td>
-              <td className="px-4 py-3 font-semibold">{row.dateOfBirth || <span className="text-amber-700">Missing</span>}</td>
+              <td className="px-4 py-3 font-semibold">{row.dateOfBirth || <span className="text-slate-600">Not entered (optional)</span>}</td>
               <td className="px-4 py-3"><strong className="text-slate-800">{row.primaryGuardian || "Not included"}</strong>{row.guardianEmail && <p className="mt-1 max-w-48 break-words text-base text-slate-600">{row.guardianEmail}</p>}{row.guardianPhone && <p>{row.guardianPhone}</p>}{(row.secondaryGuardian || row.secondaryGuardianPhone || row.secondaryGuardianEmail) && <div className="mt-3 border-t pt-2"><strong>Second parent: {row.secondaryGuardian || "Name not included"}</strong><p className="break-words">{row.secondaryGuardianPhone}</p><p className="break-words">{row.secondaryGuardianEmail}</p></div>}{row.additionalGuardianContacts?.map((contact,index) => <div key={index} className="mt-2 border-t pt-2"><strong>Additional parent {index + 3}: {contact.name}</strong><p>{contact.phone}</p><p className="break-words">{contact.email}</p></div>)}</td>
               <td className="px-4 py-3">{row.room || "—"}</td>
               <td className="px-4 py-3"><select aria-label={`Location for ${row.firstName} ${row.lastName}`} value={setting.location} onChange={(event) => updateRow(row.rowKey, { location: event.target.value })} className="w-52 rounded-lg border border-slate-200 bg-white px-2 py-2 text-base font-bold"><option value="">Choose location…</option>{locations.map((location) => <option key={location}>{location}</option>)}</select></td>
-              <td className="px-4 py-3"><select aria-label={`Funding for ${row.firstName} ${row.lastName}`} value={setting.funding} onChange={(event) => updateRow(row.rowKey, { funding: event.target.value })} className="w-40 rounded-lg border border-slate-200 bg-white px-2 py-2 text-base font-bold"><option value="">Choose funding…</option>{fundingSources.map((source) => <option key={source}>{source}</option>)}</select></td>
+              <td className="px-4 py-3"><select aria-label={`Funding for ${row.firstName} ${row.lastName}`} value={setting.funding} onChange={(event) => updateRow(row.rowKey, { funding: event.target.value })} className="w-40 rounded-lg border border-slate-200 bg-white px-2 py-2 text-base font-bold"><option value="">Not entered (optional)</option>{fundingSources.map((source) => <option key={source}>{source}</option>)}</select></td>
+              <td className="px-4 py-3"><select aria-label={`Funding location for ${row.firstName} ${row.lastName}`} value={setting.fundingLocation} onChange={(event) => updateRow(row.rowKey, { fundingLocation: event.target.value })} className="min-h-11 w-56 rounded-lg border border-slate-200 bg-white px-2 py-2 text-base font-bold"><option value="">Same as care location</option>{locations.map((location) => <option key={location}>{location}</option>)}</select></td>
               <td className="px-4 py-3">{row.candidates.length > 0 && row.allowNew ? <label className="block min-w-64"><span className="mb-2 block text-base font-black text-amber-900">Confirm child identity</span><select aria-label={`Match for ${row.firstName} ${row.lastName}`} value={setting.matchId} onChange={event=>updateRow(row.rowKey,{matchId:event.target.value})} className="min-h-11 w-64 rounded-lg border border-amber-300 bg-white px-2 py-2 text-base font-bold"><option value="">Choose after reviewing…</option>{row.candidates.map(candidate=><option key={candidate.id} value={candidate.id} disabled={!candidate.canUpdate}>{candidate.label} · {candidate.dateOfBirth || "birthday missing"}{candidate.canUpdate ? " — update existing" : " — different details"}</option>)}<option value="new">Confirmed: this is a separate child</option></select></label> : <span className={`rounded-full px-2.5 py-1 text-base font-black ${row.matchType === "update" ? "bg-blue-100 text-blue-800" : row.matchType === "new" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"}`}>{row.matchType === "update" ? "Update existing" : row.matchType === "new" ? "Add new" : row.matchType === "duplicate" ? "Repeated CSV child" : "Review identity"}</span>}</td>
               <td className="px-4 py-3">{unresolved ? <span className="font-black text-amber-800">Needs review</span> : row.warnings.length ? <span className="font-semibold text-slate-500">{row.warnings.join(" • ")}</span> : <span className="font-black text-emerald-700">Ready</span>}</td>
             </tr>;
@@ -282,7 +288,7 @@ export default function BrightwheelImportPage() {
       </div>
 
       <div className="flex flex-col gap-3 border-t border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div><p className="text-sm font-black text-slate-950">{readyCount} child record{readyCount === 1 ? "" : "s"} ready to import</p><p className="mt-1 text-xs font-semibold text-slate-500">Unresolved identities, repeated CSV children, and missing required details are skipped. Parent contact warnings do not block the import.</p></div>
+        <div><p className="text-sm font-black text-slate-950">{readyCount} child record{readyCount === 1 ? "" : "s"} ready to import</p><p className="mt-1 text-xs font-semibold text-slate-500">Unresolved identities, repeated CSV children, and missing required details are skipped. Birthday, funding and parent contact omissions do not block the import.</p></div>
         <button disabled={readyCount === 0 || committing} onClick={() => void importRoster()} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#173d29] px-6 py-3 text-sm font-black text-white shadow-lg disabled:opacity-40">{committing ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <UploadCloud className="h-5 w-5" />}{committing ? "Importing securely…" : `Import ${readyCount} Children`}</button>
       </div>
     </section>}
