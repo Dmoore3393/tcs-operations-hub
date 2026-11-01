@@ -66,6 +66,8 @@ export type ChildRecord = {
   secondaryGuardian?: string;
   secondaryGuardianPhone?: string;
   secondaryGuardianEmail?: string;
+  additionalGuardianContacts?: Array<{ name: string; phone: string; email: string }>;
+  additionalEmergencyContacts?: Array<{ name: string; phone: string; relationship: string }>;
   phone: string;
   familyId?: number;
   familyName?: string;

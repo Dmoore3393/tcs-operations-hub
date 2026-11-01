@@ -488,6 +488,9 @@ export default function ChildrenCenterLivePage() {
           <Detail l="Second Parent / Guardian" v={selected.secondaryGuardian || "Not entered"} />
           <Detail l="Second Parent Phone" v={selected.secondaryGuardianPhone || "Not entered"} />
           <Detail l="Second Parent Email" v={selected.secondaryGuardianEmail || "Not entered"} />
+          <Detail l="Second Emergency Contact" v={selected.emergencyContact2Name ? [selected.emergencyContact2Name,selected.emergencyContact2Phone,selected.emergencyContact2Relationship].filter(Boolean).join(" • ") : "Not entered"} />
+          {selected.additionalGuardianContacts?.map((contact,index) => <Detail key={`guardian-${index}`} l={`Additional Parent / Guardian ${index + 3}`} v={[contact.name,contact.phone,contact.email].filter(Boolean).join(" • ")} />)}
+          {selected.additionalEmergencyContacts?.map((contact,index) => <Detail key={`emergency-${index}`} l={`Additional Emergency Contact ${index + 3}`} v={[contact.name,contact.phone,contact.relationship].filter(Boolean).join(" • ")} />)}
           <Detail l="Phone" v={selected.phone} />
           <Detail l="Schedule" v={selected.weeklySchedule} />
           <Detail l="Planned Start" v={selected.plannedStartDate || "Not entered"} />
