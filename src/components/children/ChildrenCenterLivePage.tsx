@@ -495,6 +495,7 @@ export default function ChildrenCenterLivePage() {
           <Detail l="Schedule" v={selected.weeklySchedule} />
           <Detail l="Planned Start" v={selected.plannedStartDate || "Not entered"} />
           <Detail l="Planned Last Day" v={selected.plannedLastDay || "Not entered"} />
+          {selected.careStatusNote && <Detail l="Care Status Note" v={selected.careStatusNote} />}
           <Detail l="Pay Source" v={selected.subsidy} />
           <Detail l="Transportation" v={selected.transportation} />
           <Detail l="File Status" v={selected.licensingStatus} />

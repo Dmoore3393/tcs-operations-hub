@@ -5,6 +5,15 @@ import ts from 'typescript';
 const source = await readFile(new URL('../src/lib/timesheet-workflow.ts',import.meta.url),'utf8');
 const {outputText} = ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}});
 const w = await import('data:text/javascript;base64,'+Buffer.from(outputText).toString('base64'));
+test('archived children remain eligible only for explicitly confirmed prior service periods',()=>{
+ assert.equal(w.timesheetChildEligible('Active',{},'October 2026'),true);
+ assert.equal(w.timesheetChildEligible('Archived',{timesheetServicePeriods:['October 2026']},'October 2026'),true);
+ assert.equal(w.timesheetChildEligible('Archived',{timesheetServicePeriods:['October 2026']},'November 2026'),false);
+ assert.equal(w.timesheetChildEligible('Archived',{},'October 2026'),false);
+ assert.equal(w.timesheetChildEligible('Pending',{},'October 2026'),false);
+ assert.equal(w.timesheetChildEligible('Archived',{neverStartedCare:true,timesheetServicePeriods:['October 2026']},'October 2026'),false);
+ assert.equal(w.timesheetChildEligible('Active',{neverStartedCare:true},'October 2026'),false);
+});
 const handed = {collectorSigned:true,dynastyStatus:'Accounted For',dynastyHandedToDanielleAt:'2026-10-14T00:00:00Z'};
 const filled = {...handed,completedAt:'2026-10-14T00:01:00Z'};
 const sent = {...filled,scannedAt:'2026-10-14T00:02:00Z',sentToJenniferAt:'2026-10-14T00:02:00Z',scanDocumentId:'scan'};

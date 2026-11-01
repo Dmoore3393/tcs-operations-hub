@@ -47,6 +47,22 @@ async function api(options={}) {
  return {request,calls};
 }
 const csv='First Name,Last Name,Birthday,Enrollment Status,Room,Subsidy\nSynthetic,Avery,01/02/2020,Active,Division,Cash\nSynthetic,Inactive,01/02/2020,Inactive,Division,Cash';
+test('blank export funding preserves the matched child program before a batch default',async()=>{
+ const row=existing();row.record_data.subsidy='CCCC';
+ const roster=csv.replaceAll('Division,Cash','Division,');const t=await api({rows:[row]});
+ const p=await(await t.request({csvText:roster,defaultFunding:'Cash Pay'})).json();
+ assert.equal(p.rows[0].selectedFunding,'CCCC');
+});
+test('care-ending date, unknown-date note and explicit prior-month eligibility remain separate',async()=>{
+ const roster='First Name,Last Name,Birthday,Enrollment Status,Room,Subsidy,Last day of care,Care status note,Timesheet service periods,Never started care\nSynthetic,Avery,01/02/2020,Archived,Division,CCCC,2026-10-29,Last day confirmed,October 2026,';
+ const t=await api({rows:[existing()]});const p=await(await t.request({csvText:roster,activeOnly:false})).json();
+ await t.request({mode:'commit',csvText:roster,activeOnly:false,previewToken:p.previewToken});
+ const saved=t.calls.find(c=>c[0]==='rpc')[2].p_rows[0].payload.record_data;
+ assert.equal(saved.plannedLastDay,'2026-10-29');assert.equal(saved.enrollmentStatus,'Archived');assert.deepEqual(saved.timesheetServicePeriods,['October 2026']);
+ const never=roster.replace('2026-10-29,Last day confirmed,October 2026,',',Never started,,Yes');
+ const n=await api();const np=await(await n.request({csvText:never,activeOnly:false})).json();await n.request({mode:'commit',csvText:never,activeOnly:false,previewToken:np.previewToken});
+ const ns=n.calls.find(c=>c[0]==='rpc')[2].p_rows[0].payload.record_data;assert.equal(ns.plannedLastDay,undefined);assert.equal(ns.neverStartedCare,true);assert.equal(ns.timesheetServicePeriods,undefined);
+});
 test('stale Brightwheel Active status never reactivates a known inactive profile',async()=>{
  const t=await api({rows:[existing({enrollment_status:'Archived'})]});const p=await(await t.request({csvText:csv})).json();
  assert.equal(p.rows[0].enrollmentStatus,'Archived');

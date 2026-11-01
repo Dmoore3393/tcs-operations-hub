@@ -230,6 +230,10 @@ function childSource(row: CsvRow, index: number) {
     { required: ["subsid"] },
     { required: ["funding"] },
   ]);
+  const lastDayOfCare = parseDate(exactValue(row,["lastdayofcare","plannedlastday"]));
+  const careStatusNote = exactValue(row,["carestatusnote"]);
+  const neverStartedCare = /^(yes|true)$/i.test(exactValue(row,["neverstartedcare"]));
+  const timesheetServicePeriods = exactValue(row,["timesheetserviceperiods"]).split(";").map(v => v.trim()).filter(v => /^(January|February|March|April|May|June|July|August|September|October|November|December) \d{4}$/.test(v));
 
   return {
     rowKey: `bw-row-${index + 2}`,
@@ -258,6 +262,10 @@ function childSource(row: CsvRow, index: number) {
     additionalGuardianContacts,
     additionalEmergencyContacts,
     subsidyRaw: subsidy,
+    lastDayOfCare,
+    careStatusNote,
+    neverStartedCare,
+    timesheetServicePeriods,
     detectedFunding: inferFunding(subsidy),
     detectedLocation: canonicalLocation(room),
   };
@@ -338,10 +346,11 @@ export async function POST(request: Request) {
 
     const preview = sources.map((source, index) => {
       const override = overrides.get(source.rowKey);
-      const selectedLocation = safeLocation(text(override?.location)) || source.detectedLocation || defaultLocation;
-      const selectedFunding = safeFunding(text(override?.funding)) || source.detectedFunding || defaultFunding;
       const identity = repeats.has(index) ? { ...identities[index], matchType: "duplicate" as const, existingRowId: "", identityWarning: "This child appears more than once in the CSV or targets the same profile twice. Keep one row and refresh the preview." } : identities[index];
       const match = existingRows.find(row=>text(row.id) === identity.existingRowId);
+      const existingLocation = match ? liveLocations.find(location => text(location.id) === text(match.location_id)) : undefined;
+      const selectedLocation = safeLocation(text(override?.location)) || source.detectedLocation || canonicalLocation(text(existingLocation?.slug)) || defaultLocation;
+      const selectedFunding = safeFunding(text(override?.funding)) || source.detectedFunding || safeFunding(text(object(match?.record_data).subsidy)) || defaultFunding;
       const existingEnrollment = text(match?.enrollment_status) || text(object(match?.record_data).enrollmentStatus);
       const enrollmentStatus = /^(archived|inactive)$/i.test(existingEnrollment) && source.enrollmentStatus === "Active" ? "Archived" : source.enrollmentStatus;
       const blocked = repeats.has(index) || source.enrollmentStatus === "Needs review" || !deriveChildAgeProfile(source.dateOfBirth);
@@ -437,6 +446,10 @@ export async function POST(request: Request) {
         allergies: row.allergies || undefined,
         medicalNotes: medicationNote || undefined,
         enrollmentStatus: row.enrollmentStatus,
+        plannedLastDay: row.lastDayOfCare || undefined,
+        careStatusNote: row.careStatusNote || undefined,
+        neverStartedCare: row.neverStartedCare ? true : undefined,
+        timesheetServicePeriods: row.timesheetServicePeriods.length ? [...new Set([...(Array.isArray(existingRecord.timesheetServicePeriods) ? existingRecord.timesheetServicePeriods : []), ...row.timesheetServicePeriods])] : undefined,
         attendanceToday: text(existingRecord.attendanceToday) || "Not Scheduled",
         medicalProvider: row.doctorName || undefined,
         medicalProviderPhone: row.doctorPhone || undefined,
