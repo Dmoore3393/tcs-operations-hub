@@ -9,6 +9,8 @@ before(async()=>{
  await db.exec(`create role anon;create role authenticated;create role service_role bypassrls; create table organizations(id uuid primary key);create table locations(id uuid primary key,organization_id uuid,is_active boolean);create table staff_access(user_id uuid primary key,organization_id uuid,role text,is_active boolean);create table staff_location_assignments(user_id uuid,location_id uuid);create table children(id uuid primary key default gen_random_uuid(),organization_id uuid,location_id uuid,legacy_id text,first_name text,last_name text,date_of_birth date,age_group text,enrollment_status text,attendance_status text,guardian_name text,record_data jsonb,created_by uuid,updated_by uuid,updated_at timestamptz not null default now(),unique(organization_id,legacy_id));create table audit_log(organization_id uuid,actor_user_id uuid,action text,table_name text,row_id uuid,metadata jsonb);grant all on all tables in schema public to service_role;`);
  const folder=new URL('../supabase/migrations/',import.meta.url);const name=(await readdir(folder)).find(name=>name.endsWith('_safe_brightwheel_import.sql'));assert.ok(name);
  await db.exec(await readFile(new URL(name,folder),'utf8'));
+ const optional=(await readdir(folder)).find(name=>name.endsWith('_optional_roster_birthdays.sql'));assert.ok(optional);
+ await db.exec(await readFile(new URL(optional,folder),'utf8'));
 });
 beforeEach(async()=>{
  await db.exec('reset role; truncate children,audit_log,staff_location_assignments,staff_access,locations,organizations;drop trigger if exists fail_import_audit on audit_log;');
@@ -44,4 +46,12 @@ test('existing UUID, legacy identity and attendance survive an authorized review
 });
 test('failure to record the import audit rolls back the entire roster',async()=>{
  await db.exec("create or replace function fail_import_audit() returns trigger language plpgsql as $$ begin raise exception 'Synthetic audit failure';end $$;create trigger fail_import_audit before insert on audit_log for each row execute function fail_import_audit();");await assert.rejects(save([row()]),/Synthetic audit failure/);assert.equal((await db.query('select count(*)::int n from children')).rows[0].n,0);
+});
+
+test('blank and null birthdays are accepted without a fabricated age group',async()=>{
+ const a=row('optional-one');a.payload.date_of_birth=null;a.payload.age_group='Unknown';
+ const b=row('optional-two');b.payload.date_of_birth='';b.payload.age_group='Unknown';
+ assert.deepEqual(await save([a,b]),{inserted:2,updated:0});
+ const saved=(await db.query('select date_of_birth,age_group from children')).rows;
+ assert.deepEqual(saved,[{date_of_birth:null,age_group:'Unknown'},{date_of_birth:null,age_group:'Unknown'}]);
 });

@@ -19,6 +19,7 @@ type ImportOverride = {
   location?: string;
   funding?: string;
   matchId?: string;
+  fundingLocation?: string;
 };
 
 function object(value: unknown): DbRow {
@@ -162,10 +163,12 @@ function childSource(row: CsvRow, index: number) {
   ]);
   const brightwheelId = firstValue(row, ["brightwheel_id", "brightwheelid"], [{ required: ["brightwheel", "id"] }]);
   const studentId = firstValue(row, ["student_id", "studentid", "customid"], [{ required: ["student", "id"], excluded: ["brightwheel"] }]);
-  const dateOfBirth = parseDate(firstValue(row, ["birth_date", "birthdate", "birthday", "dateofbirth"], [
+  const birthdayInput = firstValue(row, ["birth_date", "birthdate", "birthday", "dateofbirth"], [
     { required: ["birth", "date"] },
     { required: ["birthday"] },
-  ]));
+  ]);
+  const dateOfBirth = parseDate(birthdayInput);
+  const invalidBirthday = Boolean(birthdayInput && !deriveChildAgeProfile(dateOfBirth));
   const room = firstValue(row, ["homeroom", "room", "rooms", "roomshomeroom"], [
     { required: ["homeroom"] },
     { required: ["room"], excluded: ["bathroom"] },
@@ -243,6 +246,8 @@ function childSource(row: CsvRow, index: number) {
     firstName,
     lastName,
     dateOfBirth,
+    invalidBirthday,
+    sourceFundingLocation: exactValue(row,["fundinglocation","authorizationlocation","billinglocation"]),
     room,
     enrollmentStatus: enrollmentStatus(enrollment),
     primaryGuardian,
@@ -329,7 +334,7 @@ export async function POST(request: Request) {
     const locationIdBySlug = new Map(liveLocations.map(row => [text(row.slug), text(row.id)]));
     const existingRows: DbRow[] = [];
     for (let offset=0; ; offset+=1000) {
-      const existingResult = await admin.from("children").select("id,legacy_id,location_id,first_name,last_name,date_of_birth,guardian_name,enrollment_status,record_data,updated_at").eq("organization_id", profile.organization_id).in("location_id", allowedIds).order("id").range(offset,offset+999);
+      const existingResult = await admin.from("children").select("id,legacy_id,location_id,first_name,last_name,date_of_birth,age_group,guardian_name,enrollment_status,record_data,updated_at").eq("organization_id", profile.organization_id).in("location_id", allowedIds).order("id").range(offset,offset+999);
       if (existingResult.error) throw existingResult.error;
       const page = (existingResult.data ?? []) as unknown as DbRow[];
       existingRows.push(...page);
@@ -351,24 +356,29 @@ export async function POST(request: Request) {
       const existingLocation = match ? liveLocations.find(location => text(location.id) === text(match.location_id)) : undefined;
       const selectedLocation = safeLocation(text(override?.location)) || source.detectedLocation || canonicalLocation(text(existingLocation?.slug)) || defaultLocation;
       const selectedFunding = safeFunding(text(override?.funding)) || source.detectedFunding || safeFunding(text(object(match?.record_data).subsidy)) || defaultFunding;
+      const fundingLocationInput = override?.fundingLocation !== undefined ? text(override.fundingLocation) : source.sourceFundingLocation || text(object(match?.record_data).fundingLocation);
+      const selectedFundingLocation = safeLocation(fundingLocationInput) || canonicalLocation(fundingLocationInput);
       const existingEnrollment = text(match?.enrollment_status) || text(object(match?.record_data).enrollmentStatus);
       const enrollmentStatus = /^(archived|inactive)$/i.test(existingEnrollment) && source.enrollmentStatus === "Active" ? "Archived" : source.enrollmentStatus;
-      const blocked = repeats.has(index) || source.enrollmentStatus === "Needs review" || !deriveChildAgeProfile(source.dateOfBirth);
+      const blocked = repeats.has(index) || source.enrollmentStatus === "Needs review" || source.invalidBirthday;
 
       const warnings: string[] = [];
       if (!source.firstName || !source.lastName) warnings.push("Missing child name");
-      if (!deriveChildAgeProfile(source.dateOfBirth)) warnings.push("Missing or invalid birth date");
+      if (source.invalidBirthday) warnings.push("Invalid birth date — correct the supplied value or leave it blank");
       if (source.enrollmentStatus === "Needs review") warnings.push("Unrecognized enrollment status — check the CSV");
       if (identity.identityWarning) warnings.push(identity.identityWarning);
       if (selectedLocation && !locationIdBySlug.has(locationSlug(selectedLocation))) warnings.push("This location is not assigned to your account");
       if (!selectedLocation) warnings.push("Choose a TCS location");
-      if (!selectedFunding) warnings.push("Choose a funding source");
+      if (fundingLocationInput && (!selectedFundingLocation || !locationIdBySlug.has(locationSlug(selectedFundingLocation)))) warnings.push("Choose an authorized funding location");
       if (!source.primaryGuardian) warnings.push("Parent/guardian contact not found in export");
 
       return {
         ...source,
         selectedLocation,
         selectedFunding,
+        selectedFundingLocation,
+        missingBirthday: !source.dateOfBirth,
+        missingFunding: !selectedFunding,
         ...identity,
         blocked,
         enrollmentStatus,
@@ -419,22 +429,18 @@ export async function POST(request: Request) {
 
       const matched = row.existingRowId ? existingRows.find((entry) => text(entry.id) === row.existingRowId) : undefined;
       const existingRecord = object(matched?.record_data);
-      const ageProfile = deriveChildAgeProfile(row.dateOfBirth);
-      if (!ageProfile) {
-        skipped += 1;
-        imported.push({ rowKey: row.rowKey, childName: `${row.firstName} ${row.lastName}`.trim(), result: "Skipped — invalid birth date" });
-        continue;
-      }
+      const savedBirthday = row.dateOfBirth || normalizedBirthDate(matched?.date_of_birth) || normalizedBirthDate(existingRecord.dateOfBirth);
+      const ageProfile = deriveChildAgeProfile(savedBirthday);
 
       const medicationNote = row.medications ? `Brightwheel medications: ${row.medications}` : "";
       const importedRecord: DbRow = {
         firstName: row.firstName,
         lastName: row.lastName,
-        age: ageProfile.age,
-        dateOfBirth: row.dateOfBirth,
-        ageGroup: ageProfile.ageGroup,
+        age: ageProfile?.age || text(existingRecord.age) || "Age not entered",
+        dateOfBirth: savedBirthday || undefined,
+        ageGroup: ageProfile?.ageGroup || text(existingRecord.ageGroup) || text(matched?.age_group) || "Unknown",
         location: row.selectedLocation,
-        classroom: row.room || ageProfile.classroom,
+        classroom: row.room || ageProfile?.classroom || text(existingRecord.classroom) || "Not assigned",
         primaryGuardian: row.primaryGuardian,
         secondaryGuardian: row.secondaryGuardian || undefined,
         secondaryGuardianPhone: row.secondaryGuardianPhone || undefined,
@@ -477,6 +483,13 @@ export async function POST(request: Request) {
       };
 
       const recordData = mergeDefined(existingRecord, importedRecord);
+      if (row.selectedFundingLocation) {
+        recordData.fundingLocation = row.selectedFundingLocation;
+        recordData.fundingLocationId = locationIdBySlug.get(locationSlug(row.selectedFundingLocation));
+      } else {
+        delete recordData.fundingLocation;
+        delete recordData.fundingLocationId;
+      }
       // The importer stores guardian contact details only. It never grants Parent Portal access.
       recordData.familyAccess = Array.isArray(existingRecord.familyAccess) ? existingRecord.familyAccess : [];
       recordData.familyMessages = Array.isArray(existingRecord.familyMessages) ? existingRecord.familyMessages : [];
@@ -495,8 +508,8 @@ export async function POST(request: Request) {
         legacy_id: legacyId,
         first_name: row.firstName,
         last_name: row.lastName,
-        date_of_birth: row.dateOfBirth,
-        age_group: ageProfile.ageGroup,
+        date_of_birth: savedBirthday || null,
+        age_group: ageProfile?.ageGroup || text(existingRecord.ageGroup) || text(matched?.age_group) || "Unknown",
         enrollment_status: row.enrollmentStatus,
         attendance_status: text(existingRecord.attendanceToday) || "Not Scheduled",
         guardian_name: row.primaryGuardian || text(matched?.guardian_name) || null,

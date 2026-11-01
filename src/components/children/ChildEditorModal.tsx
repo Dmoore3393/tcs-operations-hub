@@ -107,19 +107,19 @@ export default function ChildEditorModal({
                   <Grid>
                     <Field label="First name"><input required className={inputClass} value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></Field>
                     <Field label="Last name"><input required className={inputClass} value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></Field>
-                    <Field label="Date of birth"><input required type="date" className={inputClass} value={form.dateOfBirth} onChange={(e) => {
+                    <Field label="Date of birth (optional)"><input type="date" className={inputClass} value={form.dateOfBirth} onChange={(e) => {
                       const dateOfBirth = e.target.value;
                       const profile = deriveChildAgeProfile(dateOfBirth);
                       setForm({
                         ...form,
                         dateOfBirth,
                         age: profile?.age ?? "",
-                        ageGroup: profile?.ageGroup ?? "Infant",
-                        classroom: profile?.classroom ?? "Infant Room",
+                        ageGroup: profile?.ageGroup ?? "Unknown",
+                        classroom: profile?.classroom ?? "Not assigned",
                       });
                     }} /></Field>
                     <Field label="Current age"><input readOnly className={inputClass} placeholder="Calculated from date of birth" value={form.age} /></Field>
-                    <Field label="Age group"><select disabled className={inputClass} value={form.ageGroup} onChange={(e) => setForm({ ...form, ageGroup: e.target.value as AgeGroup })}><option>Infant</option><option>Toddler</option><option>Preschool</option><option>School Age</option></select></Field>
+                    <Field label="Age group"><select disabled className={inputClass} value={form.ageGroup} onChange={(e) => setForm({ ...form, ageGroup: e.target.value as AgeGroup })}><option>Unknown</option><option>Infant</option><option>Toddler</option><option>Preschool</option><option>School Age</option></select></Field>
                     <Field label="Location"><select className={inputClass} value={locationDisplayName(form.location)} onChange={(e) => setForm({ ...form, location: e.target.value })}>{locations.map((location) => <option key={location}>{location}</option>)}</select></Field>
                     <Field label="Classroom"><input readOnly className={inputClass} value={form.classroom} /></Field>
                     <Field label="Enrollment status"><select className={inputClass} value={form.enrollmentStatus} onChange={(e) => setForm({ ...form, enrollmentStatus: e.target.value as EnrollmentStatus })}><option>Active</option><option>Pending</option><option>Archived</option></select></Field>
@@ -148,7 +148,8 @@ export default function ChildEditorModal({
                     <Field label="Second parent email"><input type="email" className={inputClass} value={form.secondaryGuardianEmail} onChange={(e) => setForm({ ...form, secondaryGuardianEmail: e.target.value })} /></Field>
                     <Field label="Phone"><input className={inputClass} disabled={lockFamily} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
                     <Field label="Email"><input type="email" className={inputClass} disabled={lockFamily} value={form.guardianEmail} onChange={(e) => setForm({ ...form, guardianEmail: e.target.value })} /></Field>
-                    <Field label="Funding"><select required className={inputClass} disabled={lockFamily} value={form.subsidy} onChange={(e) => setForm({ ...form, subsidy: e.target.value })}><option value="">Choose funding source…</option>{form.subsidy === "CCRC" && <option value="CCRC" disabled>CCRC — choose Stage 1 or Stage 2</option>}{fundingSources.map((source) => <option key={source}>{source}</option>)}</select></Field>
+                    <Field label="Funding authorization location"><select className={inputClass} value={form.fundingLocation ? locationDisplayName(form.fundingLocation) : ""} onChange={(e) => setForm({ ...form, fundingLocation: e.target.value })}><option value="">Same as care location</option>{locations.map((location) => <option key={location}>{location}</option>)}</select></Field>
+                    <Field label="Funding (optional)"><select className={inputClass} disabled={lockFamily} value={form.subsidy} onChange={(e) => setForm({ ...form, subsidy: e.target.value })}><option value="">Not entered (optional)</option>{form.subsidy === "CCRC" && <option value="CCRC" disabled>CCRC — choose Stage 1 or Stage 2</option>}{fundingSources.map((source) => <option key={source}>{source}</option>)}</select></Field>
                   </Grid>
                 </SectionCard>
 

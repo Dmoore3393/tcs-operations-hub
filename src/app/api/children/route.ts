@@ -186,7 +186,7 @@ function normalizeChild(row: DbRow) {
     lastName: text(record.lastName) || text(row.last_name),
     age: text(record.age) || "Age not entered",
     dateOfBirth: text(record.dateOfBirth) || text(row.date_of_birth),
-    ageGroup: text(record.ageGroup) || text(row.age_group) || "Infant",
+    ageGroup: text(record.ageGroup) || text(row.age_group) || "Unknown",
     location: locationDisplayName(text(record.location)),
     classroom: text(record.classroom),
     primaryGuardian: text(record.primaryGuardian) || text(row.guardian_name),
@@ -297,7 +297,6 @@ function validateChild(value: unknown) {
   if (!text(child.location)) throw new Response("A childcare location is required.", { status: 400 });
   if (!text(child.ageGroup)) throw new Response("An age group is required.", { status: 400 });
   const funding = fundingSource(child.subsidy);
-  if (!funding) throw new Response("Choose a funding source.", { status: 400 });
   if (/^ccrc$/i.test(funding)) throw new Response("CCRC must be identified as Stage 1 or Stage 2.", { status: 400 });
   child.subsidy = funding;
   return child;
@@ -307,7 +306,7 @@ function safeChildRecord(child: DbRow, id: number) {
   const licensingStatus = text(child.licensingStatus) === "Missing Documents" ? "Missing Documents" : "Complete";
   const enrollmentStatus = ["Active", "Pending", "Archived"].includes(text(child.enrollmentStatus)) ? text(child.enrollmentStatus) : "Active";
   const attendanceToday = ["Present", "Checked Out", "Not Scheduled", "Absent"].includes(text(child.attendanceToday)) ? text(child.attendanceToday) : "Not Scheduled";
-  const ageGroup = ["Infant", "Toddler", "Preschool", "School Age"].includes(text(child.ageGroup)) ? text(child.ageGroup) : "Infant";
+  const ageGroup = ["Unknown", "Infant", "Toddler", "Preschool", "School Age"].includes(text(child.ageGroup)) ? text(child.ageGroup) : "Unknown";
   return {
     id,
     firstName: text(child.firstName).slice(0, 100),
@@ -442,6 +441,9 @@ export async function POST(request: Request) {
     if (action === "archive") child.enrollmentStatus = child.enrollmentStatus === "Archived" ? "Active" : "Archived";
 
     const existingRecord = object(existing.data?.record_data);
+    const fundingLocation = Object.hasOwn(rawChild, "fundingLocation") ? text(rawChild.fundingLocation) : text(existingRecord.fundingLocation);
+    // Resolve the server-side ID in this organization; never accept a client-supplied ID.
+    const fundingLocationId = fundingLocation ? await resolveLocationId(admin, profile.organization_id, fundingLocation) : "";
     const protectedPickupFields = {
       // Imported identity, extra contacts, care notes and historical eligibility
       // survive normal edits. Client input cannot replace these server fields.
@@ -465,7 +467,7 @@ export async function POST(request: Request) {
       attendance_status: child.attendanceToday,
       guardian_name: child.primaryGuardian,
       school_name: existing.data?.school_name ?? null,
-      record_data: { ...child, ...protectedPickupFields },
+      record_data: { ...child, ...protectedPickupFields, fundingLocation, fundingLocationId },
     };
 
     let saved;

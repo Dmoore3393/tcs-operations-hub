@@ -5,7 +5,7 @@ import { TEHACHAPI_LOCATION_NAME } from "@/lib/location-config";
 export type LicensingStatus = "Complete" | "Missing Documents";
 export type EnrollmentStatus = "Active" | "Pending" | "Archived";
 export type AttendanceStatus = "Present" | "Checked Out" | "Not Scheduled" | "Absent";
-export type AgeGroup = "Infant" | "Toddler" | "Preschool" | "School Age";
+export type AgeGroup = "Infant" | "Toddler" | "Preschool" | "School Age" | "Unknown";
 export type MedicalConsentStatus = "On File" | "Missing" | "Needs Update";
 
 export type FamilyMessage = {
@@ -66,6 +66,8 @@ export type ChildRecord = {
   secondaryGuardian?: string;
   secondaryGuardianPhone?: string;
   secondaryGuardianEmail?: string;
+  fundingLocation?: string;
+  fundingLocationId?: string;
   additionalGuardianContacts?: Array<{ name: string; phone: string; email: string }>;
   additionalEmergencyContacts?: Array<{ name: string; phone: string; relationship: string }>;
   careStatusNote?: string;
@@ -141,6 +143,7 @@ export type ChildFormState = {
   phone: string;
   familyName: string;
   guardianEmail: string;
+  fundingLocation: string;
   subsidy: string;
   weeklySchedule: string;
   transportation: string;
@@ -255,9 +258,9 @@ export const emptyForm: ChildFormState = {
   lastName: "",
   age: "",
   dateOfBirth: "",
-  ageGroup: "Infant",
+  ageGroup: "Unknown",
   location: locations[0],
-  classroom: "Infant Room",
+  classroom: "Not assigned",
   primaryGuardian: "",
   secondaryGuardian: "",
   secondaryGuardianPhone: "",
@@ -265,6 +268,7 @@ export const emptyForm: ChildFormState = {
   phone: "",
   familyName: "",
   guardianEmail: "",
+  fundingLocation: "",
   subsidy: "",
   weeklySchedule: "",
   transportation: "No transportation",
