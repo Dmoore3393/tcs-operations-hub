@@ -9,6 +9,7 @@ const control=url((await readFile(new URL('../src/lib/server/timesheet-batch-con
 const locationConfig=url(await readFile(new URL('../src/lib/location-config.ts',import.meta.url),'utf8'));
 const locationHelper=url((await readFile(new URL('../src/lib/server/location-slug.ts',import.meta.url),'utf8')).replace('import \"server-only\";','').replace('\"@/lib/location-config\"',JSON.stringify(locationConfig)));
 let source=await readFile(new URL('../src/app/api/timesheets/route.ts',import.meta.url),'utf8');
+source=source.replace('"@/lib/timesheet-direct-intake"',JSON.stringify(url(await readFile(new URL('../src/lib/timesheet-direct-intake.ts',import.meta.url),'utf8'))));
 source=source.replace('\"@/lib/server/timesheet-batch-controls\"',JSON.stringify(control)).replace('\"@/lib/server/location-slug\"',JSON.stringify(locationHelper));
 source=source.replace('"@/lib/timesheet-workflow"',JSON.stringify(helper)).replace(/import \{ requireStaff, staffErrorResponse \} from .*?;/,'const requireStaff=async()=>globalThis.__timesheetAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
 const api=await import(url(source));
@@ -20,6 +21,15 @@ function setup(name,record={collectorSigned:true,dynastyStatus:'Accounted For'})
  globalThis.__timesheetAuth={admin,profile:{full_name:name,organization_id:'org',locations:['Halcom','Lara Family Childcare']},user:{id:'actor'},isOwner:/Danielle|Jennifer/.test(name),isLicensee:/Dynasty/.test(name)};
 }
 const post=body=>api.POST(new Request('https://hub.test/api/timesheets',{method:'POST',body:JSON.stringify({servicePeriod:'October 2026',locationSlug:'halcom',timesheetType:'CCRC Stage 1',...body})}));
+test('direct receipt is Danielle-only, audited and allows reviewed forms to progress',async()=>{
+ setup('Jennifer Thomason',{});
+ assert.equal((await post({action:'directIntake',id:'ts',received:true,reason:'Already collected.'})).status,403);
+ setup('Danielle Moore',{});
+ assert.equal((await post({action:'directIntake',id:'ts',received:true,signaturesChecked:true,datesChecked:true,reason:'Already collected.'})).status,200);
+ assert.ok(changes[0].patch.record_data.directReviewAt);
+ assert.equal(changes[0].patch.record_data.stage,'Danielle Fill Out');
+ assert.equal(changes[0].patch.record_data.dynastyReviewedBy,undefined);
+});
 test('Jennifer and Anthony cannot fill or scan; Danielle cannot record company email',async()=>{
  setup('Jennifer Thomason');assert.equal((await post({action:'fillOut',id:'ts'})).status,403);assert.equal((await post({action:'scanBatch'})).status,403);
  setup('Anthony');assert.equal((await post({action:'scanBatch'})).status,403);

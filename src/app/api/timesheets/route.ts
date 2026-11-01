@@ -2,6 +2,7 @@ import { TIMESHEET_TYPES, timesheetType as normalizeType, signedTimesheet as sig
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 import { tcsLocationSlug } from "@/lib/server/location-slug";
 import { BATCH_ACTIONS, controlledTimesheetBatch } from "@/lib/server/timesheet-batch-controls";
+import { directIntakePatch } from "@/lib/timesheet-direct-intake";
 
 export const runtime = "nodejs";
 
@@ -139,14 +140,20 @@ export async function GET(request: Request) {
         collectorSignedAt: asText(record.collectorSignedAt) || asText(record.licenseeSubmittedAt),
         collectorSignedBy: asText(record.collectorSignedBy) || asText(record.licenseeInitials),
         collectorNotes: asText(record.collectorNotes),
-        dynastyStatus: asText(record.dynastyStatus) || "Awaiting",
+        directReceivedAt: asText(record.directReceivedAt),
+        directSignaturesAt: asText(record.directSignaturesAt),
+        directDatesAt: asText(record.directDatesAt),
+        directReviewAt: asText(record.directReviewAt),
+        directReceiptReason: asText(record.directReceiptReason),
+        directReceivedBy: asText(record.directReceivedBy),
+        dynastyStatus: asText(record.directReviewAt) ? "Danielle direct review" : asText(record.dynastyStatus) || "Awaiting",
         dynastyReviewedAt: asText(record.dynastyReviewedAt),
         dynastyReviewedBy: asText(record.dynastyReviewedBy) || asText(record.dynastyInitials),
         dynastyHandoffDate: asText(record.dynastyHandoffDate) || handoffAt.slice(0, 10),
         dynastyHandedToDanielleAt: asText(record.dynastyHandedToDanielleAt),
         dynastyHandedToJenniferAt: asText(record.dynastyHandedToJenniferAt) || asText(record.jenniferReceivedAt),
         handoffAt,
-        handoffRecipient: asText(record.dynastyHandoffRecipient) || (asText(record.dynastyHandedToDanielleAt) ? "Danielle" : handoffAt ? "Jennifer (previous workflow)" : ""),
+        handoffRecipient: asText(record.dynastyHandoffRecipient) || (asText(record.dynastyHandedToDanielleAt) || asText(record.directReviewAt) ? "Danielle" : handoffAt ? "Jennifer (previous workflow)" : ""),
         scanBatchId: asText(record.scanBatchId),
         emailBatchId: asText(record.emailBatchId),
         dynastyHandoffBy: asText(record.dynastyHandoffBy) || asText(record.batchReceivedBy),
@@ -205,6 +212,7 @@ export async function GET(request: Request) {
         canCreateBatch: actor.isDanielle || actor.isJennifer || actor.isOwner,
         canDynastyReview: actor.isDynasty,
         canDynastyHandoff: actor.isDynasty,
+        canDirectIntake: actor.isOwner && actor.isDanielle,
         canFillOut: actor.isDanielle,
         canScan: actor.isDanielle,
         canEmail: actor.isJennifer,
@@ -415,6 +423,15 @@ export async function POST(request: Request) {
         p_funding_source: type, p_stage: asText(merged.stage),
       });
       if (saved.error) throw Response.json({ error: "This form changed or could not be saved. Refresh and try again." }, { status: 409 });
+    }
+
+    if (action === "directIntake") {
+      if (!actor.isOwner || !actor.isDanielle) return Response.json({ error: "Danielle's Owner/Admin account is required." }, { status: 403 });
+      let patch: DbRow;
+      try { patch = directIntakePatch(current, body, actor, new Date().toISOString()); }
+      catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Check the direct receipt details." }, { status: 400 }); }
+      await save(patch, "DANIELLE_DIRECT_INTAKE");
+      return Response.json({ ok: true });
     }
 
     if (action === "setType") {

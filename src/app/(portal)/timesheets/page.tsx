@@ -70,6 +70,12 @@ type RecordItem = SubmissionRecord & {
   collectorSignedAt: string;
   collectorSignedBy: string;
   collectorNotes: string;
+  directReceivedAt: string;
+  directSignaturesAt: string;
+  directDatesAt: string;
+  directReviewAt: string;
+  directReceiptReason: string;
+  directReceivedBy: string;
   dynastyStatus: string;
   dynastyReviewedAt: string;
   dynastyReviewedBy: string;
@@ -109,6 +115,7 @@ type ActorCaps = {
   canDynastyReview: boolean;
   canDynastyHandoff: boolean;
   canFillOut: boolean;
+  canDirectIntake: boolean;
   canScan: boolean;
   canEmail: boolean;
   canManageRoutes: boolean;
@@ -416,6 +423,10 @@ function RecordModal({ record, actor, routes, saving, onClose, onAction }: { rec
   const [handoffDate, setHandoffDate] = useState(record.dynastyHandoffDate || new Date().toISOString().slice(0,10));
   const [certificateVerified, setCertificateVerified] = useState(record.certificateVerified);
   const [tuitionAck, setTuitionAck] = useState(record.tuitionPolicyAcknowledged);
+  const [directReason, setDirectReason] = useState(record.directReceiptReason || "Already collected directly by Danielle.");
+  const [directReceived, setDirectReceived] = useState(Boolean(record.directReceivedAt));
+  const [directSigned, setDirectSigned] = useState(Boolean(record.directSignaturesAt));
+  const [directDated, setDirectDated] = useState(Boolean(record.directDatesAt));
   const step = stageIndex(record.stage);
   const route = record.timesheetType === "CCRC" ? null : routes[timesheetRouteKey(record.locationSlug, record.timesheetType)];
   const canCollect = actor.collectorSlug === record.locationSlug;
@@ -423,12 +434,37 @@ function RecordModal({ record, actor, routes, saving, onClose, onAction }: { rec
   return <div className="tscc-modal-backdrop"><div className="tscc-modal">
     <div className="tscc-modal-head"><div><h2>{record.childName}</h2><p>{record.location} • {record.servicePeriod} • {record.stage}</p></div><button className="tscc-close" onClick={onClose}><X size={16}/></button></div>
     <div className="tscc-modal-body">
+      <section className="tscc-stage-card current" aria-label="Child timesheet checklist">
+        <h3>Child Timesheet Checklist</h3>
+        <div className="tscc-stage-actions">{[
+          ["Received", Boolean(record.directReceivedAt || record.handoffAt)],
+          ["Signatures checked", Boolean(record.directSignaturesAt || record.collectorSigned)],
+          ["Dates checked", Boolean(record.directDatesAt)],
+          ["Filled out", Boolean(record.completedAt)],
+          ["Scanned", Boolean(record.scannedAt && record.scanDocumentId)],
+          ["Submitted to agency email", Boolean(record.emailedAt && record.emailEvidenceDocumentId)],
+        ].map(([label, done]) => <span key={String(label)} className={`tscc-chip ${done ? "green" : ""}`}>{done ? "✓" : "○"} {label}</span>)}</div>
+        {record.departmentEmail && <p>Recorded submission destination: {record.departmentEmail}</p>}
+        {record.directReceivedAt && <p>Direct receipt recorded by {record.directReceivedBy} • {formatStamp(record.directReceivedAt)}. {record.directReceiptReason}</p>}
+        {actor.canDirectIntake && !record.completedAt && !record.scanDocumentId && !record.submissionIssue && <>
+          <h3 style={{marginTop:16}}>Danielle Direct Receipt / Override</h3>
+          <p>Use when the form is already in your hands. This records your review and does not sign off as another staff member. Checking both signatures and dates allows you to proceed to filling out the form.</p>
+          <div className="tscc-stage-actions">
+            <label className="tscc-check"><input type="checkbox" checked={directReceived} disabled={saving || Boolean(record.directReceivedAt)} onChange={e => setDirectReceived(e.target.checked)}/> Form received</label>
+            <label className="tscc-check"><input type="checkbox" checked={directSigned} disabled={saving || Boolean(record.directSignaturesAt)} onChange={e => setDirectSigned(e.target.checked)}/> Required signatures checked</label>
+            <label className="tscc-check"><input type="checkbox" checked={directDated} disabled={saving || Boolean(record.directDatesAt)} onChange={e => setDirectDated(e.target.checked)}/> Required dates checked</label>
+          </div>
+          <label>Direct receipt reason<input className="tscc-select" style={{fontSize:16,minHeight:44,width:"100%"}} value={directReason} maxLength={500} disabled={saving} onChange={e => setDirectReason(e.target.value)}/></label>
+          <button className="tscc-btn primary" style={{marginTop:12,minHeight:44}} disabled={saving || !directReceived || directReason.trim().length < 5} onClick={() => void onAction({action:"directIntake",id:record.id,received:directReceived,signaturesChecked:directSigned,datesChecked:directDated,reason:directReason},"Danielle's direct receipt and checks recorded.")}>Save My Receipt & Checks</button>
+        </>}
+      </section>
       <div className="tscc-stage-card current"><h3><FileCheck2 size={16}/> Timesheet Type</h3><p>CCRC forms must be classified as Stage 1 or Stage 2 before Jennifer can submit them.</p><div className="tscc-stage-actions"><select className="tscc-select" style={{maxWidth:230}} value={record.timesheetType === "CCRC" ? "" : record.timesheetType} disabled={saving || step >= 5} onChange={(event) => event.target.value && void onAction({ action:"setType", id:record.id, timesheetType:event.target.value }, `${record.childName} classified as ${event.target.value}.`)}><option value="">Choose timesheet type</option>{COMMAND_TYPES.map((type) => <option key={type}>{type}</option>)}</select>{record.needsCcrcStage && <span className="tscc-chip red"><AlertTriangle size={11}/> CCRC stage required</span>}</div></div>
 
       <StageCard number={1} title="Location Sign-Off" helper={`${record.collector} is assigned to get the form signed and check off this child.`} done={record.collectorSigned} current={step === 0} icon={<Signature size={16}/>}>
         <div className="tscc-stage-actions"><button className={`tscc-btn ${record.collectorSigned ? "light" : "green"}`} disabled={!canCollect || saving || step > 1} onClick={() => void onAction({ action:"markSigned", id:record.id, signed:!record.collectorSigned }, `${record.childName} ${record.collectorSigned ? "returned to unsigned" : "checked off as signed"}.`)}>{record.collectorSigned ? "Undo Signed Checkoff" : "✓ Check Off Signed Form"}</button><span className="tscc-chip">{record.collectorSignedAt ? formatStamp(record.collectorSignedAt) : "Not signed off yet"}</span></div>
       </StageCard>
 
+      {!record.directReviewAt && <>
       <StageCard number={2} title="Dynasty Review" helper="All timesheets go to Dynasty. She confirms every form is accounted for and signed." done={step > 1 || record.dynastyStatus === "Accounted For"} current={step === 1} icon={<ClipboardCheck size={16}/>}>
         <div className="tscc-stage-actions"><button className="tscc-btn red" disabled={!actor.canDynastyReview || saving || !record.collectorSigned || Boolean(record.handoffAt)} onClick={() => void onAction({ action:"dynastyReview", id:record.id, status:"Needs Correction" }, `${record.childName} returned to the location for correction.`)}>Needs Correction</button><button className="tscc-btn green" disabled={!actor.canDynastyReview || saving || !record.collectorSigned || Boolean(record.handoffAt)} onClick={() => void onAction({ action:"dynastyReview", id:record.id, status:"Accounted For" }, `${record.childName} accounted for by Dynasty.`)}>Accounted For + Signed</button><span className="tscc-chip">{record.dynastyReviewedAt ? formatStamp(record.dynastyReviewedAt) : record.dynastyStatus}</span></div>
       </StageCard>
@@ -437,6 +473,7 @@ function RecordModal({ record, actor, routes, saving, onClose, onAction }: { rec
         <div className="tscc-note" style={{marginBottom:9}}>PERSONAL HANDOFF ONLY — Dynasty to Danielle.</div><div className="tscc-stage-actions"><input type="date" value={handoffDate} onChange={(event) => setHandoffDate(event.target.value)} disabled={!actor.canDynastyHandoff || saving}/><button className="tscc-btn primary" disabled={!actor.canDynastyHandoff || saving || Boolean(record.handoffAt) || record.dynastyStatus !== "Accounted For"} onClick={() => void onAction({ action:"dynastyHandoff", id:record.id, handoffDate }, `Personal handoff to Danielle recorded for ${handoffDate}.`)}>Confirm Personal Handoff</button>{record.handoffAt && <span className="tscc-chip green">{record.handoffRecipient} • {record.dynastyHandoffDate}</span>}</div>
       </StageCard>
 
+      </>}
       <StageCard number={4} title="Danielle Fill Out" helper="Use the child's certificate to complete the timesheet." done={step > 3} current={step === 3} icon={<PenLine size={16}/>}>
         <div className="tscc-tuition">Tuition is charged regardless of attendance.</div><div className="tscc-stage-actions" style={{marginTop:9}}><label className="tscc-check"><input type="checkbox" checked={certificateVerified} onChange={(event) => setCertificateVerified(event.target.checked)} disabled={!actor.canFillOut || saving}/><span>Child certificate reviewed and correct program/rates verified</span></label><label className="tscc-check"><input type="checkbox" checked={tuitionAck} onChange={(event) => setTuitionAck(event.target.checked)} disabled={!actor.canFillOut || saving}/><span>Tuition policy applied regardless of attendance</span></label><button className="tscc-btn primary" disabled={!actor.canFillOut || saving || Boolean(record.completedAt) || !certificateVerified || !tuitionAck || !record.handoffAt} onClick={() => void onAction({ action:"fillOut", id:record.id, certificateVerified, tuitionPolicyAcknowledged:tuitionAck }, `${record.childName} timesheet marked filled out from the certificate.`)}>Mark Timesheet Filled Out</button>{record.completedAt && <span className="tscc-chip green">{record.completedBy} • {formatStamp(record.completedAt)}</span>}</div>
       </StageCard>
@@ -448,7 +485,7 @@ function RecordModal({ record, actor, routes, saving, onClose, onAction }: { rec
         <div className="tscc-note">{route?.department || "Department not configured"}<br/>{route?.email || "Email not configured"}</div>{record.emailedAt && <span className="tscc-chip green">{record.emailedBy} • {formatStamp(record.emailedAt)}</span>}
       </StageCard>
 
-      {record.stage === "Complete" && <div className="tscc-stage-card done" style={{textAlign:"center"}}><CheckCircle2 size={28} style={{margin:"0 auto",color:"#2f7652"}}/><h3 style={{justifyContent:"center",marginTop:7}}>Timesheet Complete</h3><p>Signed, reviewed by Dynasty, handed off to {record.handoffRecipient || "the recorded recipient"}, filled out from the certificate, scanned, sent to Jen in its location/program batch, independently verified by the location licensee, and acknowledged by the agency.</p></div>}
+      {record.stage === "Complete" && <div className="tscc-stage-card done" style={{textAlign:"center"}}><CheckCircle2 size={28} style={{margin:"0 auto",color:"#2f7652"}}/><h3 style={{justifyContent:"center",marginTop:7}}>Timesheet Complete</h3><p>Signed, reviewed through the recorded collection or direct-receipt workflow, filled out from the certificate, scanned, submitted in its location/program batch, independently verified by the location licensee, and acknowledged by the agency.</p></div>}
     </div>
   </div></div>;
 }
