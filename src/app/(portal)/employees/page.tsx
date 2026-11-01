@@ -73,6 +73,7 @@ export default function EmployeesPage() {
 
     <Link href="/staff-onboarding" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-800 px-5 py-3 text-base font-bold text-white"><Users className="h-5 w-5" /> New-Hire Onboarding</Link>
 
+    {isSystemOwner && <Link href="/employees/personnel" className="inline-flex min-h-11 items-center rounded-xl border border-emerald-800 px-5 py-3 text-base font-bold text-emerald-900">Private Personnel Records</Link>}
     {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-900">{error}</div>}
 
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
