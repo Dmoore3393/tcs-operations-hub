@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 
 const VERSION_KEY = "tcs-hub-active-deployment";
-const RELOAD_GUARD_KEY = "tcs-hub-reload-guard";
 
 const CURRENT_GIT_SHA =
   process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.trim() || "";
@@ -12,6 +11,8 @@ const CURRENT_DEPLOYMENT_URL =
   process.env.NEXT_PUBLIC_VERCEL_URL?.trim() || "";
 
 export default function PwaUpdater() {
+  const [availableVersion, setAvailableVersion] = useState("");
+  const dismissedVersion = useRef("");
   useEffect(() => {
     // Packaged screens update through a new iOS build; reloading cannot install
     // newer web code. Keep the existing updater for the website and live shell.
@@ -25,10 +26,8 @@ export default function PwaUpdater() {
     });
 
     let cancelled = false;
-    let reloading = false;
 
     async function checkVersion() {
-      if (reloading) return;
       try {
         const response = await fetch("/api/app-version", {
           cache: "no-store",
@@ -43,6 +42,7 @@ export default function PwaUpdater() {
         };
 
         const serverGitSha = payload.gitSha?.trim() || "";
+        if (cancelled) return;
         const serverDeploymentUrl = payload.deploymentUrl?.trim() || "";
         const serverVersion =
           serverGitSha ||
@@ -64,25 +64,13 @@ export default function PwaUpdater() {
           Boolean(activeVersion && activeVersion !== serverVersion);
 
         if (shouldRefresh) {
-          // iOS/PWA snapshots can occasionally restore old JavaScript even
-          // after a hard reload. Reload at most once for each server version,
-          // then allow the app to continue instead of trapping staff on the
-          // loading screen forever.
-          const guardedVersion = sessionStorage.getItem(RELOAD_GUARD_KEY);
-          sessionStorage.setItem(VERSION_KEY, serverVersion);
-
-          if (guardedVersion === serverVersion) {
-            return;
-          }
-
-          reloading = true;
-          sessionStorage.setItem(RELOAD_GUARD_KEY, serverVersion);
-          window.location.reload();
+          // A deployment must never discard an import preview or unsaved form.
+          if (dismissedVersion.current !== serverVersion) setAvailableVersion(serverVersion);
           return;
         }
 
         sessionStorage.setItem(VERSION_KEY, serverVersion);
-        sessionStorage.removeItem(RELOAD_GUARD_KEY);
+        setAvailableVersion("");
       } catch {
         // Do not interrupt staff workflows because an update check failed.
       }
@@ -108,5 +96,13 @@ export default function PwaUpdater() {
     };
   }, []);
 
-  return null;
+  if (!availableVersion) return null;
+  return <aside role="status" className="fixed bottom-24 left-4 right-4 z-[100] mx-auto max-w-xl rounded-2xl border border-emerald-300 bg-white p-4 text-base text-slate-950 shadow-xl">
+    <p className="font-bold">A Hub update is available</p>
+    <p>Save your work or finish your import before reloading.</p>
+    <div className="mt-3 flex gap-3">
+      <button className="min-h-11 rounded-xl bg-emerald-800 px-4 font-bold text-white" onClick={() => { sessionStorage.setItem(VERSION_KEY, availableVersion); window.location.reload(); }}>Reload now</button>
+      <button className="min-h-11 rounded-xl border border-slate-400 px-4 font-bold" onClick={() => { dismissedVersion.current = availableVersion; setAvailableVersion(""); }}>Later</button>
+    </div>
+  </aside>;
 }

@@ -45,14 +45,19 @@ export function resolveImportIdentity(source: IdentitySource, rows: Row[], selec
     if (selected && selected !== row.id) return blocked("This child already matches an existing profile. Refresh the preview.");
     return { ...base, matchType: "update", existingRowId: row.id };
   }
-  if (!sameName.length) {
+  // A spelling change must not silently create a second profile when the
+  // birthday and either name still match. Require a human identity choice.
+  const possible = sameName.length ? sameName : identities.filter(row => Boolean(source.dateOfBirth && row.dateOfBirth === source.dateOfBirth) && (
+    normalizedChildName(row.firstName) === normalizedChildName(source.firstName) || normalizedChildName(row.lastName) === normalizedChildName(source.lastName)
+  ));
+  if (!possible.length) {
     if (selected && selected !== "new") return blocked("That existing profile is not a valid match. Refresh the preview.");
     return base;
   }
-  const candidates = sameName.map(row => ({ id: row.id, label: `${row.firstName} ${row.lastName}`, dateOfBirth: row.dateOfBirth, canUpdate: (!row.dateOfBirth || row.dateOfBirth === source.dateOfBirth) && (!source.brightwheelId || !row.brightwheelId || source.brightwheelId === row.brightwheelId) }));
+  const candidates = possible.map(row => ({ id: row.id, label: `${row.firstName} ${row.lastName}`, dateOfBirth: row.dateOfBirth, canUpdate: (!row.dateOfBirth || row.dateOfBirth === source.dateOfBirth) && (!source.brightwheelId || !row.brightwheelId || source.brightwheelId === row.brightwheelId) && (!source.studentId || !row.studentId || source.studentId === row.studentId) }));
   if (selected === "new") return { ...base, allowNew: true, candidates };
   if (candidates.some(row => row.id === selected && row.canUpdate)) return { ...base, matchType: "update", existingRowId: selected, candidates, allowNew: true };
-  return { ...base, matchType: "review", candidates, allowNew: true, identityWarning: "A child with this name already exists. Choose a compatible profile or confirm this is a separate child." };
+  return { ...base, matchType: "review", candidates, allowNew: true, identityWarning: "An existing profile may match this child. Choose the existing profile to update, or confirm this is a separate child." };
 }
 export function repeatedImportRows(sources: IdentitySource[], targets: string[] = []) {
   const groups = new Map<string, number[]>();

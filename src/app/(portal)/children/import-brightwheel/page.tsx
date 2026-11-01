@@ -29,6 +29,9 @@ type PreviewRow = {
   room: string;
   enrollmentStatus: string;
   primaryGuardian: string;
+  secondaryGuardian: string;
+  secondaryGuardianPhone: string;
+  secondaryGuardianEmail: string;
   guardianEmail: string;
   guardianPhone: string;
   detectedLocation: string;
@@ -198,6 +201,7 @@ export default function BrightwheelImportPage() {
         <span className="grid h-11 w-11 flex-none place-items-center rounded-2xl bg-emerald-700 text-white"><ShieldCheck className="h-5 w-5" /></span>
         <div>
           <h2 className="font-black text-emerald-950">Parent invitations are OFF for this import</h2>
+          <p className="mt-2 text-base font-bold text-emerald-950">“Update existing” keeps the same child profile and its history. For a possible match, select the existing child after reviewing their details. Only confirm a separate child when they really are a different person.</p>
           <p className="mt-1 text-sm font-semibold leading-6 text-emerald-900/80">Parent names, emails, and phone numbers can be copied into the child record, but this tool does <strong>not</strong> create Parent Portal access, send emails, send texts, or invite existing families. You can invite families later when TCS is ready.</p>
         </div>
       </div>
@@ -265,7 +269,7 @@ export default function BrightwheelImportPage() {
               <td className="px-4 py-3"><input type="checkbox" aria-label={`Include ${row.firstName} ${row.lastName}`} disabled={row.blocked} checked={setting.include} onChange={(event) => updateRow(row.rowKey, { include: event.target.checked })} className="h-4 w-4 accent-emerald-700" /></td>
               <td className="px-4 py-3"><strong className="text-slate-950">{row.firstName || "Missing"} {row.lastName || "name"}</strong><p className="mt-1 text-base font-semibold text-slate-700">{row.enrollmentStatus}</p>{row.brightwheelId && <p className="mt-1 text-base text-slate-600">BW {row.brightwheelId}</p>}</td>
               <td className="px-4 py-3 font-semibold">{row.dateOfBirth || <span className="text-amber-700">Missing</span>}</td>
-              <td className="px-4 py-3"><strong className="text-slate-800">{row.primaryGuardian || "Not included"}</strong>{row.guardianEmail && <p className="mt-1 max-w-48 truncate text-base text-slate-600">{row.guardianEmail}</p>}</td>
+              <td className="px-4 py-3"><strong className="text-slate-800">{row.primaryGuardian || "Not included"}</strong>{row.guardianEmail && <p className="mt-1 max-w-48 break-words text-base text-slate-600">{row.guardianEmail}</p>}{row.guardianPhone && <p>{row.guardianPhone}</p>}{(row.secondaryGuardian || row.secondaryGuardianPhone || row.secondaryGuardianEmail) && <div className="mt-3 border-t pt-2"><strong>Second parent: {row.secondaryGuardian || "Name not included"}</strong><p className="break-words">{row.secondaryGuardianPhone}</p><p className="break-words">{row.secondaryGuardianEmail}</p></div>}</td>
               <td className="px-4 py-3">{row.room || "—"}</td>
               <td className="px-4 py-3"><select aria-label={`Location for ${row.firstName} ${row.lastName}`} value={setting.location} onChange={(event) => updateRow(row.rowKey, { location: event.target.value })} className="w-52 rounded-lg border border-slate-200 bg-white px-2 py-2 text-base font-bold"><option value="">Choose location…</option>{locations.map((location) => <option key={location}>{location}</option>)}</select></td>
               <td className="px-4 py-3"><select aria-label={`Funding for ${row.firstName} ${row.lastName}`} value={setting.funding} onChange={(event) => updateRow(row.rowKey, { funding: event.target.value })} className="w-40 rounded-lg border border-slate-200 bg-white px-2 py-2 text-base font-bold"><option value="">Choose funding…</option>{fundingSources.map((source) => <option key={source}>{source}</option>)}</select></td>

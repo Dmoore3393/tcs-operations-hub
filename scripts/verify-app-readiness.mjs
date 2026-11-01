@@ -102,8 +102,8 @@ assert(layout.includes('apple: [{ url: "/app-icon-192.png"'), "Apple home-screen
 assert(manifest.theme_color === "#0b5d35", "Manifest theme color must use the official Hub green");
 assert(trainingCenter.includes("<MainLayout>") && trainingCenter.includes("Hub Home"), "Training Center must stay integrated with the main app shell and provide a Hub Home control");
 assert(trainingStyles.includes("overflow-x:hidden") && trainingStyles.includes(".tc-view-nav"), "Training Center responsive overflow protection/navigation is missing");
-assert(updater.includes("NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA") && updater.includes("serverVersion") && updater.includes("pageshow"), "Installed app must force-refresh stale deployment snapshots");
-assert(updater.includes("RELOAD_GUARD_KEY") && updater.includes("guardedVersion === serverVersion"), "Installed app updater must prevent permanent reload loops");
+assert(updater.includes("NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA") && updater.includes("serverVersion") && updater.includes("pageshow"), "Installed app must detect stale deployment snapshots");
+assert(updater.includes("dismissedVersion") && updater.includes("Reload now") && updater.includes("Later"), "Deployment updates must let staff finish unsaved work before reloading");
 assert(appVersionRoute.includes("gitSha") && appVersionRoute.includes("deploymentUrl"), "App-version endpoint must return like-for-like deployment identifiers");
 assert(parentPortal.includes("Scan to Check In / Out") && parentPortal.includes('router.push("/parent/scan")'), "Parent Portal must keep the in-app attendance scanner entry point");
 assert(parentScanner.includes("getUserMedia") && parentScanner.includes("jsQR") && parentScanner.includes("locationFromSlug"), "Parent in-app scanner must decode camera QR codes and validate TCS location slugs");
