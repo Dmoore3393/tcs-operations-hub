@@ -38,3 +38,15 @@ test('default service month follows the previous calendar month in TCS local tim
  assert.equal(helper.previousTimesheetMonth(new Date('2027-01-01T20:00:00Z')).value,'2026-12');
  assert.equal(helper.previousTimesheetMonth(new Date('2026-11-01T06:00:00Z')).label,'September 2026');
 });
+test('assignment editor offers separate care, funding, and current-versus-future scope choices',async()=>{
+ let state=[],cursor=0;const fakeReact={useState(initial){const slot=cursor++;if(!(slot in state))state[slot]=initial;return[state[slot],value=>state[slot]=value]}};
+ const Editor=load('src/components/timesheets/TimesheetAssignmentEditor.tsx',{react:fakeReact}).default;
+ const calls=[];const record={id:'synthetic-form',childName:'Synthetic Child',servicePeriod:'October 2026',timesheetType:'CCRC Stage 1',fundingLocationId:'funding',careLocationId:'care',updatedAt:'form-version',childAssignment:{updatedAt:'child-version',careLocationId:'future-care',fundingLocationId:'future-funding',funding:'Cash Pay'}};
+ const props={record,locations:[{id:'care',name:'Synthetic Care'},{id:'funding',name:'Synthetic Funding'}],saving:false,onAction:async body=>{calls.push(body);return true}};
+ const render=()=>{cursor=0;return list(Editor(props))};
+ const selects=()=>render().filter(n=>n.type==='select');
+ assert.equal(selects()[1].props.value,'care');assert.equal(selects()[2].props.value,'funding');
+ await render().find(n=>n.type==='button').props.onClick();assert.equal(calls[0].scope,'both');assert.equal(calls[0].expectedChildUpdatedAt,'child-version');
+ selects()[0].props.onChange({target:{value:'profile'}});assert.equal(selects()[1].props.value,'future-care');assert.equal(selects()[3].props.value,'Cash Pay');
+ selects()[0].props.onChange({target:{value:'form'}});assert.equal(selects()[3].props.value,'CCRC Stage 1');assert.equal(selects()[3].props.children.flat().some(n=>n?.props?.children==='Cash Pay'),false);
+});
