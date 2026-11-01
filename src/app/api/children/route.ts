@@ -319,6 +319,8 @@ function safeChildRecord(child: DbRow, id: number) {
     classroom: text(child.classroom).slice(0, 120),
     primaryGuardian: text(child.primaryGuardian).slice(0, 160),
     secondaryGuardian: text(child.secondaryGuardian).slice(0, 160) || undefined,
+    secondaryGuardianPhone: text(child.secondaryGuardianPhone).slice(0, 50) || undefined,
+    secondaryGuardianEmail: text(child.secondaryGuardianEmail).slice(0, 254) || undefined,
     phone: text(child.phone).slice(0, 50),
     familyId: typeof child.familyId === "number" ? child.familyId : undefined,
     familyName: text(child.familyName).slice(0, 160) || undefined,
@@ -441,6 +443,9 @@ export async function POST(request: Request) {
 
     const existingRecord = object(existing.data?.record_data);
     const protectedPickupFields = {
+      // Imported identity, extra contacts, care notes and historical eligibility
+      // survive normal edits. Client input cannot replace these server fields.
+      ...Object.fromEntries(["brightwheel", "additionalGuardianContacts", "additionalEmergencyContacts", "careStatusNote", "neverStartedCare", "timesheetServicePeriods"].filter(key => existingRecord[key] !== undefined).map(key => [key, existingRecord[key]])),
       ...(text(existingRecord.pickupPinDigest) ? { pickupPinDigest: text(existingRecord.pickupPinDigest) } : {}),
       ...(text(existingRecord.pickupPinUpdatedAt) ? { pickupPinUpdatedAt: text(existingRecord.pickupPinUpdatedAt) } : {}),
       ...(text(existingRecord.attendanceLocation) ? { attendanceLocation: text(existingRecord.attendanceLocation) } : {}),

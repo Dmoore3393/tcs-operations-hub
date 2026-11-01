@@ -1,4 +1,4 @@
-import { TIMESHEET_TYPES, timesheetType as normalizeType, signedTimesheet as signed, timesheetStage as stage, timesheetHandoff, timesheetRouteKey } from "@/lib/timesheet-workflow";
+import { TIMESHEET_TYPES, timesheetType as normalizeType, signedTimesheet as signed, timesheetStage as stage, timesheetHandoff, timesheetRouteKey, timesheetChildEligible } from "@/lib/timesheet-workflow";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 import { tcsLocationSlug } from "@/lib/server/location-slug";
 import { BATCH_ACTIONS, controlledTimesheetBatch } from "@/lib/server/timesheet-batch-controls";
@@ -255,8 +255,7 @@ export async function POST(request: Request) {
       const childrenResult = await admin
         .from("children")
         .select("id,legacy_id,location_id,first_name,last_name,enrollment_status,record_data")
-        .eq("organization_id", profile.organization_id)
-        .eq("enrollment_status", "Active");
+        .eq("organization_id", profile.organization_id);
       if (childrenResult.error) throw childrenResult.error;
       const locations = await liveLocations(admin, profile.organization_id);
       const locationById = new Map<string, DbRow>();
@@ -267,6 +266,7 @@ export async function POST(request: Request) {
         const childId = asText(child.id);
         if (!childId || existingChildIds.has(childId)) continue;
         const childData = asObject(child.record_data);
+        if (!timesheetChildEligible(child.enrollment_status, childData, servicePeriod)) continue;
         const subsidy = asText(childData.subsidy).trim();
         const subsidyLower = subsidy.toLowerCase();
         if (!subsidy || subsidyLower.includes("private") || subsidyLower.includes("cash")) continue;

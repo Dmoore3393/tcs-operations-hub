@@ -1,0 +1,19 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import test from 'node:test';
+import ts from 'typescript';
+const url=s=>'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');
+const config=url(await readFile(new URL('../src/lib/location-config.ts',import.meta.url),'utf8'));
+let source=await readFile(new URL('../src/app/api/children/route.ts',import.meta.url),'utf8');
+source=source.replace(/import \{ safeFamilyAccess \} from .*?;/,'const safeFamilyAccess=v=>Array.isArray(v)?v:[];').replace('"@/lib/location-config"',JSON.stringify(config)).replace(/import \{ requireStaff, staffErrorResponse \} from .*?;/,'const requireStaff=async()=>globalThis.__childEditAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
+const api=await import(url(source));
+test('editing child contact fields retains server-held import identity, extras and historical eligibility',async()=>{
+ const held={brightwheel:{id:'synthetic-bw'},additionalGuardianContacts:[{name:'Third Guardian',phone:'555',email:''}],careStatusNote:'Known departure',timesheetServicePeriods:['October 2026'],neverStartedCare:false};let written;
+ const admin={from(){const q={select(){return q;},eq(){return q;},then(resolve,reject){return Promise.resolve({data:[{id:'synthetic-location',slug:'division'}],error:null}).then(resolve,reject);}};return q;}};
+ const userClient={from(){const q={select(){return q;},eq(){return q;},update(value){written=value;return q;},maybeSingle(){return Promise.resolve({data:written||{id:'synthetic-child',legacy_id:'7',record_data:held},error:null});}};return q;}};
+ globalThis.__childEditAuth={admin,userClient,profile:{organization_id:'synthetic-org'},isOwner:true,isLicensee:false};
+ const response=await api.POST(new Request('https://synthetic.invalid/api/children',{method:'POST',body:JSON.stringify({child:{id:7,firstName:'Synthetic',lastName:'Child',primaryGuardian:'First Guardian',location:'Division',ageGroup:'School Age',subsidy:'CCCC',enrollmentStatus:'Archived',secondaryGuardianPhone:'555-0100',secondaryGuardianEmail:'second@example.invalid',careStatusNote:'client replacement',timesheetServicePeriods:['November 2026']}})}));
+ assert.equal(response.status,200,await response.text());
+ for(const key of Object.keys(held))assert.deepEqual(written.record_data[key],held[key]);
+ assert.equal(written.record_data.secondaryGuardianPhone,'555-0100');assert.equal(written.record_data.secondaryGuardianEmail,'second@example.invalid');
+});

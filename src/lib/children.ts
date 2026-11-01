@@ -68,6 +68,9 @@ export type ChildRecord = {
   secondaryGuardianEmail?: string;
   additionalGuardianContacts?: Array<{ name: string; phone: string; email: string }>;
   additionalEmergencyContacts?: Array<{ name: string; phone: string; relationship: string }>;
+  careStatusNote?: string;
+  neverStartedCare?: boolean;
+  timesheetServicePeriods?: string[];
   phone: string;
   familyId?: number;
   familyName?: string;

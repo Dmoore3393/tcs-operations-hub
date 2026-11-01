@@ -1,5 +1,11 @@
 export const TIMESHEET_TYPES = ["CCRC Stage 1", "CCRC Stage 2", "CCCC", "DCFS", "Respite"] as const;
 export type TimesheetData = Record<string, unknown>;
+/** Archived children need an explicitly confirmed service month, not an invented last-care date. */
+export function timesheetChildEligible(enrollmentStatus: unknown, record: TimesheetData, servicePeriod: string) {
+  if (record.neverStartedCare === true) return false;
+  if (enrollmentStatus === "Active") return true;
+  return enrollmentStatus === "Archived" && Array.isArray(record.timesheetServicePeriods) && record.timesheetServicePeriods.includes(servicePeriod);
+}
 const text = (value: unknown) => typeof value === "string" ? value : "";
 export function timesheetType(value: unknown) {
   const source = text(value).trim().toLowerCase();
