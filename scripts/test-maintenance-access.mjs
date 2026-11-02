@@ -7,13 +7,22 @@ const url=s=>'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(s,{co
 const teamUrl=url(await readFile('src/lib/team-access.ts','utf8')),team=await import(teamUrl);
 const authorityUrl=url((await readFile('src/lib/child-schedule-authority.ts','utf8')).replace('"@/lib/team-access"',JSON.stringify(teamUrl))),authority=await import(authorityUrl);
 const accessUrl=url((await readFile('src/lib/maintenance-access.ts','utf8')).replace('"@/lib/team-access"',JSON.stringify(teamUrl))),access=await import(accessUrl);
-test('maintenance viewers can see only maintenance tools and explicit view-only overrides legacy editing',()=>{
+test('maintenance viewers have scoped operational tools and explicit view-only overrides legacy editing',()=>{
  const viewer={role:'Employee',permissions:['maintenance_view']};assert.equal(access.canViewMaintenance(viewer),true);assert.equal(access.canManageMaintenance(viewer),false);
  assert.equal(team.employeeCanAccessRoute(viewer.permissions,'/maintenance'),true);for(const path of ['/children','/health-safety','/child-schedules','/family-care-calendar'])assert.equal(team.employeeCanAccessRoute(viewer.permissions,path),false);
  assert.equal(team.employeeCanWriteState(viewer.permissions,'tcs-maintenance-tickets-v1'),false);assert.equal(team.employeeCanReadState(viewer.permissions,'tcs-children-v1'),false);
  assert.equal(access.canManageMaintenance({...viewer,permissions:['maintenance_view','health_safety']}),false);assert.equal(access.canManageMaintenance({...viewer,permissions:['maintenance_manage']}),true);
  assert.deepEqual(team.toggleEmployeePermission(['maintenance_manage','health_safety'],'maintenance_view'),['health_safety','maintenance_view']);
  assert.equal(team.employeeCanWriteState(['schedules','ratios'],'tcs-child-schedules-v2'),false);
+});
+test('both maintenance access choices retain regular shared staff areas without childcare access',()=>{
+ for(const permissions of [['maintenance_view'],['maintenance_manage']]){
+  for(const path of ['/employee-lounge','/communications','/employee-bulletin','/team-store','/training-center','/notifications','/time-clock','/time-clock/scan','/my-schedule','/employee-checkins','/staff-onboarding','/organization'])assert.equal(team.employeeCanAccessRoute(permissions,path),true,path);
+  for(const key of ['tcs-employee-bulletin-v1','tcs-team-rewards-v1','tcs-team-reward-orders-v1','tcs-team-xp-ledger-v1','tcs-team-trainings-v1','tcs-team-training-completions-v1'])assert.equal(team.employeeCanReadState(permissions,key),true,key);
+  assert.equal(team.employeeCanWriteState(permissions,'tcs-team-training-completions-v1'),true);
+  assert.equal(team.employeeCanWriteState(permissions,'tcs-team-reward-orders-v1'),true);
+  for(const path of ['/children','/daily-care','/child-schedules','/family-care-calendar','/team-access','/settings','/student-store'])assert.equal(team.employeeCanAccessRoute(permissions,path),false,path);
+ }
 });
 test('only licensees, Danielle and Jennifer approve child care schedules; staff and other admins cannot',()=>{
  for(const role of ['Employee','Teacher','Driver'])assert.equal(authority.canApproveChildSchedules({role,full_name:'Danielle Moore'}),false);
