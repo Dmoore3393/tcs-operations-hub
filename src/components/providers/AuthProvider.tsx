@@ -59,7 +59,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const ownerOnlyRoutes = new Set(["/settings", "/team-access", "/locations", "/audit-log", "/app-readiness", "/marketing", "/executive-dashboard", "/payroll-ops", "/account-deletion-requests"]);
+const ownerOnlyRoutes = new Set(["/staff-schedules", "/settings", "/team-access", "/locations", "/audit-log", "/app-readiness", "/marketing", "/executive-dashboard", "/payroll-ops", "/account-deletion-requests"]);
 const ownerOnlyReadStateKeys = new Set(["tcs-settings"]);
 const ownerOnlyWriteStateKeys = new Set([
   "tcs-settings",
