@@ -27,11 +27,11 @@ jobs:
       - name: Verify native app readiness foundation
         run: npm run app:check
       - name: Verify staff setup, contact editing, and birthday privacy
-        run: node --test scripts/test-staff-contact.mjs scripts/test-employee-invites.mjs scripts/test-pwa-update-prompt.mjs scripts/test-child-edit-preservation.mjs scripts/test-import-recovery.mjs
+        run: node --test scripts/test-staff-contact.mjs scripts/test-employee-invites.mjs scripts/test-invitation-session.mjs scripts/test-pwa-update-prompt.mjs scripts/test-child-edit-preservation.mjs scripts/test-import-recovery.mjs
       - name: Verify timesheet workflow, accountability, and database locks
         run: node --test scripts/test-timesheet-workflow.mjs scripts/test-timesheet-checklist.mjs scripts/test-timesheet-policy.mjs scripts/test-timesheet-policy-database.mjs scripts/test-timesheet-api.mjs scripts/test-timesheet-controls.mjs scripts/test-timesheet-database.mjs scripts/test-timesheet-direct-intake.mjs
       - name: Verify account deletion, bounded loading, native API access, and family alert authorization
-        run: node --test scripts/test-account-deletion.mjs scripts/test-request-timeout.mjs scripts/test-native-api.mjs scripts/test-native-family-notifications.mjs scripts/test-route-access.mjs scripts/test-staff-scheduler.mjs scripts/test-maintenance-access.mjs
+        run: node --test scripts/test-account-deletion.mjs scripts/test-request-timeout.mjs scripts/test-native-api.mjs scripts/test-native-family-notifications.mjs scripts/test-route-access.mjs scripts/test-staff-scheduler.mjs scripts/test-maintenance-access.mjs scripts/test-transportation-day.mjs
       - name: Typecheck application
         run: npx tsc --noEmit
       - name: Verify communications isolation and daily follow-through
