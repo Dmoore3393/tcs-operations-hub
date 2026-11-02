@@ -28,7 +28,7 @@ test('saved routes notify exact staff identities atomically; employee access is 
  create policy "location insert" on transportation_routes for insert to authenticated with check(organization_id=current_staff_organization_id() and can_access_location(location_id));
  create policy "location update" on transportation_routes for update to authenticated using(organization_id=current_staff_organization_id() and can_access_location(location_id));
  create policy "location delete" on transportation_routes for delete to authenticated using(organization_id=current_staff_organization_id());`);
- const names=await readdir('supabase/migrations');for(const suffix of ['_daily_transport_plans.sql','_transportation_driver_assignments.sql'])await db.exec(await readFile('supabase/migrations/'+names.find(name=>name.endsWith(suffix)),'utf8'));
+ const names=await readdir('supabase/migrations');for(const suffix of ['_daily_transport_plans.sql','_transportation_driver_assignments.sql','_morning_transportation.sql'])await db.exec(await readFile('supabase/migrations/'+names.find(name=>name.endsWith(suffix)),'utf8'));
  await db.query('insert into organizations values($1)',[org]);await db.query("insert into locations values($1,$2,true,'Synthetic Site')",[loc,org]);
  for(const [user,role] of [[owner,'Owner / Admin'],[driver,'Employee'],[other,'Employee']]){await db.query('insert into auth.users values($1)',[user]);await db.query("insert into staff_access values($1,$2,'Synthetic Same',$3,$4,true)",[user,org,role,[]]);await db.query('insert into staff_location_assignments values($1,$2,$3)',[org,user,loc]);}
  assert.deepEqual((await db.query('select permissions from staff_access where user_id=$1',[driver])).rows[0].permissions,['transportation']);
@@ -50,6 +50,10 @@ test('saved routes notify exact staff identities atomically; employee access is 
  await db.query('select save_transport_day_stop($1,$2,$3,$4,$5,$6,0)',[org,owner,route,day,'save',JSON.stringify({driver:'Synthetic Same',driverLaneId:otherLane,school:'Synthetic New School',vehicle:'Synthetic Other Van'})]);
  delivered=(await flush()).rows;assert.equal(delivered.length,1);assert.equal(delivered[0].user_id,other);assert.equal(delivered[0].notification.href,'/transportation?routeDate='+day);
  await db.query('select save_transport_day_stop($1,$2,$3,$4,$5,$6,1)',[org,owner,route,day,'save',JSON.stringify({driver:'Synthetic Same',driverLaneId:otherLane,school:'Synthetic New School',vehicle:'Synthetic Other Van'})]);assert.equal((await flush()).rows.length,0);
+ await db.query('select save_transport_day_stop($1,$2,$3,$4,$5,$6,0)',[org,owner,route,'2030-01-08','save',JSON.stringify({driver:'Synthetic Same',driverLaneId:otherLane,tripPeriod:'Morning',pickupLocation:'Synthetic Home',school:'Synthetic School',pickup:'7 AM',dropoff:'7:45 AM'})]);
+ delivered=(await flush()).rows;assert.equal(delivered.length,1);assert.match(delivered[0].notification.body,/Morning/);
+ assert.equal((await db.query("select plan_data->>'pickupLocation' source from transportation_day_stops where service_date='2030-01-08'")).rows[0].source,'Synthetic Home');
+ await assert.rejects(db.query('select save_transport_day_stop($1,$2,$3,$4,$5,$6,0)',[org,owner,route,'2030-01-09','save',JSON.stringify({tripPeriod:'Night'})]),/Choose Morning or Afternoon/);
  await db.query('update staff_lane_profiles set is_active=false where id=$1',[lane]);await assert.rejects(add(id(10),3),/active driver/);
  }finally{await db.close();}
 });

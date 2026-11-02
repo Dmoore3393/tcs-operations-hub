@@ -29,3 +29,9 @@ test('multi-child selection saves each destination separately and never adds an 
 test('adding a child to an existing school stop preserves IDs, individual notes and destinations',async()=>{
  const existing=[base,{...base,id:2,childId:'second-child',child:'Synthetic Second',location:'42nd Street',dropoffLocation:'42nd Street',notes:'Second child separate instructions'}];const page=await editor(existing);let nodes=page.render();nodes.find(node=>node.type==='input'&&node.props.type==='checkbox').props.onChange();nodes=page.render();nodes.find(node=>node.type==='form').props.onSubmit({preventDefault(){}});assert.equal(page.saved.length,3);assert.deepEqual(Array.from(page.saved,row=>row.id).slice(0,2),[1,2]);assert.equal(page.saved[0].notes,existing[0].notes);assert.equal(page.saved[1].notes,existing[1].notes);assert.equal(page.saved[1].dropoffLocation,'42nd Street');
 });
+
+test('morning school drop-offs keep child identity and pickup sources separate from afternoon routes',async()=>{
+ const page=await editor();let nodes=page.render();nodes.find(node=>node.type==='select'&&node.props['aria-label']==='Transportation session').props.onChange({target:{value:'Morning'}});nodes=page.render();nodes.find(node=>node.type==='input'&&node.props.placeholder==='Example: 7:45 AM').props.onChange({target:{value:'7:45 AM'}});nodes=page.render();nodes.filter(node=>node.type==='input'&&node.props.type==='checkbox')[0].props.onChange();nodes=page.render();nodes.find(node=>node.type==='form').props.onSubmit({preventDefault(){}});
+ assert.equal(page.saved[0].tripPeriod,'Morning');assert.equal(page.saved[0].pickupLocation,'Halcom');assert.equal(page.saved[0].dropoff,'7:45 AM');assert.equal(page.saved[0].childId,'first-child');assert.notEqual(page.saved[0].id,base.id);
+ assert.equal(groupSchoolPickupStops([base,{...base,id:99,tripPeriod:'Morning',pickupLocation:'Halcom'}]).length,2);
+});
