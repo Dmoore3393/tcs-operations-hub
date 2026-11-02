@@ -23,14 +23,14 @@ test('only licensees, Danielle and Jennifer approve child care schedules; staff 
 });
 const db=new PGlite();const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;const org=id(1),loc=id(2),other=id(3),dan=id(10),jen=id(11),tony=id(12),licensee=id(13),viewer=id(14),manager=id(15);
 before(async()=>{
- await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated;
+ await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated;
  create table staff_access(user_id uuid primary key,organization_id uuid,full_name text,role text,permissions text[],is_active boolean);
  create table locations(id uuid primary key,organization_id uuid,is_active boolean);
  create table staff_location_assignments(organization_id uuid,user_id uuid,location_id uuid);
  create table hub_state(organization_id uuid,state_key text,state_value jsonb,version integer,updated_by uuid,updated_at timestamptz,primary key(organization_id,state_key));
  create table audit_log(organization_id uuid,location_id uuid,actor_user_id uuid,action text check(action in ('CREATE','UPDATE','REVIEW','EXPORT','DELETE')),table_name text,metadata jsonb);
- create table family_schedule_submissions(id uuid,organization_id uuid,location_id uuid,status text,reviewed_by uuid,schedule_data jsonb);
- create table child_schedule_overrides(id uuid,organization_id uuid,location_id uuid,approved_by uuid);
+ create table family_schedule_submissions(id uuid,organization_id uuid,location_id uuid,status text,reviewed_by uuid references auth.users(id) on delete set null,schedule_data jsonb);
+ create table child_schedule_overrides(id uuid,organization_id uuid,location_id uuid,approved_by uuid references auth.users(id) on delete set null);
  create table child_schedules(id uuid primary key,organization_id uuid,location_id uuid,record_data jsonb);alter table child_schedules enable row level security;
  grant select,insert,update,delete on child_schedules to authenticated;grant select on staff_access,staff_location_assignments,locations to authenticated;grant all on all tables in schema public to service_role;
  create function is_tcs_owner() returns boolean language sql stable as $$select exists(select 1 from staff_access where user_id=auth.uid() and is_active and role='Owner / Admin')$$;
@@ -39,12 +39,13 @@ before(async()=>{
  create function current_staff_organization_id() returns uuid language sql stable as $$select organization_id from staff_access where user_id=auth.uid() and is_active$$;
  create function can_access_location(uuid) returns boolean language sql stable as $$select exists(select 1 from locations where id=$1 and organization_id=current_staff_organization_id() and is_active and (is_tcs_owner() or exists(select 1 from staff_location_assignments where user_id=auth.uid() and location_id=$1)))$$;
  create policy read_schedules on child_schedules for select to authenticated using(organization_id=current_staff_organization_id());`);
- const files=await readdir('supabase/migrations');const name=files.find(n=>n.endsWith('_maintenance_department_access.sql'));await db.exec(await readFile('supabase/migrations/'+name,'utf8'));
+ const files=await readdir('supabase/migrations');const name=files.find(n=>n.endsWith('_maintenance_department_access.sql'));await db.exec(await readFile('supabase/migrations/'+name,'utf8'));const history=files.find(n=>n.endsWith('_child_approval_history_cleanup.sql'));await db.exec(await readFile('supabase/migrations/'+history,'utf8'));
 });
 beforeEach(async()=>{
- await db.exec("reset role;truncate staff_access,locations,staff_location_assignments,hub_state,audit_log,child_schedules,family_schedule_submissions,child_schedule_overrides;");
+ await db.exec("reset role;truncate staff_access,locations,staff_location_assignments,hub_state,audit_log,child_schedules,family_schedule_submissions,child_schedule_overrides,auth.users;");
  await db.query('insert into locations values($1,$2,true),($3,$2,true)',[loc,org,other]);
  for(const [who,name,role,permissions] of [[dan,'Danielle Moore','Owner / Admin',[]],[jen,'Jennifer Thomason','Owner / Admin',[]],[tony,'Anthony Thomason','Owner / Admin',[]],[licensee,'Synthetic Licensee','Location Licensee',[]],[viewer,'Synthetic Viewer','Employee',['maintenance_view','schedules','ratios']],[manager,'Synthetic Manager','Employee',['maintenance_manage']]]){
+ await db.query('insert into auth.users values($1)',[who]);
  await db.query('insert into staff_access values($1,$2,$3,$4,$5,true)',[who,org,name,role,permissions]);await db.query('insert into staff_location_assignments values($1,$2,$3)',[org,who,loc]);}
  await db.query("insert into hub_state values($1,'tcs-maintenance-tickets-v1',$2,1,null,now())",[org,JSON.stringify([{id:'existing-other-location',title:'Preserve this ticket',location:'other'}])]);
  await db.query('insert into child_schedules values($1,$2,$3,$4),($5,$2,$6,$4)',[id(30),org,loc,JSON.stringify({status:'Existing'}),id(31),other]);
@@ -114,4 +115,9 @@ test('database approval triggers also reject unauthorized server-side decisions 
  await assert.rejects(db.query('insert into child_schedule_overrides values($1,$2,$3,$4)',[id(92),org,other,licensee]),/Only assigned licensees/);
  await db.query("insert into family_schedule_submissions values($1,$2,$3,'Approved',$4,'[]')",[id(93),org,loc,licensee]);await db.query('insert into child_schedule_overrides values($1,$2,$3,$4)',[id(94),org,other,jen]);
  assert.equal((await db.query('select count(*) n from child_schedule_overrides')).rows[0].n,1);
+});
+
+test('account deletion can clear reviewer references without changing approved schedules',async()=>{
+ await db.query("insert into family_schedule_submissions values($1,$2,$3,'Approved',$4,'[]')",[id(97),org,loc,jen]);await db.query('insert into child_schedule_overrides values($1,$2,$3,$4)',[id(98),org,loc,jen]);
+ await db.query('delete from auth.users where id=$1',[jen]);assert.equal((await db.query('select reviewed_by,status from family_schedule_submissions')).rows[0].reviewed_by,null);assert.equal((await db.query('select status from family_schedule_submissions')).rows[0].status,'Approved');assert.equal((await db.query('select approved_by from child_schedule_overrides')).rows[0].approved_by,null);
 });
