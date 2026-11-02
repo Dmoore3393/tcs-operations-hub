@@ -12,6 +12,8 @@ export type HubNotification = {
   createdAt: string;
   readAt: string;
   eventKey: string;
+  archivedAt?: string;
+  archiveReason?: string;
 };
 
 export type HubNotificationEventType =
@@ -143,7 +145,7 @@ export function notificationTemplate(type: HubNotificationEventType, context: Hu
         severity: "info" as const,
         title: "Staff schedule updated",
         body: "A staff schedule was added or changed. Open The Hub to review the current schedule.",
-        href: "/scheduling",
+        href: "/my-schedule",
       };
     case "schedule_published":
       return {

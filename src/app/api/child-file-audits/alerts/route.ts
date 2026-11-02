@@ -139,16 +139,8 @@ function buildAlert(row: DbRow, today: string) {
   const audit = latestAudit(record);
   const href = `/child-file-audits?child=${encodeURIComponent(legacyId)}`;
 
-  if (!audit) {
-    return {
-      location,
-      href,
-      title: "Child file audit missing",
-      body: `A child file at ${location} has not been audited yet. Open The Hub to review the secured file.`,
-      eventKey: `child-file-audit:none:${legacyId}:${weekKey(today)}`,
-      severity: "attention" as const,
-    };
-  }
+  // An imported child or untouched audit template is setup work, not missing paperwork.
+  if (!audit || !audit.items.some(item=>item.status==='On File'||item.status==='Missing'||item.status==='N/A')) return null;
 
   const summary = auditSummary(audit);
   const dueDays = audit.nextAuditDue ? dayDistance(today, audit.nextAuditDue) : null;
