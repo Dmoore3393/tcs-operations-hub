@@ -57,7 +57,14 @@ test('employee invite dialog prefills the saved email, requires a location, and 
  await tree.find(n=>n.type==='form').props.onSubmit({preventDefault(){}});assert.equal(requests.length,2);const body=JSON.parse(requests[1].init.body);assert.equal(body.lane_profile_id,lane);assert.equal(body.full_name,'Synthetic Staff');assert.equal(body.email,'reviewed@example.com');assert.deepEqual(body.locations,['Halcom']);assert.equal(completed,1);
 });
 
-test('normal maintenance invitations grant only the maintenance workspace, preserving department and job identity',async()=>{
+test('maintenance invitations preserve job identity and require an explicit transportation grant',async()=>{
  setup();tables.staff_lane_profiles[0].department='Maintenance';const result=await post({permissions:['children_basic','daily_care','schedules','health_safety','maintenance_view']});assert.equal(result.status,200);assert.deepEqual(events.find(event=>event.kind==='send').options.data.tcs_permissions,['maintenance_view']);assert.equal(tables.staff_lane_profiles[0].department,'Maintenance');
  setup();tables.staff_lane_profiles[0].department='Maintenance';assert.equal((await post({permissions:['maintenance_manage','schedules']})).status,200);assert.deepEqual(events.find(event=>event.kind==='send').options.data.tcs_permissions,['maintenance_manage']);
+});
+
+
+test('reviewed maintenance invitations retain optional transportation and strip unrelated child permissions',async()=>{
+ for(const access of ['maintenance_view','maintenance_manage']){
+  setup();tables.staff_lane_profiles[0].department='Maintenance';const result=await post({permissions:[access,'transportation','children_basic','schedules','daily_care','health_safety']});assert.equal(result.status,200);assert.deepEqual(events.find(event=>event.kind==='send').options.data.tcs_permissions,[access,'transportation']);
+ }
 });

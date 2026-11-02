@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import {canViewMaintenance} from "@/lib/maintenance-access";
 import MainLayout from "@/components/layout/MainLayout";
 import { TcsKidsScene } from "@/components/brand/TcsKidsScene";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -505,6 +507,7 @@ export default function TransportationPage() {
 
         {tab === "Vehicles" && (
           <>
+            {canViewMaintenance(profile)&&<Link href="/maintenance#vehicle-maintenance" className="inline-flex min-h-11 items-center rounded-xl bg-emerald-800 px-5 py-3 text-base font-bold text-white">Vehicle maintenance &amp; service history</Link>}
             <SectionCard title="Complete Vehicle Fleet" description={canManageSystem ? "The complete fleet is owner-managed. Rename or update every field as needed." : "View fleet details for route planning. Danielle controls vehicle additions and changes."} action={canManageSystem ? <PrimaryButton onClick={() => openVehicle()}><Plus className="h-4 w-4" /> Add Vehicle</PrimaryButton> : undefined}>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {vehicles.map((vehicle) => (

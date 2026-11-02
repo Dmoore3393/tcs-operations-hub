@@ -4,6 +4,7 @@ import {canManageMaintenance,canViewMaintenance} from "@/lib/maintenance-access"
 import {tcsLocationSlug} from "@/lib/server/location-slug";
 import {normalizeLocation} from "@/lib/location-config";
 import type {MaintenanceTicket} from "@/lib/maintenance";
+import {vehicleServiceTypes} from "@/lib/maintenance";
 export const runtime="nodejs";
 type Row=Record<string,unknown>;
 const text=(value:unknown)=>typeof value==='string'?value.trim():'';
@@ -35,7 +36,18 @@ export async function POST(request:Request){try{
  if(!['Routine','Soon','Urgent','Safety Critical'].includes(raw.priority)||!['Open','Assigned','In Progress','Waiting on Parts','Completed'].includes(raw.status))return Response.json({error:'Choose a valid priority and status.'},{status:400});
  if(text(raw.description).length>5000||text(raw.completionNotes).length>5000||text(raw.assignedTo).length>200||text(raw.area).length>200||(text(raw.dueDate)&&!/^\d{4}-\d{2}-\d{2}$/.test(raw.dueDate)))return Response.json({error:'Check the ticket text and due date.'},{status:400});
  const previous=c.tickets.find(ticket=>ticket.id===id);if(previous&&!c.isOwner&&!c.siteFor(previous.location))return Response.json({error:'That ticket is outside your assigned locations.'},{status:403});
+ const kind=raw.kind||previous?.kind||'Facility';
+ if(!['Facility','Vehicle'].includes(kind))return Response.json({error:'Choose facility or vehicle maintenance.'},{status:400});
+ const vehicleFields:Partial<MaintenanceTicket>={kind};
+ if(kind==='Vehicle'){
+  if(!text(raw.vehicleName)||text(raw.vehicleName).length>200||!vehicleServiceTypes.includes(raw.serviceType))return Response.json({error:'Enter the vehicle name or plate and choose a service type.'},{status:400});
+  for(const field of ['odometer','nextServiceMileage'] as const){if(raw[field]!==undefined&&raw[field]!==null&&raw[field]!==''){if(typeof raw[field]!=='number'||!Number.isSafeInteger(raw[field])||raw[field]<0||raw[field]>10000000)return Response.json({error:'Mileage must be a whole number of zero or more.'},{status:400});vehicleFields[field]=raw[field];}}
+  const date=text(raw.nextServiceDate);
+  if(date&&(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date+'T12:00:00Z'))||new Date(date+'T12:00:00Z').toISOString().slice(0,10)!==date))return Response.json({error:'Choose a valid next service date.'},{status:400});
+  Object.assign(vehicleFields,{vehicleName:text(raw.vehicleName),serviceType:raw.serviceType,nextServiceDate:date});
+ }
  const now=new Date().toISOString();const ticket:MaintenanceTicket={id,title,location:normalizeLocation(text(site.name)),area:text(raw.area),description:text(raw.description),priority:raw.priority,status:raw.status,assignedTo:text(raw.assignedTo),dueDate:text(raw.dueDate),completionNotes:text(raw.completionNotes),reportedBy:previous?previous.reportedBy:c.profile.full_name,reportedAt:previous?previous.reportedAt:now,completedAt:raw.status==='Completed'?(previous?.completedAt||now):''};
+ Object.assign(ticket,vehicleFields);
  const result=await c.admin.rpc('save_maintenance_ticket',{p_org:c.profile.organization_id,p_actor:c.user.id,p_location:site.id,p_previous_location:previous?c.siteFor(previous.location)?.id||null:null,p_ticket:ticket,p_expected_version:body.expectedVersion});
  if(result.error)return Response.json({error:result.error.message?.includes('changed')?'Maintenance changed while this ticket was open. Close it, refresh, and open it again before saving.':'The maintenance ticket could not be saved. Please try again.'},{status:result.error.message?.includes('changed')?409:500});
  return Response.json({ok:true,ticket,version:result.data});
