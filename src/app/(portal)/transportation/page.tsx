@@ -1,4 +1,5 @@
 "use client";
+import {transportTripPeriod,transportPickup,transportDestination,transportRouteGroup} from "@/lib/transport-trips";
 
 import Link from "next/link";
 import {canViewMaintenance} from "@/lib/maintenance-access";
@@ -135,7 +136,7 @@ type LiveTransportationRoute = TransportationRoute & {
 };
 
 function routeGroupKey(route: LiveTransportationRoute) {
-  return route.routeName?.trim() || `${route.driver || "Transportation"} Route`;
+  return transportRouteGroup({...route,routeName:route.routeName?.trim() || `${route.driver || "Transportation"} Route`});
 }
 
 function routeRunStatus(route: LiveTransportationRoute, today: string): RunStatus {
@@ -316,7 +317,7 @@ export default function TransportationPage() {
       pickedUpBy: actor,
       checkedInAt: undefined,
       checkedInBy: undefined,
-      runHistory: [...(item.runHistory ?? []).slice(-59), { date: today, status: "Picked Up", at: now, by: actor, location: route.pickupArea?.trim() || route.school || "Pickup location" }],
+      runHistory: [...(item.runHistory ?? []).slice(-59), { date: today, status: "Picked Up", at: now, by: actor, location: transportPickup(route) || "Pickup location" }],
     } : item));
     void sendHubNotificationEvent({
       accessToken: session?.access_token,
@@ -328,7 +329,8 @@ export default function TransportationPage() {
   }
 
   function markCheckedIn(route: LiveTransportationRoute) {
-    const destination = route.dropoffLocation?.trim() || route.location;
+    if(transportTripPeriod(route)==='Morning') return;
+    const destination = transportDestination(route);
     if (!destination) return;
     const now = new Date().toISOString();
     setRoutes((current) => current.map((item) => item.id === route.id ? {
@@ -427,13 +429,13 @@ export default function TransportationPage() {
 
               <SchoolStopGroups routes={selectedTodayRoutes}>{(route) => {
                 const runStatus = routeRunStatus(route, today);
-                const destination = route.dropoffLocation?.trim() || route.location;
+                const destination = transportDestination(route);
                 return <article key={route.id} className={`rounded-3xl border p-5 shadow-sm ${runStatus === "Checked In" ? "border-emerald-200 bg-emerald-50/60" : runStatus === "Picked Up" ? "border-blue-200 bg-blue-50/60" : "border-slate-200 bg-white"}`}>
                   <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-[#1769d2]">{routeGroupKey(route)} • Stop {route.stopOrder ?? "—"}</p><div className="mt-1 flex flex-wrap items-center gap-2"><h3 className="text-xl font-black text-slate-950">{route.child}</h3><StatusBadge tone={runStatus === "Checked In" ? "green" : runStatus === "Picked Up" ? "blue" : "amber"}>{runStatus === "Picked Up" ? "In Transit" : runStatus}</StatusBadge></div><p className="mt-1 text-sm font-bold text-slate-600">{route.school || "School not entered"} • Pickup {route.pickup || "time not entered"}</p></div>{canManageRoutes && <button onClick={() => setTab("Daily Planner")} className="rounded-xl border border-slate-200 p-2 text-slate-500"><Pencil className="h-4 w-4" /></button>}</div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2"><InfoBox label="PICK UP AT" value={route.pickupArea?.trim() || route.school || "Not entered"} /><InfoBox label="CHECK INTO" value={destination || "Not entered"} /></div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2"><InfoBox label="PICK UP AT" value={transportPickup(route) || "Not entered"} /><InfoBox label="CHECK INTO" value={destination || "Not entered"} /></div>
                   {route.notes && <p className="mt-3 rounded-xl bg-white px-3 py-2 text-xs font-semibold leading-5 text-red-700 ring-1 ring-slate-100"><strong>Transportation note:</strong> {route.notes}</p>}
-                  {dispatch.canCallOut&&runStatus==="Waiting"&&<button disabled={dispatch.saving} onClick={()=>void dispatch.change(route,"callout")} className="mt-3 min-h-11 rounded-xl bg-red-800 px-4 py-3 text-base font-bold text-white">Call Out</button>}
-                  <div className="mt-4 flex flex-wrap gap-2">{runStatus === "Waiting" && <button onClick={() => markPickedUp(route)} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#1769d2] px-4 py-3 text-sm font-black text-white"><UserCheck className="h-4 w-4" /> PICKED UP</button>}{runStatus === "Picked Up" && <button onClick={() => markCheckedIn(route)} disabled={!destination} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#34a853] px-4 py-3 text-sm font-black text-white disabled:opacity-40"><CheckCircle2 className="h-4 w-4" /> CHECK INTO {destination || "LOCATION NEEDED"}</button>}{runStatus === "Checked In" && <div className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-100 px-4 py-3 text-sm font-black text-emerald-800"><CheckCircle2 className="h-4 w-4" /> CHECKED IN</div>}{canManageRoutes && runStatus !== "Waiting" && <button onClick={() => resetToday(route)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-3 text-xs font-black text-slate-600"><RotateCcw className="h-4 w-4" /> Reset</button>}</div>
+                  {transportTripPeriod(route)==="Morning"&&<Link href="/transportation" className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 py-3 font-bold text-white">Open morning pickup and school handoff</Link>}{dispatch.canCallOut&&runStatus==="Waiting"&&<button disabled={dispatch.saving} onClick={()=>void dispatch.change(route,"callout")} className="mt-3 min-h-11 rounded-xl bg-red-800 px-4 py-3 text-base font-bold text-white">Call Out</button>}
+                  <div className="mt-4 flex flex-wrap gap-2">{runStatus === "Waiting" && <button onClick={() => markPickedUp(route)} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#1769d2] px-4 py-3 text-sm font-black text-white"><UserCheck className="h-4 w-4" /> PICKED UP</button>}{runStatus === "Picked Up" && transportTripPeriod(route)!=="Morning" && <button onClick={() => markCheckedIn(route)} disabled={!destination} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#34a853] px-4 py-3 text-sm font-black text-white disabled:opacity-40"><CheckCircle2 className="h-4 w-4" /> CHECK INTO {destination || "LOCATION NEEDED"}</button>}{runStatus === "Checked In" && <div className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-100 px-4 py-3 text-sm font-black text-emerald-800"><CheckCircle2 className="h-4 w-4" /> CHECKED IN</div>}{canManageRoutes && runStatus !== "Waiting" && <button onClick={() => resetToday(route)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-3 text-xs font-black text-slate-600"><RotateCcw className="h-4 w-4" /> Reset</button>}</div>
                   {runStatus !== "Waiting" && <div className="mt-3 space-y-1 text-xs font-semibold text-slate-500">{route.pickedUpAt && <p>Picked up {timestampLabel(route.pickedUpAt)} by {route.pickedUpBy || "staff"}</p>}{route.checkedInAt && <p>Checked into {destination} {timestampLabel(route.checkedInAt)} by {route.checkedInBy || "staff"}</p>}</div>}
                 </article>;
               }}</SchoolStopGroups>
@@ -445,7 +447,7 @@ export default function TransportationPage() {
 
         {tab === "Routes" && (
           <>
-            <section className="space-y-3 rounded-2xl border border-emerald-200 bg-white p-5 text-base"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-2xl font-black text-emerald-950">School pickup stops</h2>{canManageRoutes&&<button onClick={()=>setEditingSchoolStop([])} className="min-h-11 rounded-xl bg-emerald-800 px-5 py-3 font-bold text-white">Add School Stop</button>}</div><p>Group children at one school pickup. Every child keeps their own drop-off location.</p>{groupSchoolPickupStops(locationRoutes,true).map(stop=><article key={stop.key} className="rounded-xl border p-4"><h3 className="text-lg font-black">{stop.school} • {stop.pickup||"Pickup time not set"}</h3><p>{stop.driver} • {stop.vehicle} • {stop.routes.length} children</p><ul className="my-3 space-y-1">{stop.routes.map(route=><li key={route.id}><strong>{route.child}</strong> → {route.dropoffLocation||route.location}</li>)}</ul>{canManageRoutes&&<button className="min-h-11 rounded-xl border border-emerald-700 px-4 py-2 font-bold text-emerald-900" onClick={()=>setEditingSchoolStop(stop.routes)}>Edit stop / add children</button>}</article>)}</section>
+            <section className="space-y-3 rounded-2xl border border-emerald-200 bg-white p-5 text-base"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-2xl font-black text-emerald-950">Morning and afternoon school trips</h2>{canManageRoutes&&<button onClick={()=>setEditingSchoolStop([])} className="min-h-11 rounded-xl bg-emerald-800 px-5 py-3 font-bold text-white">Add Morning / Afternoon Trip</button>}</div><p>Add morning school drop-offs or afternoon school pickups. Each child keeps an individual pickup and handoff.</p>{groupSchoolPickupStops(locationRoutes,true).map(stop=><article key={stop.key} className="rounded-xl border p-4"><h3 className="text-lg font-black">{transportTripPeriod(stop.routes[0])} • {stop.school} • {stop.pickup||"Pickup time not set"}</h3><p>{stop.driver} • {stop.vehicle} • {stop.routes.length} children</p><ul className="my-3 space-y-1">{stop.routes.map(route=><li key={route.id}><strong>{route.child}</strong>: {transportPickup(route)} → {transportDestination(route)}</li>)}</ul>{canManageRoutes&&<button className="min-h-11 rounded-xl border border-emerald-700 px-4 py-2 font-bold text-emerald-900" onClick={()=>setEditingSchoolStop(stop.routes)}>Edit stop / add children</button>}</article>)}</section>
             <SectionCard action={canManageRoutes ? <PrimaryButton onClick={() => openRoute()}><Plus className="h-4 w-4" /> Add Route</PrimaryButton> : undefined}>
               <label className="relative block">
                 <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
@@ -587,6 +589,8 @@ export default function TransportationPage() {
               <Field label="School or destination"><TransportSchoolSelect schools={schools} value={editingRoute.school} onChange={school=>setEditingRoute({...editingRoute,school})}/></Field>
               <Field label="Area"><select className={inputClass} value={editingRoute.area} onChange={(event) => setEditingRoute({ ...editingRoute, area: event.target.value })}><option>Lancaster</option><option>Quartz Hill</option><option>Rosamond</option><option>Tehachapi</option><option>Other</option></select></Field>
               <Field label="Days"><input className={inputClass} value={editingRoute.days} onChange={(event) => setEditingRoute({ ...editingRoute, days: event.target.value })} /></Field>
+              <Field label="Session"><select className={inputClass} value={editingRoute.tripPeriod||'Afternoon'} onChange={event=>setEditingRoute({...editingRoute,tripPeriod:event.target.value as 'Morning'|'Afternoon'})}><option>Morning</option><option>Afternoon</option></select></Field>
+              {editingRoute.tripPeriod==='Morning'&&<Field label="Morning pickup location"><input className={inputClass} value={editingRoute.pickupLocation||editingRoute.location} onChange={event=>setEditingRoute({...editingRoute,pickupLocation:event.target.value})}/></Field>}
               <Field label="Driver"><TransportDriverSelect driver={editingRoute.driver} driverLaneId={editingRoute.driverLaneId} onChange={(driver,driverLaneId)=>setEditingRoute({...editingRoute,driver,driverLaneId})}/></Field>
               <Field label="Vehicle">
                 <select className={inputClass} value={editingRoute.vehicle} onChange={(event) => setEditingRoute({ ...editingRoute, vehicle: event.target.value })}>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import {transportTripPeriod,transportPickup,transportDestination,transportRouteGroup} from "@/lib/transport-trips";
 import MyAssignedRoutes from "@/components/transportation/MyAssignedRoutes";
 import TransportCallouts from "@/components/transportation/TransportCallouts";
 import {useTransportDay} from "@/hooks/useTransportDay";
@@ -68,7 +69,7 @@ type LiveRoute = TransportationRoute & {
 };
 
 function routeKey(route: LiveRoute) {
-  return route.routeName?.trim() || `${route.location} • ${route.driver || "Transportation Route"}`;
+  return transportRouteGroup(route);
 }
 
 function statusFor(route: LiveRoute, today: string): RunStatus {
@@ -106,7 +107,7 @@ function destinationLocation(value?: string): Exclude<LocationKey, "All Location
 
 function matchesLocation(route: LiveRoute, activeLocation: string) {
   if (activeLocation === "All Locations") return true;
-  const destination = destinationLocation(route.dropoffLocation);
+  const destination = (transportTripPeriod(route)==='Morning'?null:destinationLocation(route.dropoffLocation));
   return route.location === activeLocation || destination === activeLocation;
 }
 
@@ -212,9 +213,10 @@ export default function TransportationV2Page() {
     return () => window.clearTimeout(timer);
   }, [isOnline, replayingOffline, routesHydrated, setRoutes]);
 
+  const [trip,setTrip]=useState('All trips');
   const todayRoutes = useMemo(
-    () => dispatch.activeRoutes.filter((route) => matchesLocation(route, activeLocation)),
-    [dispatch.activeRoutes, activeLocation],
+    () => dispatch.activeRoutes.filter((route) => matchesLocation(route, activeLocation)&&(trip==='All trips'||transportTripPeriod(route)===trip)),
+    [dispatch.activeRoutes, activeLocation,trip],
   );
   const routeNames = useMemo(() => [...new Set(todayRoutes.map(routeKey))], [todayRoutes]);
   const effectiveRoute = routeNames.includes(selectedRoute) ? selectedRoute : routeNames[0] || "";
@@ -238,7 +240,7 @@ export default function TransportationV2Page() {
 
   const locationArrivals = todayRoutes.filter((route) => {
     const status = statusFor(route, today);
-    return status === "Arrived" && destinationLocation(route.dropoffLocation) !== null;
+    return status === "Arrived" && (transportTripPeriod(route)==='Morning'?null:destinationLocation(route.dropoffLocation)) !== null;
   });
   const leadershipExceptions = routes.filter((route) => {
     if (route.runDate !== today) return false;
@@ -321,7 +323,7 @@ export default function TransportationV2Page() {
   function markArrived(route: LiveRoute) {
     const now = new Date().toISOString();
     updateRoute(route, { runDate: today, runStatus: "Arrived", arrivedAt: now, arrivedBy: actor });
-    const destination = destinationLocation(route.dropoffLocation);
+    const destination = (transportTripPeriod(route)==='Morning'?null:destinationLocation(route.dropoffLocation));
     void sendHubNotificationEvent({
       accessToken: session?.access_token,
       eventType: "transportation_update",
@@ -331,7 +333,7 @@ export default function TransportationV2Page() {
   }
 
   async function checkIntoLocation(route: LiveRoute) {
-    const location = destinationLocation(route.dropoffLocation);
+    const location = (transportTripPeriod(route)==='Morning'?null:destinationLocation(route.dropoffLocation));
     if (!location) return;
     const child = childForSchoolRoute(route,children);
     if (!child) {
@@ -404,8 +406,9 @@ export default function TransportationV2Page() {
   return (
     <MainLayout>
       <div className="mx-auto max-w-[1580px] space-y-6 pb-12">
-        <section className="rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><span className="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-100 text-emerald-900" aria-hidden="true"><Bus className="h-8 w-8 pointer-events-none"/></span><div><h1 className="text-2xl font-black text-emerald-950">Transportation</h1><p className="text-base text-slate-700">Today’s pickups, arrivals and check-ins</p></div></div>{canManageTransportation&&<Link href="/transportation-setup" className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-emerald-800 px-5 py-3 text-base font-bold text-white"><Pencil className="h-5 w-5" aria-hidden="true"/>Routes & call-outs</Link>}</div><p className="mt-3 text-base text-slate-700">Choose your route below, then confirm each child at pickup, arrival and check-in.</p></section>
+        <section className="rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><span className="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-100 text-emerald-900" aria-hidden="true"><Bus className="h-8 w-8 pointer-events-none"/></span><div><h1 className="text-2xl font-black text-emerald-950">Transportation</h1><p className="text-base text-slate-700">Morning school drop-offs and afternoon pickups</p></div></div>{canManageTransportation&&<Link href="/transportation-setup" className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-emerald-800 px-5 py-3 text-base font-bold text-white"><Pencil className="h-5 w-5" aria-hidden="true"/>Routes & call-outs</Link>}</div><p className="mt-3 text-base text-slate-700">Choose your route below, then confirm each child at pickup, arrival and check-in.</p></section>
 
+        <section className="flex flex-wrap gap-3 rounded-2xl border border-emerald-200 bg-white p-4" aria-label="Transportation sessions">{['All trips','Morning','Afternoon'].map(session=><button key={session} type="button" aria-pressed={trip===session} onClick={()=>setTrip(session)} className={`min-h-12 rounded-xl px-5 py-3 text-base font-bold ${trip===session?'bg-emerald-800 text-white':'border border-emerald-300 bg-white text-emerald-950'}`}>{session==='Morning'?'Morning · School drop-offs':session==='Afternoon'?'Afternoon · School pickups':'All trips'}</button>)}</section>
         <Suspense fallback={<p>Loading assigned routes…</p>}><MyAssignedRoutes routes={routes}/></Suspense>
         {(dispatch.error||dispatch.actionError)&&<section role="alert" className="rounded-xl bg-red-50 p-4 text-base text-red-950">{dispatch.error||dispatch.actionError}<button className="ml-3 min-h-11 underline" onClick={()=>void dispatch.refresh()}>Try again</button></section>}
         {!dispatch.ready&&!dispatch.error&&<p role="status" className="text-base">Checking today’s route changes and call-outs…</p>}
@@ -436,7 +439,7 @@ export default function TransportationV2Page() {
         {locationArrivals.length > 0 && <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm"><div className="flex items-start gap-3"><BellRing className="mt-0.5 h-6 w-6 text-[#1769d2]" /><div><p className="text-xs font-black uppercase tracking-[.16em] text-[#1769d2]">Location arrival notice</p><h2 className="mt-1 text-xl font-black text-[#102a56]">A transported child has arrived</h2><p className="mt-1 text-sm font-semibold text-slate-600">Program directors and authorized staff only need the arrival notice. Missing-drop-off alerts stay with Danielle and Jen.</p></div></div></section>}
 
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#1769d2]">My Route Today</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">Choose the route you are running</h2><p className="mt-1 text-sm font-semibold text-slate-500">Pickup and destination confirmation happen one child at a time.</p></div><div className="flex flex-wrap gap-2"><Link href={effectiveRoute ? `/emergency-cards?route=${encodeURIComponent(effectiveRoute)}` : "/emergency-cards"} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#9f2f35] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#7e2228]"><HeartPulse className="h-4 w-4" /> EMERGENCY MEDICAL CARDS</Link></div></div>
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#1769d2]">My Route Today</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">Choose the route you are running</h2><p className="mt-1 text-sm font-semibold text-slate-500">Pickup and destination confirmation happen one child at a time.</p></div><div className="flex flex-wrap gap-2"><Link href={effectiveRoute ? `/emergency-cards?route=${encodeURIComponent(myRoute[0]?.routeName||effectiveRoute)}` : "/emergency-cards"} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#9f2f35] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#7e2228]"><HeartPulse className="h-4 w-4" /> EMERGENCY MEDICAL CARDS</Link></div></div>
           <div className="mt-5 flex flex-wrap gap-2">{routeNames.map((name) => <button key={name} onClick={() => setSelectedRoute(name)} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${effectiveRoute === name ? "border-[#1769d2] bg-[#eef6ff] text-[#102a56]" : "border-slate-200 bg-white text-slate-600"}`}>{name}</button>)}{!routeNames.length && <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">No active routes are scheduled for today at this location.</p>}</div>
         </section>
 
@@ -445,26 +448,26 @@ export default function TransportationV2Page() {
           <div className={`rounded-3xl border p-5 ${currentRouteNeedsAttention.length ? "border-red-300 bg-red-50" : "border-emerald-300 bg-emerald-50"}`}>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-start gap-3">{currentRouteNeedsAttention.length ? <AlertTriangle className="mt-0.5 h-6 w-6 flex-none text-red-700" /> : <ShieldCheck className="mt-0.5 h-6 w-6 flex-none text-emerald-700" />}<div><p className={`text-xs font-black uppercase tracking-[.14em] ${currentRouteNeedsAttention.length ? "text-red-700" : "text-emerald-700"}`}>Route emergency readiness</p><h3 className={`mt-1 text-xl font-black ${currentRouteNeedsAttention.length ? "text-red-950" : "text-emerald-950"}`}>{currentRouteReadyCount}/{myRoute.length} children Emergency Ready</h3><p className="mt-1 text-sm font-semibold text-slate-700">{currentRouteNeedsAttention.length ? "Pickup is blocked for children whose emergency record is not ready. Review the missing information before departure." : "Emergency contacts, consent status, provider information, and allergy status are ready for this route."}</p></div></div>
-              <Link href={`/emergency-cards?route=${encodeURIComponent(effectiveRoute)}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#8f2a30] px-4 py-2.5 text-sm font-black text-white"><HeartPulse className="h-4 w-4" /> Review / Print Backup</Link>
+              <Link href={`/emergency-cards?route=${encodeURIComponent(myRoute[0]?.routeName||effectiveRoute)}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#8f2a30] px-4 py-2.5 text-sm font-black text-white"><HeartPulse className="h-4 w-4" /> Review / Print Backup</Link>
             </div>
             {currentRouteNeedsAttention.length > 0 && <div className="mt-4 grid gap-2 md:grid-cols-2">{currentRouteNeedsAttention.map(({ route, readiness }) => <div key={route.id} className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs"><strong className="text-red-950">{route.child}</strong><p className="mt-1 text-red-700">{readiness ? readiness.missing.slice(0, 3).join(" • ") : "Child emergency record not found"}</p></div>)}</div>}
           </div>
           <div className="rounded-3xl border border-blue-100 bg-[#f7fbff] p-5"><div className="flex items-start gap-3"><Navigation className="mt-0.5 h-5 w-5 text-[#1769d2]" /><p className="text-sm font-semibold leading-6 text-slate-700"><strong>Required chain:</strong> Tap Picked Up only when the child is physically with you. At the destination, tap Arrived. For a TCS location, the child must then be checked into that location before the handoff is complete.</p></div></div>
           <SchoolStopGroups routes={myRoute}>{(route) => {
             const status = statusFor(route, today);
-            const destination = destinationLocation(route.dropoffLocation);
+            const destination = (transportTripPeriod(route)==='Morning'?null:destinationLocation(route.dropoffLocation));
             const emergency = currentRouteEmergency.find((item) => item.route.id === route.id);
             const emergencyReady = Boolean(emergency?.ready);
             return <article key={route.id} className={`rounded-3xl border p-5 shadow-sm ${status === "Checked In" ? "border-emerald-200 bg-emerald-50/60" : status === "Arrived" ? "border-purple-200 bg-purple-50/50" : status === "Picked Up" ? "border-blue-200 bg-blue-50/50" : "border-slate-200 bg-white"}`}>
               <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.15em] text-[#1769d2]">Stop {route.stopOrder ?? "—"} • {route.pickup || "Time not entered"}</p><h3 className="mt-1 text-xl font-black text-slate-950">{route.child}</h3><p className="mt-1 text-sm font-bold text-slate-600">{route.school || "Pickup destination not entered"}</p></div><Status status={status} /></div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2"><Info label="PICK UP AT" value={route.pickupArea || route.school || "Not entered"} /><Info label="DESTINATION" value={route.dropoffLocation || "Not entered"} /></div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2"><Info label="PICK UP AT" value={[transportPickup(route),route.pickupArea].filter(Boolean).join(" • ") || "Not entered"} /><Info label="DESTINATION" value={transportDestination(route) || "Not entered"} /></div>
               <div className="mt-4 flex flex-wrap gap-2">
                 {dispatch.canCallOut&&status==="Waiting"&&<button disabled={dispatch.saving} onClick={()=>void dispatch.change(route,"callout")} className="min-h-11 rounded-xl bg-red-800 px-4 py-3 text-base font-bold text-white">Call Out</button>}
                 <Link href={emergency?.child?`/emergency-cards?child=${emergency.child.id}`:"/emergency-cards"} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800"><HeartPulse className="h-4 w-4" /> EMERGENCY CARD</Link>
                 {status === "Waiting" && <Action disabled={!emergencyReady} title={!emergencyReady ? "Emergency record must be ready before pickup." : undefined} onClick={() => markPickedUp(route)}><UserCheck className="h-4 w-4" /> {emergencyReady ? "PICKED UP" : "EMERGENCY RECORD NOT READY"}</Action>}
                 {status === "Picked Up" && <Action onClick={() => markArrived(route)} tone="purple"><MapPin className="h-4 w-4" /> ARRIVED AT DESTINATION</Action>}
                 {status === "Arrived" && destination && <Action onClick={() => checkIntoLocation(route)} tone="green"><CheckCircle2 className="h-4 w-4" /> CHECK CHILD INTO {destination.toUpperCase()}</Action>}
-                {status === "Arrived" && !destination && <Action onClick={() => confirmExternalDropoff(route)} tone="green"><CheckCircle2 className="h-4 w-4" /> CONFIRM DROP-OFF COMPLETE</Action>}
+                {status === "Arrived" && !destination && <Action onClick={() => confirmExternalDropoff(route)} tone="green"><CheckCircle2 className="h-4 w-4" /> {transportTripPeriod(route)==='Morning'?'CONFIRM SCHOOL DROP-OFF':'CONFIRM DROP-OFF COMPLETE'}</Action>}
                 {status === "Checked In" && <div className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-100 px-4 py-3 text-sm font-black text-emerald-800"><CheckCircle2 className="h-4 w-4" /> HANDOFF COMPLETE</div>}
               </div>
               <div className="mt-3 space-y-1 text-xs font-semibold text-slate-500">{route.pickedUpAt && <p>Picked up {timeLabel(route.pickedUpAt)} by {route.pickedUpBy || "staff"}</p>}{route.arrivedAt && <p>Arrived {timeLabel(route.arrivedAt)} by {route.arrivedBy || "staff"}</p>}{route.checkedInAt && <p>{destination ? "Checked into care" : "Drop-off completed"} {timeLabel(route.checkedInAt)} by {route.checkedInBy || "staff"}</p>}</div>
