@@ -24,13 +24,16 @@ export function timesheetHandoff(record: TimesheetData) {
   // Existing handoffs retain their original recipient and timestamp.
   return text(record.dynastyHandedToDanielleAt) || text(record.dynastyHandedToJenniferAt) || text(record.jenniferReceivedAt) || text(record.directReviewAt);
 }
+/** External confirmations are explicit facts, never fabricated document IDs. */
+export function hasTimesheetScan(record:TimesheetData){return Boolean(text(record.scannedAt)&&(text(record.scanDocumentId)||(record.submissionControlVersion===3&&record.scanRecordedExternally===true)));}
+export function hasTimesheetSubmission(record:TimesheetData){return Boolean(text(record.emailedAt)&&(text(record.emailEvidenceDocumentId)||(record.submissionControlVersion===3&&record.submissionRecordedExternally===true)));}
 export function timesheetStage(record: TimesheetData) {
   if (record.submissionIssue && typeof record.submissionIssue === "object") return "Correction Required";
   if (record.submissionControlVersion === 3) {
     if (!text(record.directReceivedAt) || !signedTimesheet(record) || !text(record.directDatesAt)) return "Location Sign-Off";
     if (!text(record.completedAt)) return "Danielle Fill Out";
-    if (!text(record.scannedAt) || !text(record.scanDocumentId)) return "Scan & Send to Jennifer";
-    if (!text(record.emailedAt) || !text(record.emailEvidenceDocumentId)) return "Jennifer Email";
+    if (!hasTimesheetScan(record)) return "Scan & Send to Jennifer";
+    if (!hasTimesheetSubmission(record)) return "Jennifer Email";
     if (!(record.workflowOwner === "Jennifer" && record.workflowReviewer === "") && !text(record.jenReviewedAt)) return "Licensee Verification";
     return "Complete";
   }
@@ -52,8 +55,8 @@ export function validateTimesheetBatch(records: TimesheetData[], action: "scanBa
   if (!records.length) return "This batch has no timesheets.";
   if (records.some(record => record.submissionIssue)) return "Resolve the flagged issue and reopen this batch first.";
   if (records.some(record => !signedTimesheet(record) || (record.submissionControlVersion === 3 && (!text(record.directReceivedAt) || !text(record.directDatesAt))) || (record.submissionControlVersion !== 3 && record.dynastyStatus !== "Accounted For" && !text(record.directReviewAt)) || (record.submissionControlVersion !== 3 && !timesheetHandoff(record)) || !text(record.completedAt))) return "Every timesheet in this batch must be signed, reviewed, handed off, and filled out before submission.";
-  if (action === "emailBatch" && records.some(record => (record.submissionControlVersion !== 3 && !text(record.sentToJenniferAt)) || !text(record.scanDocumentId))) return "Every timesheet in this batch must be scanned and sent to Jen before recording the company email.";
-  if (records.every(record => action === "scanBatch" ? Boolean(text(record.scanDocumentId)) : Boolean(text(record.emailEvidenceDocumentId)))) return "This batch has already been recorded. Flag an issue to correct a submitted batch.";
+  if (action === "emailBatch" && records.some(record => (record.submissionControlVersion !== 3 && !text(record.sentToJenniferAt)) || !hasTimesheetScan(record))) return "Every timesheet in this batch must be marked scanned before recording the agency submission.";
+  if (records.every(record => action === "scanBatch" ? hasTimesheetScan(record) : hasTimesheetSubmission(record))) return "This batch has already been recorded. Flag an issue to correct a submitted batch.";
   return "";
 }
 
@@ -72,6 +75,6 @@ export function batchOverdue(records: TimesheetData[], today = pacificToday()) {
 export function batchFingerprint(rows: Array<{ id: unknown; record_data: unknown }>, routeRevision: string) {
   return JSON.stringify([routeRevision, rows.map(row => {
     const record = row.record_data as TimesheetData;
-    return [String(row.id), text(record.completedAt), text(record.scanDocumentId), text(record.scanBatchId), text(record.submissionDueDate)];
+    return [String(row.id), text(record.completedAt), text(record.scanDocumentId), text(record.scanBatchId), text(record.submissionDueDate), text(record.scannedAt), String(record.scanRecordedExternally===true)];
   }).sort((a, b) => a[0].localeCompare(b[0]))]);
 }

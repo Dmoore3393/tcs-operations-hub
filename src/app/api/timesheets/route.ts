@@ -181,6 +181,9 @@ export async function GET(request: Request) {
         tuitionPolicyAcknowledged: asBool(record.tuitionPolicyAcknowledged),
         completedBy: asText(record.completedBy),
         completedAt: asText(record.completedAt),
+        scanRecordedExternally: asBool(record.scanRecordedExternally),
+        submissionRecordedExternally: asBool(record.submissionRecordedExternally),
+        receiptRecordedExternally: asBool(record.receiptRecordedExternally),
         scanQualityChecked: asBool(record.scanQualityChecked),
         scannedBy: asText(record.scannedBy),
         scannedAt: asText(record.scannedAt),
@@ -493,7 +496,7 @@ export async function POST(request: Request) {
 
     if (action === "setType") {
       if (!(actor.collectorSlug === slug || actor.isDynasty || actor.isDanielle || actor.isJennifer)) return Response.json({ error: "You cannot classify this timesheet." }, { status: 403 });
-      if (asText(current.scanDocumentId) || asText(current.emailedAt) || asText(current.sentToJenniferAt) || asText(current.licenseeApprovalFingerprint) || stage(current) === "Complete") return Response.json({ error: "Flag and reopen a submitted batch before reclassifying it." }, { status: 400 });
+      if ((asText(current.scanDocumentId) || asText(current.scannedAt)) || asText(current.emailedAt) || asText(current.sentToJenniferAt) || asText(current.licenseeApprovalFingerprint) || stage(current) === "Complete") return Response.json({ error: "Flag and reopen a submitted batch before reclassifying it." }, { status: 400 });
       const type = normalizeType(body.timesheetType);
       if (!COMMAND_TYPES.some((item) => item === type)) return Response.json({ error: "Choose CCRC Stage 1, CCRC Stage 2, CCCC, DCFS, or Respite." }, { status: 400 });
       const changedCompletedForm = type !== normalizeType(current.timesheetType ?? current.fundingSource ?? row.funding_source) && asText(current.completedAt);

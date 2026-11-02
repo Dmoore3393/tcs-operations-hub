@@ -24,7 +24,7 @@ export function timesheetDeadlineFlag(due: string, submitted: boolean, today: st
 
 export function timesheetStepLabel(stage:string,currentWorkflow=true, owner="Danielle", reviewer="Jennifer") {
   if(!currentWorkflow)return stage;
-  return ({'Location Sign-Off':'Receipt, signatures and dates','Danielle Fill Out':`${owner}: fill out`,'Scan & Send to Jennifer':`${owner}: scan`,'Jennifer Email':`${owner}: submit to agency`,'Licensee Verification':`${reviewer || owner}: final review`,'Complete':reviewer?'Reviewed by Jen':'Submission recorded'} as Record<string,string>)[stage] || stage;
+  return ({'Location Sign-Off':'Receipt, signatures and dates','Danielle Fill Out':`${owner}: fill out`,'Scan & Send to Jennifer':`${owner}: mark scanned`,'Jennifer Email':`${owner}: submit to agency`,'Licensee Verification':`${reviewer || owner}: final review`,'Complete':reviewer?'Reviewed by Jen':'Submission recorded'} as Record<string,string>)[stage] || stage;
 }
 
 export function timesheetProcessor(locationSlug:string) { return locationSlug==='tehachapi'?'Jennifer':'Danielle'; }

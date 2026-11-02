@@ -27,6 +27,7 @@ before(async () => {
   const folder=new URL('../supabase/migrations/',import.meta.url);const name=(await readdir(folder)).find(name=>name.endsWith('_timesheet_danielle_jen_workflow.sql'));assert.ok(name);await db.exec(await readFile(new URL(name,folder),'utf8'));
   const assignmentName=(await readdir(folder)).find(name=>name.endsWith('_timesheet_assignment_editor.sql'));assert.ok(assignmentName);await db.exec(await readFile(new URL(assignmentName,folder),'utf8'));
   const tehachapiName=(await readdir(folder)).find(name=>name.endsWith('_timesheet_tehachapi_processor.sql'));assert.ok(tehachapiName);await db.exec(await readFile(new URL(tehachapiName,folder),'utf8'));
+  const externalName=(await readdir(folder)).find(name=>name.endsWith('_timesheet_external_tracking.sql'));await db.exec(await readFile(new URL(externalName,folder),'utf8'));
 });
 beforeEach(async () => {
   await db.exec("reset role; select set_config('request.jwt.claims','{}',false); truncate timesheets,timesheet_submission_routes,staff_access,locations,staff_location_assignments,document_records,audit_log,user_notification_state,children; drop trigger if exists fail_audit on audit_log;");
@@ -127,4 +128,18 @@ test('database accepts Jennifer’s Tehachapi submission only with the verified 
  await assert.rejects(batch('emailBatch',danielle,patch,{loc:otherLoc}),/Unauthorized/);
  await assert.rejects(batch('emailBatch',jen,{...patch,departmentEmail:'wrong@example.com'},{loc:otherLoc}),/recipient/);
  await batch('emailBatch',jen,patch,{loc:otherLoc});assert.ok((await rows()).every(row=>row.record_data.emailedByUserId===jen));
+});
+
+
+test('current workflow records external scans and submissions without creating document records, while keeping recipient and actor controls',async()=>{
+ await db.query('delete from document_records');
+ const scanPatch={submissionControlVersion:3,scanRecordedExternally:true,scanQualityChecked:true,scanRecordedByUserId:danielle,scannedAt:'2026-11-01T18:00:00Z'};
+ await assert.rejects(batch('scanBatch',danielle,{...scanPatch,scanQualityChecked:false}),/Confirm external scanning/);
+ await batch('scanBatch',danielle,scanPatch);
+ const emailPatch={submissionControlVersion:3,submissionRecordedExternally:true,attachmentConfirmed:true,emailedByUserId:danielle,emailedAt:'2026-11-01T19:00:00Z',departmentEmail:'submissions@example.com'};
+ await assert.rejects(batch('emailBatch',danielle,{...emailPatch,departmentEmail:'wrong@example.com'}),/recipient/);
+ await assert.rejects(batch('emailBatch',danielle,{...emailPatch,emailedByUserId:jen}),/Confirm external submission/);
+ await batch('emailBatch',danielle,emailPatch);await batch('verifyBatch',jen,{jenReviewedAt:'2026-11-01T20:00:00Z'});
+ assert.equal((await db.query('select count(*) n from document_records')).rows[0].n,0);
+ assert.ok((await rows()).every(row=>row.record_data.scanRecordedExternally&&row.record_data.submissionRecordedExternally&&!row.record_data.scanDocumentId&&!row.record_data.emailEvidenceDocumentId));
 });

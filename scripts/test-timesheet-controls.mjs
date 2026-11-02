@@ -99,3 +99,16 @@ test('Jennifer scans and submits Tehachapi with actual proof, without a separate
  await error(f.act('verifyBatch',{submissionChecked:true},'Jennifer'),403);
  await ok(f.act('receiptBatch',{documentId:receipt,reference:'Synthetic agency acknowledgment',agencyAccepted:true},'Jennifer'));
 });
+
+
+test('current checklist accepts external scanning and emailed submission without uploads, retains Jen review and clears facts when reopened',async()=>{
+ const f=fixture({current:true});f.documents.length=0;
+ await error(f.act('scanBatch',{recordedExternally:true,scanQualityChecked:false}));
+ await ok(f.act('scanBatch',{recordedExternally:true,scanQualityChecked:true}));
+ assert.equal(workflow.timesheetStage(f.rows[0].record_data),'Jennifer Email');assert.equal(f.rows[0].record_data.scanDocumentId,'');
+ await error(f.act('emailBatch',{recordedExternally:true,actualRecipient:'wrong@example.com',sentAt:'2026-11-01T20:00:00Z',attachmentConfirmed:true}));
+ await ok(f.act('emailBatch',{recordedExternally:true,actualRecipient:f.route.email,sentAt:'2026-11-01T20:00:00Z',attachmentConfirmed:true}));
+ assert.equal(workflow.timesheetStage(f.rows[0].record_data),'Licensee Verification');
+ await ok(f.act('verifyBatch',{submissionChecked:true},'Jennifer'));assert.equal(workflow.timesheetStage(f.rows[0].record_data),'Complete');
+ await ok(f.act('flagBatch',{reason:'Synthetic correction needs a replacement packet'}));await ok(f.act('reopenBatch',{reason:'Synthetic replacement will be scanned again'}));assert.equal(f.rows[0].record_data.scanRecordedExternally,false);assert.equal(f.rows[0].record_data.submissionRecordedExternally,false);
+});

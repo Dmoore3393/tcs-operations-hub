@@ -2,7 +2,7 @@ import "server-only";
 import {randomUUID} from "node:crypto";
 import type {SupabaseClient} from "@supabase/supabase-js";
 import {timesheetDeadline,timesheetDeadlineFlag,timesheetPolicyApplies} from "@/lib/timesheet-policy";
-import {pacificToday,timesheetType,timesheetChildEligible} from "@/lib/timesheet-workflow";
+import {hasTimesheetSubmission,pacificToday,timesheetType,timesheetChildEligible} from "@/lib/timesheet-workflow";
 import {previousTimesheetMonth} from "@/lib/timesheet-checklist";
 import {isOwnerAccessRole} from "@/lib/team-access";
 import {deliverStoredTimesheetAlert,loadNotificationState} from "@/lib/server/notifications";
@@ -14,7 +14,7 @@ export function timesheetAlertsForRows(forms:Row[],children:Row[],today:string,p
   const alerts=new Map<string,{type:string;status:string;count:number;owner?:string}>();
   const add=(type:string,status:string,tehachapi=false)=>{const key=`${period}:${type}:${status}:${tehachapi}`;const current=alerts.get(key);alerts.set(key,{type,status,count:(current?.count||0)+1,...(tehachapi?{owner:'Jennifer'}:{})});};
   const rows=forms.filter(row=>row.service_period===period);
-  for(const row of rows){const data=object(row.record_data),type=timesheetType(data.timesheetType??row.funding_source);const submitted=Boolean(data.emailedAt&&data.emailEvidenceDocumentId&&!data.submissionIssue);const flag=timesheetDeadlineFlag(timesheetDeadline(period,type)||text(data.submissionDueDate),submitted,today);const tehachapi=row.locationSlug==='tehachapi';if(data.submissionIssue)add(type,'Correction required',tehachapi);else if(flag)add(type,flag,tehachapi);else if(submitted&&!tehachapi&&!data.jenReviewedAt)add(type,'Jen review');}
+  for(const row of rows){const data=object(row.record_data),type=timesheetType(data.timesheetType??row.funding_source);const submitted=Boolean(hasTimesheetSubmission(data)&&!data.submissionIssue);const flag=timesheetDeadlineFlag(timesheetDeadline(period,type)||text(data.submissionDueDate),submitted,today);const tehachapi=row.locationSlug==='tehachapi';if(data.submissionIssue)add(type,'Correction required',tehachapi);else if(flag)add(type,flag,tehachapi);else if(submitted&&!tehachapi&&!data.jenReviewedAt)add(type,'Jen review');}
   const existing=new Set(rows.map(row=>text(row.child_id)));
   for(const child of children){
     const data=object(child.record_data);if(existing.has(text(child.id))||!timesheetChildEligible(child.enrollment_status,data,period))continue;

@@ -1,7 +1,7 @@
 import { applyTimesheetPolicy, timesheetPolicyApplies, timesheetDeadline, canProcessTimesheet } from "@/lib/timesheet-policy";
 import { createHash, randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { batchFingerprint, timesheetBatchKey, timesheetRouteKey, timesheetStage, timesheetType, TIMESHEET_TYPES, validSubmissionDate, validateTimesheetBatch } from "@/lib/timesheet-workflow";
+import { hasTimesheetScan, hasTimesheetSubmission, batchFingerprint, timesheetBatchKey, timesheetRouteKey, timesheetStage, timesheetType, TIMESHEET_TYPES, validSubmissionDate, validateTimesheetBatch } from "@/lib/timesheet-workflow";
 
 type Row = Record<string, unknown>;
 const text = (value: unknown) => typeof value === "string" ? value.trim() : "";
@@ -68,23 +68,24 @@ export async function controlledTimesheetBatch({ admin, organizationId, userId, 
     const fixedDeadline = timesheetDeadline(period,type);
     if (fixedDeadline && body.dueDate !== fixedDeadline) fail("The deadline follows the program rule: the 1st, or the 5th for CCRC Stage 2, of the following month.");
     if (!validSubmissionDate(body.dueDate)) fail("Choose the actual submission due date from the agency instructions.");
-    if (records.some(record => text(record.emailEvidenceDocumentId))) fail("Flag a submitted batch before changing its deadline.");
+    if (records.some(record => hasTimesheetSubmission(record))) fail("Flag a submitted batch before changing its deadline.");
     patch = { submissionDueDate: body.dueDate, deadlineSetBy: actor.name, deadlineSetAt: now, licenseeApprovalFingerprint: "", licenseeApprovedAt: "" };
   } else if (action === "scanBatch") {
     const error = validateTimesheetBatch(records, "scanBatch"); if (error) fail(error);
-    if (records.some(record => text(record.emailEvidenceDocumentId))) fail("Flag the submitted batch before replacing scans.");
+    if (records.some(record => hasTimesheetSubmission(record))) fail("Flag the submitted batch before replacing scans.");
     confirmed("scanQualityChecked", "Confirm every page is readable and complete.");
-    const scanDocumentId = await evidence(body.documentId, "Timesheet Batch Scan");
-    patch = { scanDocumentId, scanQualityChecked: true, scannedBy: actor.name, scannedAt: now, ...(currentWorkflow ? {} : {sentToJenniferAt:now}), scanBatchId: batchId, licenseeApprovalFingerprint: "", licenseeApprovedAt: "" };
+    const external=currentWorkflow && body.recordedExternally===true;
+    const scanDocumentId = external ? "" : await evidence(body.documentId, "Timesheet Batch Scan");
+    patch = { scanDocumentId, scanRecordedExternally:external, scanRecordedByUserId:userId, scanQualityChecked: true, scannedBy: actor.name, scannedAt: now, ...(currentWorkflow ? {} : {sentToJenniferAt:now}), scanBatchId: batchId, licenseeApprovalFingerprint: "", licenseeApprovedAt: "" };
   } else if (action === "approveBatch") {
     readyRoute();
-    if (records.some(record => !text(record.scanDocumentId) || !text(record.sentToJenniferAt) || !text(record.completedAt))) fail("Every completed form must have its scan recorded first.");
+    if (records.some(record => !hasTimesheetScan(record) || (!currentWorkflow && !text(record.sentToJenniferAt)) || !text(record.completedAt))) fail("Every completed form must have its scan recorded first.");
     if (records.some(record => !validSubmissionDate(record.submissionDueDate))) fail("Set the actual batch due date first.");
-    if (records.some(record => text(record.emailEvidenceDocumentId))) fail("This batch has already been submitted. Use the final licensee verification.");
+    if (records.some(record => hasTimesheetSubmission(record))) fail("This batch has already been submitted. Use the final licensee verification.");
     if (body.formCount !== rows.length) fail("The expected form count must match the full batch. Account for missing forms before approving.");
     confirmed("rosterConfirmed", "Check every eligible child against the roster and certificate, including each applicable program.");
     confirmed("destinationConfirmed", "Check the location, service month, program/stage, department, and email against the agency instructions.");
-    for (const id of new Set(records.map(record => record.scanDocumentId))) await evidence(id, "Timesheet Batch Scan");
+    for (const record of records) if(record.scanRecordedExternally!==true) await evidence(record.scanDocumentId, "Timesheet Batch Scan");
     patch = { licenseeApprovedAt: now, licenseeApprovedBy: actor.name, licenseeApprovedByUserId: userId, licenseeApprovalFingerprint: fingerprint, approvedRouteRevision: routeRevision, expectedFormCount: rows.length };
   } else if (action === "emailBatch") {
     readyRoute();
@@ -94,21 +95,23 @@ export async function controlledTimesheetBatch({ admin, organizationId, userId, 
     const sentAt = new Date(text(body.sentAt));
     if (!Number.isFinite(sentAt.getTime()) || sentAt.getTime() > Date.now() + 120000) fail("Enter the actual sent-email date and time; it cannot be in the future.");
     confirmed("attachmentConfirmed", "Confirm the complete, correct packet is attached in the sent email.");
-    const emailEvidenceDocumentId = await evidence(body.documentId, "Timesheet Sent Email Proof");
-    patch = { emailEvidenceDocumentId, department: text(route.department), departmentEmail: text(route.email).toLowerCase(), attachmentConfirmed: true, emailedBy: actor.name, emailedByUserId: userId, emailedAt: sentAt.toISOString(), ...(currentWorkflow ? {} : {emailedByJenniferAt:sentAt.toISOString()}), emailRecordedAt: now, emailBatchId: batchId, licenseeVerifiedAt: "", agencyReceiptAt: "", receiptDocumentId: "" };
+    const external=currentWorkflow && body.recordedExternally===true;
+    const emailEvidenceDocumentId = external ? "" : await evidence(body.documentId, "Timesheet Sent Email Proof");
+    patch = { emailEvidenceDocumentId, submissionRecordedExternally:external, department: text(route.department), departmentEmail: text(route.email).toLowerCase(), attachmentConfirmed: true, emailedBy: actor.name, emailedByUserId: userId, emailedAt: sentAt.toISOString(), ...(currentWorkflow ? {} : {emailedByJenniferAt:sentAt.toISOString()}), emailRecordedAt: now, emailBatchId: batchId, licenseeVerifiedAt: "", agencyReceiptAt: "", receiptDocumentId: "" };
   } else if (action === "verifyBatch") {
-    if (records.some(record => !text(record.emailEvidenceDocumentId) || !text(record.emailedAt))) fail("Jennifer must record the sent-email proof first.");
+    if (records.some(record => !hasTimesheetSubmission(record) || !text(record.emailedAt))) fail("Record the actual agency submission first.");
     if (records.some(record => record.emailedByUserId === userId)) fail("The sender cannot verify their own submission. A separate assigned licensee must check it.", 403);
-    confirmed("submissionChecked", "Open the sent-email proof and verify recipient, attachments, child list, location, stage, and service month.");
-    for (const id of new Set(records.map(record => record.emailEvidenceDocumentId))) await evidence(id, "Timesheet Sent Email Proof");
+    confirmed("submissionChecked", "Check the actual sent email and verify recipient, attachments, child list, location, stage, and service month.");
+    for (const record of records) if(record.submissionRecordedExternally!==true) await evidence(record.emailEvidenceDocumentId, "Timesheet Sent Email Proof");
     patch = currentWorkflow ? {jenReviewedAt:now,jenReviewedBy:actor.name,jenReviewedByUserId:userId} : {licenseeVerifiedAt:now,licenseeVerifiedBy:actor.name,licenseeVerifiedByUserId:userId};
   } else if (action === "receiptBatch") {
-    if (records.some(record => !(currentWorkflow ? (tehachapi ? text(record.emailedAt) : text(record.jenReviewedAt)) : text(record.licenseeVerifiedAt)) || !text(record.emailEvidenceDocumentId))) fail("The assigned licensee must independently verify the sent submission first.");
+    if (records.some(record => !(currentWorkflow ? (tehachapi ? text(record.emailedAt) : text(record.jenReviewedAt)) : text(record.licenseeVerifiedAt)) || !hasTimesheetSubmission(record))) fail("The assigned licensee must independently verify the sent submission first.");
     const reference = text(body.reference);
     if (reference.length < 3 || reference.length > 300) fail("Record the agency's receipt/reference or who confirmed receipt.");
     confirmed("agencyAccepted", "Confirm the correct agency acknowledged receipt of this packet. An email sent checkmark alone is not a receipt.");
-    const receiptDocumentId = await evidence(body.documentId, "Timesheet Agency Receipt");
-    patch = { receiptDocumentId, agencyReceiptReference: reference, agencyReceiptAt: now, agencyReceiptBy: actor.name, agencyReceiptByUserId: userId };
+    const external=currentWorkflow && body.recordedExternally===true;
+    const receiptDocumentId = external ? "" : await evidence(body.documentId, "Timesheet Agency Receipt");
+    patch = { receiptDocumentId, receiptRecordedExternally:external, agencyReceiptReference: reference, agencyReceiptAt: now, agencyReceiptBy: actor.name, agencyReceiptByUserId: userId };
   } else if (action === "flagBatch") {
     const reason = text(body.reason);
     if (reason.length < 10 || reason.length > 2000) fail("Describe what is missing, incorrect, rejected, or needs follow-up (10–2,000 characters).");
@@ -117,7 +120,7 @@ export async function controlledTimesheetBatch({ admin, organizationId, userId, 
     if (!hasIssue) fail("Flag the issue before reopening this batch.");
     const reason = text(body.reason);
     if (reason.length < 10 || reason.length > 2000) fail("Record how the issue will be corrected (10–2,000 characters).");
-    patch = { jenReviewedAt:"",jenReviewedBy:"",jenReviewedByUserId:"",submissionIssue: null, lastCorrection: { reason, at: now, by: actor.name }, scanDocumentId: "", scanQualityChecked: false, scannedAt: "", sentToJenniferAt: "", scanBatchId: "", licenseeApprovedAt: "", licenseeApprovalFingerprint: "", approvedRouteRevision: "", emailEvidenceDocumentId: "", emailedAt: "", emailedByJenniferAt: "", emailBatchId: "", attachmentConfirmed: false, licenseeVerifiedAt: "", receiptDocumentId: "", agencyReceiptAt: "", agencyReceiptReference: "" };
+    patch = { scanRecordedExternally:false,submissionRecordedExternally:false,receiptRecordedExternally:false,scanRecordedByUserId:"",jenReviewedAt:"",jenReviewedBy:"",jenReviewedByUserId:"",submissionIssue: null, lastCorrection: { reason, at: now, by: actor.name }, scanDocumentId: "", scanQualityChecked: false, scannedAt: "", sentToJenniferAt: "", scanBatchId: "", licenseeApprovedAt: "", licenseeApprovalFingerprint: "", approvedRouteRevision: "", emailEvidenceDocumentId: "", emailedAt: "", emailedByJenniferAt: "", emailBatchId: "", attachmentConfirmed: false, licenseeVerifiedAt: "", receiptDocumentId: "", agencyReceiptAt: "", agencyReceiptReference: "" };
   } else fail("Unknown batch action.");
 
   const updates = rows.map(row => {
