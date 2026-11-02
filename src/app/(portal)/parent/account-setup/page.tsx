@@ -151,7 +151,7 @@ export default function ParentAccountSetupPage() {
           </div> : <>
             <p className="text-xs font-black uppercase tracking-[.18em] text-emerald-700">Secure account setup</p>
             <h2 className="mt-2 text-3xl font-black text-slate-950">Choose your password</h2>
-            <p className="mt-3 text-sm leading-6 text-slate-600">Account email: <strong className="text-slate-900">{session.user.email}</strong></p>
+            <p className="mt-3 text-sm leading-6 text-slate-600">Account email: <strong className="text-slate-900"><span translate="no" className="contents">{session.user.email}</span></strong></p>
 
             <form onSubmit={submit} className="mt-7 space-y-4">
               <label className="block"><span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">New password</span><div className="relative"><LockKeyhole className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" /><input type={showPassword ? "text" : "password"} required minLength={8} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-11 text-sm font-semibold outline-none focus:border-emerald-400" /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></label>

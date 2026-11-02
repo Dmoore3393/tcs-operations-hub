@@ -267,7 +267,7 @@ export default function NotificationBell() {
           >
             <div className="flex items-start gap-3">
               <span className={`mt-1 h-2.5 w-2.5 flex-none rounded-full ${item.severity === "urgent" ? "bg-red-500" : item.severity === "attention" ? "bg-amber-500" : "bg-blue-500"}`} />
-              <div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><strong className="text-xs text-slate-900">{item.title}</strong><span className="flex-none text-base font-semibold text-slate-600">{timeAgo(item.createdAt)}</span></div><p className="mt-1 text-base leading-4 text-slate-600">{item.body}</p>{item.location && item.location !== "All Locations" && <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-1 text-base font-black text-slate-600">{item.location}</span>}</div>
+              <div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><strong className="text-xs text-slate-900">{item.title}</strong><span className="flex-none text-base font-semibold text-slate-600">{timeAgo(item.createdAt)}</span></div><p className="mt-1 text-base leading-4 text-slate-600"><span translate="no" className="contents">{item.body}</span></p>{item.location && item.location !== "All Locations" && <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-1 text-base font-black text-slate-600">{item.location}</span>}</div>
             </div>
           </Link>)}
       </div>

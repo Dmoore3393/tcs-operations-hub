@@ -1,3 +1,4 @@
+import {translateText} from './i18n/translate';
 /** Shared, plain-language menu sections. Callers filter permissions before grouping. */
 const sections=[
  {title:'Everyday',paths:['/','/time-clock','/my-schedule','/communications','/notifications','/transportation','/transportation-v2']},
@@ -9,7 +10,7 @@ const sections=[
 ];
 export function groupHubTools<T extends {href:string;label:string}>(items:T[],query=''){
  const term=query.trim().toLowerCase();const groups=sections.map(section=>({title:section.title,items:[] as T[]}));
- for(const item of items){if(term&&!`${item.label} ${item.href}`.toLowerCase().includes(term))continue;const index=sections.findIndex(section=>section.paths.includes(item.href));groups[index<0?groups.length-1:index].items.push(item);}
+ for(const item of items){if(term&&!`${item.label} ${translateText(item.label,'es')} ${item.href}`.toLowerCase().includes(term))continue;const index=sections.findIndex(section=>section.paths.includes(item.href));groups[index<0?groups.length-1:index].items.push(item);}
  return groups.filter(group=>group.items.length);
 }
 export function toolSectionOpen(group:{title:string;items:{href:string}[]},pathname:string,query=''){

@@ -133,7 +133,7 @@ export async function POST(request: Request) {
 
     const laneResult = await admin
       .from("staff_lane_profiles")
-      .select("id,job_title,secondary_title,lane_level,lane_group,reports_to_label")
+      .select("id,job_title,secondary_title,lane_level,lane_group,reports_to_label,preferred_language")
       .eq("organization_id", profile.organization_id)
       .eq("staff_user_id", profile.user_id)
       .eq("is_active", true)
@@ -146,6 +146,7 @@ export async function POST(request: Request) {
       bootstrapped,
       profile: {
         ...scopedProfile,
+        preferred_language: ["en","es"].includes(user.user_metadata?.tcs_language)?user.user_metadata.tcs_language:laneResult.data?.preferred_language??null,
         locations: Array.isArray(scopedProfile.locations) ? scopedProfile.locations : [],
         permissions: Array.isArray(profile.permissions) ? profile.permissions : [],
         lane_profile_id: laneResult.data?.id ?? null,

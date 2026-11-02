@@ -477,3 +477,6 @@ label:has(input[type="checkbox"]), label:has(input[type="radio"]) {
 
 /* Doodles are decoration, painted behind content inside isolated welcome cards. */
 .tcs-doodles { z-index: -1; pointer-events: none; }
+
+/* The signed-in staff menu has its own account-backed language preference. */
+body:has([data-staff-shell]) .public-language-bar { display: none; }

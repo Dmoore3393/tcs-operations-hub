@@ -1,3 +1,4 @@
+import {StaffLanguageSync} from "@/components/i18n/StaffLanguage";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { LocationProvider } from "@/components/providers/LocationProvider";
 import PwaUpdater from "@/components/pwa/PwaUpdater";
@@ -8,5 +9,5 @@ import NativeCapabilities from "@/components/native/NativeCapabilities";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
-  return <><PwaUpdater /><AuthProvider><LocationProvider><NativeCapabilities /><DemoWorkspaceNotice />{children}</LocationProvider></AuthProvider></>;
+  return <><PwaUpdater /><AuthProvider><StaffLanguageSync/><LocationProvider><NativeCapabilities /><DemoWorkspaceNotice />{children}</LocationProvider></AuthProvider></>;
 }

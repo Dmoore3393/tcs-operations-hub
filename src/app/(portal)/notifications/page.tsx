@@ -396,7 +396,7 @@ export default function NotificationsPage() {
                 <span className={`grid h-11 w-11 flex-none place-items-center rounded-2xl ${item.category === "emergency" ? "bg-red-100 text-red-700" : item.category === "transportation" ? "bg-blue-100 text-blue-700" : item.category === "tour" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700"}`}>{categoryIcon(item.category)}</span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-start justify-between gap-2"><h3 className="font-black text-slate-950">{item.title}</h3><span className="text-base font-bold text-slate-600">{formatStamp(item.createdAt)}</span></div>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">{item.body}</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-600"><span translate="no" className="contents">{item.body}</span></p>
                   <div className="mt-2 flex flex-wrap gap-2">{item.location && item.location !== "All Locations" && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-base font-black text-slate-600">{item.location}</span>}{!item.readAt && <span className="rounded-full bg-blue-100 px-2.5 py-1 text-base font-black text-blue-700">Unread</span>}</div>
                 </div>
               </Link>)}</div>}

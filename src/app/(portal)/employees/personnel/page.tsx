@@ -36,7 +36,7 @@ export default function PersonnelPage() {
       {error && <div role="alert"><p>{error}</p><button className="mt-2 min-h-12 rounded-xl bg-emerald-800 px-5 text-white" onClick={() => { setLoading(true); setRetry(n => n + 1); }}>Try again</button></div>}
       {records.filter(row => row.source_name.toLowerCase().includes(search.trim().toLowerCase())).map(row => <details key={row.id} className="rounded-2xl border bg-white p-5">
         <summary className="min-h-11 cursor-pointer font-bold">{row.source_name} — {row.staff_lane_profiles ? row.staff_lane_profiles.is_active ? "Linked • active" : "Linked • inactive" : "Identity review needed"}</summary>
-        {row.staff_lane_profiles && <p className="my-3">Hub profile: {row.staff_lane_profiles.full_name} • {row.staff_lane_profiles.job_title} • {row.staff_lane_profiles.primary_location || "Location unassigned"}</p>}
+        {row.staff_lane_profiles && <p className="my-3">Hub profile: <span translate="no" className="contents">{row.staff_lane_profiles.full_name}</span> • {row.staff_lane_profiles.job_title} • {row.staff_lane_profiles.primary_location || "Location unassigned"}</p>}
         <dl className="mt-4 space-y-4">{Object.entries(row.details).filter(([, value]) => value.trim()).map(([key, value]) => <div key={key}><dt className="font-bold text-emerald-900">{key} <span className="font-normal">(Brightwheel)</span></dt><dd className="whitespace-pre-wrap break-words">{value}</dd></div>)}</dl>
       </details>)}
       {!loading && !error && records.length === 0 && <p>No personnel records have been imported.</p>}

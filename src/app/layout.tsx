@@ -1,3 +1,5 @@
+import {cookies} from "next/headers";
+import {LanguageProvider,LanguageSwitch} from "@/components/i18n/LanguageProvider";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -44,17 +46,18 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const language=(await cookies()).get("tcs_language")?.value==="es"?"es":"en";
   return (
     <html
-      lang="en"
+      lang={language}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans"><LanguageProvider initialLanguage={language}><div className="public-language-bar flex justify-end bg-emerald-50 p-2"><LanguageSwitch/></div>{children}</LanguageProvider></body>
     </html>
   );
 }

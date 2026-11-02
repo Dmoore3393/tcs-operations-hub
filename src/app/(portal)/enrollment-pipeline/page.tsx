@@ -433,7 +433,7 @@ export default function TourBoardPage() {
                   </div>
 
                   <div className="tour-card-meta">
-                    <span><UserRound/>{lead.childName || "Child name needed"} • {lead.childAge || lead.ageGroup || "Age not entered"}</span>
+                    <span><UserRound/><span translate="no" className="contents">{lead.childName || "Child name needed"}</span> • {lead.childAge || lead.ageGroup || "Age not entered"}</span>
                     <span><MapPin/>{lead.location}</span>
                     <span><Users/>{lead.programType || lead.requestedCare || "Program not entered"}</span>
                   </div>
@@ -465,7 +465,7 @@ export default function TourBoardPage() {
 
       {statusFilter==="Declined"&&<div style={{padding:"0 15px 10px"}}><section className="tour-panel"><div className="tour-panel-title"><strong>Declined / Closed Leads</strong><span>{filtered.filter(l=>l.stage==="Declined").length}</span></div></section></div>}
 
-      <section className="tour-bottom"><div className="tour-panel"><div className="tour-panel-title"><strong>📅 Upcoming Tours</strong><span>{upcomingTours.length} next</span></div><div className="upcoming-list">{upcomingTours.length===0&&<div className="tour-empty">No upcoming tours scheduled.</div>}{upcomingTours.map(({lead,tour})=><div className="upcoming-row" key={tour.id}><b>{formatShortDate(tour.scheduledAt)}</b><span><strong>{lead.familyName}</strong><br/>{formatDateTime(tour.scheduledAt)} • {lead.location} • {tour.conductedBy||"Unassigned"}</span></div>)}</div></div><div className="tour-panel"><div className="tour-panel-title"><strong>🏡 Tour Conversion</strong><span>{touredFamilies} toured</span></div><div className="conversion"><div className="conversion-ring" style={{"--conversion":`${conversion}%`} as any}><strong>{conversion}%</strong></div><div className="conversion-stats"><b>{scoped.length}</b>Total Leads<b>{enrolledCount}</b>Enrolled<b>{scoped.filter(l=>l.stage==="Follow-Up").length}</b>In Follow-Up</div></div></div><div className="tour-panel"><div className="tour-panel-title"><strong>📊 Lead Sources</strong><span>{scoped.length} leads</span></div><div className="source-ring"><div className="source-donut"/><div className="source-list">{sourceCounts.length===0&&<div>No source data yet.</div>}{sourceCounts.map(([source,count])=><div key={source}><span>{source}</span><b>{count}</b></div>)}</div></div></div><div className="tour-panel"><div className="tour-panel-title"><strong>📝 Notes & Follow-Ups</strong><span>{followUps.length} next</span></div><div className="follow-list">{followUps.length===0&&<div className="tour-empty">Nothing waiting for follow-up.</div>}{followUps.map((lead)=><div className="follow-row" key={lead.id}><b style={{color:isPastDue(lead.followUpDate)?"#c7433e":"#a86b14"}}>{formatShortDate(lead.followUpDate)}</b><span><strong>{lead.familyName}</strong><br/>{lead.nextAction||lead.notes||"Follow up with family"}</span></div>)}</div></div></section>
+      <section className="tour-bottom"><div className="tour-panel"><div className="tour-panel-title"><strong>📅 Upcoming Tours</strong><span>{upcomingTours.length} next</span></div><div className="upcoming-list">{upcomingTours.length===0&&<div className="tour-empty">No upcoming tours scheduled.</div>}{upcomingTours.map(({lead,tour})=><div className="upcoming-row" key={tour.id}><b>{formatShortDate(tour.scheduledAt)}</b><span><strong>{lead.familyName}</strong><br/>{formatDateTime(tour.scheduledAt)} • {lead.location} • {tour.conductedBy||"Unassigned"}</span></div>)}</div></div><div className="tour-panel"><div className="tour-panel-title"><strong>🏡 Tour Conversion</strong><span>{touredFamilies} toured</span></div><div className="conversion"><div className="conversion-ring" style={{"--conversion":`${conversion}%`} as any}><strong>{conversion}%</strong></div><div className="conversion-stats"><b>{scoped.length}</b>Total Leads<b>{enrolledCount}</b>Enrolled<b>{scoped.filter(l=>l.stage==="Follow-Up").length}</b>In Follow-Up</div></div></div><div className="tour-panel"><div className="tour-panel-title"><strong>📊 Lead Sources</strong><span>{scoped.length} leads</span></div><div className="source-ring"><div className="source-donut"/><div className="source-list">{sourceCounts.length===0&&<div>No source data yet.</div>}{sourceCounts.map(([source,count])=><div key={source}><span>{source}</span><b>{count}</b></div>)}</div></div></div><div className="tour-panel"><div className="tour-panel-title"><strong>📝 Notes & Follow-Ups</strong><span>{followUps.length} next</span></div><div className="follow-list">{followUps.length===0&&<div className="tour-empty">Nothing waiting for follow-up.</div>}{followUps.map((lead)=><div className="follow-row" key={lead.id}><b style={{color:isPastDue(lead.followUpDate)?"#c7433e":"#a86b14"}}>{formatShortDate(lead.followUpDate)}</b><span><strong>{lead.familyName}</strong><br/><span translate="no" className="contents">{lead.nextAction||lead.notes||"Follow up with family"}</span></span></div>)}</div></div></section>
     </div>
 
     {leadDraft&&<ModalShell title={leads.some(item=>item.id===leadDraft.id)?"Update Family Lead":"Add New Childcare Lead"} subtitle="CRM-style family record: who they are, what they need, what happened last, and what happens next." onClose={()=>setLeadDraft(null)} wide>
@@ -544,13 +544,13 @@ export default function TourBoardPage() {
         <section className="tour-detail-box">
           <h3>Family & Child Snapshot</h3>
           <div className="tour-card-meta">
-            <span><UserRound/>Child: {detailLead.childName||"Not entered"} • {detailLead.childAge||detailLead.ageGroup||"Age not entered"}</span>
+            <span><UserRound/>Child: <span translate="no" className="contents">{detailLead.childName||"Not entered"}</span> • {detailLead.childAge||detailLead.ageGroup||"Age not entered"}</span>
             {detailLead.additionalChildren&&<span><Users/>Additional children: {detailLead.additionalChildren}</span>}
             <span><MapPin/>{detailLead.location}</span>
             <span><Users/>{detailLead.programType||detailLead.requestedCare||"Program not entered"}</span>
             <span><Sparkles/>{detailLead.subsidy||"Funding not entered"}</span>
-            <span><Phone/>{detailLead.phone||"No phone"}</span>
-            <span><Mail/>{detailLead.email||"No email"}</span>
+            <span><Phone/><span translate="no" className="contents">{detailLead.phone||"No phone"}</span></span>
+            <span><Mail/><span translate="no" className="contents">{detailLead.email||"No email"}</span></span>
           </div>
           <div className="tour-crm-facts">
             <p><b>Preferred start:</b><span>{detailLead.preferredStartDate?formatShortDate(detailLead.preferredStartDate):"Not entered"}</span></p>
@@ -577,12 +577,12 @@ export default function TourBoardPage() {
 
         <section className="tour-detail-box">
           <h3>Tour History</h3>
-          <div className="tour-history">{detailLead.tourHistory.length===0&&<div className="tour-empty">No tours scheduled yet.</div>}{[...detailLead.tourHistory].sort((a,b)=>b.scheduledAt.localeCompare(a.scheduledAt)).map((tour)=><div className="tour-history-entry" key={tour.id}><strong>{tour.status} • {formatDateTime(tour.scheduledAt)}</strong><small>{tour.conductedBy?`Tour host: ${tour.conductedBy}`:"Host not assigned"}{tour.lateMinutes?` • ${tour.lateMinutes} min late`:""}</small>{tour.rating!=="Not Rated"&&<div>Fit: {tour.rating}</div>}{tour.familyReaction&&<div>Family reaction: {tour.familyReaction}</div>}{tour.questionsConcerns&&<div>Questions/concerns: {tour.questionsConcerns}</div>}{tour.notes&&<div>Notes: {tour.notes}</div>}{tour.nextStep&&<div>Next: {tour.nextStep}</div>}</div>)}</div>
+          <div className="tour-history">{detailLead.tourHistory.length===0&&<div className="tour-empty">No tours scheduled yet.</div>}{[...detailLead.tourHistory].sort((a,b)=>b.scheduledAt.localeCompare(a.scheduledAt)).map((tour)=><div className="tour-history-entry" key={tour.id}><strong>{tour.status} • {formatDateTime(tour.scheduledAt)}</strong><small>{tour.conductedBy?`Tour host: ${tour.conductedBy}`:"Host not assigned"}{tour.lateMinutes?` • ${tour.lateMinutes} min late`:""}</small>{tour.rating!=="Not Rated"&&<div>Fit: {tour.rating}</div>}{tour.familyReaction&&<div>Family reaction: {tour.familyReaction}</div>}{tour.questionsConcerns&&<div>Questions/concerns: {tour.questionsConcerns}</div>}{tour.notes&&<div>Notes: <span translate="no" className="contents">{tour.notes}</span></div>}{tour.nextStep&&<div>Next: {tour.nextStep}</div>}</div>)}</div>
         </section>
 
         <section className="tour-detail-box">
           <h3>CRM Activity Timeline</h3>
-          <div className="tour-history">{[...detailLead.activity].sort((a,b)=>b.at.localeCompare(a.at)).map((entry)=><div className="tour-history-entry crm" key={entry.id}><strong>{entry.kind} • {formatDateTime(entry.at)}</strong><small>{entry.by||"TCS Team"}</small><div>{entry.note}</div></div>)}</div>
+          <div className="tour-history">{[...detailLead.activity].sort((a,b)=>b.at.localeCompare(a.at)).map((entry)=><div className="tour-history-entry crm" key={entry.id}><strong>{entry.kind} • {formatDateTime(entry.at)}</strong><small>{entry.by||"TCS Team"}</small><div><span translate="no" className="contents">{entry.note}</span></div></div>)}</div>
         </section>
       </div>
     </ModalShell>}

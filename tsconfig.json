@@ -26,7 +26,8 @@
       "@/*": [
         "./src/*"
       ]
-    }
+    },
+    "jsxImportSource": "@/lib/localized-jsx"
   },
   "include": [
     "next-env.d.ts",

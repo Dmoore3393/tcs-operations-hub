@@ -31,7 +31,7 @@ export async function GET(request:Request) {
     const {admin,profile}=await requireOwner(request);
     const laneId=new URL(request.url).searchParams.get("lane") || "";
     if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(laneId))return Response.json({error:"Choose an existing employee profile."},{status:400});
-    const lane=await admin.from("staff_lane_profiles").select("id,full_name,job_title,lane_level,lane_group,department,primary_location,staff_user_id").eq("organization_id",profile.organization_id).eq("id",laneId).eq("is_active",true).maybeSingle();
+    const lane=await admin.from("staff_lane_profiles").select("id,full_name,job_title,lane_level,lane_group,preferred_language,department,primary_location,staff_user_id").eq("organization_id",profile.organization_id).eq("id",laneId).eq("is_active",true).maybeSingle();
     if(lane.error)throw lane.error;
     if(!lane.data)return Response.json({error:"The active employee profile was not found."},{status:404});
     if(lane.data.staff_user_id)return Response.json({error:"This employee already has a linked Hub account. Use Manage Access to review it or send a new setup link."},{status:409});
@@ -63,11 +63,11 @@ export async function POST(request: Request) {
     let permissions = role === "Employee" ? sanitizeEmployeePermissions(body.permissions) : [];
     const requestedLaneId = body.lane_profile_id?.trim() || null;
 
-    let selectedLane: { id: string; full_name:string; updated_at:string; department:string|null; staff_user_id: string | null; job_title: string; secondary_title: string | null } | null = null;
+    let selectedLane: { id: string; full_name:string; updated_at:string; department:string|null; staff_user_id: string | null; job_title: string; secondary_title: string | null; preferred_language?:string|null } | null = null;
     if (requestedLaneId) {
       const laneResult = await admin
         .from("staff_lane_profiles")
-        .select("id,full_name,updated_at,department,staff_user_id,job_title,lane_level,lane_group,secondary_title")
+        .select("id,full_name,updated_at,department,staff_user_id,job_title,lane_level,lane_group,preferred_language,secondary_title")
         .eq("organization_id", profile.organization_id)
         .eq("id", requestedLaneId)
         .eq("is_active", true)
@@ -94,11 +94,13 @@ export async function POST(request: Request) {
     }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || new URL(request.url).origin;
-    const redirectTo = `${siteUrl}/accept-invite`;
+    const inviteLanguage=selectedLane?.preferred_language;
+    const redirectTo = `${siteUrl}/accept-invite${inviteLanguage==="es"?"?lang=es":""}`;
     const invitedAt = new Date().toISOString();
 
     const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
       data: {
+        ...(inviteLanguage==="en"||inviteLanguage==="es"?{tcs_language:inviteLanguage}:{}),
         tcs_full_name: fullName,
         tcs_role: role,
         tcs_locations: locations,
