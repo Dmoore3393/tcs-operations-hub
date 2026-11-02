@@ -99,7 +99,20 @@ export default function MaintenancePage() {
 
     <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-white p-4 text-base"><strong>{canManage?"Maintenance: manage tickets":"Maintenance: view only"}</strong><span>Tickets, assignments, due dates and completion updates.</span><button className="min-h-11 rounded-xl border px-4 py-2 font-bold" onClick={()=>void load()}>Refresh updates</button></div>
     {(error||loadError) && <p role="alert" className="rounded-xl bg-red-50 p-4 text-base font-bold text-red-900">{error||loadError}</p>}
-    <div className="flex flex-wrap gap-3"><Link href="/my-schedule" className="min-h-11 rounded-xl bg-emerald-800 px-5 py-3 text-base font-bold text-white">My maintenance work schedule</Link></div>
+    <nav aria-label="Shared staff tools" className="rounded-2xl border border-emerald-200 bg-white p-5">
+      <h2 className="text-xl font-black text-emerald-950">Your staff Hub</h2>
+      <p className="mt-2 text-base text-slate-700">Maintenance is part of Team TCS. You have the same shared staff spaces, rewards and learning tools as the rest of the team.</p>
+      <div className="mt-4 flex flex-wrap gap-3">{[
+        {href:"/my-schedule",label:"My Schedule"},
+        {href:"/time-clock",label:"Time Clock"},
+        {href:"/employee-lounge",label:"Employee Lounge"},
+        {href:"/communications",label:"Communications"},
+        {href:"/employee-bulletin",label:"Bulletin Board"},
+        {href:"/training-center",label:"Training Center"},
+        {href:"/team-store",label:"Team Store"},
+        {href:"/notifications",label:"Notifications"},
+      ].map(item=><Link key={item.href} href={item.href} className="inline-flex min-h-11 items-center rounded-xl bg-emerald-800 px-5 py-3 text-base font-bold text-white">{item.label}</Link>)}</div>
+    </nav>
     <section aria-label="Location rest awareness" className="rounded-2xl border border-emerald-200 bg-white p-5"><h2 className="text-xl font-black text-emerald-950">Before starting noisy work</h2><p className="mt-2 text-base text-slate-700">These location-only signals come from today’s recorded rest updates. Confirm with on-site staff before starting work. A missing or old entry does not mean children are awake.</p>{!restDataAvailable&&<p role="status" className="mt-3 text-amber-900">Rest updates could not be checked. Contact the location before starting noisy work.</p>}<div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{restSignals.filter(signal=>location==="All Locations"||signal.location===location).map(signal=><article key={signal.locationId} className={`rounded-xl border p-4 text-base ${signal.status==="resting"?"border-amber-300 bg-amber-50 text-amber-950":"border-slate-200 bg-slate-50 text-slate-900"}`}><h3 className="font-black">{signal.location}</h3><p className="mt-2 font-bold">{signal.label}</p>{signal.lastEntryTime&&<p className="mt-2">Latest recorded rest update: {signal.lastEntryTime}</p>}</article>)}</div><p className="mt-3 text-base text-slate-700">Emergency childcare coverage access is handled separately by leadership.</p></section>
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Metric icon={<Wrench className="h-5 w-5" />} label="Open Tickets" value={open.length} tone="slate" />
