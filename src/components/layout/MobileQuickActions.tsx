@@ -133,7 +133,7 @@ export default function MobileQuickActions() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-base font-black uppercase tracking-[0.18em]" style={{ color: theme.primary }}>The Hub • {locationOptionLabel(location)}</p>
-                  <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">Staff tools</h2>
+                  <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">All your tools</h2>
                   <p className="mt-1 text-base text-slate-700">Open a section or search for what you need.</p>
                 </div>
                 <button type="button" onClick={() => setOpen(false)} className="grid h-10 w-10 place-items-center rounded-2xl bg-white text-slate-700 shadow-sm" aria-label="Close tools"><X className="h-5 w-5" /></button>
