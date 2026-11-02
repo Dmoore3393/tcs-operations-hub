@@ -103,8 +103,8 @@ export default function AcceptInvitePage() {
               <div className="flex items-start gap-3">
                 <Mail className="mt-0.5 h-5 w-5 text-emerald-700" />
                 <div>
-                  <p className="font-black text-slate-950">{profile?.full_name || "Invited staff member"}</p>
-                  <p className="mt-0.5 text-sm text-slate-600">{profile?.email || session?.user.email}</p>
+                  <p className="font-black text-slate-950"><span translate="no" className="contents">{profile?.full_name || "Invited staff member"}</span></p>
+                  <p className="mt-0.5 text-sm text-slate-600"><span translate="no" className="contents">{profile?.email || session?.user.email}</span></p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-black text-emerald-900">{profile?.role}</span>
                     {(profile?.locations ?? []).map((location) => <span key={location} className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-600 ring-1 ring-slate-200">{location}</span>)}

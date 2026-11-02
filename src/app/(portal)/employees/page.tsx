@@ -101,7 +101,7 @@ export default function EmployeesPage() {
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((lane) => <article key={lane.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-start justify-between gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-lg font-black text-emerald-900">{lane.full_name.split(/\s+/).map((item) => item[0]).join("").slice(0, 2)}</div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-lg font-black text-emerald-900"><span translate="no" className="contents">{lane.full_name.split(/\s+/).map((item) => item[0]).join("").slice(0, 2)}</span></div>
             <div className="flex flex-wrap justify-end gap-2">{lane.lane_level && <StatusBadge tone="green">{laneLevelLabel(lane)}</StatusBadge>}<StatusBadge tone={lane.staff_user_id ? lane.account_active ? "blue" : "amber" : "slate"}>{lane.staff_user_id ? lane.account_active ? lane.account_invite_pending ? "Invite Pending" : "Hub Active" : "Hub Paused" : "No Hub Login"}</StatusBadge></div>
           </div>
           <h2 className="mt-4 text-xl font-black text-slate-950">{laneDisplayName(lane)}</h2>

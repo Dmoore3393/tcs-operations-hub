@@ -241,7 +241,7 @@ export default function EmergencyCardsPage() {
             const checked = selectedIds.includes(child.id);
             return <article key={child.id} className={`emergency-row ${readiness.ready ? "ready" : "attention"}`}>
               <button type="button" onClick={() => toggleSelected(child.id)} className={`emergency-check ${checked ? "checked" : ""}`} aria-label={checked ? "Remove from vehicle packet" : "Add to vehicle packet"}>{checked ? "✓" : ""}</button>
-              <div className="emergency-avatar">{child.firstName?.[0]}{child.lastName?.[0]}</div>
+              <div className="emergency-avatar"><span translate="no" className="contents">{child.firstName?.[0]}</span><span translate="no" className="contents">{child.lastName?.[0]}</span></div>
               <div className="emergency-child-main">
                 <div className="emergency-name-line"><h3>{childDisplayName(child)}</h3>{critical && <span className="critical-chip">MEDICAL ALERT</span>}</div>
                 <p>{child.age} • {locationKey(child.location)} • {child.transportRestraint || "Restraint not entered"}</p>
@@ -295,7 +295,7 @@ function EmergencyCardModal({ child, canUploadDocuments, onClose, onPrint }: { c
         <div><strong>{readiness.ready ? "Emergency Ready" : "Needs Attention Before Paperless Use"}</strong>{!readiness.ready && <span>{readiness.missing.join(" • ")}</span>}</div>
       </div>
 
-      {hasCriticalMedicalAlert(child) && <section className="emergency-alert-box"><HeartPulse /><div><small>CRITICAL MEDICAL / ALLERGY INFORMATION</small><strong>{child.allergies || "See emergency instructions"}</strong><p>{child.emergencyInstructions || child.medicalNotes}</p></div></section>}
+      {hasCriticalMedicalAlert(child) && <section className="emergency-alert-box"><HeartPulse /><div><small>CRITICAL MEDICAL / ALLERGY INFORMATION</small><strong><span translate="no" className="contents">{child.allergies || "See emergency instructions"}</span></strong><p><span translate="no" className="contents">{child.emergencyInstructions || child.medicalNotes}</span></p></div></section>}
 
       <div className="emergency-detail-grid">
         <CardSection title="Parent / Guardian" icon={<UserRound />}>
@@ -357,7 +357,7 @@ function PrintableEmergencyCard({ child }: { child: ChildRecord }) {
   const readiness = emergencyCardReadiness(child);
   return <article className="print-emergency-card">
     <header><div><small>TCS OPERATIONS HUB • EMERGENCY MEDICAL CARD</small><h2>{childDisplayName(child)}</h2><p>{child.age} • DOB {formatDate(child.dateOfBirth)} • {locationKey(child.location)}</p></div><strong className={readiness.ready ? "ready" : "attention"}>{readiness.status}</strong></header>
-    <div className="print-alert"><b>ALLERGIES / MEDICAL ALERTS:</b> {child.allergies || "None entered"}{child.emergencyInstructions ? <><br/><b>EMERGENCY INSTRUCTIONS:</b> {child.emergencyInstructions}</> : null}</div>
+    <div className="print-alert"><b>ALLERGIES / MEDICAL ALERTS:</b> <span translate="no" className="contents">{child.allergies || "None entered"}</span>{child.emergencyInstructions ? <><br/><b>EMERGENCY INSTRUCTIONS:</b> {child.emergencyInstructions}</> : null}</div>
     <div className="print-grid">
       <PrintField label="Parent / Guardian" value={child.primaryGuardian} />
       <PrintField label="Parent Phone" value={child.phone} />

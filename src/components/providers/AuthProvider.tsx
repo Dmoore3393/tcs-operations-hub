@@ -25,6 +25,7 @@ import { normalizeHubPathname } from "@/lib/route-pathname";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 export type StaffAccessProfile = {
+  preferred_language?:"en"|"es"|null;
   primary_location?:string|null;
   user_id: string;
   email: string;
@@ -488,7 +489,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-100 text-red-700"><LockKeyhole className="h-7 w-7" /></div>
           <h1 className="mt-5 text-2xl font-black text-slate-950">We couldn’t finish signing you in</h1>
           <p className="mt-3 leading-7 text-slate-600">{accessError || "This account is signed in, but it has not been approved for the TCS Operations Hub."}</p>
-          <p className="mt-2 text-sm text-slate-500">Signed in as {session.user.email}</p>
+          <p className="mt-2 text-sm text-slate-500">Signed in as <span translate="no" className="contents">{session.user.email}</span></p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <button
               onClick={() => {

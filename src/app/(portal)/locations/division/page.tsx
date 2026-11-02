@@ -205,7 +205,7 @@ export default function SchoolAgeCenterHomePage() {
           <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3"><Megaphone className="h-6 w-6 text-[#1769d2]" /><h3 className="text-xl font-black text-[#102a56]">Announcements</h3></div><span className="text-xs font-black text-slate-600">LIVE STATUS</span></div>
             <div className="mt-4 space-y-3">
-              {announcements.map((item) => { const Icon = item.icon; return <div key={item.title} className={`rounded-2xl border p-4 ${item.tone}`}><div className="flex gap-3"><span className="mt-0.5"><Icon className="h-5 w-5" /></span><div><p className="font-black">{item.title}</p><p className="mt-1 text-sm font-semibold leading-6 opacity-80">{item.body}</p></div></div></div>; })}
+              {announcements.map((item) => { const Icon = item.icon; return <div key={item.title} className={`rounded-2xl border p-4 ${item.tone}`}><div className="flex gap-3"><span className="mt-0.5"><Icon className="h-5 w-5" /></span><div><p className="font-black">{item.title}</p><p className="mt-1 text-sm font-semibold leading-6 opacity-80"><span translate="no" className="contents">{item.body}</span></p></div></div></div>; })}
             </div>
           </article>
 

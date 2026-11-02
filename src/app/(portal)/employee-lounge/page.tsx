@@ -229,7 +229,7 @@ export default function EmployeeLoungePage() {
             <div className="mt-4 space-y-3">
               {visibleShoutOuts.map((item) => (
                 <article key={item.id} className="rounded-2xl bg-[#fff8ed] p-4">
-                  <p className="text-sm font-semibold italic leading-6 text-slate-700">“{item.message}”</p>
+                  <p className="text-sm font-semibold italic leading-6 text-slate-700">“<span translate="no" className="contents">{item.message}</span>”</p>
                   <p className="mt-2 text-xs font-black text-[#2f6b37]">— {item.from}</p>
                   {item.created_at && <button type="button" onClick={()=>setSafetyPost(item)} className="mt-3 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">Report or block</button>}
                 </article>
@@ -265,7 +265,7 @@ export default function EmployeeLoungePage() {
                   <div key={item.title} className="rounded-2xl bg-[#fffaf1] p-3 text-center">
                     <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#2f6b37] shadow"><Icon className="h-5 w-5" /></span>
                     <p className="mt-2 text-xs font-black text-[#0b3153]">{item.title}</p>
-                    <p className="mt-1 text-base font-semibold text-slate-500">{item.note}</p>
+                    <p className="mt-1 text-base font-semibold text-slate-500"><span translate="no" className="contents">{item.note}</span></p>
                   </div>
                 );
               })}

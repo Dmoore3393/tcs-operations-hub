@@ -495,7 +495,7 @@ export default function StaffOnboardingPage() {
                       className={`w-full rounded-2xl border p-4 text-left ${selectedId === plan.id ? "border-emerald-700 bg-emerald-50 ring-2 ring-emerald-700" : "border-slate-200 bg-white"}`}
                     >
                       <strong className="block text-lg text-slate-950">
-                        {plan.full_name}
+                        <span translate="no" className="contents">{plan.full_name}</span>
                       </strong>
                       <span className="mt-1 block text-base text-slate-700">
                         {plan.job_title} • starts {plan.start_date}
@@ -533,7 +533,7 @@ export default function StaffOnboardingPage() {
                 <section className="min-w-0 space-y-4">
                   <div className="rounded-3xl border border-slate-200 bg-white p-5">
                     <h2 className="text-2xl font-black text-slate-950">
-                      {selected.full_name}
+                      <span translate="no" className="contents">{selected.full_name}</span>
                     </h2>
                     <p className="mt-2 text-base text-slate-700">
                       {selected.job_title} •{" "}

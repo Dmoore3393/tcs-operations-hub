@@ -183,7 +183,7 @@ export default function EmployeeBulletinPage() {
           {showUserMenu && (
             <div className="absolute right-5 top-16 z-50 w-64 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
               <p className="font-black text-[#0b3158]">{staffName}</p>
-              <p className="mt-1 text-xs text-slate-500">{profile?.email || user?.email}</p>
+              <p className="mt-1 text-xs text-slate-500"><span translate="no" className="contents">{profile?.email || user?.email}</span></p>
               <button onClick={() => void signOut()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#0b3158] px-4 py-2.5 text-sm font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button>
             </div>
           )}

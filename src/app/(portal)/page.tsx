@@ -164,7 +164,7 @@ export default function Home() {
             <div className="pointer-events-none absolute -bottom-14 left-10 h-32 w-32 rounded-full bg-white/5" />
             <div className="relative">
               <p className="text-base font-black uppercase tracking-[.18em] text-white/65">The Hub • {location}</p>
-              <h1 className="mt-2 text-[28px] font-black leading-8">{greeting}, {profile?.full_name?.split(" ")[0] || "there"} 👋</h1>
+              <h1 className="mt-2 text-[28px] font-black leading-8">{greeting}, <span translate="no" className="contents">{profile?.full_name?.split(" ")[0] || "there"}</span> 👋</h1>
               <p className="mt-1 text-xs font-semibold text-white/70">{profile?.job_title || "TCS Team"}{profile?.secondary_title ? ` • ${profile.secondary_title}` : ""}</p>
               <div className="mt-4 flex items-end justify-between gap-3"><p className="max-w-[230px] text-sm font-semibold leading-5 text-white/85">Everything you need for your shift, right from your phone—and a little more fun to use. ✨</p><GatorGuide size="sm" /></div>
 

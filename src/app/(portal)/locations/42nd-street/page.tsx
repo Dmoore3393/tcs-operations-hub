@@ -226,7 +226,7 @@ export default function LaraFamilyChildcareHomePage() {
               <div className="grid grid-cols-[1.3fr_.7fr_1fr_.8fr] bg-[#faf7f0] px-3 py-2 text-base font-black uppercase tracking-wide text-slate-600"><span>Name</span><span>Age</span><span>Group</span><span>Status</span></div>
               {laraChildren.slice(0, 5).map((child) => (
                 <div key={child.id} className="grid grid-cols-[1.3fr_.7fr_1fr_.8fr] items-center border-t border-[#f1eadf] px-3 py-2 text-xs">
-                  <span className="truncate font-black text-[#0b3153]">{child.firstName} {child.lastName.slice(0, 1)}.</span>
+                  <span className="truncate font-black text-[#0b3153]"><span translate="no" className="contents">{child.firstName}</span> <span translate="no" className="contents">{child.lastName.slice(0, 1)}</span>.</span>
                   <span className="truncate text-slate-500">{child.age}</span>
                   <span className="truncate text-slate-500">{child.ageGroup}</span>
                   <span className={`w-fit rounded-full px-2 py-1 text-base font-black ${child.attendanceToday === "Present" ? "bg-[#edf7ee] text-[#2f6b37]" : child.attendanceToday === "Absent" ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-500"}`}>{child.attendanceToday}</span>
@@ -255,7 +255,7 @@ export default function LaraFamilyChildcareHomePage() {
             <div className="space-y-3">
               {notices.map((notice) => {
                 const Icon = notice.icon;
-                return <div key={notice.title} className={`rounded-2xl border p-3 ${notice.tone}`}><div className="flex items-start gap-3"><Icon className="mt-0.5 h-5 w-5 shrink-0" /><div><p className="text-sm font-black">{notice.title}</p><p className="mt-1 text-xs font-semibold leading-5 opacity-80">{notice.body}</p></div></div></div>;
+                return <div key={notice.title} className={`rounded-2xl border p-3 ${notice.tone}`}><div className="flex items-start gap-3"><Icon className="mt-0.5 h-5 w-5 shrink-0" /><div><p className="text-sm font-black">{notice.title}</p><p className="mt-1 text-xs font-semibold leading-5 opacity-80"><span translate="no" className="contents">{notice.body}</span></p></div></div></div>;
               })}
             </div>
           </Card>

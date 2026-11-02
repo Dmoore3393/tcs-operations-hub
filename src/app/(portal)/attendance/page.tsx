@@ -328,7 +328,7 @@ export default function AttendancePage() {
         </header>
         <div className="space-y-4 p-5">
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold leading-5 text-amber-950">
-            This changes where {moveChild.firstName} counts for attendance and ratios <strong>today only</strong>. Their enrolled home location stays {moveChild.location}.
+            This changes where <span translate="no" className="contents">{moveChild.firstName}</span> counts for attendance and ratios <strong>today only</strong>. Their enrolled home location stays {moveChild.location}.
           </div>
           <label>
             <span className="mb-1 block text-xs font-black uppercase tracking-wider text-slate-500">Move to</span>

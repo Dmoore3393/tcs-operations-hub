@@ -106,7 +106,7 @@ export default function ParentAccountPendingPage() {
               <button onClick={() => void signOut()} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-800"><LogOut className="h-4 w-4" />Sign Out</button>
             </div>
 
-            <p className="mt-6 text-center text-xs font-semibold leading-5 text-slate-500">Signed in as {status?.email}. No pending child details are shown on this page while approval is incomplete.</p>
+            <p className="mt-6 text-center text-xs font-semibold leading-5 text-slate-500">Signed in as <span translate="no" className="contents">{status?.email}</span>. No pending child details are shown on this page while approval is incomplete.</p>
           </>}
         </div>
       </section>

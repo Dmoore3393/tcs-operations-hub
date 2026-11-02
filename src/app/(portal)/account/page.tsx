@@ -18,7 +18,7 @@ export default function AccountPage(){
  return <main className="min-h-screen bg-[#f4f0e7] p-4 py-10 text-slate-950"><section className="mx-auto max-w-2xl rounded-3xl bg-white p-6 shadow-lg sm:p-9">
   <p className="text-xs font-black uppercase tracking-widest text-emerald-700">The Hub • Your account</p><h1 className="mt-2 text-3xl font-black">Account & Privacy</h1>
   {loading?<p className="mt-6">Loading your account…</p>:!session?<div className="mt-6"><p>Sign in with the account you want to delete.</p><div className="mt-4 flex gap-3"><Link href="/login" className="rounded-xl bg-emerald-700 px-4 py-3 font-bold text-white">Staff sign-in</Link><Link href="/parent-login" className="rounded-xl border px-4 py-3 font-bold">Parent sign-in</Link></div></div>:<>
-   <p className="mt-3 break-all text-sm text-slate-600">Signed in as {session.user.email}</p>
+   <p className="mt-3 break-all text-sm text-slate-600">Signed in as <span translate="no" className="contents">{session.user.email}</span></p>
    <h2 className="mt-7 text-xl font-black">Delete your account</h2>
    <p className="mt-3 leading-7">You can request permanent deletion here. TCS will review and complete your request within 30 days. This removes your Hub account and associated personal data that TCS is not required to retain.</p>
    <p className="mt-3 text-sm leading-6 text-slate-600">Childcare enrollment, attendance, billing/subsidy, incident, and employee compliance records may be retained when required under TCS’s record-retention obligations. TCS will explain any records retained when confirming completion. Submitting this request does not immediately delete your account or any child’s records.</p>
