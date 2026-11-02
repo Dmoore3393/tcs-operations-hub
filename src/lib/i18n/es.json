@@ -2712,5 +2712,7 @@
   "TCS Closed": "TCS cerrado",
   "The same intervals and rules used by the Staffing Command Center.": "Los mismos intervalos y reglas del Centro de gestión de personal.",
   "This export is built from the exact same live coverage windows—not a separate spreadsheet calculation.": "Esta exportación usa los mismos intervalos de cobertura en vivo, sin cálculos de hoja de cálculo separados.",
-  "This page now uses the same staffing engine as the Staffing Command Center. Child schedules create demand, verified rules calculate required staffing, and transportation/break/admin blocks remove staff from floor coverage.": "Esta página usa la misma planificación que el Centro de gestión de personal. Los horarios infantiles generan demanda; las reglas verificadas calculan personal necesario; transporte, descansos y tareas administrativas reducen la cobertura de aula."
+  "This page now uses the same staffing engine as the Staffing Command Center. Child schedules create demand, verified rules calculate required staffing, and transportation/break/admin blocks remove staff from floor coverage.": "Esta página usa la misma planificación que el Centro de gestión de personal. Los horarios infantiles generan demanda; las reglas verificadas calculan personal necesario; transporte, descansos y tareas administrativas reducen la cobertura de aula.",
+  "Handoffs complete": "Entregas completadas",
+  "children": "niños"
 }
