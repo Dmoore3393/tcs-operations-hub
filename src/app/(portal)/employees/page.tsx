@@ -1,5 +1,6 @@
 "use client";
 
+import EmployeeInviteDialog from "@/components/employees/EmployeeInviteDialog";
 import MainLayout from "@/components/layout/MainLayout";
 import { PageIntro, SectionCard, StatCard, StatusBadge, inputClass } from "@/components/hub/HubUI";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -16,18 +17,21 @@ type LanePayload = {
 
 export default function EmployeesPage() {
   const { session, isSystemOwner } = useAuth();
+  const accessToken=session?.access_token;
   const [payload, setPayload] = useState<LanePayload>({ lanes: [], currentUserId: "", canManageLanes: false });
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState("All Lanes");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [inviteEmployee,setInviteEmployee]=useState<StaffLaneProfile|null>(null);
+  const [notice,setNotice]=useState("");
 
   const load = useCallback(async () => {
-    if (!session?.access_token) return;
+    if (!accessToken) return;
     setLoading(true);
     try {
       const response = await fetch("/api/staff-lanes", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
         cache: "no-store",
       });
       const body = await response.json().catch(() => ({})) as LanePayload & { error?: string };
@@ -39,9 +43,9 @@ export default function EmployeesPage() {
     } finally {
       setLoading(false);
     }
-  }, [session?.access_token]);
+  }, [accessToken]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const timer=window.setTimeout(()=>void load(),0);return()=>window.clearTimeout(timer); }, [load]);
 
   const groups = useMemo(() => ["All Lanes", ...Array.from(new Set(payload.lanes.map((lane) => lane.lane_group)))], [payload.lanes]);
   const filtered = useMemo(() => payload.lanes.filter((lane) => {
@@ -74,6 +78,7 @@ export default function EmployeesPage() {
     <Link href="/staff-onboarding" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-800 px-5 py-3 text-base font-bold text-white"><Users className="h-5 w-5" /> New-Hire Onboarding</Link>
 
     {isSystemOwner && <Link href="/employees/personnel" className="inline-flex min-h-11 items-center rounded-xl border border-emerald-800 px-5 py-3 text-base font-bold text-emerald-900">Private Personnel Records</Link>}
+    {notice && <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-base font-bold text-emerald-950">{notice}</div>}
     {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-900">{error}</div>}
 
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -95,7 +100,7 @@ export default function EmployeesPage() {
         {filtered.map((lane) => <article key={lane.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-lg font-black text-emerald-900">{lane.full_name.split(/\s+/).map((item) => item[0]).join("").slice(0, 2)}</div>
-            <div className="flex flex-wrap justify-end gap-2">{lane.lane_level && <StatusBadge tone="green">{laneLevelLabel(lane)}</StatusBadge>}<StatusBadge tone={lane.staff_user_id ? lane.account_active ? "blue" : "amber" : "slate"}>{lane.staff_user_id ? lane.account_active ? "Hub Active" : "Hub Paused" : "No Hub Login"}</StatusBadge></div>
+            <div className="flex flex-wrap justify-end gap-2">{lane.lane_level && <StatusBadge tone="green">{laneLevelLabel(lane)}</StatusBadge>}<StatusBadge tone={lane.staff_user_id ? lane.account_active ? "blue" : "amber" : "slate"}>{lane.staff_user_id ? lane.account_active ? lane.account_invite_pending ? "Invite Pending" : "Hub Active" : "Hub Paused" : "No Hub Login"}</StatusBadge></div>
           </div>
           <h2 className="mt-4 text-xl font-black text-slate-950">{laneDisplayName(lane)}</h2>
           <p className="text-sm font-black text-emerald-800">{lane.job_title}</p>
@@ -109,11 +114,13 @@ export default function EmployeesPage() {
           <div className="mt-4 flex flex-wrap gap-2">
             <Link href="/organization" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700">View Organization</Link>
             {lane.staff_user_id && <Link href="/staff-performance" className="rounded-xl bg-emerald-800 px-3 py-2 text-xs font-black text-white">Performance</Link>}
-            {isSystemOwner && <Link href="/team-access" className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800">Access</Link>}
+            {isSystemOwner && !lane.staff_user_id && <button className="min-h-11 rounded-xl bg-emerald-800 px-4 py-3 text-base font-bold text-white" onClick={()=>{setNotice("");setInviteEmployee(lane);}}>Invite to Hub</button>}
+            {isSystemOwner && lane.staff_user_id && <Link href={`/team-access?user=${encodeURIComponent(lane.staff_user_id)}`} className="min-h-11 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-base font-bold text-emerald-800">Manage Access</Link>}
           </div>
           <div className="mt-4 border-t border-slate-100 pt-3 text-base font-black uppercase tracking-wider text-slate-600">Hub access: {lane.access_role || "Not assigned"} • Source: {lane.source_label}</div>
         </article>)}
       </section>
     }
+    {isSystemOwner && inviteEmployee && <EmployeeInviteDialog key={inviteEmployee.id} employee={inviteEmployee} onClose={()=>setInviteEmployee(null)} onInvited={async()=>{setNotice(`Invitation sent for ${inviteEmployee.full_name}. The login is linked to their existing employee profile.`);setInviteEmployee(null);await load();}}/>}
   </div></MainLayout>;
 }
