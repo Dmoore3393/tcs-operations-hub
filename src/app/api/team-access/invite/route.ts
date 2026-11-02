@@ -76,7 +76,7 @@ export async function POST(request: Request) {
       if (laneResult.data.staff_user_id) return Response.json({ error: "That TCS lane is already linked to another Hub account." }, { status: 409 });
       if(laneResult.data.full_name !== fullName)return Response.json({error:"Use the existing employee’s name. Invitations do not rename staff profiles."},{status:400});
       selectedLane = laneResult.data;
-      if(role==="Employee" && laneResult.data.department?.toLowerCase()==="maintenance")permissions=permissions.includes("maintenance_manage")?["maintenance_manage"]:["maintenance_view"];
+      if(role==="Employee" && laneResult.data.department?.toLowerCase()==="maintenance")permissions=[permissions.includes("maintenance_manage")?"maintenance_manage":"maintenance_view",...(permissions.includes("transportation")?["transportation" as const]:[])];
     }
 
     const { data: existing, error:existingError } = await admin

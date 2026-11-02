@@ -314,7 +314,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const maintenanceOnly=isEmployeeRole(profile.role) && (profile.permissions||[]).some(permission=>permission==="maintenance_view"||permission==="maintenance_manage") && (profile.permissions||[]).every(permission=>permission==="maintenance_view"||permission==="maintenance_manage");
+    const maintenanceOnly=isEmployeeRole(profile.role) && (profile.permissions||[]).some(permission=>permission==="maintenance_view"||permission==="maintenance_manage") && (profile.permissions||[]).every(permission=>permission==="maintenance_view"||permission==="maintenance_manage"||permission==="transportation");
     if(profile.accepted_at && maintenanceOnly && ["/","/login","/accept-invite"].includes(pathname)){router.replace("/maintenance");return;}
     if (profile.accepted_at && (pathname === "/login" || pathname === "/accept-invite")) {
       router.replace("/");

@@ -80,7 +80,7 @@ test('real RLS blocks employee recurring schedule writes and limits licensees to
 const locationUrl=url(await readFile('src/lib/location-config.ts','utf8'));
 const slugUrl=url((await readFile('src/lib/server/location-slug.ts','utf8')).replace('import "server-only";','').replace('"@/lib/location-config"',JSON.stringify(locationUrl)));
 let rpcCalls=[];
-let maintenanceSource=(await readFile('src/app/api/maintenance/route.ts','utf8')).replace('"@/lib/maintenance-rest"',JSON.stringify(url(await readFile('src/lib/maintenance-rest.ts','utf8')))).replace('"@/lib/maintenance-access"',JSON.stringify(accessUrl)).replace('"@/lib/server/location-slug"',JSON.stringify(slugUrl)).replace('"@/lib/location-config"',JSON.stringify(locationUrl)).replace(/import \{requireStaff,staffErrorResponse\}[^;]+;/,'const requireStaff=async()=>globalThis.maintenanceAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
+let maintenanceSource=(await readFile('src/app/api/maintenance/route.ts','utf8')).replaceAll('"@/lib/maintenance"',JSON.stringify(url(await readFile('src/lib/maintenance.ts','utf8')))).replace('"@/lib/maintenance-rest"',JSON.stringify(url(await readFile('src/lib/maintenance-rest.ts','utf8')))).replace('"@/lib/maintenance-access"',JSON.stringify(accessUrl)).replace('"@/lib/server/location-slug"',JSON.stringify(slugUrl)).replace('"@/lib/location-config"',JSON.stringify(locationUrl)).replace(/import \{requireStaff,staffErrorResponse\}[^;]+;/,'const requireStaff=async()=>globalThis.maintenanceAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
 const maintenanceApi=await import(url(maintenanceSource));
 function apiSetup(permissions){
  rpcCalls=[];const rows={locations:[{id:loc,organization_id:'org',slug:'halcom',name:'Halcom',full_name:'Synthetic Halcom',is_active:true},{id:other,organization_id:'org',slug:'division',name:'Division',full_name:'Synthetic Division',is_active:true}],staff_location_assignments:[{organization_id:'org',user_id:'employee',location_id:loc}],hub_state:[{organization_id:'org',state_key:'tcs-maintenance-tickets-v1',version:7,state_value:[{id:'own',location:'Halcom',title:'Own ticket',reportedBy:'Original reporter',reportedAt:'original-time'},{id:'hidden',location:'Division',title:'Other site private note'}]}]};
@@ -129,4 +129,23 @@ test('database approval triggers also reject unauthorized server-side decisions 
 test('account deletion can clear reviewer references without changing approved schedules',async()=>{
  await db.query("insert into family_schedule_submissions values($1,$2,$3,'Approved',$4,'[]')",[id(97),org,loc,jen]);await db.query('insert into child_schedule_overrides values($1,$2,$3,$4)',[id(98),org,loc,jen]);
  await db.query('delete from auth.users where id=$1',[jen]);assert.equal((await db.query('select reviewed_by,status from family_schedule_submissions')).rows[0].reviewed_by,null);assert.equal((await db.query('select status from family_schedule_submissions')).rows[0].status,'Approved');assert.equal((await db.query('select approved_by from child_schedule_overrides')).rows[0].approved_by,null);
+});
+
+
+test('optional transportation grants driver tools without childcare approvals or ticket editing for a viewer',()=>{
+ const permissions=['maintenance_view','transportation'];
+ for(const path of ['/transportation','/transportation-v2','/maintenance','/communications'])assert.equal(team.employeeCanAccessRoute(permissions,path),true);
+ for(const key of ['tcs-routes','tcs-schools-v2','tcs-vehicles-v2','tcs-vehicle-readiness-v2'])assert.equal(team.employeeCanReadState(permissions,key),true);
+ assert.equal(team.employeeCanAccessRoute(permissions,'/child-schedules'),false);assert.equal(team.employeeCanWriteState(permissions,'tcs-child-schedules-v2'),false);assert.equal(access.canManageMaintenance({role:'Employee',permissions}),false);
+});
+test('vehicle services persist mileage and next service details, and reject invalid or view-only changes',async()=>{
+ apiSetup(['maintenance_manage']);const ticket={id:'new-vehicle-service',title:'Synthetic oil service',location:'Halcom',priority:'Routine',status:'Completed',kind:'Vehicle',vehicleName:'Synthetic test van',serviceType:'Oil & filters',odometer:120000,nextServiceMileage:125000,nextServiceDate:'2026-12-01',completionNotes:'Synthetic oil and filter replaced'};
+ const result=await maintenancePost(ticket);assert.equal(result.status,200);const saved=rpcCalls[0].args.p_ticket;assert.equal(saved.vehicleName,ticket.vehicleName);assert.equal(saved.odometer,120000);assert.equal(saved.nextServiceMileage,125000);assert.equal(saved.nextServiceDate,'2026-12-01');assert.ok(saved.completedAt);
+ for(const change of [{vehicleName:''},{serviceType:'Unknown'},{odometer:-1},{odometer:12.5},{nextServiceMileage:'120000'},{nextServiceDate:'2026-02-30'}]){apiSetup(['maintenance_manage']);assert.equal((await maintenancePost({...ticket,...change})).status,400);assert.equal(rpcCalls.length,0);}
+ apiSetup(['maintenance_view','transportation']);assert.equal((await maintenancePost(ticket)).status,403);assert.equal(rpcCalls.length,0);
+});
+test('versioned database writes retain vehicle service history alongside facility tickets',async()=>{
+ const ticket={id:'synthetic-vehicle-service',title:'Synthetic brake service',location:'synthetic-site',kind:'Vehicle',vehicleName:'Synthetic test van',serviceType:'Brakes',odometer:100000,nextServiceMileage:110000,nextServiceDate:'2026-12-01',status:'Completed',completionNotes:'Synthetic completion history'};
+ await db.query('select save_maintenance_ticket($1,$2,$3,null,$4,$5)',[org,manager,loc,JSON.stringify(ticket),1]);
+ const records=(await db.query('select state_value from hub_state')).rows[0].state_value;assert.deepEqual(records[1],ticket);assert.equal(records[0].id,'existing-other-location');
 });
