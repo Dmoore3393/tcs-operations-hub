@@ -18,6 +18,7 @@ export type StaffLaneProfile = {
   sort_order: number;
   access_role?: string | null;
   account_active?: boolean | null;
+  account_invite_pending?:boolean;
 };
 
 export function laneLevelLabel(lane: StaffLaneProfile) {

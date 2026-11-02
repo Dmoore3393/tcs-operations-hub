@@ -27,7 +27,7 @@ jobs:
       - name: Verify native app readiness foundation
         run: npm run app:check
       - name: Verify staff setup, contact editing, and birthday privacy
-        run: node --test scripts/test-staff-contact.mjs scripts/test-pwa-update-prompt.mjs scripts/test-child-edit-preservation.mjs scripts/test-import-recovery.mjs
+        run: node --test scripts/test-staff-contact.mjs scripts/test-employee-invites.mjs scripts/test-pwa-update-prompt.mjs scripts/test-child-edit-preservation.mjs scripts/test-import-recovery.mjs
       - name: Verify timesheet workflow, accountability, and database locks
         run: node --test scripts/test-timesheet-workflow.mjs scripts/test-timesheet-checklist.mjs scripts/test-timesheet-policy.mjs scripts/test-timesheet-policy-database.mjs scripts/test-timesheet-api.mjs scripts/test-timesheet-controls.mjs scripts/test-timesheet-database.mjs scripts/test-timesheet-direct-intake.mjs
       - name: Verify account deletion, bounded loading, native API access, and family alert authorization

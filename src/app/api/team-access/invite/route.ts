@@ -25,6 +25,22 @@ function locationsForRole(role: AccessRole, values: string[] | undefined) {
   return unique;
 }
 
+export async function GET(request:Request) {
+  try {
+    const {admin,profile}=await requireOwner(request);
+    const laneId=new URL(request.url).searchParams.get("lane") || "";
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(laneId))return Response.json({error:"Choose an existing employee profile."},{status:400});
+    const lane=await admin.from("staff_lane_profiles").select("id,full_name,job_title,primary_location,staff_user_id").eq("organization_id",profile.organization_id).eq("id",laneId).eq("is_active",true).maybeSingle();
+    if(lane.error)throw lane.error;
+    if(!lane.data)return Response.json({error:"The active employee profile was not found."},{status:404});
+    if(lane.data.staff_user_id)return Response.json({error:"This employee already has a linked Hub account. Use Manage Access to review it or send a new setup link."},{status:409});
+    const contacts=await admin.from("staff_personnel_imports").select("details").eq("organization_id",profile.organization_id).eq("lane_id",lane.data.id);
+    if(contacts.error)throw contacts.error;
+    const emails=[...new Set((contacts.data || []).map(row=>{const value=row.details?.Email;return typeof value==="string" ? value.trim().toLowerCase() : "";}).filter(value=>/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(value)))];
+    return Response.json({employee:lane.data,email:emails.length===1?emails[0]:"",emailNeedsReview:emails.length>1},{headers:{"Cache-Control":"private, no-store","Vary":"Authorization"}});
+  }catch(error){return responseFromThrown(error);}
+}
+
 export async function POST(request: Request) {
   try {
     const { admin, user, profile } = await requireOwner(request);
@@ -37,19 +53,20 @@ export async function POST(request: Request) {
       return Response.json({ error: "Enter the person’s name, email, and role." }, { status: 400 });
     }
 
-    if (!/^\S+@\S+\.\S+$/.test(email)) {
+    if (email.length>254 || !/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(email)) {
       return Response.json({ error: "Enter a valid email address." }, { status: 400 });
     }
 
-    const locations = locationsForRole(role, body.locations);
+    let locations:string[];
+    try{locations = locationsForRole(role, body.locations);}catch(error){return Response.json({error:error instanceof Error?error.message:"Choose valid locations."},{status:400});}
     const permissions = role === "Employee" ? sanitizeEmployeePermissions(body.permissions) : [];
     const requestedLaneId = body.lane_profile_id?.trim() || null;
 
-    let selectedLane: { id: string; staff_user_id: string | null; job_title: string; secondary_title: string | null } | null = null;
+    let selectedLane: { id: string; full_name:string; updated_at:string; staff_user_id: string | null; job_title: string; secondary_title: string | null } | null = null;
     if (requestedLaneId) {
       const laneResult = await admin
         .from("staff_lane_profiles")
-        .select("id,staff_user_id,job_title,secondary_title")
+        .select("id,full_name,updated_at,staff_user_id,job_title,secondary_title")
         .eq("organization_id", profile.organization_id)
         .eq("id", requestedLaneId)
         .eq("is_active", true)
@@ -57,16 +74,18 @@ export async function POST(request: Request) {
       if (laneResult.error) throw laneResult.error;
       if (!laneResult.data) return Response.json({ error: "The selected TCS lane was not found." }, { status: 400 });
       if (laneResult.data.staff_user_id) return Response.json({ error: "That TCS lane is already linked to another Hub account." }, { status: 409 });
+      if(laneResult.data.full_name !== fullName)return Response.json({error:"Use the existing employee’s name. Invitations do not rename staff profiles."},{status:400});
       selectedLane = laneResult.data;
     }
 
-    const { data: existing } = await admin
+    const { data: existing, error:existingError } = await admin
       .from("staff_access")
       .select("user_id,email")
       .eq("organization_id", profile.organization_id)
       .ilike("email", email)
       .maybeSingle();
 
+    if(existingError)throw existingError;
     if (existing) {
       return Response.json({ error: "That email already has a TCS account. Edit the existing account or send a new setup link." }, { status: 409 });
     }
@@ -114,13 +133,15 @@ export async function POST(request: Request) {
     if (selectedLane) {
       const laneLink = await admin
         .from("staff_lane_profiles")
-        .update({ staff_user_id: invitedUser.id, full_name: fullName })
+        .update({ staff_user_id: invitedUser.id })
         .eq("organization_id", profile.organization_id)
-        .eq("id", selectedLane.id);
-      if (laneLink.error) {
+        .eq("id", selectedLane.id)
+        .is("staff_user_id",null).eq("is_active",true).eq("updated_at",selectedLane.updated_at).select("id").maybeSingle();
+      if (laneLink.error || !laneLink.data) {
         await admin.from("staff_access").delete().eq("user_id", invitedUser.id);
         await admin.auth.admin.deleteUser(invitedUser.id).catch(() => undefined);
-        throw laneLink.error;
+        if(laneLink.error)throw laneLink.error;
+        return Response.json({error:"This employee profile changed or was already linked. Refresh Employees before trying again."},{status:409});
       }
     }
 

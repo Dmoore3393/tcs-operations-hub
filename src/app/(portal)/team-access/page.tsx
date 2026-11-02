@@ -94,7 +94,7 @@ export default function TeamAccessPage() {
       const next = (payload.accounts ?? []) as TeamAccessAccount[];
       setAccounts(next);
       setLanes((payload.lanes ?? []) as StaffLaneProfile[]);
-      const selected = next.find((account) => account.user_id === preferredId) ?? next[0] ?? null;
+      const selected = next.find((account) => account.user_id === (preferredId || new URLSearchParams(window.location.search).get("user"))) ?? next[0] ?? null;
       setEditing(selected ? { ...selected, locations: [...selected.locations], permissions: [...selected.permissions] } : null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Could not load team accounts.");

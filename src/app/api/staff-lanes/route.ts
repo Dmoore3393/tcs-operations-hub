@@ -16,7 +16,7 @@ export async function GET(request: Request) {
         .order("full_name"),
       auth.admin
         .from("staff_access")
-        .select("user_id,role,is_active")
+        .select("user_id,role,is_active,accepted_at")
         .eq("organization_id", auth.profile.organization_id),
     ]);
 
@@ -30,6 +30,7 @@ export async function GET(request: Request) {
         ...lane,
         access_role: access?.role ?? null,
         account_active: access ? Boolean(access.is_active) : null,
+        account_invite_pending:Boolean(access?.is_active && !access.accepted_at),
       };
     });
 
