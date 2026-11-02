@@ -51,3 +51,10 @@ test("normalization never grants an unauthenticated profile access", () => {
     assert.equal(canAccessRoute(null, route), false);
   }
 });
+
+test('Jennifer’s staff scheduler requires Owner/Admin access while employees keep My Schedule',()=>{
+ const owner={role:'Owner / Admin',full_name:'Jennifer Thomason',permissions:[]};
+ assert.equal(canAccessRoute(owner,'/staff-schedules'),true);
+ for(const profile of [null,{role:'Location Licensee',full_name:'Synthetic Licensee',permissions:[]},{role:'Employee',full_name:'Synthetic Employee',permissions:['schedules']}])for(const route of ['/staff-schedules','/staff-schedules/'])assert.equal(canAccessRoute(profile,route),false);
+ assert.equal(canAccessRoute({role:'Employee',full_name:'Synthetic Employee',permissions:[]},'/my-schedule'),true);
+});
