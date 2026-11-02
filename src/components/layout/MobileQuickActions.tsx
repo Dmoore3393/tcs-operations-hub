@@ -1,5 +1,6 @@
 "use client";
 
+import {groupHubTools,toolSectionOpen} from "@/lib/hub-tool-groups";
 import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
 import { locationOptionLabel } from "@/lib/location-config";
 import { useHubLocation } from "@/components/providers/LocationProvider";
@@ -105,16 +106,7 @@ export default function MobileQuickActions() {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  const groups = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return toolGroups
-      .map((group) => ({
-        ...group,
-        items: group.items.filter((item) => canAccessRoute(profile, item.href))
-          .filter((item) => !term || item.label.toLowerCase().includes(term)),
-      }))
-      .filter((group) => group.items.length);
-  }, [profile, search]);
+  const groups=useMemo(()=>groupHubTools(toolGroups.flatMap(group=>group.items).filter(item=>canAccessRoute(profile,item.href)),search),[profile,search]);
 
   const bottomItems = [
     { href: "/", label: "Home", icon: Home },
@@ -142,7 +134,7 @@ export default function MobileQuickActions() {
                 <div>
                   <p className="text-base font-black uppercase tracking-[0.18em]" style={{ color: theme.primary }}>The Hub • {locationOptionLabel(location)}</p>
                   <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">All your tools</h2>
-                  <p className="mt-1 text-xs font-semibold text-slate-500">Only tools approved for your account are shown.</p>
+                  <p className="mt-1 text-base text-slate-700">Open a section or search for what you need.</p>
                 </div>
                 <button type="button" onClick={() => setOpen(false)} className="grid h-10 w-10 place-items-center rounded-2xl bg-white text-slate-700 shadow-sm" aria-label="Close tools"><X className="h-5 w-5" /></button>
               </div>
@@ -151,17 +143,18 @@ export default function MobileQuickActions() {
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
+                  aria-label="Find a staff tool"
                   placeholder="Find a tool…"
-                  className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm font-semibold text-slate-900 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                  className="w-full rounded-2xl border border-slate-200 bg-white min-h-12 py-3 pl-10 pr-4 text-base font-semibold text-slate-900 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
                 />
               </label>
             </div>
 
             <div className="max-h-[calc(86dvh-138px)] overflow-y-auto px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4">
               {groups.map((group) => (
-                <div key={group.title} className="mb-6">
-                  <p className="mb-2 px-1 text-base font-black uppercase tracking-[0.16em] text-slate-600">{group.title}</p>
-                  <div className="grid grid-cols-3 gap-2.5">
+                <details key={group.title} open={toolSectionOpen(group,pathname,search)} className="mb-3 rounded-2xl border border-slate-200 bg-white p-3">
+                  <summary className="min-h-11 cursor-pointer py-3 text-lg font-black text-slate-950">{group.title}</summary>
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                     {group.items.map((item) => {
                       const Icon = item.icon;
                       const selected = active(item.href);
@@ -174,12 +167,12 @@ export default function MobileQuickActions() {
                           style={selected ? { background: `linear-gradient(145deg, ${theme.primary}, ${theme.primaryDark})` } : undefined}
                         >
                           <span className={`grid h-9 w-9 place-items-center rounded-xl ${selected ? "bg-white/15" : "bg-slate-100"}`}><Icon className="h-5 w-5" /></span>
-                          <span className="text-base font-black leading-4">{item.label}</span>
+                          <span className="text-base font-bold leading-5">{item.label}</span>
                         </Link>
                       );
                     })}
                   </div>
-                </div>
+                </details>
               ))}
               {!groups.length && <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm font-bold text-slate-500">No matching tools.</div>}
             </div>
@@ -212,7 +205,7 @@ export default function MobileQuickActions() {
           })}
           <button type="button" onClick={() => setOpen(true)} className={`flex min-h-[66px] flex-col items-center justify-center gap-1 rounded-xl px-1 text-base font-black ${open ? "text-slate-950" : "text-slate-600"}`}>
             <span className={`grid h-8 w-8 place-items-center rounded-xl ${open ? "bg-slate-100" : ""}`}><Menu className="h-4.5 w-4.5" /></span>
-            More
+            Tools
           </button>
         </div>
       </nav>

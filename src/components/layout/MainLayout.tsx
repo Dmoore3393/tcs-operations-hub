@@ -1,5 +1,6 @@
 "use client";
 
+import {groupHubTools,toolSectionOpen} from "@/lib/hub-tool-groups";
 import LegalFooter from "@/components/LegalFooter";
 
 import { GatorGuide } from "@/components/brand/HubJoy";
@@ -323,16 +324,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
         <label className="relative mx-3 mt-4 block"><span className="sr-only">Find a Hub tool</span><Search className="pointer-events-none absolute left-3 top-4 h-5 w-5 text-emerald-950" aria-hidden="true" /><input ref={toolSearch} value={toolQuery} onChange={(event) => setToolQuery(event.target.value)} placeholder="Find a tool…" className="min-h-12 w-full rounded-xl border border-white/30 bg-white py-3 pl-11 pr-3 text-base text-slate-950 placeholder:text-slate-600" /><span className="mt-2 block text-sm font-semibold text-white">⌘ / Ctrl K to search</span></label>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="Hub tools">
-          {visibleNavItems.filter((item) => `${item.label} ${item.href}`.toLowerCase().includes(toolQuery.trim().toLowerCase())).map((item) => {
-            const active = pathname === item.href;
-            const Icon = item.icon;
-            return (
-              <Link key={item.href} href={item.href} className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-bold transition ${active ? "bg-white shadow-lg" : "hover:bg-white/12"}`} style={active ? { color: theme.ink } : { color: theme.textOnPrimary }}>
-                <Icon className="h-4.5 w-4.5" />
-                {item.label}
-              </Link>
-            );
-          })}
+          {groupHubTools(visibleNavItems,toolQuery).map(group=><details key={group.title} open={toolSectionOpen(group,pathname,toolQuery)} className="rounded-xl border border-white/15 px-1">
+            <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-black">{group.title}</summary>
+            <div className="space-y-1 pb-2">{group.items.map(item=>{const active=pathname===item.href;const Icon=item.icon;return <Link key={item.href} href={item.href} aria-current={active?'page':undefined} className={`flex min-h-11 items-center gap-3 rounded-xl px-3.5 py-2.5 text-base font-bold transition ${active?'bg-white shadow-lg':'hover:bg-white/12'}`} style={{color:active?theme.ink:theme.textOnPrimary}}><Icon className="h-5 w-5 flex-none" aria-hidden="true"/>{item.label}</Link>;})}</div>
+          </details>)}
+          {!groupHubTools(visibleNavItems,toolQuery).length&&<p role="status" className="p-3 text-base">No matching tools. Try a shorter name.</p>}
         </nav>
 
         <div className="border-t border-white/10 p-4">
@@ -341,7 +337,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               <GatorGuide size="sm" />
               <div className="min-w-0 pb-1">
                 <p className="text-base font-black uppercase tracking-wider opacity-70">Gator reminder</p>
-                <p className="mt-1 text-sm font-black leading-5">Family schedules due Friday at 6 PM</p>
+                <p className="mt-1 text-sm font-black leading-5">Parent messages stay in Brightwheel during staff rollout</p>
               </div>
             </div>
           </div>
