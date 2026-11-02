@@ -7,6 +7,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { careLocations } from "@/lib/location-config";
 import type { StaffLaneProfile } from "@/lib/staff-lanes";
 import {
+  toggleEmployeePermission,
   ACCESS_ROLES,
   DEFAULT_EMPLOYEE_PERMISSIONS,
   EMPLOYEE_PERMISSION_OPTIONS,
@@ -132,9 +133,7 @@ export default function TeamAccessPage() {
   }
 
   function togglePermission<T extends InviteForm | TeamAccessAccount>(record: T, permission: string): T {
-    const next = record.permissions.includes(permission)
-      ? record.permissions.filter((item) => item !== permission)
-      : [...record.permissions, permission];
+    const next = toggleEmployeePermission(record.permissions,permission);
     return { ...record, permissions: next };
   }
 

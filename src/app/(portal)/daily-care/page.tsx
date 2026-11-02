@@ -72,7 +72,7 @@ function resultOptions(category: CareCategory) {
     Bottle: ["Finished bottle", "Drank most", "Drank some", "Refused", "Bottle not offered"],
     Diaper: ["Wet", "Bowel movement", "Wet + bowel movement", "Dry", "Rash / skin concern"],
     Potty: ["Urinated • independent", "Urinated • reminded", "Bowel movement", "Tried • did not go", "Accident", "Asked independently"],
-    Rest: ["Fell asleep", "Rested quietly", "Did not sleep", "Restless", "Woke early", "15-minute sleep check • breathing normal", "15-minute sleep check • needs attention"],
+    Rest: ["Fell asleep", "Woke up", "Rest ended", "Rested quietly", "Did not sleep", "Restless", "Woke early", "15-minute sleep check • breathing normal", "15-minute sleep check • needs attention"],
     "Daily Note": ["Calm and engaged", "Happy and social", "Needed extra support", "Tired", "Great participation"],
   }[category];
 }

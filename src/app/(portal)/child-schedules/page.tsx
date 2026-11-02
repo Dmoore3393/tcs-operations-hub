@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import {useAuth} from "@/components/providers/AuthProvider";
+import {canApproveChildSchedules} from "@/lib/child-schedule-authority";
 import MainLayout from "@/components/layout/MainLayout";
 import { DemoNotice, Modal, PageIntro, SecondaryButton, SectionCard, StatCard, inputClass } from "@/components/hub/HubUI";
 import { useHubLocation } from "@/components/providers/LocationProvider";
@@ -19,6 +21,8 @@ function newBlock(location: Exclude<LocationKey, "All Locations">): CareBlock {
 }
 
 export default function ChildSchedulesPage() {
+  const {profile}=useAuth();
+  const canEdit=canApproveChildSchedules(profile);
   const [records, setRecords, recordsReady] = usePersistentState<ChildScheduleRecord[]>("tcs-child-schedules-v2", starterChildSchedules);
   const [children, , childrenReady] = usePersistentState<ChildRecord[]>("tcs-children-v1", initialChildren);
   const { location: activeLocation } = useHubLocation();
@@ -30,7 +34,7 @@ export default function ChildSchedulesPage() {
   useEffect(() => { const timeoutId = window.setTimeout(() => setLocationFilter(activeLocation), 0); return () => window.clearTimeout(timeoutId); }, [activeLocation]);
 
   useEffect(() => {
-    if (!recordsReady || !childrenReady) return;
+    if (!canEdit || !recordsReady || !childrenReady) return;
     const enrolledChildren = children.filter((child) => child.enrollmentStatus !== "Archived");
     setRecords((current) => {
       const byId = new Map(current.map((record) => [record.childId, record]));
@@ -55,7 +59,7 @@ export default function ChildSchedulesPage() {
       if (archivedRecords.length) changed = true;
       return changed ? synced : current;
     });
-  }, [children, childrenReady, recordsReady, setRecords]);
+  }, [canEdit, children, childrenReady, recordsReady, setRecords]);
 
   const editing = records.find((record) => record.childId === editingId) ?? null;
   const filtered = useMemo(() => records.filter((record) => {
@@ -69,6 +73,7 @@ export default function ChildSchedulesPage() {
   const splitSchedules = filtered.filter((record) => record.days[selectedDay].blocks.length > 1).length;
 
   function updateRecord(next: ChildScheduleRecord) {
+    if(!canEdit)return;
     setRecords((current) => current.map((record) => record.childId === next.childId ? next : record));
   }
 
@@ -116,13 +121,13 @@ export default function ChildSchedulesPage() {
           <tbody>{filtered.map((record) => <tr key={record.childId} className="bg-white shadow-sm">
             <td className="rounded-l-2xl border-y border-l border-slate-200 px-4 py-3"><p className="font-black text-slate-950">{record.childName}</p><p className="mt-1 text-xs text-slate-500">{record.ageGroup} • {record.defaultLocation}</p></td>
             {dayNames.map((day) => { const entry = record.days[day]; return <td key={day} className={`border-y border-slate-200 px-2 py-3 align-top ${selectedDay === day ? "tcs-themed-surface" : ""}`}><div className={`min-h-14 rounded-xl px-2 py-2 text-xs leading-5 ${entry.noCare || !entry.blocks.length ? "bg-slate-50 text-slate-600" : "tcs-themed-surface text-slate-700"}`}><p className="font-bold">{entry.noCare || !entry.blocks.length ? "No care" : entry.blocks.map((block) => `${block.start.replace(/^0/, "")}–${block.end.replace(/^0/, "")}`).join(" + ")}</p>{!entry.noCare && entry.blocks.some((block) => block.location !== record.defaultLocation) && <p className="mt-1 font-semibold tcs-themed-text">Location change</p>}</div></td>; })}
-            <td className="rounded-r-2xl border-y border-r border-slate-200 px-3 py-3"><button onClick={() => setEditingId(record.childId)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">Edit Week</button></td>
+            <td className="rounded-r-2xl border-y border-r border-slate-200 px-3 py-3"><button disabled={!canEdit} onClick={() => setEditingId(record.childId)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">{canEdit?"Edit Week":"View only"}</button></td>
           </tr>)}</tbody>
         </table>
       </div>
     </SectionCard>
 
-    {editing && <Modal title={`${editing.childName} — Weekly Schedule`} description="Enter exact times for each day. Turn on No Care when the child is not scheduled." onClose={() => setEditingId(null)} footer={<><SecondaryButton onClick={() => setEditingId(null)}>Done</SecondaryButton><Link href="/ratios" className="tcs-primary-button inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold"><ShieldCheck className="h-4 w-4" /> View Ratios</Link></>}>
+    {canEdit && editing && <Modal title={`${editing.childName} — Weekly Schedule`} description="Enter exact times for each day. Turn on No Care when the child is not scheduled." onClose={() => setEditingId(null)} footer={<><SecondaryButton onClick={() => setEditingId(null)}>Done</SecondaryButton><Link href="/ratios" className="tcs-primary-button inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold"><ShieldCheck className="h-4 w-4" /> View Ratios</Link></>}>
       <div className="space-y-5">
         <div className="rounded-2xl border tcs-themed-border tcs-themed-surface p-4"><p className="font-black text-slate-950">Default location: {editing.defaultLocation}</p><p className="mt-1 text-sm text-slate-600">A day or block can be assigned to a different location when a child moves between sites.</p></div>
         <div className="flex flex-wrap gap-2"><button onClick={() => copyDay("Monday", ["Tuesday", "Wednesday", "Thursday", "Friday"])} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-xs font-black"><Copy className="h-3.5 w-3.5" /> Copy Monday to Tue–Fri</button></div>

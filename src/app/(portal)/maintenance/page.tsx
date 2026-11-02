@@ -1,12 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
-import { usePersistentState } from "@/hooks/usePersistentState";
+import {hubRequest} from "@/lib/hub-request";
 import {
   maintenancePriorityRank,
-  starterMaintenanceTickets,
   type MaintenancePriority,
   type MaintenanceStatus,
   type MaintenanceTicket,
@@ -14,7 +14,6 @@ import {
 import {
   AlertTriangle,
   CheckCircle2,
-  CircleDot,
   Hammer,
   LoaderCircle,
   Plus,
@@ -23,7 +22,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 
 const priorities: MaintenancePriority[] = ["Routine", "Soon", "Urgent", "Safety Critical"];
 const statuses: MaintenanceStatus[] = ["Open", "Assigned", "In Progress", "Waiting on Parts", "Completed"];
@@ -36,9 +35,17 @@ function priorityStyle(priority: MaintenancePriority) {
 }
 
 export default function MaintenancePage() {
-  const { profile } = useAuth();
+  const { profile,session } = useAuth();
+  const token=session?.access_token;
   const { location } = useHubLocation();
-  const [tickets, setTickets, hydrated] = usePersistentState<MaintenanceTicket[]>("tcs-maintenance-tickets-v1", starterMaintenanceTickets);
+  const [tickets,setTickets]=useState<MaintenanceTicket[]>([]);
+  const [hydrated,setHydrated]=useState(false),[canManage,setCanManage]=useState(false),[error,setError]=useState(""),[saving,setSaving]=useState(false);
+  const [loadError,setLoadError]=useState("");
+  const [restSignals,setRestSignals]=useState<{locationId:string;location:string;status:string;label:string;lastEntryTime:string}[]>([]);
+  const [restDataAvailable,setRestDataAvailable]=useState(true);
+  const [version,setVersion]=useState(0),[editingVersion,setEditingVersion]=useState(0),[locations,setLocations]=useState<{id:string;label:string;name:string}[]>([]);
+  const load=useCallback(async()=>{if(!token)return;try{const data=await hubRequest<{tickets:MaintenanceTicket[];version:number;canManage:boolean;locations:{id:string;label:string;name:string}[];restSignals:{locationId:string;location:string;status:string;label:string;lastEntryTime:string}[];restDataAvailable:boolean}>("/api/maintenance",token);setTickets(data.tickets);setVersion(data.version);setCanManage(data.canManage);setLocations(data.locations);setRestSignals(data.restSignals||[]);setRestDataAvailable(data.restDataAvailable);setLoadError("");}catch(reason){setLoadError(reason instanceof Error?reason.message:"Could not load maintenance.");}finally{setHydrated(true);}},[token]);
+  useEffect(()=>{const timer=window.setTimeout(()=>void load(),0);const polling=window.setInterval(()=>void load(),30000);return()=>{window.clearTimeout(timer);window.clearInterval(polling);};},[load]);
   const [editing, setEditing] = useState<MaintenanceTicket | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | MaintenanceStatus>("All");
@@ -59,9 +66,10 @@ export default function MaintenancePage() {
   const completed = visible.filter((ticket) => ticket.status === "Completed");
 
   function newTicket() {
+    if(!canManage)return;setError("");setEditingVersion(version);
     setEditing({
       id: `maint-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      location: location === "All Locations" ? "Halcom" : location,
+      location: locations.some(site=>site.label===location)?location:locations[0]?.label || "",
       area: "",
       title: "",
       description: "",
@@ -76,26 +84,23 @@ export default function MaintenancePage() {
     });
   }
 
-  function save() {
-    if (!editing || !editing.title.trim() || !editing.location) return;
-    const next = {
-      ...editing,
-      completedAt: editing.status === "Completed" ? editing.completedAt || new Date().toISOString() : "",
-    };
-    setTickets((current) => current.some((ticket) => ticket.id === next.id)
-      ? current.map((ticket) => ticket.id === next.id ? next : ticket)
-      : [...current, next]);
-    setEditing(null);
+  async function save() {
+    if(!editing||!token||!canManage||saving)return;setSaving(true);setError("");
+    try{const result=await hubRequest<{ticket:MaintenanceTicket;version:number}>("/api/maintenance",token,{method:"POST",body:JSON.stringify({ticket:editing,expectedVersion:editingVersion})});setTickets(current=>current.some(ticket=>ticket.id===result.ticket.id)?current.map(ticket=>ticket.id===result.ticket.id?result.ticket:ticket):[...current,result.ticket]);setVersion(result.version);setEditing(null);}catch(reason){setError(reason instanceof Error?reason.message:"Could not save the ticket.");}finally{setSaving(false);}
   }
 
-  return <MainLayout><div className="mx-auto max-w-[1500px] space-y-6 pb-12">
+  return <MainLayout><div className="mx-auto max-w-[1500px] space-y-6 pb-12 [&_input]:text-base [&_select]:text-base [&_textarea]:text-base [&_button]:min-h-11">
     <section className="overflow-hidden rounded-[30px] bg-gradient-to-br from-[#3c3028] via-[#654c38] to-[#2f3b2d] p-6 text-white shadow-xl sm:p-8">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-        <div><p className="text-xs font-black uppercase tracking-[.18em] text-amber-200">Facilities + safety work orders</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">Maintenance & Safety Tickets</h1><p className="mt-3 max-w-4xl text-sm font-semibold leading-6 text-amber-50/80">Report broken doors, cameras, plumbing, playground, vehicle, electrical, and other site issues with priority, assignment, due date, and completion history.</p></div>
-        <button onClick={newTicket} className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-950"><Plus className="h-4 w-4" /> New Ticket</button>
+        <div><p className="text-xs font-black uppercase tracking-[.18em] text-amber-200">Maintenance work area</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">Maintenance Department</h1><p className="mt-3 max-w-4xl text-sm font-semibold leading-6 text-amber-50/80">Report broken doors, cameras, plumbing, playground, vehicle, electrical, and other site issues with priority, assignment, due date, and completion history.</p></div>
+        {canManage && <button onClick={newTicket} className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-950"><Plus className="h-4 w-4" /> New Ticket</button>}
       </div>
     </section>
 
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-white p-4 text-base"><strong>{canManage?"Maintenance: manage tickets":"Maintenance: view only"}</strong><span>Tickets, assignments, due dates and completion updates.</span><button className="min-h-11 rounded-xl border px-4 py-2 font-bold" onClick={()=>void load()}>Refresh updates</button></div>
+    {(error||loadError) && <p role="alert" className="rounded-xl bg-red-50 p-4 text-base font-bold text-red-900">{error||loadError}</p>}
+    <div className="flex flex-wrap gap-3"><Link href="/my-schedule" className="min-h-11 rounded-xl bg-emerald-800 px-5 py-3 text-base font-bold text-white">My maintenance work schedule</Link></div>
+    <section aria-label="Location rest awareness" className="rounded-2xl border border-emerald-200 bg-white p-5"><h2 className="text-xl font-black text-emerald-950">Before starting noisy work</h2><p className="mt-2 text-base text-slate-700">These location-only signals come from today’s recorded rest updates. Confirm with on-site staff before starting work. A missing or old entry does not mean children are awake.</p>{!restDataAvailable&&<p role="status" className="mt-3 text-amber-900">Rest updates could not be checked. Contact the location before starting noisy work.</p>}<div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{restSignals.filter(signal=>location==="All Locations"||signal.location===location).map(signal=><article key={signal.locationId} className={`rounded-xl border p-4 text-base ${signal.status==="resting"?"border-amber-300 bg-amber-50 text-amber-950":"border-slate-200 bg-slate-50 text-slate-900"}`}><h3 className="font-black">{signal.location}</h3><p className="mt-2 font-bold">{signal.label}</p>{signal.lastEntryTime&&<p className="mt-2">Latest recorded rest update: {signal.lastEntryTime}</p>}</article>)}</div><p className="mt-3 text-base text-slate-700">Emergency childcare coverage access is handled separately by leadership.</p></section>
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Metric icon={<Wrench className="h-5 w-5" />} label="Open Tickets" value={open.length} tone="slate" />
       <Metric icon={<ShieldAlert className="h-5 w-5" />} label="Safety Critical" value={critical.length} tone={critical.length ? "red" : "green"} />
@@ -109,18 +114,19 @@ export default function MaintenancePage() {
     </section>
 
     {!hydrated ? <div className="flex min-h-60 items-center justify-center gap-2 rounded-3xl border border-slate-200 bg-white text-sm font-bold text-slate-500"><LoaderCircle className="h-5 w-5 animate-spin" /> Loading maintenance tickets…</div> :
-      visible.length === 0 ? <div className="grid min-h-60 place-items-center rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center"><div><Hammer className="mx-auto h-10 w-10 text-slate-300" /><h2 className="mt-3 text-xl font-black text-slate-800">No tickets in this view</h2><p className="mt-1 text-sm text-slate-500">Create a ticket when something needs maintenance attention.</p></div></div> :
+      visible.length === 0 ? <div className="grid min-h-60 place-items-center rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center"><div><Hammer className="mx-auto h-10 w-10 text-slate-300" /><h2 className="mt-3 text-xl font-black text-slate-800">No tickets in this view</h2><p className="mt-1 text-sm text-slate-500">{canManage?"Create a ticket when something needs maintenance attention.":"Maintenance updates will appear here when tickets are posted for your locations."}</p></div></div> :
       <section className="grid gap-4 xl:grid-cols-2">{visible.map((ticket) => <article key={ticket.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-start justify-between gap-4"><div><p className="text-base font-black uppercase tracking-wider text-slate-600">{ticket.location} • {ticket.area || "Area not entered"}</p><h2 className="mt-1 text-xl font-black text-slate-950">{ticket.title}</h2></div><span className={`rounded-full px-2.5 py-1 text-base font-black uppercase ${priorityStyle(ticket.priority)}`}>{ticket.priority}</span></div>
         <p className="mt-3 text-sm leading-6 text-slate-600">{ticket.description || "No description entered."}</p>
         <div className="mt-4 grid grid-cols-2 gap-2"><Info label="Status" value={ticket.status} /><Info label="Assigned To" value={ticket.assignedTo || "Unassigned"} /><Info label="Reported By" value={ticket.reportedBy || "Not entered"} /><Info label="Due" value={ticket.dueDate || "Not set"} /></div>
-        <button onClick={() => setEditing({ ...ticket })} className="mt-4 w-full rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white">Open Ticket</button>
+        <button onClick={() => {setError("");setEditingVersion(version);setEditing({ ...ticket });}} className="mt-4 w-full rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white">Open Ticket</button>
       </article>)}</section>}
 
     {editing && <div className="fixed inset-0 z-[10000] overflow-y-auto bg-slate-950/70 p-3 backdrop-blur-sm"><section className="mx-auto my-8 w-full max-w-2xl overflow-hidden rounded-[28px] bg-white shadow-2xl">
       <header className="flex items-start justify-between gap-4 bg-gradient-to-r from-[#49372b] to-[#2f3b2d] px-5 py-4 text-white"><div><p className="text-base font-black uppercase tracking-[.16em] text-amber-100">Maintenance ticket</p><h2 className="mt-1 text-2xl font-black">{editing.title || "New Ticket"}</h2></div><button onClick={() => setEditing(null)} className="rounded-xl bg-white/10 p-2"><X className="h-5 w-5" /></button></header>
-      <div className="grid gap-4 p-5 sm:grid-cols-2">
-        <Field label="Location"><input value={editing.location} onChange={(event) => setEditing({ ...editing, location: event.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" /></Field>
+      {error && <p role="alert" className="m-5 rounded-xl bg-red-50 p-3 text-red-900">{error}</p>}
+      {!canManage ? <div className="grid gap-4 p-5 text-base sm:grid-cols-2"><Info label="Location" value={editing.location}/><Info label="Area" value={editing.area}/><Info label="Priority" value={editing.priority}/><Info label="Status" value={editing.status}/><Info label="Assigned to" value={editing.assignedTo || "Unassigned"}/><Info label="Due" value={editing.dueDate || "Not set"}/><div className="sm:col-span-2"><Info label="Issue details" value={editing.description || "No description"}/><Info label="Completion notes" value={editing.completionNotes || "No completion notes"}/></div></div> : <div className="grid gap-4 p-5 sm:grid-cols-2">
+        <Field label="Location"><select value={editing.location} onChange={event=>setEditing({...editing,location:event.target.value})} className="min-h-11 w-full rounded-xl border p-3 text-base">{locations.map(site=><option key={site.id} value={site.label}>{site.name}</option>)}</select></Field>
         <Field label="Area / Room"><input value={editing.area} onChange={(event) => setEditing({ ...editing, area: event.target.value })} placeholder="Front door, camera 2, playground…" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold" /></Field>
         <Field label="Issue" wide><input value={editing.title} onChange={(event) => setEditing({ ...editing, title: event.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" /></Field>
         <Field label="Description" wide><textarea value={editing.description} onChange={(event) => setEditing({ ...editing, description: event.target.value })} className="min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold leading-6" /></Field>
@@ -129,8 +135,8 @@ export default function MaintenancePage() {
         <Field label="Assigned To"><input value={editing.assignedTo} onChange={(event) => setEditing({ ...editing, assignedTo: event.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold" /></Field>
         <Field label="Due Date"><input type="date" value={editing.dueDate} onChange={(event) => setEditing({ ...editing, dueDate: event.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" /></Field>
         <Field label="Completion Notes" wide><textarea value={editing.completionNotes} onChange={(event) => setEditing({ ...editing, completionNotes: event.target.value })} className="min-h-20 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold leading-6" /></Field>
-      </div>
-      <footer className="flex justify-end gap-2 border-t border-slate-200 p-4"><button onClick={() => setEditing(null)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-700">Cancel</button><button disabled={!editing.title.trim()} onClick={save} className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white disabled:opacity-40">Save Ticket</button></footer>
+      </div>}
+      <footer className="flex justify-end gap-2 border-t border-slate-200 p-4"><button onClick={() => setEditing(null)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-700">{canManage?"Cancel":"Close"}</button>{canManage && <button disabled={saving || !editing.title.trim()} onClick={save} className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white disabled:opacity-40">{saving?"Saving…":"Save Ticket"}</button>}</footer>
     </section></div>}
   </div></MainLayout>;
 }
@@ -140,7 +146,7 @@ function Metric({ icon, label, value, tone }: { icon: React.ReactNode; label: st
   return <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><span className={`grid h-10 w-10 place-items-center rounded-xl ${styles[tone]}`}>{icon}</span><div><strong className="block text-2xl font-black text-slate-950">{value}</strong><span className="text-base font-black uppercase tracking-wider text-slate-500">{label}</span></div></div>;
 }
 function Info({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-xl bg-slate-50 p-3"><span className="text-base font-black uppercase tracking-wider text-slate-600">{label}</span><strong className="mt-1 block text-xs text-slate-900">{value}</strong></div>;
+  return <div className="rounded-xl bg-slate-50 p-3"><span className="text-base font-black uppercase tracking-wider text-slate-600">{label}</span><strong className="mt-1 block text-base text-slate-900">{value}</strong></div>;
 }
 function Field({ label, wide = false, children }: { label: string; wide?: boolean; children: React.ReactNode }) {
   return <label className={wide ? "sm:col-span-2" : ""}><span className="mb-1 block text-base font-black uppercase tracking-wider text-slate-500">{label}</span>{children}</label>;

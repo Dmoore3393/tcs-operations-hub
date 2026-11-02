@@ -3,6 +3,8 @@ export const ACCESS_ROLES = ["Owner / Admin", "Location Licensee", "Employee"] a
 export type AccessRole = (typeof ACCESS_ROLES)[number];
 
 export const EMPLOYEE_PERMISSION_OPTIONS = [
+  {key:"maintenance_view",label:"Maintenance — view only",description:"See maintenance tickets, assignments, priorities, due dates and completion updates for assigned locations. Cannot create or change tickets."},
+  {key:"maintenance_manage",label:"Maintenance — manage tickets",description:"Create, assign and update maintenance tickets at assigned locations. Does not grant access to child records or schedule approvals."},
   {
     key: "children_basic",
     label: "Children & care alerts",
@@ -31,7 +33,7 @@ export const EMPLOYEE_PERMISSION_OPTIONS = [
   {
     key: "schedules",
     label: "Schedules & Attendance",
-    description: "View child schedules and update approved attendance-related information.",
+    description: "View child schedules and attendance. Only licensees, Danielle and Jennifer approve or change child care schedules.",
   },
   {
     key: "ratios",
@@ -186,6 +188,7 @@ const employeeAlwaysAllowedRoutes = new Set(["/", "/communications", "/employee-
 
 export function employeeCanAccessRoute(permissions: string[], pathname: string) {
   if (employeeAlwaysAllowedRoutes.has(pathname)) return true;
+  if(pathname==="/maintenance")return hasAnyPermission(permissions,["maintenance_view","maintenance_manage","health_safety"]);
   if (pathname === "/family-care-calendar") {
     return hasAnyPermission(permissions, ["schedules", "ratios"]);
   }
@@ -243,7 +246,7 @@ export function employeeCanReadState(permissions: string[], stateKey: string) {
     case "tcs-health-safety-v1":
       return hasAnyPermission(permissions, ["health_safety", "shift_reports"]);
     case "tcs-maintenance-tickets-v1":
-      return permissions.includes("health_safety");
+      return hasAnyPermission(permissions,["maintenance_view","maintenance_manage","health_safety"]);
     case "tcs-location-hours-v2":
     case "tcs-shifts":
       return permissions.includes("ratios");
@@ -276,7 +279,7 @@ export function employeeCanWriteState(permissions: string[], stateKey: string) {
     case "tcs-nutrition-rules-v1":
       return permissions.includes("meals");
     case "tcs-child-schedules-v2":
-      return permissions.includes("schedules");
+      return false;
     case "tcs-shift-handoffs-v1":
     case "tcs-shift-reports-v1":
       return permissions.includes("shift_reports");
@@ -288,7 +291,7 @@ export function employeeCanWriteState(permissions: string[], stateKey: string) {
     case "tcs-health-safety-v1":
       return permissions.includes("health_safety");
     case "tcs-maintenance-tickets-v1":
-      return permissions.includes("health_safety");
+      return permissions.includes("maintenance_manage") || (!permissions.includes("maintenance_view") && permissions.includes("health_safety"));
     default:
       return false;
   }
@@ -316,3 +319,9 @@ export type TeamAccessAccount = {
   created_at: string | null;
   status: "Invite Pending" | "Active" | "Paused";
 };
+
+export function toggleEmployeePermission(permissions:string[],permission:string){
+ if(permissions.includes(permission))return permissions.filter(value=>value!==permission);
+ const other=permission==='maintenance_view'?'maintenance_manage':permission==='maintenance_manage'?'maintenance_view':'';
+ return [...permissions.filter(value=>value!==other),permission];
+}

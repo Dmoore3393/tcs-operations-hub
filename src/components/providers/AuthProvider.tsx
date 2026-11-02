@@ -1,5 +1,6 @@
 "use client";
 
+import {canApproveChildSchedules} from "@/lib/child-schedule-authority";
 import { isSupabaseConfigured, supabase, supabaseAuthStorageKey } from "@/lib/supabase/client";
 import {
   employeeCanAccessRoute,
@@ -138,6 +139,7 @@ export function canReadStateKey(profile: StaffAccessProfile | null, stateKey: st
 
 export function canWriteStateKey(profile: StaffAccessProfile | null, stateKey: string) {
   if (!profile) return false;
+  if(stateKey==="tcs-child-schedules-v2")return canApproveChildSchedules(profile);
   if (stateKey === "tcs-team-trainings-v1" && isTrainingAdminProfile(profile)) return true;
   if (isOwnerRole(profile.role)) return true;
   if (isLicenseeRole(profile.role)) return !ownerOnlyWriteStateKeys.has(stateKey);
@@ -312,6 +314,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    const maintenanceOnly=isEmployeeRole(profile.role) && (profile.permissions||[]).some(permission=>permission==="maintenance_view"||permission==="maintenance_manage") && (profile.permissions||[]).every(permission=>permission==="maintenance_view"||permission==="maintenance_manage");
+    if(profile.accepted_at && maintenanceOnly && ["/","/login","/accept-invite"].includes(pathname)){router.replace("/maintenance");return;}
     if (profile.accepted_at && (pathname === "/login" || pathname === "/accept-invite")) {
       router.replace("/");
     }
