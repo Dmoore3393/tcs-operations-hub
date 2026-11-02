@@ -4,7 +4,7 @@ export type AccessRole = (typeof ACCESS_ROLES)[number];
 
 export const EMPLOYEE_PERMISSION_OPTIONS = [
   {key:"maintenance_view",label:"Maintenance — view only",description:"See maintenance tickets, assignments, priorities, due dates and completion updates for assigned locations. Cannot create or change tickets."},
-  {key:"maintenance_manage",label:"Maintenance — manage tickets",description:"Create, assign and update maintenance tickets at assigned locations. Does not grant access to child records or schedule approvals."},
+  {key:"maintenance_manage",label:"Maintenance — manage tickets",description:"Update and complete existing maintenance tickets at assigned locations. New issues go through the licensee or administration. Does not grant access to child records or schedule approvals."},
   {
     key: "children_basic",
     label: "Children & care alerts",
@@ -148,13 +148,13 @@ export const ROLE_PERMISSION_SUMMARIES: Record<AccessRole, string[]> = {
     "Complete every step of the Timesheet workflow",
   ],
   "Location Licensee": [
-    "Operational access for the assigned location only",
+    "Main location remains the priority; switch to other open TCS locations when providing backup",
     "Children, schedules, ratios, meals, KidKare, internal reports, employee/child files, transportation fees, enrollment, digital forms, compliance, work plans, Student Store, and location Team Store rewards",
-    "Prepare location Timesheets and send them into the workflow",
-    "No Team Access, global Settings, role management, company training setup, or other-location records",
+    "Create maintenance tickets and support day-to-day operations at open TCS locations",
+    "No Team Access, global Settings, role management or company training setup",
   ],
   Employee: [
-    "Invited by email and assigned to one or more work locations",
+    "Usual work locations stay recorded; switch to any open TCS location when covering there",
     "Only sees the operational tools individually approved by an Owner/Admin, plus the Team Store, Training Center, Employee Lounge, and Bulletin Board",
     "No Team Access, global Settings, role management, security controls, or company-wide administration",
     "No KidKare or Timesheet access; those tools are limited to Owner/Admin and Location Licensee accounts",
@@ -292,7 +292,7 @@ export function employeeCanWriteState(permissions: string[], stateKey: string) {
     case "tcs-health-safety-v1":
       return permissions.includes("health_safety");
     case "tcs-maintenance-tickets-v1":
-      return permissions.includes("maintenance_manage") || (!permissions.includes("maintenance_view") && permissions.includes("health_safety"));
+      return permissions.includes("maintenance_manage");
     default:
       return false;
   }

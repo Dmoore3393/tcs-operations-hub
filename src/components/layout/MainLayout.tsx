@@ -230,7 +230,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const [sync, setSync] = useState<HubSyncDetail>({ state: "idle", message: "Secure shared data" });
   const [isOnline, setIsOnline] = useState(true);
   const [hasParentPortalAccess, setHasParentPortalAccess] = useState(false);
-  const { location, setLocation, availableLocations, locationLocked, theme } = useHubLocation();
+  const { location, setLocation, availableLocations, locationLocked, mainLocation, theme } = useHubLocation();
   const { profile, user, session, signOut } = useAuth();
   const meta = useMemo(() => pageMeta[pathname] ?? pageMeta["/"], [pathname]);
   const visibleNavItems = useMemo(() => navItems.filter((item) => canAccessRoute(profile, item.href)), [profile]);
@@ -367,7 +367,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               <label className="relative min-w-0 flex-1">
                 <span className="sr-only">Selected location</span>
                 <select value={location} disabled={availableLocations.length === 1} onChange={(event) => setLocation(event.target.value as LocationKey)} className="h-9 w-full appearance-none truncate rounded-xl border border-slate-200 bg-slate-50 py-1.5 pl-3 pr-8 text-base font-black text-slate-700 outline-none">
-                  {availableLocations.map((item) => <option key={item} value={item}>{locationOptionLabel(item)}</option>)}
+                  {availableLocations.map((item) => <option key={item} value={item}>{locationOptionLabel(item)}{mainLocation?(item===mainLocation?" · Main":" · Backup"):""}</option>)}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
               </label>
@@ -388,7 +388,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 <label className="relative block">
                   <span className="sr-only">Selected location</span>
                   <select value={location} disabled={availableLocations.length === 1} onChange={(event) => setLocation(event.target.value as LocationKey)} className="appearance-none rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-3.5 pr-9 text-sm font-bold text-slate-700 outline-none hover:bg-slate-100" title="Changes the Hub colors and sets the active location for schedules, ratios, and printable tools">
-                    {availableLocations.map((item) => <option key={item} value={item}>{locationOptionLabel(item)}</option>)}
+                    {availableLocations.map((item) => <option key={item} value={item}>{locationOptionLabel(item)}{mainLocation?(item===mainLocation?" · Main":" · Backup"):""}</option>)}
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 </label>
@@ -400,7 +400,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 <p className="max-w-44 truncate text-sm font-black text-slate-800">{profile?.full_name || user?.email}</p>
               </div>
               <button onClick={() => setShowUserMenu((current) => !current)} className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-black" style={{ background: theme.primarySoft, color: theme.ink }} aria-label="Open user menu">{staffInitials(profile, user?.email)}</button>
-              {showLocationHelp && <div className="absolute right-12 top-14 z-40 w-80 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600 shadow-xl"><p className="font-black text-slate-950">Active location selector</p><p className="mt-1">It changes the Hub’s colors and tells location-aware pages which site you are working on. {locationLocked ? "Your login is limited to the location access assigned to your account." : "Choose All Locations for company-wide information."}</p></div>}
+              {showLocationHelp && <div className="absolute right-12 top-14 z-40 w-80 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600 shadow-xl"><p className="font-black text-slate-950">Active location selector</p><p className="mt-1">It changes the Hub’s colors and tells location-aware pages which site you are working on. {locationLocked ? "Your usual location stays recorded. Choose another open TCS location when providing backup; your role permissions stay the same." : "Choose All Locations for company-wide information."}</p></div>}
               {showUserMenu && <div className="absolute right-0 top-14 z-40 w-72 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-xl"><p className="font-black text-slate-950">{profile?.full_name || "TCS Staff"}</p><p className="mt-1 truncate text-xs text-slate-500">{profile?.email || user?.email}</p>{profile?.job_title && <p className="mt-3 text-sm font-black text-emerald-800">{profile.job_title}</p>}{profile?.secondary_title && <p className="mt-1 text-xs font-bold text-amber-700">{profile.secondary_title}</p>}<div className="mt-2 flex flex-wrap gap-2">{profile?.lane_level && <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-base font-black uppercase tracking-wider text-emerald-800">Level {profile.lane_level}</span>}<span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-base font-black uppercase tracking-wider text-slate-700">Hub access: {profile?.role}</span></div>{hasParentPortalAccess && <Link href="/parent" className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 font-black text-white"><Users className="h-4 w-4" /> Switch to Parent Portal</Link>}<button onClick={() => { window.localStorage.removeItem("tcs-hub-app-setup-v1"); window.location.reload(); }} className={`${hasParentPortalAccess ? "mt-2" : "mt-4"} flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700`}><Settings className="h-4 w-4" /> App Setup</button><Link href="/account" className="mt-2 flex w-full items-center justify-center rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700">Account & Privacy</Link><button onClick={() => void signOut()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button></div>}
             </div>
           </div>
@@ -413,6 +413,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             sync.state === "saved" ? <div className="flex items-center gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-1.5 text-base font-bold text-emerald-800"><CloudCheck className="h-3.5 w-3.5" /> Saved and synced</div> : null}
         </div>
 
+        {mainLocation&&<aside className="mx-3 mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-base text-emerald-950 sm:mx-5 lg:mx-8"><p><strong>Main location: {locationOptionLabel(mainLocation)}</strong> — your priority.{location!==mainLocation?` You’re helping at ${locationOptionLabel(location)}.`:" Switch locations above when providing backup."}</p>{location!==mainLocation&&<button type="button" className="min-h-11 rounded-xl border border-emerald-700 bg-white px-4 py-2 font-bold" onClick={()=>setLocation(mainLocation)}>Return to main location</button>}</aside>}
         <main className="px-3 pb-28 pt-3 sm:px-5 sm:pt-5 lg:p-8">{children}<div className="mt-8"><LegalFooter /></div></main>
       </div>
       <AppSetupPrompt />

@@ -48,7 +48,7 @@ before(async()=>{
  create function current_staff_organization_id() returns uuid language sql stable as $$select organization_id from staff_access where user_id=auth.uid() and is_active$$;
  create function can_access_location(uuid) returns boolean language sql stable as $$select exists(select 1 from locations where id=$1 and organization_id=current_staff_organization_id() and is_active and (is_tcs_owner() or exists(select 1 from staff_location_assignments where user_id=auth.uid() and location_id=$1)))$$;
  create policy read_schedules on child_schedules for select to authenticated using(organization_id=current_staff_organization_id());`);
- const files=await readdir('supabase/migrations');const name=files.find(n=>n.endsWith('_maintenance_department_access.sql'));await db.exec(await readFile('supabase/migrations/'+name,'utf8'));const history=files.find(n=>n.endsWith('_child_approval_history_cleanup.sql'));await db.exec(await readFile('supabase/migrations/'+history,'utf8'));
+ const files=await readdir('supabase/migrations');const name=files.find(n=>n.endsWith('_maintenance_department_access.sql'));await db.exec(await readFile('supabase/migrations/'+name,'utf8'));const history=files.find(n=>n.endsWith('_child_approval_history_cleanup.sql'));await db.exec(await readFile('supabase/migrations/'+history,'utf8'));const creation=files.find(n=>n.endsWith('_maintenance_ticket_creation_authority.sql'));await db.exec(await readFile('supabase/migrations/'+creation,'utf8'));
 });
 beforeEach(async()=>{
  await db.exec("reset role;truncate staff_access,locations,staff_location_assignments,hub_state,audit_log,child_schedules,family_schedule_submissions,child_schedule_overrides,auth.users;");
@@ -60,11 +60,11 @@ beforeEach(async()=>{
  await db.query('insert into child_schedules values($1,$2,$3,$4),($5,$2,$6,$4)',[id(30),org,loc,JSON.stringify({status:'Existing'}),id(31),other]);
 });
 after(()=>db.close());
-const save=(actor,site=loc,version=1)=>db.query('select save_maintenance_ticket($1,$2,$3,null,$4,$5)',[org,actor,site,JSON.stringify({id:'synthetic-ticket',title:'Synthetic repair',location:'synthetic-site',status:'Open'}),version]);
+const save=(actor,site=loc,version=1,previous=null)=>db.query('select save_maintenance_ticket($1,$2,$3,$6,$4,$5)',[org,actor,site,JSON.stringify({id:'synthetic-ticket',title:'Synthetic repair',location:'synthetic-site',status:'Open'}),version,previous]);
 test('database denies viewer writes and unassigned locations, while a manager preserves every other ticket',async()=>{
  await assert.rejects(save(viewer),/management access/);await assert.rejects(save(manager,other),/not assigned/);assert.equal((await db.query('select version from hub_state')).rows[0].version,1);
- await save(manager);const board=(await db.query('select * from hub_state')).rows[0];assert.equal(board.version,2);assert.equal(board.state_value.length,2);assert.equal(board.state_value[0].id,'existing-other-location');
- await assert.rejects(save(manager),/changed/);assert.equal((await db.query('select count(*) n from audit_log')).rows[0].n,1);
+ await assert.rejects(save(manager),/Only licensees/);await save(licensee);await save(manager,loc,2,loc);const board=(await db.query('select * from hub_state')).rows[0];assert.equal(board.version,3);assert.equal(board.state_value.length,2);assert.equal(board.state_value[0].id,'existing-other-location');
+ await assert.rejects(save(manager,loc,2,loc),/changed/);assert.equal((await db.query('select count(*) n from audit_log')).rows[0].n,2);
  assert.equal((await db.query("select has_function_privilege('authenticated','save_maintenance_ticket(uuid,uuid,uuid,uuid,jsonb,integer)','execute') allowed")).rows[0].allowed,false);
 });
 test('real RLS blocks employee recurring schedule writes and limits licensees to assigned sites',async()=>{
@@ -139,13 +139,26 @@ test('optional transportation grants driver tools without childcare approvals or
  assert.equal(team.employeeCanAccessRoute(permissions,'/child-schedules'),false);assert.equal(team.employeeCanWriteState(permissions,'tcs-child-schedules-v2'),false);assert.equal(access.canManageMaintenance({role:'Employee',permissions}),false);
 });
 test('vehicle services persist mileage and next service details, and reject invalid or view-only changes',async()=>{
- apiSetup(['maintenance_manage']);const ticket={id:'new-vehicle-service',title:'Synthetic oil service',location:'Halcom',priority:'Routine',status:'Completed',kind:'Vehicle',vehicleName:'Synthetic test van',serviceType:'Oil & filters',odometer:120000,nextServiceMileage:125000,nextServiceDate:'2026-12-01',completionNotes:'Synthetic oil and filter replaced'};
+ apiSetup(['maintenance_manage']);globalThis.maintenanceAuth.profile.role='Location Licensee';globalThis.maintenanceAuth.isLicensee=true;const ticket={id:'new-vehicle-service',title:'Synthetic oil service',location:'Halcom',priority:'Routine',status:'Completed',kind:'Vehicle',vehicleName:'Synthetic test van',serviceType:'Oil & filters',odometer:120000,nextServiceMileage:125000,nextServiceDate:'2026-12-01',completionNotes:'Synthetic oil and filter replaced'};
  const result=await maintenancePost(ticket);assert.equal(result.status,200);const saved=rpcCalls[0].args.p_ticket;assert.equal(saved.vehicleName,ticket.vehicleName);assert.equal(saved.odometer,120000);assert.equal(saved.nextServiceMileage,125000);assert.equal(saved.nextServiceDate,'2026-12-01');assert.ok(saved.completedAt);
- for(const change of [{vehicleName:''},{serviceType:'Unknown'},{odometer:-1},{odometer:12.5},{nextServiceMileage:'120000'},{nextServiceDate:'2026-02-30'}]){apiSetup(['maintenance_manage']);assert.equal((await maintenancePost({...ticket,...change})).status,400);assert.equal(rpcCalls.length,0);}
+ for(const change of [{vehicleName:''},{serviceType:'Unknown'},{odometer:-1},{odometer:12.5},{nextServiceMileage:'120000'},{nextServiceDate:'2026-02-30'}]){apiSetup(['maintenance_manage']);globalThis.maintenanceAuth.profile.role='Location Licensee';globalThis.maintenanceAuth.isLicensee=true;assert.equal((await maintenancePost({...ticket,...change})).status,400);assert.equal(rpcCalls.length,0);}
  apiSetup(['maintenance_view','transportation']);assert.equal((await maintenancePost(ticket)).status,403);assert.equal(rpcCalls.length,0);
 });
 test('versioned database writes retain vehicle service history alongside facility tickets',async()=>{
  const ticket={id:'synthetic-vehicle-service',title:'Synthetic brake service',location:'synthetic-site',kind:'Vehicle',vehicleName:'Synthetic test van',serviceType:'Brakes',odometer:100000,nextServiceMileage:110000,nextServiceDate:'2026-12-01',status:'Completed',completionNotes:'Synthetic completion history'};
- await db.query('select save_maintenance_ticket($1,$2,$3,null,$4,$5)',[org,manager,loc,JSON.stringify(ticket),1]);
+ await db.query('select save_maintenance_ticket($1,$2,$3,null,$4,$5)',[org,licensee,loc,JSON.stringify(ticket),1]);
  const records=(await db.query('select state_value from hub_state')).rows[0].state_value;assert.deepEqual(records[1],ticket);assert.equal(records[0].id,'existing-other-location');
+});
+
+
+test('licensees and owners create tickets; ordinary care staff report issues and maintenance workers only update existing jobs',async()=>{
+ for(const role of ['Location Licensee','Licensee','Owner / Admin'])assert.equal(access.canCreateMaintenance({role,permissions:[]}),true);
+ for(const name of ['Danielle Moore','Jennifer Thomason','Anthony Thomason'])assert.equal(access.canCreateMaintenance({role:'Owner / Admin',permissions:[],full_name:name}),true);
+ for(const permissions of [['health_safety'],['maintenance_view'],['maintenance_manage']])assert.equal(access.canCreateMaintenance({role:'Employee',permissions}),false);
+ assert.equal(access.canManageMaintenance({role:'Employee',permissions:['health_safety']}),false);assert.equal(team.employeeCanWriteState(['health_safety'],'tcs-maintenance-tickets-v1'),false);
+ assert.equal(access.canCreateMaintenance({role:'Location Licensee',permissions:[],is_active:false}),false);
+ apiSetup(['health_safety']);let payload=await (await maintenanceApi.GET(new Request('https://hub.test/api/maintenance'))).json();assert.equal(payload.canCreate,false);assert.equal(payload.canManage,false);
+ apiSetup(['maintenance_manage']);assert.equal((await maintenancePost({id:'brand-new',title:'Synthetic issue',location:'Halcom',priority:'Routine',status:'Open'})).status,403);assert.equal(rpcCalls.length,0);
+ apiSetup([]);globalThis.maintenanceAuth.profile.role='Location Licensee';globalThis.maintenanceAuth.isLicensee=true;payload=await (await maintenanceApi.GET(new Request('https://hub.test/api/maintenance'))).json();assert.equal(payload.canCreate,true);assert.equal(payload.canManage,true);
+ assert.equal((await maintenancePost({id:'licensed-new',title:'Synthetic licensee repair',location:'Halcom',priority:'Routine',status:'Open'})).status,200);
 });

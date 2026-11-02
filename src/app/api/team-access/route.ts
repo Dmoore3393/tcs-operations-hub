@@ -26,7 +26,7 @@ function normalizeLocations(role: AccessRole, values: string[] | undefined) {
 
   const unique = [...new Set((values ?? []).filter((location) => careLocations.includes(location as (typeof careLocations)[number])))];
   if (role === "Location Licensee") {
-    if (unique.length !== 1) throw new Error("A Licensee must be assigned exactly one location.");
+    if (unique.length !== 1) throw new Error("Choose exactly one main location for the licensee; backup access is included.");
     return unique;
   }
 

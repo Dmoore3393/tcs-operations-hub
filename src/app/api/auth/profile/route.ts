@@ -1,3 +1,4 @@
+import {withStaffBackupLocations} from "@/lib/server/staff-location-coverage";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupportedAccessRole } from "@/lib/team-access";
 
@@ -140,11 +141,12 @@ export async function POST(request: Request) {
 
     if (laneResult.error) throw laneResult.error;
 
+    const scopedProfile=await withStaffBackupLocations(admin,profile);
     return Response.json({
       bootstrapped,
       profile: {
-        ...profile,
-        locations: Array.isArray(profile.locations) ? profile.locations : [],
+        ...scopedProfile,
+        locations: Array.isArray(scopedProfile.locations) ? scopedProfile.locations : [],
         permissions: Array.isArray(profile.permissions) ? profile.permissions : [],
         lane_profile_id: laneResult.data?.id ?? null,
         job_title: laneResult.data?.job_title ?? null,

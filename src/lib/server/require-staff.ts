@@ -1,4 +1,5 @@
 import "server-only";
+import {withStaffBackupLocations} from "@/lib/server/staff-location-coverage";
 
 import { isLicenseeAccessRole, isOwnerAccessRole } from "@/lib/team-access";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -18,6 +19,7 @@ export type AuthorizedStaff = {
     is_active: boolean;
     permissions: string[];
     locations: string[];
+    primary_location?:string|null;
   };
   isOwner: boolean;
   isLicensee: boolean;
@@ -56,7 +58,7 @@ export async function requireStaff(request: Request): Promise<AuthorizedStaff> {
     userClient,
     user: userData.user,
     token,
-    profile,
+    profile:await withStaffBackupLocations(admin,profile),
     isOwner: isOwnerAccessRole(profile.role),
     isLicensee: isLicenseeAccessRole(profile.role),
   };

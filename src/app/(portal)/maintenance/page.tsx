@@ -40,12 +40,13 @@ export default function MaintenancePage() {
   const token=session?.access_token;
   const { location } = useHubLocation();
   const [tickets,setTickets]=useState<MaintenanceTicket[]>([]);
+  const [canCreate,setCanCreate]=useState(false);
   const [hydrated,setHydrated]=useState(false),[canManage,setCanManage]=useState(false),[error,setError]=useState(""),[saving,setSaving]=useState(false);
   const [loadError,setLoadError]=useState("");
   const [restSignals,setRestSignals]=useState<{locationId:string;location:string;status:string;label:string;lastEntryTime:string}[]>([]);
   const [restDataAvailable,setRestDataAvailable]=useState(true);
   const [version,setVersion]=useState(0),[editingVersion,setEditingVersion]=useState(0),[locations,setLocations]=useState<{id:string;label:string;name:string}[]>([]);
-  const load=useCallback(async()=>{if(!token)return;try{const data=await hubRequest<{tickets:MaintenanceTicket[];version:number;canManage:boolean;locations:{id:string;label:string;name:string}[];restSignals:{locationId:string;location:string;status:string;label:string;lastEntryTime:string}[];restDataAvailable:boolean}>("/api/maintenance",token);setTickets(data.tickets);setVersion(data.version);setCanManage(data.canManage);setLocations(data.locations);setRestSignals(data.restSignals||[]);setRestDataAvailable(data.restDataAvailable);setLoadError("");}catch(reason){setLoadError(reason instanceof Error?reason.message:"Could not load maintenance.");}finally{setHydrated(true);}},[token]);
+  const load=useCallback(async()=>{if(!token)return;try{const data=await hubRequest<{tickets:MaintenanceTicket[];version:number;canManage:boolean;canCreate:boolean;locations:{id:string;label:string;name:string}[];restSignals:{locationId:string;location:string;status:string;label:string;lastEntryTime:string}[];restDataAvailable:boolean}>("/api/maintenance",token);setTickets(data.tickets);setVersion(data.version);setCanManage(data.canManage);setCanCreate(data.canCreate);setLocations(data.locations);setRestSignals(data.restSignals||[]);setRestDataAvailable(data.restDataAvailable);setLoadError("");}catch(reason){setLoadError(reason instanceof Error?reason.message:"Could not load maintenance.");}finally{setHydrated(true);}},[token]);
   useEffect(()=>{const timer=window.setTimeout(()=>void load(),0);const polling=window.setInterval(()=>void load(),30000);return()=>{window.clearTimeout(timer);window.clearInterval(polling);};},[load]);
   const [editing, setEditing] = useState<MaintenanceTicket | null>(null);
   const [search, setSearch] = useState("");
@@ -69,7 +70,7 @@ export default function MaintenancePage() {
   const completed = visible.filter((ticket) => ticket.status === "Completed");
 
   function newTicket(kind:"Facility"|"Vehicle"="Facility") {
-    if(!canManage)return;setError("");setEditingVersion(version);
+    if(!canCreate)return;setError("");setEditingVersion(version);
     setEditing({
       kind,vehicleName:"",serviceType:"Repair",nextServiceDate:"",
       id: `maint-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -96,13 +97,14 @@ export default function MaintenancePage() {
   return <MainLayout><div className="mx-auto max-w-[1500px] space-y-6 pb-12 [&_input]:text-base [&_select]:text-base [&_textarea]:text-base [&_button]:min-h-11">
     <section className="overflow-hidden rounded-[30px] bg-gradient-to-br from-[#3c3028] via-[#654c38] to-[#2f3b2d] p-6 text-white shadow-xl sm:p-8">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-        <div><p className="text-xs font-black uppercase tracking-[.18em] text-amber-200">Maintenance work area</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">Maintenance Department</h1><p className="mt-3 max-w-4xl text-sm font-semibold leading-6 text-amber-50/80">Report broken doors, cameras, plumbing, playground, vehicle, electrical, and other site issues with priority, assignment, due date, and completion history.</p></div>
-        {canManage && <div className="flex flex-wrap gap-3"><button onClick={()=>newTicket("Vehicle")} className="min-h-11 rounded-xl bg-emerald-700 px-4 py-3 text-base font-black text-white">New Vehicle Service</button><button onClick={()=>newTicket()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-950"><Plus className="h-4 w-4" /> New Facility Ticket</button></div>}
+        <div><p className="text-xs font-black uppercase tracking-[.18em] text-amber-200">Maintenance work area</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">Maintenance Department</h1><p className="mt-3 max-w-4xl text-sm font-semibold leading-6 text-amber-50/80">Licensees create facility and vehicle tickets for their locations. Staff report new issues to their location licensee. Danielle, Jen and Anthony oversee maintenance.</p></div>
+        {canCreate && <div className="flex flex-wrap gap-3"><button onClick={()=>newTicket("Vehicle")} className="min-h-11 rounded-xl bg-emerald-700 px-4 py-3 text-base font-black text-white">New Vehicle Service</button><button onClick={()=>newTicket()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-950"><Plus className="h-4 w-4" /> New Facility Ticket</button></div>}
       </div>
     </section>
 
     <section id="vehicle-maintenance" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-base text-emerald-950"><h2 className="text-xl font-black">Vehicle maintenance &amp; service history</h2><p className="mt-2">Track oil changes, tires, brakes, inspections and repairs by vehicle. Record mileage, the person handling the work, due dates, completion notes and the next service date or mileage. Completed tickets stay in the history.</p><button onClick={()=>{setKindFilter("Vehicle");setStatusFilter("All");}} className="mt-3 min-h-11 rounded-xl bg-emerald-800 px-4 py-3 font-bold text-white">Show vehicle maintenance</button>{canAccessRoute(profile,"/transportation")&&<Link href={canAccessRoute(profile,"/transportation-setup")?"/transportation-setup":"/transportation"} className="ml-3 inline-flex min-h-11 items-center font-bold underline">Open Transportation &amp; Fleet</Link>}<p className="mt-3">Service tickets do not change a vehicle’s fleet readiness. Leadership updates Ready / Needs Attention / Out of Service in Transportation.</p></section>
-    <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-white p-4 text-base"><strong>{canManage?"Maintenance: manage tickets":"Maintenance: view only"}</strong><span>Tickets, assignments, due dates and completion updates.</span><button className="min-h-11 rounded-xl border px-4 py-2 font-bold" onClick={()=>void load()}>Refresh updates</button></div>
+    {!canCreate&&<p className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-base text-emerald-950">Need a repair? Report it to your location licensee so they can create a ticket. For an immediate safety risk, contact your licensee, Danielle, Jen or Anthony directly.<Link href="/communications" className="mt-3 block min-h-11 w-fit rounded-xl border border-emerald-700 bg-white px-4 py-2 font-bold">Open staff communications</Link></p>}
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-white p-4 text-base"><strong>{canManage?"Maintenance: update tickets":"Maintenance: view only"}</strong><span>Tickets, assignments, due dates and completion updates. New tickets are created by licensees and administration.</span><button className="min-h-11 rounded-xl border px-4 py-2 font-bold" onClick={()=>void load()}>Refresh updates</button></div>
     {(error||loadError) && <p role="alert" className="rounded-xl bg-red-50 p-4 text-base font-bold text-red-900">{error||loadError}</p>}
     <nav aria-label="Shared staff tools" className="rounded-2xl border border-emerald-200 bg-white p-5">
       <h2 className="text-xl font-black text-emerald-950">Your staff Hub</h2>

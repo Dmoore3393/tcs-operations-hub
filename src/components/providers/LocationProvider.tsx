@@ -10,6 +10,7 @@ type LocationContextValue = {
   setLocation: (location: LocationKey) => void;
   availableLocations: LocationKey[];
   locationLocked: boolean;
+  mainLocation:LocationKey|null;
   theme: (typeof locationThemes)[LocationKey];
 };
 
@@ -17,6 +18,9 @@ const LocationContext = createContext<LocationContextValue | null>(null);
 
 export function LocationProvider({ children }: { children: React.ReactNode }) {
   const { profile, isLocationRestricted } = useAuth();
+  const mainLocation=isLocationRestricted&&profile?.primary_location?normalizeLocation(profile.primary_location):null;
+  const workDate=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Los_Angeles",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const storageKey=isLocationRestricted?`tcs-backup-location:${profile?.user_id||"pending"}:${workDate}`:"tcs-active-location";
   const [location, setLocationState] = useState<LocationKey>("All Locations");
 
   const availableLocations = useMemo<LocationKey[]>(() => {
@@ -36,35 +40,36 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       try {
-        const stored = window.localStorage.getItem("tcs-active-location");
+        const stored = (isLocationRestricted?window.sessionStorage:window.localStorage).getItem(storageKey);
         const saved = migrateActiveLocation(stored) as LocationKey | null;
-        const next = saved && availableLocations.includes(saved) ? saved : availableLocations[0];
+        const next = saved && availableLocations.includes(saved) ? saved : mainLocation&&availableLocations.includes(mainLocation)?mainLocation:availableLocations[0];
         setLocationState(next);
-        window.localStorage.setItem("tcs-active-location", next);
+        (isLocationRestricted?window.sessionStorage:window.localStorage).setItem(storageKey, next);
       } catch {
-        setLocationState(availableLocations[0]);
+        setLocationState(mainLocation&&availableLocations.includes(mainLocation)?mainLocation:availableLocations[0]);
       }
     }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [availableLocations]);
+  }, [availableLocations,isLocationRestricted,mainLocation,storageKey]);
 
   const setLocation = useCallback((next: LocationKey) => {
     if (!availableLocations.includes(next)) return;
     setLocationState(next);
     try {
-      window.localStorage.setItem("tcs-active-location", next);
+      (isLocationRestricted?window.sessionStorage:window.localStorage).setItem(storageKey, next);
     } catch {
       // The selector still works for the current session.
     }
-  }, [availableLocations]);
+  }, [availableLocations,isLocationRestricted,storageKey]);
 
   const value = useMemo(() => ({
     location,
     setLocation,
     availableLocations,
     locationLocked: isLocationRestricted,
+    mainLocation,
     theme: locationThemes[location],
-  }), [availableLocations, isLocationRestricted, location, setLocation]);
+  }), [availableLocations, isLocationRestricted, location, setLocation,mainLocation]);
 
   return <LocationContext.Provider value={value}>{children}</LocationContext.Provider>;
 }
