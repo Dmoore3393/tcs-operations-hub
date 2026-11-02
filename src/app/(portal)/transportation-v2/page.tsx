@@ -3,6 +3,8 @@
 import Link from "next/link";
 import TransportCallouts from "@/components/transportation/TransportCallouts";
 import {useTransportDay} from "@/hooks/useTransportDay";
+import {childForSchoolRoute} from "@/lib/school-pickup-stops";
+import SchoolStopGroups from "@/components/transportation/SchoolStopGroups";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
@@ -226,7 +228,7 @@ export default function TransportationV2Page() {
   const checkedIn = todayRoutes.filter((route) => statusFor(route, today) === "Checked In").length;
   const fleetReady = vehicles.filter((vehicle) => vehicle.status === "Ready").length;
   const currentRouteEmergency = myRoute.map((route) => {
-    const child = children.find((item) => `${item.firstName} ${item.lastName}`.trim().toLowerCase() === route.child.trim().toLowerCase());
+    const child = childForSchoolRoute(route,children);
     const readiness = child ? emergencyCardReadiness(child) : null;
     return { route, child, readiness, ready: Boolean(child && readiness?.ready) };
   });
@@ -308,7 +310,7 @@ export default function TransportationV2Page() {
   }
 
   function markPickedUp(route: LiveRoute) {
-    const child = children.find((item) => `${item.firstName} ${item.lastName}`.trim().toLowerCase() === route.child.trim().toLowerCase());
+    const child = childForSchoolRoute(route,children);
     if (!child || !emergencyCardReadiness(child).ready) return;
     const now = new Date().toISOString();
     updateRoute(route, { runDate: today, runStatus: "Picked Up", pickedUpAt: now, pickedUpBy: actor, arrivedAt: undefined, checkedInAt: undefined });
@@ -330,7 +332,7 @@ export default function TransportationV2Page() {
   async function checkIntoLocation(route: LiveRoute) {
     const location = destinationLocation(route.dropoffLocation);
     if (!location) return;
-    const child = children.find((item) => `${item.firstName} ${item.lastName}`.trim().toLowerCase() === route.child.trim().toLowerCase());
+    const child = childForSchoolRoute(route,children);
     if (!child) {
       setCoverageMessage(`Could not check ${route.child} into care because the child record was not found.`);
       return;
@@ -453,7 +455,7 @@ export default function TransportationV2Page() {
             {currentRouteNeedsAttention.length > 0 && <div className="mt-4 grid gap-2 md:grid-cols-2">{currentRouteNeedsAttention.map(({ route, readiness }) => <div key={route.id} className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs"><strong className="text-red-950">{route.child}</strong><p className="mt-1 text-red-700">{readiness ? readiness.missing.slice(0, 3).join(" • ") : "Child emergency record not found"}</p></div>)}</div>}
           </div>
           <div className="rounded-3xl border border-blue-100 bg-[#f7fbff] p-5"><div className="flex items-start gap-3"><Navigation className="mt-0.5 h-5 w-5 text-[#1769d2]" /><p className="text-sm font-semibold leading-6 text-slate-700"><strong>Required chain:</strong> Tap Picked Up only when the child is physically with you. At the destination, tap Arrived. For a TCS location, the child must then be checked into that location before the handoff is complete.</p></div></div>
-          <div className="grid gap-4 xl:grid-cols-2">{myRoute.map((route) => {
+          <SchoolStopGroups routes={myRoute}>{(route) => {
             const status = statusFor(route, today);
             const destination = destinationLocation(route.dropoffLocation);
             const emergency = currentRouteEmergency.find((item) => item.route.id === route.id);
@@ -463,7 +465,7 @@ export default function TransportationV2Page() {
               <div className="mt-4 grid gap-3 sm:grid-cols-2"><Info label="PICK UP AT" value={route.pickupArea || route.school || "Not entered"} /><Info label="DESTINATION" value={route.dropoffLocation || "Not entered"} /></div>
               <div className="mt-4 flex flex-wrap gap-2">
                 {dispatch.canCallOut&&status==="Waiting"&&<button disabled={dispatch.saving} onClick={()=>void dispatch.change(route,"callout")} className="min-h-11 rounded-xl bg-red-800 px-4 py-3 text-base font-bold text-white">Call Out</button>}
-                <Link href={`/emergency-cards?name=${encodeURIComponent(route.child)}`} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800"><HeartPulse className="h-4 w-4" /> EMERGENCY CARD</Link>
+                <Link href={emergency?.child?`/emergency-cards?child=${emergency.child.id}`:"/emergency-cards"} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800"><HeartPulse className="h-4 w-4" /> EMERGENCY CARD</Link>
                 {status === "Waiting" && <Action disabled={!emergencyReady} title={!emergencyReady ? "Emergency record must be ready before pickup." : undefined} onClick={() => markPickedUp(route)}><UserCheck className="h-4 w-4" /> {emergencyReady ? "PICKED UP" : "EMERGENCY RECORD NOT READY"}</Action>}
                 {status === "Picked Up" && <Action onClick={() => markArrived(route)} tone="purple"><MapPin className="h-4 w-4" /> ARRIVED AT DESTINATION</Action>}
                 {status === "Arrived" && destination && <Action onClick={() => checkIntoLocation(route)} tone="green"><CheckCircle2 className="h-4 w-4" /> CHECK CHILD INTO {destination.toUpperCase()}</Action>}
@@ -472,7 +474,7 @@ export default function TransportationV2Page() {
               </div>
               <div className="mt-3 space-y-1 text-xs font-semibold text-slate-500">{route.pickedUpAt && <p>Picked up {timeLabel(route.pickedUpAt)} by {route.pickedUpBy || "staff"}</p>}{route.arrivedAt && <p>Arrived {timeLabel(route.arrivedAt)} by {route.arrivedBy || "staff"}</p>}{route.checkedInAt && <p>{destination ? "Checked into care" : "Drop-off completed"} {timeLabel(route.checkedInAt)} by {route.checkedInBy || "staff"}</p>}</div>
             </article>;
-          })}</div>
+          }}</SchoolStopGroups>
         </section>}
 
         <section className="grid gap-5 xl:grid-cols-3"><Panel title="Recent Pickups" icon={<UserCheck className="h-5 w-5" />}>{todayRoutes.filter((route) => route.pickedUpAt).sort((a, b) => String(b.pickedUpAt).localeCompare(String(a.pickedUpAt))).slice(0, 5).map((route) => <Row key={route.id} top={route.child} bottom={`${timeLabel(route.pickedUpAt)} • ${route.school}`} />)}</Panel><Panel title="Schools" icon={<MapPin className="h-5 w-5" />}>{schools.filter((school) => school.status === "Active").slice(0, 5).map((school) => <Row key={school.id} top={school.school} bottom={`${school.area} • ${school.dismissal || "dismissal not entered"}`} />)}</Panel><Panel title="Transportation Reminders" icon={<ShieldCheck className="h-5 w-5" />}><Row top="One child at a time" bottom="Never bulk-confirm pickups or handoffs." /><Row top="Arrival is not check-in" bottom="TCS destination handoff requires a separate location check-in." /><Row top="Field trip exception review" bottom="Missing destination handoffs alert Danielle and Jen only." /></Panel></section>
