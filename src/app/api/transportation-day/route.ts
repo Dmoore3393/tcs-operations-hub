@@ -1,3 +1,4 @@
+import {flushTransportAssignmentNotices} from "@/lib/server/transport-assignment-notifications";
 import {requireStaff,staffErrorResponse} from "@/lib/server/require-staff";
 import {validTransportDate} from "@/lib/transportation-day";
 export const runtime="nodejs";
@@ -16,5 +17,6 @@ export async function POST(request:Request){try{
  if(body.action==='save'&&!c.isOwner)return Response.json({error:'Administration assigns daily routes. Licensees can call out or restore their children.'},{status:403});
  const result=await c.admin.rpc('save_transport_day_stop',{p_org:c.profile.organization_id,p_actor:c.user.id,p_route:body.routeId,p_day:body.date,p_action:body.action,p_plan:body.plan||{},p_expected_version:body.expectedVersion});
  if(result.error){const msg=result.error.message||'Could not update daily transportation.';return Response.json({error:msg},{status:/changed/.test(msg)?409:/assigned|Leadership|administration/.test(msg)?403:400});}
+ if(body.action==='save')try{await flushTransportAssignmentNotices(c);}catch(error){console.error('Daily route saved; assignment notice remains queued',error instanceof Error?error.message:'dispatch failed');}
  return Response.json({ok:true,changedStops:result.data});
  }catch(error){return staffErrorResponse(error);}}

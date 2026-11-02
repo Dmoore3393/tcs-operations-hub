@@ -55,3 +55,9 @@ test("configuration correction preserves site IDs, child/staff links and other o
     assert.deepEqual((await db.query("select location_id from children union all select location_id from staff_location_assignments")).rows, [{ location_id: 10 }, { location_id: 10 }]);
   } finally { await db.close(); }
 });
+
+test("21st is closed while its stable historical location key remains available",()=>{
+ assert.equal(config.normalizeLocation("21st Street"),"21st Street");
+ assert.equal(config.locationOptionLabel("21st Street"),"21st Street (Closed)");
+ assert.ok(config.starterLocationHours.find(row=>row.location==="21st Street").days.Monday.closed);
+});

@@ -12,7 +12,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { initialChildren, type ChildRecord } from "@/lib/children";
 import { childAttendsLocation, starterChildSchedules, type ChildScheduleRecord } from "@/lib/child-schedules";
 
-type LocationRecord = { id: string; name: string; shortName: Exclude<LocationKey, "All Locations">; type: string; capacity: number; facilityNumber: string; address: string; phone: string; status: "Active" | "Planning" };
+type LocationRecord = { id: string; name: string; shortName: Exclude<LocationKey, "All Locations">; type: string; capacity: number; facilityNumber: string; address: string; phone: string; status: "Active" | "Planning" | "Closed" };
 
 const starter: LocationRecord[] = (Object.keys(locationThemes) as LocationKey[]).filter((item): item is Exclude<LocationKey, "All Locations"> => item !== "All Locations").map((key) => ({
   id: key.toLowerCase().replaceAll(" ", "-"),
@@ -23,7 +23,7 @@ const starter: LocationRecord[] = (Object.keys(locationThemes) as LocationKey[])
   facilityNumber: key === "42nd Street" ? "Facility #197701124" : "Add facility number",
   address: key === "Halcom" ? "Lancaster, CA" : key === "42nd Street" ? "44027 42nd St W, Lancaster, CA 93536" : key === "Tehachapi" ? "Tehachapi, CA" : "Add site address",
   phone: "(760) 382-5742",
-  status: "Active",
+  status: key === "21st Street" ? "Closed" : "Active",
 }));
 
 export default function LocationsPage() {
@@ -58,7 +58,7 @@ export default function LocationsPage() {
     setHours((current) => current.map((record) => record.location === location ? { ...record, days: { ...record.days, [day]: { ...record.days[day], ...patch } } } : record));
   }
 
-  const totalCapacity = locations.reduce((sum, item) => sum + item.capacity, 0);
+  const totalCapacity = locations.filter(item=>item.status==="Active").reduce((sum, item) => sum + item.capacity, 0);
   const activeChildren = useMemo(() => children.filter((child) => child.enrollmentStatus === "Active"), [children]);
   const totalEnrollment = activeChildren.length;
   const todayName = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(new Date()) as DayName;
@@ -83,10 +83,10 @@ export default function LocationsPage() {
         const selected = activeLocation === location.shortName;
         return <article key={location.id} className={`overflow-hidden rounded-3xl border bg-white shadow-sm ${selected ? "ring-4" : "border-slate-200"}`} style={selected ? { borderColor: theme.primary, boxShadow: `0 0 0 4px ${theme.primarySoft}` } : undefined}>
           <div className="p-5" style={{ background: `linear-gradient(135deg, ${theme.primaryDark}, ${theme.primary})`, color: theme.textOnPrimary }}>
-            <div className="flex items-start justify-between gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15"><Building2 className="h-6 w-6" /></div><div className="flex gap-2"><StatusBadge tone={location.status === "Active" ? "green" : "amber"}>{location.status}</StatusBadge><button onClick={() => { setEditing(location); setShowModal(true); }} className="rounded-xl bg-white/15 p-2 hover:bg-white/25" aria-label={`Edit ${location.shortName}`}><Pencil className="h-4 w-4" /></button></div></div>
+            <div className="flex items-start justify-between gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15"><Building2 className="h-6 w-6" /></div><div className="flex gap-2"><StatusBadge tone={location.status === "Active" ? "green" : location.status === "Closed" ? "red" : "amber"}>{location.status}</StatusBadge><button onClick={() => { setEditing(location); setShowModal(true); }} className="rounded-xl bg-white/15 p-2 hover:bg-white/25" aria-label={`Edit ${location.shortName}`}><Pencil className="h-4 w-4" /></button></div></div>
             <h2 className="mt-4 text-2xl font-black">{theme.label}</h2><p className="mt-1 text-sm font-bold opacity-85">{location.shortName === "Tehachapi" ? theme.fullName : location.name} • {location.shortName === "Tehachapi" ? theme.programType : location.type}</p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button onClick={() => setActiveLocation(location.shortName)} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-black" style={{ color: theme.ink }}>{selected ? <><Check className="h-4 w-4" /> Active Location</> : "Use This Location"}</button>
+              <button onClick={() => setActiveLocation(location.shortName)} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-black" style={{ color: theme.ink }}>{selected ? <><Check className="h-4 w-4" /> Active Location</> : location.status==="Closed" ? "View Historical Location" : "Use This Location"}</button>
               {location.shortName === "Halcom" && <Link href="/locations/halcom" onClick={() => setActiveLocation("Halcom")} className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/15 px-3 py-2 text-xs font-black text-white hover:bg-white/25">Open Moore Family Childcare Home →</Link>}
               {location.shortName === "33rd Street" && <Link href="/locations/33rd-street" onClick={() => setActiveLocation("33rd Street")} className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/15 px-3 py-2 text-xs font-black text-white hover:bg-white/25">Open Cornejo Family Childcare Home →</Link>}
               {location.shortName === "Division" && <Link href="/locations/division" onClick={() => setActiveLocation("Division")} className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/15 px-3 py-2 text-xs font-black text-white hover:bg-white/25">Open School Age Center Home →</Link>}
@@ -149,7 +149,7 @@ export default function LocationsPage() {
         <label><span className="mb-1.5 block text-sm font-bold">Capacity</span><input type="number" min="0" className={inputClass} value={editing.capacity} onChange={(event) => setEditing({ ...editing, capacity: Number(event.target.value) })} /></label>
         <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold">Address</span><input className={inputClass} value={editing.address} onChange={(event) => setEditing({ ...editing, address: event.target.value })} /></label>
         <label><span className="mb-1.5 block text-sm font-bold">Facility number</span><input className={inputClass} value={editing.facilityNumber} onChange={(event) => setEditing({ ...editing, facilityNumber: event.target.value })} /></label>
-        <label><span className="mb-1.5 block text-sm font-bold">Status</span><select className={inputClass} value={editing.status} onChange={(event) => setEditing({ ...editing, status: event.target.value as LocationRecord["status"] })}><option>Active</option><option>Planning</option></select></label>
+        <label><span className="mb-1.5 block text-sm font-bold">Status</span><select className={inputClass} value={editing.status} onChange={(event) => setEditing({ ...editing, status: event.target.value as LocationRecord["status"] })}><option>Active</option><option>Planning</option><option>Closed</option></select></label>
         <button id="location-form-submit" type="submit" className="hidden">Submit</button>
       </form>
     </Modal>}

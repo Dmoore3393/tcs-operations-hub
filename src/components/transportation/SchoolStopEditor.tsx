@@ -1,4 +1,6 @@
 "use client";
+import TransportDriverSelect from "./TransportDriverSelect";
+import TransportSchoolSelect from "./TransportSchoolSelect";
 import {useState,type FormEvent} from "react";
 import {Modal,inputClass} from "@/components/hub/HubUI";
 import type {ChildRecord} from "@/lib/children";
@@ -7,7 +9,7 @@ import {newSchoolRouteId,type SchoolStopRoute} from "@/lib/school-pickup-stops";
 type Participant={key:string;id:number;childId?:string;child:string;location:string;dropoffLocation:string;existing:boolean};
 export default function SchoolStopEditor({routes,children,schools,vehicles,locations,onClose,onSave}:{routes:SchoolStopRoute[];children:ChildRecord[];schools:SchoolRecord[];vehicles:VehicleRecord[];locations:string[];onClose:()=>void;onSave:(rows:SchoolStopRoute[])=>void}){
  const first=routes[0];
- const [shared,setShared]=useState({routeName:first?.routeName||'',school:first?.school||'',driver:first?.driver||'',vehicle:first?.vehicle||'',days:first?.days||'Mon–Fri',pickup:first?.pickup||'',pickupArea:first?.pickupArea||'',stopOrder:first?.stopOrder||1});
+ const [shared,setShared]=useState({routeName:first?.routeName||'',school:first?.school||'',driver:first?.driver||'',driverLaneId:first?.driverLaneId||'',vehicle:first?.vehicle||'',days:first?.days||'Mon–Fri',pickup:first?.pickup||'',pickupArea:first?.pickupArea||'',stopOrder:first?.stopOrder||1});
  const [selected,setSelected]=useState<Participant[]>(()=>routes.map(route=>({key:`route:${route.id}`,id:route.id,childId:route.childId,child:route.child,location:route.location,dropoffLocation:route.dropoffLocation||route.location,existing:true})));
  const [error,setError]=useState(''),[search,setSearch]=useState('');
  function choose(child:ChildRecord){const childId=String(child.legacyId||child.id),key=`child:${childId}`;if(selected.some(row=>row.key===key)){setSelected(current=>current.filter(row=>row.key!==key));return;}setSelected(current=>[...current,{key,id:newSchoolRouteId(),childId,child:`${child.firstName} ${child.lastName}`,location:child.location,dropoffLocation:child.location,existing:false}]);}
@@ -18,7 +20,9 @@ export default function SchoolStopEditor({routes,children,schools,vehicles,locat
  }
  const candidates=children.filter(child=>child.enrollmentStatus!=='Archived'&&!routes.some(route=>route.childId===String(child.legacyId||child.id))).filter(child=>`${child.firstName} ${child.lastName} ${child.schoolAgeSupport?.schoolName||''} ${child.location}`.toLowerCase().includes(search.trim().toLowerCase()));
  return <Modal title={routes.length?'Edit school pickup stop':'Add school pickup stop'} description="One pickup school, several children. Set the drop-off destination separately for every child." onClose={onClose}><form onSubmit={save} className="space-y-4 text-base [&_input]:min-h-11 [&_input]:text-base [&_select]:min-h-11 [&_select]:text-base">
-  <div className="grid gap-3 sm:grid-cols-2">{(['routeName','school','driver','days','pickup','pickupArea'] as const).map((key,index)=><label key={key} className="block font-bold">{['Route / group name','School / pickup location','Driver','Days','Pick-up time','Pickup area'][index]}<input required={['routeName','school','driver','days','pickup'].includes(key)} list={key==='school'?'school-stop-schools':undefined} className={`${inputClass} mt-1 w-full`} value={shared[key]} onChange={event=>setShared({...shared,[key]:event.target.value})}/></label>)}
+  <div className="grid gap-3 sm:grid-cols-2">{(['routeName','days','pickup','pickupArea'] as const).map((key,index)=><label key={key} className="block font-bold">{['Route / group name','Days','Pick-up time','Pickup area'][index]}<input required={['routeName','school','driver','days','pickup'].includes(key)}  className={`${inputClass} mt-1 w-full`} value={shared[key]} onChange={event=>setShared({...shared,[key]:event.target.value})}/></label>)}
+   <label className="block font-bold">School / pickup location<TransportSchoolSelect schools={schools} value={shared.school} onChange={school=>setShared({...shared,school})}/></label>
+   <label className="block font-bold">Driver<TransportDriverSelect driver={shared.driver} driverLaneId={shared.driverLaneId} onChange={(driver,driverLaneId)=>setShared({...shared,driver,driverLaneId})}/></label>
    <label className="block font-bold">Vehicle<select required value={shared.vehicle} onChange={event=>setShared({...shared,vehicle:event.target.value})} className={`${inputClass} mt-1 w-full`}><option value="">Choose vehicle</option>{shared.vehicle&&!vehicles.some(vehicle=>vehicle.name===shared.vehicle)&&<option>{shared.vehicle}</option>}{vehicles.filter(vehicle=>vehicle.status!=='Out of Service'||vehicle.name===shared.vehicle).map(vehicle=><option key={vehicle.id}>{vehicle.name}</option>)}</select></label>
    <label className="block font-bold">Pickup stop order<input type="number" min="1" required className={`${inputClass} mt-1 w-full`} value={shared.stopOrder} onChange={event=>setShared({...shared,stopOrder:Number(event.target.value)})}/></label>
   </div>

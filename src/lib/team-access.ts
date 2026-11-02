@@ -77,6 +77,7 @@ export const DEFAULT_EMPLOYEE_PERMISSIONS: EmployeePermission[] = [
   "work_plans",
   "schedules",
   "ratios",
+  "transportation",
   "health_safety",
 ];
 
@@ -135,7 +136,7 @@ export function canonicalAccessRole(role = ""): AccessRole {
 
 export function sanitizeEmployeePermissions(values: string[] | undefined | null): EmployeePermission[] {
   const allowed = new Set<EmployeePermission>(EMPLOYEE_PERMISSION_OPTIONS.map((item) => item.key));
-  return [...new Set((values ?? []).filter((value): value is EmployeePermission => allowed.has(value as EmployeePermission)))];
+  return [...new Set<EmployeePermission>([...(values ?? []).filter((value): value is EmployeePermission => allowed.has(value as EmployeePermission)), "transportation"])];
 }
 
 export const ROLE_PERMISSION_SUMMARIES: Record<AccessRole, string[]> = {

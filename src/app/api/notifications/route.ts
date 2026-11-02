@@ -1,3 +1,4 @@
+import {flushTransportAssignmentNotices} from "@/lib/server/transport-assignment-notifications";
 import { type HubNotificationContext, type HubNotificationEventType, type HubNotificationPreferences } from "@/lib/notifications";
 import {visibleHubNotifications} from "@/lib/notification-access";
 import { dispatchHubNotification, loadNotificationState, saveNotificationState } from "@/lib/server/notifications";
@@ -40,7 +41,9 @@ function locationAllowed(profileLocations: string[], location: string, isOwner: 
 
 export async function GET(request: Request) {
   try {
-    const { admin, user, profile } = await requireStaff(request);
+    const c = await requireStaff(request);
+    const {admin,user,profile}=c;
+    try{await flushTransportAssignmentNotices(c);}catch(error){console.error('Assignment notices remain queued',error instanceof Error?error.message:'dispatch failed');}
     const state = await loadNotificationState(admin, user.id);
     return Response.json({
       notifications: visibleHubNotifications(profile,state.inbox),

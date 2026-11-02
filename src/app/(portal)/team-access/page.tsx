@@ -308,8 +308,8 @@ function LocationSelector({ role, locations, onToggle }: { role: AccessRole; loc
 
 function PermissionSelector({ permissions, onToggle }: { permissions: string[]; onToggle: (permission: string) => void }) {
   return <div className="mt-5"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black text-slate-700">Employee permissions</p><p className="mt-1 text-xs text-slate-500">Turn on only the tools this employee needs for their job. KidKare and Timesheets are administrative-role tools and are never available to standard Employee accounts.</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">{permissions.length} selected</span></div><div className="mt-3 grid gap-3 md:grid-cols-2">{EMPLOYEE_PERMISSION_OPTIONS.map((item) => {
-    const checked = permissions.includes(item.key);
-    return <label key={item.key} className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition ${checked ? "border-emerald-300 bg-emerald-50" : "border-slate-200 hover:border-slate-300"}`}><input className="mt-1" type="checkbox" checked={checked} onChange={() => onToggle(item.key)} /><span><span className="block text-sm font-black text-slate-900">{item.label}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{item.description}</span></span></label>;
+    const checked = item.key==="transportation"||permissions.includes(item.key);
+    return <label key={item.key} className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition ${checked ? "border-emerald-300 bg-emerald-50" : "border-slate-200 hover:border-slate-300"}`}><input className="mt-1" type="checkbox" checked={checked} disabled={item.key==="transportation"} onChange={() => onToggle(item.key)} /><span><span className="block text-sm font-black text-slate-900">{item.label}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{item.description}</span></span></label>;
   })}</div></div>;
 }
 
