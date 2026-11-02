@@ -1,4 +1,5 @@
 import "server-only";
+import {canReceiveHubNotification} from "@/lib/notification-access";
 
 import {
   categoryForEvent,
@@ -230,7 +231,7 @@ export async function dispatchHubNotification(args: {
     const role = typeof row.role === "string" ? row.role : "";
     const locations = stringArray(row.locations);
     const permissions = stringArray(row.permissions);
-    return locationMatches(locations, location) && permissionMatches(role, permissions, eventType);
+    return locationMatches(locations, location) && permissionMatches(role, permissions, eventType) && canReceiveHubNotification({role,permissions,locations},{...template,location,eventKey});
   });
 
   let delivered = 0;
@@ -331,7 +332,7 @@ export async function dispatchManualHubNotification(args: {
     const role = typeof row.role === "string" ? row.role : "";
     const locations = stringArray(row.locations);
     const permissions = stringArray(row.permissions);
-    return locationMatches(locations, targetLocation) && targetGroupMatches(role, permissions, args.targetGroup);
+    return locationMatches(locations, targetLocation) && targetGroupMatches(role, permissions, args.targetGroup) && canReceiveHubNotification({role,permissions,locations},{category:args.category,href,location:targetLocation,eventKey,title:args.title});
   });
 
   let delivered = 0;
@@ -392,7 +393,7 @@ export async function dispatchFileAuditOversightNotification(args: {
 
   const { data: rows, error } = await args.admin
     .from("staff_access")
-    .select("user_id,role,locations,is_active,organization_id")
+    .select("user_id,role,locations,permissions,is_active,organization_id")
     .eq("organization_id", args.organizationId)
     .eq("is_active", true);
   if (error) throw new Error(error.message);
@@ -402,6 +403,7 @@ export async function dispatchFileAuditOversightNotification(args: {
     const role = typeof row.role === "string" ? row.role : "";
     const userId = typeof row.user_id === "string" ? row.user_id : "";
     if (!userId) continue;
+    if(!canReceiveHubNotification({role,permissions:stringArray(row.permissions),locations:stringArray(row.locations)},{category:"system",href,location:targetLocation,eventKey,title:args.title}))continue;
 
     if (isOwnerAccessRole(role)) {
       recipientIds.add(userId);

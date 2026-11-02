@@ -1,4 +1,5 @@
 import { type HubNotificationContext, type HubNotificationEventType, type HubNotificationPreferences } from "@/lib/notifications";
+import {visibleHubNotifications} from "@/lib/notification-access";
 import { dispatchHubNotification, loadNotificationState, saveNotificationState } from "@/lib/server/notifications";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 
@@ -39,12 +40,12 @@ function locationAllowed(profileLocations: string[], location: string, isOwner: 
 
 export async function GET(request: Request) {
   try {
-    const { admin, user } = await requireStaff(request);
+    const { admin, user, profile } = await requireStaff(request);
     const state = await loadNotificationState(admin, user.id);
     return Response.json({
-      notifications: state.inbox,
+      notifications: visibleHubNotifications(profile,state.inbox),
       preferences: state.preferences,
-      unreadCount: state.inbox.filter((item) => !item.readAt).length,
+      unreadCount: visibleHubNotifications(profile,state.inbox).filter((item) => !item.readAt).length,
     }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" },
     });
@@ -55,7 +56,7 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const { admin, user } = await requireStaff(request);
+    const { admin, user, profile } = await requireStaff(request);
     const body = await request.json() as {
       readIds?: string[];
       markAllRead?: boolean;
@@ -78,9 +79,9 @@ export async function PATCH(request: Request) {
 
     await saveNotificationState(admin, state.user, inbox, preferences);
     return Response.json({
-      notifications: inbox,
+      notifications: visibleHubNotifications(profile,inbox),
       preferences,
-      unreadCount: inbox.filter((item) => !item.readAt).length,
+      unreadCount: visibleHubNotifications(profile,inbox).filter((item) => !item.readAt).length,
     });
   } catch (error) {
     return staffErrorResponse(error);
