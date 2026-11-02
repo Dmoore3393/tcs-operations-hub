@@ -323,6 +323,11 @@ export function usePersistentState<T>(key: string, initialValue: T) {
             return;
           }
           announceHubSync({ state: "saved", key, message: `All ${config.label} changes saved` });
+          if(key==="tcs-routes") {
+            // Dispatch only after the transaction commits; inbox polling also recovers queued jobs.
+            const {data:{session}}=await supabase!.auth.getSession();
+            if(session?.access_token)void fetch("/api/transportation-assignments/dispatch",{method:"POST",keepalive:true,headers:{Authorization:`Bearer ${session.access_token}`}}).catch(()=>{});
+          }
           return;
         }
 

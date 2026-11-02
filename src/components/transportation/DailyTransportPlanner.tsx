@@ -1,11 +1,14 @@
 "use client";
+import TransportDriverSelect from "./TransportDriverSelect";
+import TransportSchoolSelect from "./TransportSchoolSelect";
+import type {SchoolRecord} from "@/lib/hub-data";
 import SchoolStopGroups from "@/components/transportation/SchoolStopGroups";
 import {useState} from "react";
 import {useTransportDay} from "@/hooks/useTransportDay";
 import {localIsoDate} from "@/lib/date-utils";
 import {scheduledOnDate,type DayRoute} from "@/lib/transportation-day";
 import {Modal,inputClass} from "@/components/hub/HubUI";
-export default function DailyTransportPlanner({routes,location}:{routes:DayRoute[];location:string}){
+export default function DailyTransportPlanner({routes,location,schools=[]}:{routes:DayRoute[];location:string;schools?:SchoolRecord[]}){
  const [date,setDate]=useState(localIsoDate),[editing,setEditing]=useState<{route:DayRoute;version:number}|null>(null),[notice,setNotice]=useState('');
  const day=useTransportDay(routes,date);const past=date<localIsoDate();
  const rows=routes.filter(route=>route.status!=='Not Riding'&&(location==='All Locations'||route.location===location)).map(route=>{const stop=day.stopFor(route);return{route:{...route,...stop?.plan_data},stop,scheduled:Boolean(stop?.is_planned)||scheduledOnDate(route.days,date)};});
@@ -23,8 +26,10 @@ export default function DailyTransportPlanner({routes,location}:{routes:DayRoute
    {!day.sourceFor(route)?.child_id&&<p className="mt-2 text-slate-700">This stop has no linked child ID. Call Out applies to this stop only; check any other stops for this child.</p>}
    <div className="mt-3 flex flex-wrap gap-2">{day.canPlan&&!past&&<button disabled={day.saving} onClick={()=>setEditing({route:{...route},version:stop?.version||0})} className="rounded-xl bg-emerald-800 px-4 py-2 font-bold text-white">{scheduled?'Edit this day':'Add to this day'}</button>}{day.canCallOut&&!past&&(scheduled||stop?.called_out)&&<button disabled={day.saving} onClick={()=>void callout(route,Boolean(stop?.called_out))} className={`rounded-xl px-4 py-2 font-bold text-white ${stop?.called_out?'bg-slate-800':'bg-red-800'}`}>{stop?.called_out?'Restore':'Call Out'}</button>}</div>
   </article>;}}</SchoolStopGroups>{!rows.length&&<p>No recurring route entries at this location. Add children and stops in the Routes tab first.</p>}</>}
-  {editing&&<Modal title="Assign transportation for this day" description={`Only ${date} will change. The recurring route stays the same.`} onClose={()=>{if(!day.saving)setEditing(null);}}><form className="space-y-3 text-base" onSubmit={async event=>{event.preventDefault();const {driver,vehicle,routeName='',stopOrder=1,pickup,dropoff,dropoffLocation='',notes}=editing.route;if(await day.change(editing.route,'save',{driver,vehicle,routeName,stopOrder,pickup,dropoff,dropoffLocation,notes},editing.version)){setEditing(null);setNotice('Saved for this date only.');}}}>
-   {(['driver','vehicle','routeName','pickup','dropoff','dropoffLocation','notes'] as const).map((key,index)=><label key={key} className="block font-bold">{['Driver','Vehicle','Route / group name','Pick-up time','Drop-off time','Destination','Notes'][index]}<input className={`${inputClass} mt-1 w-full`} value={editing.route[key]||''} onChange={event=>setEditing({...editing,route:{...editing.route,[key]:event.target.value}})}/></label>)}
+  {editing&&<Modal title="Assign transportation for this day" description={`Only ${date} will change. The recurring route stays the same.`} onClose={()=>{if(!day.saving)setEditing(null);}}><form className="space-y-3 text-base" onSubmit={async event=>{event.preventDefault();const {driver,driverLaneId='',school,vehicle,routeName='',stopOrder=1,pickup,dropoff,dropoffLocation='',notes}=editing.route;if(await day.change(editing.route,'save',{driver,driverLaneId,school,vehicle,routeName,stopOrder,pickup,dropoff,dropoffLocation,notes},editing.version)){setEditing(null);setNotice('Saved for this date. The assigned driver will receive a route alert.');}}}>
+   <label className="block font-bold">Driver<TransportDriverSelect driver={editing.route.driver} driverLaneId={editing.route.driverLaneId} onChange={(driver,driverLaneId)=>setEditing({...editing,route:{...editing.route,driver,driverLaneId}})}/></label>
+   <label className="block font-bold">School / pickup location<TransportSchoolSelect schools={schools} value={editing.route.school} onChange={school=>setEditing({...editing,route:{...editing.route,school}})}/></label>
+   {(['vehicle','routeName','pickup','dropoff','dropoffLocation','notes'] as const).map((key,index)=><label key={key} className="block font-bold">{['Vehicle','Route / group name','Pick-up time','Drop-off time','Destination','Notes'][index]}<input className={`${inputClass} mt-1 w-full`} value={editing.route[key]||''} onChange={event=>setEditing({...editing,route:{...editing.route,[key]:event.target.value}})}/></label>)}
    <label className="block font-bold">Stop order<input type="number" min="1" max="999" required className={`${inputClass} mt-1 w-full`} value={editing.route.stopOrder||1} onChange={event=>setEditing({...editing,route:{...editing.route,stopOrder:Number(event.target.value)}})}/></label>
    {day.actionError&&<p role="alert" className="text-red-900">{day.actionError}</p>}<button type="submit" disabled={day.saving} className="rounded-xl bg-emerald-800 px-5 py-3 font-bold text-white">{day.saving?'Saving…':'Save this day'}</button>
   </form></Modal>}

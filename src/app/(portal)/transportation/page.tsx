@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import {canViewMaintenance} from "@/lib/maintenance-access";
+import TransportDriverSelect from "@/components/transportation/TransportDriverSelect";
+import TransportSchoolSelect from "@/components/transportation/TransportSchoolSelect";
 import DailyTransportPlanner from "@/components/transportation/DailyTransportPlanner";
 import TransportCallouts from "@/components/transportation/TransportCallouts";
 import {useTransportDay} from "@/hooks/useTransportDay";
@@ -231,12 +233,6 @@ export default function TransportationPage() {
     setRoutes((current) => current.some((item) => item.id === saved.id)
       ? current.map((item) => item.id === saved.id ? saved : item)
       : [...current, saved]);
-    void sendHubNotificationEvent({
-      accessToken: session?.access_token,
-      eventType: "transportation_update",
-      location: saved.location,
-      eventKey: `transport-route:${saved.id}:${Date.now()}`,
-    });
     setEditingRoute(null);
   }
 
@@ -415,7 +411,7 @@ export default function TransportationPage() {
           ))}
         </div>
 
-        {tab === "Daily Planner" && <DailyTransportPlanner routes={routes} location={activeLocation}/>}
+        {tab === "Daily Planner" && <DailyTransportPlanner routes={routes} location={activeLocation} schools={schools}/>}
         {tab === "Today" && (
           <div className="space-y-5">
             {(dispatch.error||dispatch.actionError)&&<p role="alert" className="rounded-xl bg-red-50 p-4 text-base text-red-950">{dispatch.error||dispatch.actionError}<button className="ml-3 min-h-11 underline" onClick={()=>void dispatch.refresh()}>Try again</button></p>}
@@ -588,13 +584,10 @@ export default function TransportationPage() {
               <Field label="Stop order"><input min={1} type="number" className={inputClass} value={editingRoute.stopOrder ?? 1} onChange={(event) => setEditingRoute({ ...editingRoute, stopOrder: Number(event.target.value) || 1 })} /></Field>
               <Field label="Childcare location"><select required className={inputClass} value={editingRoute.location} onChange={(event) => setEditingRoute({ ...editingRoute, location: event.target.value })}>{availableLocations.filter((item) => item !== "All Locations").map((item) => <option key={item}>{item}</option>)}</select></Field>
               <Field label="Existing child profile"><select className={inputClass} value={editingRoute.childId||""} onChange={event=>{const selected=routeChildren.find(child=>String(child.legacyId||child.id)===event.target.value);setEditingRoute({...editingRoute,childId:event.target.value,child:selected?`${selected.firstName} ${selected.lastName}`:editingRoute.child});}}><option value="">Choose a child, or keep an unlinked name</option>{routeChildren.filter(child=>child.enrollmentStatus!=="Archived").map(child=><option key={child.id} value={String(child.legacyId||child.id)}>{child.firstName} {child.lastName} • {child.location} • {child.dateOfBirth||"Birth date not recorded"}</option>)}</select></Field><Field label={editingRoute.childId?"Child name":"Unlinked child name"}><input required readOnly={Boolean(editingRoute.childId)} className={inputClass} value={editingRoute.child} onChange={event=>setEditingRoute({...editingRoute,child:event.target.value})}/></Field>
-              <Field label="School or destination">
-                <input list="transport-school-options" className={inputClass} value={editingRoute.school} onChange={(event) => setEditingRoute({ ...editingRoute, school: event.target.value })} placeholder="Choose or type a destination" />
-                <datalist id="transport-school-options"><option value="Home Transportation" /><option value="Dojo" />{activeSchools.map((school) => <option key={school.id} value={school.school} />)}</datalist>
-              </Field>
+              <Field label="School or destination"><TransportSchoolSelect schools={schools} value={editingRoute.school} onChange={school=>setEditingRoute({...editingRoute,school})}/></Field>
               <Field label="Area"><select className={inputClass} value={editingRoute.area} onChange={(event) => setEditingRoute({ ...editingRoute, area: event.target.value })}><option>Lancaster</option><option>Quartz Hill</option><option>Rosamond</option><option>Tehachapi</option><option>Other</option></select></Field>
               <Field label="Days"><input className={inputClass} value={editingRoute.days} onChange={(event) => setEditingRoute({ ...editingRoute, days: event.target.value })} /></Field>
-              <Field label="Driver"><input className={inputClass} value={editingRoute.driver} onChange={(event) => setEditingRoute({ ...editingRoute, driver: event.target.value })} /></Field>
+              <Field label="Driver"><TransportDriverSelect driver={editingRoute.driver} driverLaneId={editingRoute.driverLaneId} onChange={(driver,driverLaneId)=>setEditingRoute({...editingRoute,driver,driverLaneId})}/></Field>
               <Field label="Vehicle">
                 <select className={inputClass} value={editingRoute.vehicle} onChange={(event) => setEditingRoute({ ...editingRoute, vehicle: event.target.value })}>
                   <option value="">No vehicle assigned</option>

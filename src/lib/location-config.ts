@@ -20,7 +20,7 @@ export function locationDisplayName(value: string) {
 }
 
 export function locationOptionLabel(value: LocationKey) {
-  return value === "Tehachapi" ? TEHACHAPI_LOCATION_LABEL : value;
+  return value === "21st Street" ? "21st Street (Closed)" : value === "Tehachapi" ? TEHACHAPI_LOCATION_LABEL : value;
 }
 
 export type DayName = "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
@@ -72,7 +72,7 @@ function closed(): DailyHours {
 
 export const starterLocationHours: LocationHoursRecord[] = [
   { location: "Halcom", days: { Monday: hours("06:00", "23:00"), Tuesday: hours("06:00", "23:00"), Wednesday: hours("06:00", "23:00"), Thursday: hours("06:00", "23:00"), Friday: hours("06:00", "18:00"), Saturday: hours("06:00", "23:00"), Sunday: hours("06:00", "23:00") } },
-  { location: "21st Street", days: { Monday: hours("06:00", "23:00"), Tuesday: hours("06:00", "23:00"), Wednesday: hours("06:00", "23:00"), Thursday: hours("06:00", "23:00"), Friday: hours("06:00", "23:00"), Saturday: hours("06:00", "23:00"), Sunday: hours("06:00", "23:00") } },
+  { location: "21st Street", days: { Monday: closed(), Tuesday: closed(), Wednesday: closed(), Thursday: closed(), Friday: closed(), Saturday: closed(), Sunday: closed() } },
   { location: "Division", days: { Monday: hours("06:00", "19:00"), Tuesday: hours("06:00", "19:00"), Wednesday: hours("06:00", "19:00"), Thursday: hours("06:00", "19:00"), Friday: hours("06:00", "19:00"), Saturday: closed(), Sunday: closed() } },
   { location: "33rd Street", days: { Monday: hours("06:00", "23:00"), Tuesday: hours("06:00", "23:00"), Wednesday: hours("06:00", "23:00"), Thursday: hours("06:00", "23:00"), Friday: hours("06:00", "23:00"), Saturday: hours("06:00", "23:00"), Sunday: hours("06:00", "23:00") } },
   { location: "Tehachapi", days: { Monday: hours("06:00", "19:00"), Tuesday: hours("06:00", "19:00"), Wednesday: hours("06:00", "19:00"), Thursday: hours("06:00", "19:00"), Friday: hours("06:00", "19:00"), Saturday: closed(), Sunday: closed() } },
