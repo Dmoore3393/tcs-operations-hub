@@ -90,6 +90,7 @@ type CalendarPayload = {
     timeZone: string;
   };
   canManageClosures: boolean;
+  canApproveSchedules:boolean;
   locations: Location[];
   closures: Closure[];
   submissions: Submission[];
@@ -110,6 +111,7 @@ function statusStyle(status: string) {
 
 export default function FamilyCareCalendarPage() {
   const { session } = useAuth();
+  const accessToken=session?.access_token;
   const [data, setData] = useState<CalendarPayload | null>(null);
   const [locationFilter, setLocationFilter] = useState("");
   const [loading, setLoading] = useState(true);
@@ -124,12 +126,12 @@ export default function FamilyCareCalendarPage() {
   const [closureNote, setClosureNote] = useState("");
 
   const load = useCallback(async () => {
-    if (!session?.access_token) return;
+    if (!accessToken) return;
     setLoading(true);
     setError("");
     try {
       const response = await fetch("/api/care-calendar", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
         cache: "no-store",
       });
       const payload = await response.json() as CalendarPayload & { error?: string };
@@ -140,9 +142,9 @@ export default function FamilyCareCalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [session?.access_token]);
+  }, [accessToken]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {const timer=window.setTimeout(()=>void load(),0);return()=>window.clearTimeout(timer);}, [load]);
 
   const visibleLocations = data?.locations ?? [];
   const calendarDates = useMemo(() => {
@@ -182,7 +184,7 @@ export default function FamilyCareCalendarPage() {
   }
 
   async function createClosure() {
-    if (!session?.access_token || !closureDate) return;
+    if (!accessToken || !closureDate) return;
     setSaving(true);
     setError("");
     setNotice("");
@@ -190,7 +192,7 @@ export default function FamilyCareCalendarPage() {
       const response = await fetch("/api/care-calendar", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -214,14 +216,14 @@ export default function FamilyCareCalendarPage() {
   }
 
   async function removeClosure(id: string) {
-    if (!session?.access_token) return;
+    if (!accessToken) return;
     setSaving(true);
     setError("");
     try {
       const response = await fetch("/api/care-calendar", {
         method: "DELETE",
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ id }),
@@ -238,7 +240,8 @@ export default function FamilyCareCalendarPage() {
   }
 
   async function reviewSubmission(submissionId: string, decision: "Approved" | "Needs Changes" | "Unable to Accommodate") {
-    if (!session?.access_token) return;
+    if (!accessToken) return;
+    if(!data?.canApproveSchedules)return;
     setReviewingId(submissionId);
     setError("");
     setNotice("");
@@ -246,7 +249,7 @@ export default function FamilyCareCalendarPage() {
       const response = await fetch("/api/care-calendar", {
         method: "PATCH",
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -323,12 +326,15 @@ export default function FamilyCareCalendarPage() {
           <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{careDays.map((day) => <div key={day.date} className="rounded-xl bg-slate-50 p-3"><p className="text-base font-black uppercase tracking-wider text-slate-600">{displayDate(day.date, { weekday: "short", month: "short", day: "numeric" })}</p><p className="mt-1 text-xs font-black text-slate-900">{day.startTime}–{day.endTime}</p>{day.note && <p className="mt-1 text-base font-semibold leading-4 text-slate-500">{day.note}</p>}</div>)}</div>
           {careDays.length === 0 && <p className="mt-4 rounded-xl bg-slate-50 p-3 text-xs font-semibold text-slate-500">Family selected no care for the entire week.</p>}
 
+          {data?.canApproveSchedules && <>
           <textarea value={reviewNotes[submission.id] || ""} onChange={(event) => setReviewNotes((current) => ({ ...current, [submission.id]: event.target.value.slice(0, 1000) }))} placeholder="Optional note to family — required in practice if changes are needed or care cannot be accommodated." className="mt-4 min-h-20 w-full resize-y rounded-xl border border-slate-200 px-3 py-3 text-xs font-semibold" />
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
             <button disabled={reviewingId === submission.id} onClick={() => void reviewSubmission(submission.id, "Approved")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-xs font-black text-white disabled:opacity-40">{reviewingId === submission.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Approve Schedule</button>
             <button disabled={reviewingId === submission.id} onClick={() => void reviewSubmission(submission.id, "Needs Changes")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3 text-xs font-black text-white disabled:opacity-40"><RefreshCw className="h-4 w-4" />Needs Changes</button>
             <button disabled={reviewingId === submission.id} onClick={() => void reviewSubmission(submission.id, "Unable to Accommodate")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-3 text-xs font-black text-white disabled:opacity-40"><XCircle className="h-4 w-4" />Unable to Accommodate</button>
           </div>
+          </>}
+          {!data?.canApproveSchedules && <p className="mt-4 rounded-xl bg-slate-50 p-3 text-base text-slate-700">Viewing only. An assigned licensee, Danielle or Jennifer will review this request.</p>}
         </article>;
       })}</div>
     </section>

@@ -21,6 +21,7 @@ export default function EmployeesPage() {
   const [payload, setPayload] = useState<LanePayload>({ lanes: [], currentUserId: "", canManageLanes: false });
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState("All Lanes");
+  const [department,setDepartment]=useState("All departments");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [inviteEmployee,setInviteEmployee]=useState<StaffLaneProfile|null>(null);
@@ -60,8 +61,8 @@ export default function EmployeesPage() {
       lane.reports_to_label,
     ].filter(Boolean).join(" ").toLowerCase().includes(term);
     const matchesGroup = group === "All Lanes" || lane.lane_group === group;
-    return matchesTerm && matchesGroup;
-  }), [group, payload.lanes, search]);
+    return matchesTerm && matchesGroup && (department==="All departments" || lane.department===department);
+  }), [department, group, payload.lanes, search]);
 
   const linked = payload.lanes.filter((lane) => lane.staff_user_id).length;
   const leadership = payload.lanes.filter((lane) => lane.lane_level && lane.lane_level <= 3).length;
@@ -89,9 +90,10 @@ export default function EmployeesPage() {
     </section>
 
     <SectionCard>
-      <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
+      <div className="grid gap-3 lg:grid-cols-[1fr_240px_240px]">
         <label className="relative"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" /><input className={`${inputClass} pl-10`} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search employee, lane, site, department, or supervisor…" /></label>
         <select className={inputClass} value={group} onChange={(event) => setGroup(event.target.value)}>{groups.map((item) => <option key={item}>{item}</option>)}</select>
+        <select aria-label="Employee department" className={inputClass} value={department} onChange={event=>setDepartment(event.target.value)}><option>All departments</option>{[...new Set(payload.lanes.map(lane=>lane.department).filter((value):value is string=>Boolean(value)))].sort().map(value=><option key={value}>{value}</option>)}</select>
       </div>
     </SectionCard>
 
@@ -106,6 +108,7 @@ export default function EmployeesPage() {
           <p className="text-sm font-black text-emerald-800">{lane.job_title}</p>
           {lane.secondary_title && <p className="mt-1 text-xs font-bold text-amber-700">{lane.secondary_title}</p>}
           <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm">
+            <p className="mb-2"><span className="font-black text-slate-500">Department:</span> <span className="font-semibold text-slate-800">{lane.department || "Not assigned"}</span></p>
             <p><span className="font-black text-slate-500">Lane:</span> <span className="font-semibold text-slate-800">{lane.lane_group}</span></p>
             {lane.primary_location && <p className="mt-2"><span className="font-black text-slate-500">Primary location:</span> <span className="font-semibold text-slate-800">{lane.primary_location}</span></p>}
             <p className="mt-2"><span className="font-black text-slate-500">Reports to:</span> <span className="font-semibold text-slate-800">{lane.reports_to_label || "Executive / ownership level"}</span></p>

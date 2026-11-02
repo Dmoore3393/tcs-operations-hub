@@ -56,3 +56,8 @@ test('employee invite dialog prefills the saved email, requires a location, and 
  tree.find(n=>n.type==='input'&&n.props.name==='invite-location').props.onChange();tree=render();assert.equal(tree.find(n=>n.type==='button'&&n.props.type==='submit').props.disabled,false);
  await tree.find(n=>n.type==='form').props.onSubmit({preventDefault(){}});assert.equal(requests.length,2);const body=JSON.parse(requests[1].init.body);assert.equal(body.lane_profile_id,lane);assert.equal(body.full_name,'Synthetic Staff');assert.equal(body.email,'reviewed@example.com');assert.deepEqual(body.locations,['Halcom']);assert.equal(completed,1);
 });
+
+test('normal maintenance invitations grant only the maintenance workspace, preserving department and job identity',async()=>{
+ setup();tables.staff_lane_profiles[0].department='Maintenance';const result=await post({permissions:['children_basic','daily_care','schedules','health_safety','maintenance_view']});assert.equal(result.status,200);assert.deepEqual(events.find(event=>event.kind==='send').options.data.tcs_permissions,['maintenance_view']);assert.equal(tables.staff_lane_profiles[0].department,'Maintenance');
+ setup();tables.staff_lane_profiles[0].department='Maintenance';assert.equal((await post({permissions:['maintenance_manage','schedules']})).status,200);assert.deepEqual(events.find(event=>event.kind==='send').options.data.tcs_permissions,['maintenance_manage']);
+});

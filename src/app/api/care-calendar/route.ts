@@ -1,3 +1,4 @@
+import {canApproveChildSchedules} from "@/lib/child-schedule-authority";
 import { after } from "next/server";
 import { notifyAuthorizedFamily } from "@/lib/server/family-native-notifications";
 import {
@@ -161,6 +162,7 @@ export async function GET(request: Request) {
     return Response.json({
       settings,
       canManageClosures: isOwner,
+      canApproveSchedules:canApproveChildSchedules(profile),
       locations: locations.map((row) => ({
         id: text(row.id),
         slug: text(row.slug),
@@ -331,9 +333,9 @@ export async function DELETE(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const { admin, user, profile, isOwner, isLicensee } = await requireStaff(request);
-    if (!canReviewSchedules(profile, isOwner, isLicensee)) {
-      throw new Response("Schedule-review access is required.", { status: 403 });
+    const { admin, user, profile, isOwner } = await requireStaff(request);
+    if (!canApproveChildSchedules(profile)) {
+      throw new Response("Only assigned licensees, Danielle and Jennifer can approve or change family schedule requests.", { status: 403 });
     }
 
     const body = object(await request.json().catch(() => ({})));

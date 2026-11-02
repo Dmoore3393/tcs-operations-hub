@@ -30,7 +30,7 @@ export async function GET(request:Request) {
     const {admin,profile}=await requireOwner(request);
     const laneId=new URL(request.url).searchParams.get("lane") || "";
     if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(laneId))return Response.json({error:"Choose an existing employee profile."},{status:400});
-    const lane=await admin.from("staff_lane_profiles").select("id,full_name,job_title,primary_location,staff_user_id").eq("organization_id",profile.organization_id).eq("id",laneId).eq("is_active",true).maybeSingle();
+    const lane=await admin.from("staff_lane_profiles").select("id,full_name,job_title,department,primary_location,staff_user_id").eq("organization_id",profile.organization_id).eq("id",laneId).eq("is_active",true).maybeSingle();
     if(lane.error)throw lane.error;
     if(!lane.data)return Response.json({error:"The active employee profile was not found."},{status:404});
     if(lane.data.staff_user_id)return Response.json({error:"This employee already has a linked Hub account. Use Manage Access to review it or send a new setup link."},{status:409});
@@ -59,14 +59,14 @@ export async function POST(request: Request) {
 
     let locations:string[];
     try{locations = locationsForRole(role, body.locations);}catch(error){return Response.json({error:error instanceof Error?error.message:"Choose valid locations."},{status:400});}
-    const permissions = role === "Employee" ? sanitizeEmployeePermissions(body.permissions) : [];
+    let permissions = role === "Employee" ? sanitizeEmployeePermissions(body.permissions) : [];
     const requestedLaneId = body.lane_profile_id?.trim() || null;
 
-    let selectedLane: { id: string; full_name:string; updated_at:string; staff_user_id: string | null; job_title: string; secondary_title: string | null } | null = null;
+    let selectedLane: { id: string; full_name:string; updated_at:string; department:string|null; staff_user_id: string | null; job_title: string; secondary_title: string | null } | null = null;
     if (requestedLaneId) {
       const laneResult = await admin
         .from("staff_lane_profiles")
-        .select("id,full_name,updated_at,staff_user_id,job_title,secondary_title")
+        .select("id,full_name,updated_at,department,staff_user_id,job_title,secondary_title")
         .eq("organization_id", profile.organization_id)
         .eq("id", requestedLaneId)
         .eq("is_active", true)
@@ -76,6 +76,7 @@ export async function POST(request: Request) {
       if (laneResult.data.staff_user_id) return Response.json({ error: "That TCS lane is already linked to another Hub account." }, { status: 409 });
       if(laneResult.data.full_name !== fullName)return Response.json({error:"Use the existing employee’s name. Invitations do not rename staff profiles."},{status:400});
       selectedLane = laneResult.data;
+      if(role==="Employee" && laneResult.data.department?.toLowerCase()==="maintenance")permissions=permissions.includes("maintenance_manage")?["maintenance_manage"]:["maintenance_view"];
     }
 
     const { data: existing, error:existingError } = await admin
