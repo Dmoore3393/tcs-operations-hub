@@ -48,6 +48,7 @@ type AuthContextValue = {
   user: User | null;
   profile: StaffAccessProfile | null;
   loading: boolean;
+  isPasswordRecovery: boolean;
   isSystemOwner: boolean;
   isCorporateAdmin: boolean;
   isLocationLicensee: boolean;
@@ -185,6 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [checkingFamilyAccess, setCheckingFamilyAccess] = useState(false);
   const [accessError, setAccessError] = useState("");
+  const [isPasswordRecovery,setIsPasswordRecovery]=useState(false);
   const signingOutRef = useRef(false);
   const lastActivityRef = useRef(0);
   const timeoutTriggeredRef = useRef(false);
@@ -271,6 +273,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (signingOutRef.current) return;
+      if(_event==="PASSWORD_RECOVERY")setIsPasswordRecovery(true);
+      if(!nextSession)setIsPasswordRecovery(false);
       setSession(nextSession);
 
       if (!nextSession) {
@@ -303,7 +307,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isParentPortalRoute(pathname) || isPublicInfoRoute(pathname)) return;
 
     if (!session) {
-      if (pathname !== "/login") router.replace("/login");
+      if (pathname !== "/login" && pathname !== "/accept-invite") router.replace("/login");
       return;
     }
 
@@ -315,11 +319,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const maintenanceOnly=isEmployeeRole(profile.role) && (profile.permissions||[]).some(permission=>permission==="maintenance_view"||permission==="maintenance_manage") && (profile.permissions||[]).every(permission=>permission==="maintenance_view"||permission==="maintenance_manage"||permission==="transportation");
-    if(profile.accepted_at && maintenanceOnly && ["/","/login","/accept-invite"].includes(pathname)){router.replace("/maintenance");return;}
-    if (profile.accepted_at && (pathname === "/login" || pathname === "/accept-invite")) {
+    if(profile.accepted_at && !isPasswordRecovery && maintenanceOnly && ["/","/login","/accept-invite"].includes(pathname)){router.replace("/maintenance");return;}
+    if (profile.accepted_at && !isPasswordRecovery && (pathname === "/login" || pathname === "/accept-invite")) {
       router.replace("/");
     }
-  }, [loading, pathname, profile, router, session]);
+  }, [loading, pathname, profile, router, session,isPasswordRecovery]);
 
   useEffect(() => {
     let cancelled = false;
@@ -439,6 +443,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user: session?.user ?? null,
       profile,
       loading,
+      isPasswordRecovery,
       isSystemOwner,
       isCorporateAdmin: isSystemOwner,
       isLocationLicensee,
@@ -448,9 +453,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshProfile: async () => loadProfile(session),
       signOut,
     };
-  }, [loadProfile, loading, profile, session, signOut]);
+  }, [loadProfile, loading, profile, session, signOut,isPasswordRecovery]);
 
-  if (pathname === "/login" || pathname === "/account" || isParentPortalRoute(pathname)) {
+  if (pathname === "/login" || pathname === "/accept-invite" || pathname === "/account" || isParentPortalRoute(pathname)) {
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
   }
 

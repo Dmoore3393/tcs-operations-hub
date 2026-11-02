@@ -26,3 +26,11 @@ export const supabase = isSupabaseConfigured
       },
     })
   : null;
+
+/** Invitation password changes use verified tokens in memory, independent of Safari storage. */
+export function createInvitationClient() {
+  if (!supabaseUrl || !supabaseBrowserKey) throw new Error("Secure sign-in is not configured.");
+  return createClient(supabaseUrl, supabaseBrowserKey, {
+    auth: { storageKey: "tcs-invitation-memory", persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}

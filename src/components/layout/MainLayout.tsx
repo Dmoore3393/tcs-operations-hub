@@ -175,6 +175,7 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/staff-schedules": { title: "Staff Schedules", subtitle: "Jennifer’s weekly staff planner, shift assignments and schedule publishing" },
   "/scheduling": { title: "Staffing Command Center", subtitle: "Live child demand, floor coverage, transportation adjustments, and staffing gaps" },
   "/transportation": { title: "Transportation", subtitle: "Routes, schools, drivers, and vehicle readiness" },
+  "/transportation-setup": { title: "Transportation Setup", subtitle: "Daily dispatch, call-outs, recurring routes, schools and vehicles" },
   "/transportation-v2": { title: "Live Transportation", subtitle: "Pickup, transit, arrival, emergency access, and handoff confirmation" },
   "/transportation-fees": { title: "Transportation Fees", subtitle: "Weekly route-to-billing audit and family payment tracking" },
   "/billing-command-center": { title: "Billing & Subsidy Command Center", subtitle: "Family funding, subsidy timesheets, and transportation billing oversight" },

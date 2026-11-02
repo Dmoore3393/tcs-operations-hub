@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import TransportCallouts from "@/components/transportation/TransportCallouts";
+import {useTransportDay} from "@/hooks/useTransportDay";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
@@ -127,6 +129,7 @@ export default function TransportationV2Page() {
   const [transportCoverage, setTransportCoverage] = useState<StaffActivityRow[]>([]);
   const [coverageMessage, setCoverageMessage] = useState("");
   const today = localIsoDate();
+  const dispatch=useTransportDay(routes,today);
   const actor = profile?.full_name?.trim() || profile?.email || "TCS Staff";
   const leader = isLeadership(profile?.full_name || "", profile?.email || "");
   const canManageTransportation = canManageSystem || isLocationLicensee;
@@ -207,8 +210,8 @@ export default function TransportationV2Page() {
   }, [isOnline, replayingOffline, routesHydrated, setRoutes]);
 
   const todayRoutes = useMemo(
-    () => routes.filter((route) => route.status !== "Not Riding" && scheduledToday(route.days) && matchesLocation(route, activeLocation)),
-    [routes, activeLocation],
+    () => dispatch.activeRoutes.filter((route) => matchesLocation(route, activeLocation)),
+    [dispatch.activeRoutes, activeLocation],
   );
   const routeNames = useMemo(() => [...new Set(todayRoutes.map(routeKey))], [todayRoutes]);
   const effectiveRoute = routeNames.includes(selectedRoute) ? selectedRoute : routeNames[0] || "";
@@ -407,13 +410,16 @@ export default function TransportationV2Page() {
           </div>
         </section>
 
+        {(dispatch.error||dispatch.actionError)&&<section role="alert" className="rounded-xl bg-red-50 p-4 text-base text-red-950">{dispatch.error||dispatch.actionError}<button className="ml-3 min-h-11 underline" onClick={()=>void dispatch.refresh()}>Try again</button></section>}
+        {!dispatch.ready&&!dispatch.error&&<p role="status" className="text-base">Checking today’s route changes and call-outs…</p>}
+        <TransportCallouts stops={dispatch.stops.filter(stop=>activeLocation==="All Locations"||stop.snapshot.location===activeLocation)} canRestore={dispatch.canCallOut} saving={dispatch.saving} onRestore={route=>void dispatch.change(route,"restore")}/>
         {coverageMessage && <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-black text-blue-950 shadow-sm">{coverageMessage}</section>}
 
         <section className={`rounded-2xl border p-4 shadow-sm ${isOnline ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-red-300 bg-red-50 text-red-950"}`}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               {isOnline ? <ShieldCheck className="mt-0.5 h-5 w-5 flex-none text-emerald-700" /> : <WifiOff className="mt-0.5 h-5 w-5 flex-none text-red-700" />}
-              <div><p className="font-black">{isOnline ? "Transportation connection is online" : "Offline mode — route actions are being protected"}</p><p className="mt-1 text-xs font-semibold leading-5">{isOnline ? (pendingOffline ? `${pendingOffline} queued route action${pendingOffline === 1 ? "" : "s"} waiting to sync.` : "Route confirmations can sync to The Hub.") : "Pickup and handoff status changes are queued without storing child medical details on this device. Keep this screen open until service returns."}</p></div>
+              <div><p className="font-black">{isOnline ? "Transportation connection is online" : "Offline mode — route actions are being protected"}</p><p className="mt-1 text-xs font-semibold leading-5">{isOnline ? (pendingOffline ? `${pendingOffline} queued route action${pendingOffline === 1 ? "" : "s"} waiting to sync.` : "Route confirmations can sync to The Hub.") : "Pickup and handoff status changes are queued without storing child medical details on this device. Call-outs may be out of date; confirm with leadership before pickup. Keep this screen open until service returns."}</p></div>
             </div>
             <div className="text-xs font-bold">{pendingOffline > 0 ? `${pendingOffline} pending` : lastSyncAt ? `Last synced ${timeLabel(lastSyncAt)}` : "Ready"}</div>
           </div>
@@ -433,7 +439,7 @@ export default function TransportationV2Page() {
         {locationArrivals.length > 0 && <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm"><div className="flex items-start gap-3"><BellRing className="mt-0.5 h-6 w-6 text-[#1769d2]" /><div><p className="text-xs font-black uppercase tracking-[.16em] text-[#1769d2]">Location arrival notice</p><h2 className="mt-1 text-xl font-black text-[#102a56]">A transported child has arrived</h2><p className="mt-1 text-sm font-semibold text-slate-600">Program directors and authorized staff only need the arrival notice. Missing-drop-off alerts stay with Danielle and Jen.</p></div></div></section>}
 
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#1769d2]">My Route Today</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">Choose the route you are running</h2><p className="mt-1 text-sm font-semibold text-slate-500">Pickup and destination confirmation happen one child at a time.</p></div><div className="flex flex-wrap gap-2"><Link href={effectiveRoute ? `/emergency-cards?route=${encodeURIComponent(effectiveRoute)}` : "/emergency-cards"} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#9f2f35] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#7e2228]"><HeartPulse className="h-4 w-4" /> EMERGENCY MEDICAL CARDS</Link>{canManageTransportation && <Link href="/transportation" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#102a56] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#1769d2]"><Pencil className="h-4 w-4" /> MANAGE TRANSPORTATION SETUP</Link>}</div></div>
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#1769d2]">My Route Today</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">Choose the route you are running</h2><p className="mt-1 text-sm font-semibold text-slate-500">Pickup and destination confirmation happen one child at a time.</p></div><div className="flex flex-wrap gap-2"><Link href={effectiveRoute ? `/emergency-cards?route=${encodeURIComponent(effectiveRoute)}` : "/emergency-cards"} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#9f2f35] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#7e2228]"><HeartPulse className="h-4 w-4" /> EMERGENCY MEDICAL CARDS</Link>{canManageTransportation && <Link href="/transportation-setup" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#102a56] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#1769d2]"><Pencil className="h-4 w-4" /> MANAGE TRANSPORTATION SETUP</Link>}</div></div>
           <div className="mt-5 flex flex-wrap gap-2">{routeNames.map((name) => <button key={name} onClick={() => setSelectedRoute(name)} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${effectiveRoute === name ? "border-[#1769d2] bg-[#eef6ff] text-[#102a56]" : "border-slate-200 bg-white text-slate-600"}`}>{name}</button>)}{!routeNames.length && <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">No active routes are scheduled for today at this location.</p>}</div>
         </section>
 
@@ -456,6 +462,7 @@ export default function TransportationV2Page() {
               <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.15em] text-[#1769d2]">Stop {route.stopOrder ?? "—"} • {route.pickup || "Time not entered"}</p><h3 className="mt-1 text-xl font-black text-slate-950">{route.child}</h3><p className="mt-1 text-sm font-bold text-slate-600">{route.school || "Pickup destination not entered"}</p></div><Status status={status} /></div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2"><Info label="PICK UP AT" value={route.pickupArea || route.school || "Not entered"} /><Info label="DESTINATION" value={route.dropoffLocation || "Not entered"} /></div>
               <div className="mt-4 flex flex-wrap gap-2">
+                {dispatch.canCallOut&&status==="Waiting"&&<button disabled={dispatch.saving} onClick={()=>void dispatch.change(route,"callout")} className="min-h-11 rounded-xl bg-red-800 px-4 py-3 text-base font-bold text-white">Call Out</button>}
                 <Link href={`/emergency-cards?name=${encodeURIComponent(route.child)}`} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800"><HeartPulse className="h-4 w-4" /> EMERGENCY CARD</Link>
                 {status === "Waiting" && <Action disabled={!emergencyReady} title={!emergencyReady ? "Emergency record must be ready before pickup." : undefined} onClick={() => markPickedUp(route)}><UserCheck className="h-4 w-4" /> {emergencyReady ? "PICKED UP" : "EMERGENCY RECORD NOT READY"}</Action>}
                 {status === "Picked Up" && <Action onClick={() => markArrived(route)} tone="purple"><MapPin className="h-4 w-4" /> ARRIVED AT DESTINATION</Action>}
