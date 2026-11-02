@@ -115,6 +115,7 @@ export const starterVehicles: VehicleRecord[] = [
 ];
 
 export type TransportationRoute = {
+  pickupStopId?: string;
   childId?: string;
   id: number;
   location: string;

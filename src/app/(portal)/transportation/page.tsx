@@ -6,6 +6,9 @@ import DailyTransportPlanner from "@/components/transportation/DailyTransportPla
 import TransportCallouts from "@/components/transportation/TransportCallouts";
 import {useTransportDay} from "@/hooks/useTransportDay";
 import {initialChildren,type ChildRecord} from "@/lib/children";
+import SchoolStopEditor from "@/components/transportation/SchoolStopEditor";
+import {groupSchoolPickupStops,mergeSchoolStopRows,type SchoolStopRoute} from "@/lib/school-pickup-stops";
+import SchoolStopGroups from "@/components/transportation/SchoolStopGroups";
 import MainLayout from "@/components/layout/MainLayout";
 import { TcsKidsScene } from "@/components/brand/TcsKidsScene";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -167,6 +170,7 @@ export default function TransportationPage() {
   const [vehicles, setVehicles] = usePersistentState<VehicleRecord[]>("tcs-vehicles-v2", starterVehicles);
   const [readiness, setReadiness] = usePersistentState<ReadinessState>("tcs-vehicle-readiness-v2", {});
   const [tab, setTab] = useState<Tab>("Daily Planner");
+  const [editingSchoolStop,setEditingSchoolStop]=useState<SchoolStopRoute[]|null>(null);
   const [routeSearch, setRouteSearch] = useState("");
   const [schoolSearch, setSchoolSearch] = useState("");
   const [editingRoute, setEditingRoute] = useState<LiveTransportationRoute | null>(null);
@@ -425,7 +429,7 @@ export default function TransportationPage() {
               <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5"><MiniSummary label="Route" value={effectiveRouteKey} /><MiniSummary label="Driver Today" value={selectedDriver} /><MiniSummary label="Vehicle" value={selectedVehicle} /><MiniSummary label="In Transit" value={String(selectedOnboard)} /><MiniSummary label="Checked In" value={`${selectedCheckedIn}/${selectedTodayRoutes.length}`} /></section>
               <section className="rounded-3xl border border-blue-100 bg-[#f7fbff] p-5 shadow-sm sm:p-6"><div className="flex items-start gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#1769d2] text-white"><Navigation className="h-5 w-5" /></div><div><h3 className="text-lg font-black text-[#102a56]">Required custody steps</h3><p className="mt-1 text-sm font-semibold leading-6 text-slate-600">1. Tap <strong>PICKED UP</strong> only when the child is physically with you. 2. The child stays <strong>IN TRANSIT</strong> while riding. 3. At the destination, tap <strong>CHECK INTO LOCATION</strong>. 4. Reconcile the route before you finish. Site staff are notified only when the child arrives; missing-arrival review stays with Danielle and Jen.</p></div></div></section>
 
-              <div className="grid gap-4 xl:grid-cols-2">{selectedTodayRoutes.map((route) => {
+              <SchoolStopGroups routes={selectedTodayRoutes}>{(route) => {
                 const runStatus = routeRunStatus(route, today);
                 const destination = route.dropoffLocation?.trim() || route.location;
                 return <article key={route.id} className={`rounded-3xl border p-5 shadow-sm ${runStatus === "Checked In" ? "border-emerald-200 bg-emerald-50/60" : runStatus === "Picked Up" ? "border-blue-200 bg-blue-50/60" : "border-slate-200 bg-white"}`}>
@@ -436,7 +440,7 @@ export default function TransportationPage() {
                   <div className="mt-4 flex flex-wrap gap-2">{runStatus === "Waiting" && <button onClick={() => markPickedUp(route)} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#1769d2] px-4 py-3 text-sm font-black text-white"><UserCheck className="h-4 w-4" /> PICKED UP</button>}{runStatus === "Picked Up" && <button onClick={() => markCheckedIn(route)} disabled={!destination} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#34a853] px-4 py-3 text-sm font-black text-white disabled:opacity-40"><CheckCircle2 className="h-4 w-4" /> CHECK INTO {destination || "LOCATION NEEDED"}</button>}{runStatus === "Checked In" && <div className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-100 px-4 py-3 text-sm font-black text-emerald-800"><CheckCircle2 className="h-4 w-4" /> CHECKED IN</div>}{canManageRoutes && runStatus !== "Waiting" && <button onClick={() => resetToday(route)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-3 text-xs font-black text-slate-600"><RotateCcw className="h-4 w-4" /> Reset</button>}</div>
                   {runStatus !== "Waiting" && <div className="mt-3 space-y-1 text-xs font-semibold text-slate-500">{route.pickedUpAt && <p>Picked up {timestampLabel(route.pickedUpAt)} by {route.pickedUpBy || "staff"}</p>}{route.checkedInAt && <p>Checked into {destination} {timestampLabel(route.checkedInAt)} by {route.checkedInBy || "staff"}</p>}</div>}
                 </article>;
-              })}</div>
+              }}</SchoolStopGroups>
 
               <section className={`rounded-3xl border p-5 shadow-sm sm:p-6 ${selectedWaiting === 0 && selectedOnboard === 0 ? "border-emerald-200 bg-emerald-50" : selectedOnboard > 0 ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}`}><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div className="flex items-start gap-3"><AlertTriangle className={`mt-0.5 h-6 w-6 ${selectedOnboard > 0 ? "text-red-700" : "text-amber-700"}`} /><div><h3 className="font-black text-slate-950">Route Reconciliation</h3><p className="mt-1 text-sm font-semibold leading-6 text-slate-600">A route cannot be considered complete with a child still marked In Transit. Missing-arrival review is leadership-only because the child may be on a field trip or another approved off-site activity.</p></div></div><button onClick={reconcileRoute} className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white">RECONCILE ROUTE</button></div>{routeMessage && <div className="mt-4 rounded-xl bg-white/70 px-4 py-3 text-sm font-bold text-slate-800">{routeMessage}</div>}</section>
             </>}
@@ -445,6 +449,7 @@ export default function TransportationPage() {
 
         {tab === "Routes" && (
           <>
+            <section className="space-y-3 rounded-2xl border border-emerald-200 bg-white p-5 text-base"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-2xl font-black text-emerald-950">School pickup stops</h2>{canManageRoutes&&<button onClick={()=>setEditingSchoolStop([])} className="min-h-11 rounded-xl bg-emerald-800 px-5 py-3 font-bold text-white">Add School Stop</button>}</div><p>Group children at one school pickup. Every child keeps their own drop-off location.</p>{groupSchoolPickupStops(locationRoutes,true).map(stop=><article key={stop.key} className="rounded-xl border p-4"><h3 className="text-lg font-black">{stop.school} • {stop.pickup||"Pickup time not set"}</h3><p>{stop.driver} • {stop.vehicle} • {stop.routes.length} children</p><ul className="my-3 space-y-1">{stop.routes.map(route=><li key={route.id}><strong>{route.child}</strong> → {route.dropoffLocation||route.location}</li>)}</ul>{canManageRoutes&&<button className="min-h-11 rounded-xl border border-emerald-700 px-4 py-2 font-bold text-emerald-900" onClick={()=>setEditingSchoolStop(stop.routes)}>Edit stop / add children</button>}</article>)}</section>
             <SectionCard action={canManageRoutes ? <PrimaryButton onClick={() => openRoute()}><Plus className="h-4 w-4" /> Add Route</PrimaryButton> : undefined}>
               <label className="relative block">
                 <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
@@ -608,6 +613,7 @@ export default function TransportationPage() {
           </Modal>
         )}
 
+        {editingSchoolStop&&<SchoolStopEditor routes={editingSchoolStop} children={routeChildren} schools={schools} vehicles={vehicles} locations={availableLocations} onClose={()=>setEditingSchoolStop(null)} onSave={rows=>{setRoutes(current=>mergeSchoolStopRows(current,rows));setEditingSchoolStop(null);}}/>}
         {canManageSystem && editingSchool && (
           <Modal
             title={schools.some((item) => item.id === editingSchool.id) ? "Edit School" : "Add School"}
