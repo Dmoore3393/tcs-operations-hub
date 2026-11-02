@@ -5,7 +5,8 @@ import test from 'node:test';
 const url=source=>'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText).toString('base64');
 const roles=url(await readFile('src/lib/team-access.ts','utf8'));
 const config=url(await readFile('src/lib/location-config.ts','utf8'));
-const source=(await readFile('src/app/api/team-access/invite/route.ts','utf8')).replace('"@/lib/team-access"',JSON.stringify(roles)).replace('"@/lib/location-config"',JSON.stringify(config)).replace(/import \{ requireOwner, responseFromThrown \} from .*?;/,'const requireOwner=async()=>{if(!globalThis.inviteAuth)throw new Response("Owner required",{status:403});return globalThis.inviteAuth};const responseFromThrown=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
+const inviteRoleURL=url(await readFile('src/lib/staff-invite-access.ts','utf8'));
+const source=(await readFile('src/app/api/team-access/invite/route.ts','utf8')).replace('"@/lib/staff-invite-access"',JSON.stringify(inviteRoleURL)).replace('"@/lib/team-access"',JSON.stringify(roles)).replace('"@/lib/location-config"',JSON.stringify(config)).replace(/import \{ requireOwner, responseFromThrown \} from .*?;/,'const requireOwner=async()=>{if(!globalThis.inviteAuth)throw new Response("Owner required",{status:403});return globalThis.inviteAuth};const responseFromThrown=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
 const api=await import(url(source));
 const lane='00000000-0000-4000-8000-000000000001';
 let tables,events,race,readError;
@@ -67,4 +68,14 @@ test('reviewed maintenance invitations retain transportation and strip unrelated
  for(const access of ['maintenance_view','maintenance_manage']){
   setup();tables.staff_lane_profiles[0].department='Maintenance';const result=await post({permissions:[access,'transportation','children_basic','schedules','daily_care','health_safety']});assert.equal(result.status,200);assert.deepEqual(events.find(event=>event.kind==='send').options.data.tcs_permissions,[access,'transportation']);
  }
+});
+
+
+test('a recorded executive owner is recommended Owner/Admin and cannot be invited as maintenance-only staff',async()=>{
+ setup();Object.assign(tables.staff_lane_profiles[0],{department:'Maintenance',job_title:'Owner • Director of Maintenance',lane_level:1,lane_group:'Executive'});
+ const prepared=await(await get()).json();assert.equal(prepared.recommendedRole,'Owner / Admin');assert.equal(events.length,0);
+ assert.equal((await post()).status,400);assert.equal(events.length,0);
+ const response=await post({role:'Owner / Admin',locations:['All Locations']});assert.equal(response.status,200);
+ const sent=events.find(event=>event.kind==='send');assert.equal(sent.options.data.tcs_role,'Owner / Admin');assert.deepEqual(sent.options.data.tcs_locations,['All Locations']);
+ setup();Object.assign(tables.staff_lane_profiles[0],{job_title:'Maintenance helper',lane_level:1,lane_group:'Executive'});assert.equal((await(await get()).json()).recommendedRole,'Employee');
 });

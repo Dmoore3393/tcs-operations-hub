@@ -25,6 +25,7 @@ import { normalizeHubPathname } from "@/lib/route-pathname";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 export type StaffAccessProfile = {
+  primary_location?:string|null;
   user_id: string;
   email: string;
   full_name: string;

@@ -1,3 +1,4 @@
+import {withStaffBackupLocations} from "@/lib/server/staff-location-coverage";
 import "server-only";
 import {canReceiveHubNotification} from "@/lib/notification-access";
 
@@ -469,9 +470,11 @@ export async function deliverStoredTimesheetAlert(admin: SupabaseClient, userId:
 
 /** Assignment inbox entries are committed by the database before attempting phone push. */
 export async function deliverStoredTransportAlert(admin:SupabaseClient,userId:string,notification:HubNotification){
- const {data:profile,error}=await admin.from('staff_access').select('role,permissions,locations,is_active').eq('user_id',userId).maybeSingle();
+ const {data:profile,error}=await admin.from('staff_access').select('role,permissions,locations,is_active,organization_id').eq('user_id',userId).maybeSingle();
  if(error)throw new Error(error.message);
- if(!profile?.is_active||!canReceiveHubNotification(profile,notification))return;
+ if(!profile?.is_active)return;
+ const scoped=await withStaffBackupLocations(admin,profile);
+ if(!canReceiveHubNotification(scoped,notification))return;
  const state=await loadNotificationState(admin,userId);
  if(state.preferences.enabled&&state.preferences.transportation&&!quietHoursActive(state.preferences))await deliverPushChannels({admin,user:state.user,payload:{title:notification.title,body:notification.body,href:notification.href,tag:notification.eventKey}});
 }

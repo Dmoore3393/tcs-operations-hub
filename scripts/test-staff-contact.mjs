@@ -16,7 +16,9 @@ const imports = (source) => source
   .replaceAll('"@/lib/team-access"', JSON.stringify(rolesUrl))
   .replaceAll('"@/lib/supabase/admin"', JSON.stringify(adminUrl));
 const ownerUrl = moduleUrl(imports(await readFile("src/lib/server/require-owner.ts", "utf8")));
-const staffUrl = moduleUrl(imports(await readFile("src/lib/server/require-staff.ts", "utf8"))
+const coverageConfig=moduleUrl(await readFile("src/lib/location-config.ts","utf8"));
+const coverageUrl=moduleUrl(imports(await readFile("src/lib/server/staff-location-coverage.ts","utf8")).replace('"@/lib/location-config"',JSON.stringify(coverageConfig)));
+const staffUrl = moduleUrl(imports(await readFile("src/lib/server/require-staff.ts", "utf8")).replace('"@/lib/server/staff-location-coverage"',JSON.stringify(coverageUrl))
   .replace(/import \{ createClient, type SupabaseClient, type User \} from "@supabase\/supabase-js";/, "const createClient = () => ({});"));
 const route = async (path) => import(moduleUrl(imports(await readFile(path, "utf8"))
   .replaceAll('"@/lib/server/require-owner"', JSON.stringify(ownerUrl))
@@ -81,6 +83,7 @@ function setup(overrides = {}) {
       };
       const query = {
         select() { return query; },
+        order() { return query; },
         update(value) { patch = value; return query; },
         eq(key, value) { filters.push(["eq", key, value]); return query; },
         ilike(key, value) { filters.push(["ilike", key, value]); return query; },

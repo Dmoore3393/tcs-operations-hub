@@ -1,6 +1,6 @@
 import {maintenanceRestSummary} from "@/lib/maintenance-rest";
 import {requireStaff,staffErrorResponse} from "@/lib/server/require-staff";
-import {canManageMaintenance,canViewMaintenance} from "@/lib/maintenance-access";
+import {canCreateMaintenance,canManageMaintenance,canViewMaintenance} from "@/lib/maintenance-access";
 import {tcsLocationSlug} from "@/lib/server/location-slug";
 import {normalizeLocation} from "@/lib/location-config";
 import type {MaintenanceTicket} from "@/lib/maintenance";
@@ -20,13 +20,13 @@ async function context(request:Request){
  if(board.data&&!Array.isArray(board.data.state_value))throw new Error('Maintenance records need administrator review.');
  const tickets=(board.data?.state_value||[]) as MaintenanceTicket[];
  const siteFor=(location:string)=>allowed.find(site=>site.slug===tcsLocationSlug(location));
- return {...auth,allowed,tickets,version:Number(board.data?.version||0),siteFor,canManage:canManageMaintenance(auth.profile)};
+ return {...auth,allowed,tickets,version:Number(board.data?.version||0),siteFor,canCreate:canCreateMaintenance(auth.profile),canManage:canManageMaintenance(auth.profile)};
 }
 export async function GET(request:Request){try{
  const c=await context(request);const now=new Date();const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now);const part=(type:string)=>parts.find(value=>value.type===type)?.value||'';const day=`${part('year')}-${part('month')}-${part('day')}`,clock=`${part('hour')}:${part('minute')}`;
  const rest=c.allowed.length ? await c.admin.from('daily_care_entries').select('id,child_id,location_id,entry_date,entry_time,result').eq('organization_id',c.profile.organization_id).eq('category','Rest').eq('entry_date',day).in('location_id',c.allowed.map(site=>site.id)) : {data:[],error:null};
  const restRows=rest.error?[]:rest.data||[];
- return Response.json({tickets:c.tickets.filter(ticket=>c.isOwner||c.siteFor(ticket.location)),version:c.version,canManage:c.canManage,locations:c.allowed.map(site=>({id:site.id,label:normalizeLocation(text(site.name)),name:site.full_name||site.name})),restSignals:c.allowed.map(site=>({locationId:site.id,location:normalizeLocation(text(site.name)),...maintenanceRestSummary(restRows,text(site.id),day,clock)})),restDataAvailable:!rest.error,checkedAt:now.toISOString()},{headers:{'Cache-Control':'private, no-store','Vary':'Authorization'}});
+ return Response.json({tickets:c.tickets.filter(ticket=>c.isOwner||c.siteFor(ticket.location)),version:c.version,canManage:c.canManage,canCreate:c.canCreate,locations:c.allowed.map(site=>({id:site.id,label:normalizeLocation(text(site.name)),name:site.full_name||site.name})),restSignals:c.allowed.map(site=>({locationId:site.id,location:normalizeLocation(text(site.name)),...maintenanceRestSummary(restRows,text(site.id),day,clock)})),restDataAvailable:!rest.error,checkedAt:now.toISOString()},{headers:{'Cache-Control':'private, no-store','Vary':'Authorization'}});
 }catch(error){return staffErrorResponse(error);}}
 
 export async function POST(request:Request){try{
@@ -35,7 +35,7 @@ export async function POST(request:Request){try{
  if(!id||id.length>200||!title||title.length>200||!site||!Number.isInteger(body.expectedVersion)||body.expectedVersion<0)return Response.json({error:'Choose a permitted location and enter a ticket title.'},{status:400});
  if(!['Routine','Soon','Urgent','Safety Critical'].includes(raw.priority)||!['Open','Assigned','In Progress','Waiting on Parts','Completed'].includes(raw.status))return Response.json({error:'Choose a valid priority and status.'},{status:400});
  if(text(raw.description).length>5000||text(raw.completionNotes).length>5000||text(raw.assignedTo).length>200||text(raw.area).length>200||(text(raw.dueDate)&&!/^\d{4}-\d{2}-\d{2}$/.test(raw.dueDate)))return Response.json({error:'Check the ticket text and due date.'},{status:400});
- const previous=c.tickets.find(ticket=>ticket.id===id);if(previous&&!c.isOwner&&!c.siteFor(previous.location))return Response.json({error:'That ticket is outside your assigned locations.'},{status:403});
+ const previous=c.tickets.find(ticket=>ticket.id===id);if(!previous&&!c.canCreate)return Response.json({error:'Report new maintenance issues to your location licensee. Licensees and administration create tickets.'},{status:403});if(previous&&!c.isOwner&&!c.siteFor(previous.location))return Response.json({error:'That ticket is outside your assigned locations.'},{status:403});
  const kind=raw.kind||previous?.kind||'Facility';
  if(!['Facility','Vehicle'].includes(kind))return Response.json({error:'Choose facility or vehicle maintenance.'},{status:400});
  const vehicleFields:Partial<MaintenanceTicket>={kind};
