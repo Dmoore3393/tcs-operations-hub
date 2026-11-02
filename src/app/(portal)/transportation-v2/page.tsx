@@ -419,7 +419,7 @@ export default function TransportationV2Page() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               {isOnline ? <ShieldCheck className="mt-0.5 h-5 w-5 flex-none text-emerald-700" /> : <WifiOff className="mt-0.5 h-5 w-5 flex-none text-red-700" />}
-              <div><p className="font-black">{isOnline ? "Transportation connection is online" : "Offline mode — route actions are being protected"}</p><p className="mt-1 text-xs font-semibold leading-5">{isOnline ? (pendingOffline ? `${pendingOffline} queued route action${pendingOffline === 1 ? "" : "s"} waiting to sync.` : "Route confirmations can sync to The Hub.") : "Pickup and handoff status changes are queued without storing child medical details on this device. Keep this screen open until service returns."}</p></div>
+              <div><p className="font-black">{isOnline ? "Transportation connection is online" : "Offline mode — route actions are being protected"}</p><p className="mt-1 text-xs font-semibold leading-5">{isOnline ? (pendingOffline ? `${pendingOffline} queued route action${pendingOffline === 1 ? "" : "s"} waiting to sync.` : "Route confirmations can sync to The Hub.") : "Pickup and handoff status changes are queued without storing child medical details on this device. Call-outs may be out of date; confirm with leadership before pickup. Keep this screen open until service returns."}</p></div>
             </div>
             <div className="text-xs font-bold">{pendingOffline > 0 ? `${pendingOffline} pending` : lastSyncAt ? `Last synced ${timeLabel(lastSyncAt)}` : "Ready"}</div>
           </div>

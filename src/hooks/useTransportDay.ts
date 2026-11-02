@@ -12,8 +12,8 @@ export function useTransportDay<T extends DayRoute>(routes:T[],date:string){
  const generation=useRef({value:0});
  const load=useCallback(async()=>{if(!token)return;const current=++generation.current.value;try{const data=await hubRequest<Payload>(`/api/transportation-day?date=${encodeURIComponent(date)}`,token);if(current===generation.current.value){setPayload(data);setLoadedDate(date);setError('');}}catch(reason){if(current===generation.current.value)setError(reason instanceof Error?reason.message:'Daily transportation could not be loaded.');}},[date,token]);
  useEffect(()=>{const sequence=generation.current;const timer=window.setTimeout(()=>void load(),0);const interval=window.setInterval(()=>void load(),15000);return()=>{sequence.value++;window.clearTimeout(timer);window.clearInterval(interval);};},[load]);
- const ready=loadedDate===date&&!error;
- const activeRoutes=useMemo(()=>ready?mergeTransportDay(routes,payload.stops,date):[],[ready,routes,payload.stops,date]);
+ const ready=loadedDate===date;
+ const activeRoutes=useMemo(()=>ready?mergeTransportDay(routes,payload.stops,date):routes.filter(route=>route.runDate===date&&["Picked Up","Arrived"].includes(route.runStatus||"")),[ready,routes,payload.stops,date]);
  const sourceFor=(route:DayRoute)=>payload.sources.find(source=>source.legacy_id===String(route.id));
  const stopFor=(route:DayRoute)=>payload.stops.find(stop=>stop.service_date===date&&String(stop.snapshot.id)===String(route.id));
  async function change(route:DayRoute,action:'save'|'callout'|'restore',plan:Partial<DayRoute>={},expectedVersion=stopFor(route)?.version||0){
