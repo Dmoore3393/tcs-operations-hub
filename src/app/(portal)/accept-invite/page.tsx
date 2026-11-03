@@ -1,5 +1,7 @@
 "use client";
 
+import {authEmailErrorMessage} from "@/lib/auth-email-errors";
+import {useEmailCooldown} from "@/hooks/useEmailCooldown";
 import { useAuth } from "@/components/providers/AuthProvider";
 import StaffContactFields from "@/components/StaffContactFields";
 import { readStaffContact, validateStaffContact } from "@/lib/staff-contact";
@@ -15,6 +17,7 @@ const fieldClass = "w-full rounded-xl border border-slate-300 bg-white px-3.5 py
 
 export default function AcceptInvitePage() {
   const router = useRouter();
+  const emailCooldown = useEmailCooldown();
   const { session, profile, loading, refreshProfile, signOut } = useAuth();
   const [contact, setContact] = useState(() => readStaffContact(session?.user.user_metadata, profile?.full_name));
   const [password, setPassword] = useState("");
@@ -25,7 +28,7 @@ export default function AcceptInvitePage() {
   const [needsNewLink,setNeedsNewLink]=useState(false),[setupEmail,setSetupEmail]=useState(session?.user.email||""),[sendingLink,setSendingLink]=useState(false),[linkSent,setLinkSent]=useState(false),[signInRequired,setSignInRequired]=useState(false);
   const passwordSaved=useRef(false),prefilledUser=useRef("");
   useEffect(()=>{if(!session||!profile||prefilledUser.current===session.user.id)return;const timer=window.setTimeout(()=>{if(prefilledUser.current===session.user.id)return;prefilledUser.current=session.user.id;setContact(readStaffContact(session.user.user_metadata,profile.full_name));setSetupEmail(session.user.email||profile.email);},0);return()=>window.clearTimeout(timer);},[session,profile]);
-  async function requestSetupLink(event:FormEvent){event.preventDefault();if(!supabase||sendingLink)return;setSendingLink(true);setError("");try{const {error:sendError}=await supabase.auth.resetPasswordForEmail(setupEmail.trim(),{redirectTo:window.location.origin+"/accept-invite"});if(sendError)throw sendError;setLinkSent(true);}catch(reason){setError(reason instanceof Error?reason.message:"The setup email could not be requested. Please try again.");}finally{setSendingLink(false);}}
+  async function requestSetupLink(event:FormEvent){event.preventDefault();if(!supabase||sendingLink||emailCooldown.remaining)return;emailCooldown.start();setSendingLink(true);setError("");try{const {error:sendError}=await supabase.auth.resetPasswordForEmail(setupEmail.trim(),{redirectTo:window.location.origin+"/accept-invite"});if(sendError)throw sendError;setLinkSent(true);}catch(reason){setError(authEmailErrorMessage(reason));}finally{setSendingLink(false);}}
 
 
   const checkingInvitation=loading&&!(session&&profile);
@@ -95,7 +98,7 @@ export default function AcceptInvitePage() {
 
         {complete&&<div className="px-6 py-7 text-center"><p className="mb-3 text-base text-slate-700">{signInRequired?"Your account is activated. Sign in with the password you just created.":"Opening The Hub…"}</p><Link href="/login" className="inline-flex min-h-12 items-center rounded-xl bg-emerald-800 px-5 py-3 font-bold text-white">Go to Sign In</Link></div>}
         {!complete&&checkingInvitation&&<p role="status" className="p-6 text-base">Checking your invitation…</p>}
-        {!complete&&!checkingInvitation&&(!session||needsNewLink)&&<form onSubmit={requestSetupLink} className="space-y-4 px-6 py-7 text-base"><h2 className="text-xl font-black">Open a fresh staff setup link</h2><p>Your invitation session is no longer available. Request a new email and open its newest link in the same browser. Your employee profile will stay the same.</p><label className="block font-bold">Staff invitation email<input required type="email" autoComplete="email" value={setupEmail} onChange={event=>{setSetupEmail(event.target.value);setLinkSent(false);}} className={`${fieldClass} mt-2`}/></label>{error&&<p role="alert" className="text-red-900">{error}</p>}{linkSent?<p role="status" className="rounded-xl bg-emerald-50 p-4 text-emerald-950">If this address has a Hub account, a new setup email has been requested. Check the inbox and Spam, and use only the newest link.</p>:<button disabled={sendingLink} className="min-h-12 rounded-xl bg-emerald-800 px-5 py-3 font-bold text-white">{sendingLink?"Requesting email…":"Request new setup email"}</button>}<Link href="/login" className="block min-h-11 py-3 font-bold text-emerald-800 underline">Return to Sign In</Link></form>}
+        {!complete&&!checkingInvitation&&(!session||needsNewLink)&&<form onSubmit={requestSetupLink} className="space-y-4 px-6 py-7 text-base"><h2 className="text-xl font-black">Open a fresh staff setup link</h2><p>Your invitation session is no longer available. Request a new email and open its newest link in the same browser. Your employee profile will stay the same.</p><label className="block font-bold">Staff invitation email<input required type="email" autoComplete="email" value={setupEmail} onChange={event=>{setSetupEmail(event.target.value);setLinkSent(false);}} className={`${fieldClass} mt-2`}/></label>{error&&<p role="alert" className="text-red-900">{error}</p>}{linkSent?<p role="status" className="rounded-xl bg-emerald-50 p-4 text-emerald-950">If this address has a Hub account, a new setup email has been requested. Check the inbox and Spam, and use only the newest link.</p>:<button disabled={sendingLink||emailCooldown.remaining>0} className="min-h-12 rounded-xl bg-emerald-800 px-5 py-3 font-bold text-white">{sendingLink?"Requesting email…":emailCooldown.remaining?"Wait before requesting another email":"Request new setup email"}</button>}<Link href="/login" className="block min-h-11 py-3 font-bold text-emerald-800 underline">Return to Sign In</Link></form>}
         {!complete&&!checkingInvitation&&session&&!profile&&!needsNewLink&&<div role="alert" className="p-6 text-base">Your staff access could not be verified. Contact Danielle or Jennifer, or <button onClick={()=>void signOut()} className="font-bold underline">sign out</button> and reopen your newest invitation.</div>}
         {!complete && !checkingInvitation && session && profile && !needsNewLink && (
           <form onSubmit={finishSetup} className="space-y-5 px-6 py-7 sm:px-9">
