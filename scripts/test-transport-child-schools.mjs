@@ -30,6 +30,8 @@ before(async()=>{
  await db.exec(await readFile('supabase/migrations/'+migration,'utf8'));
  const connected=(await readdir('supabase/migrations')).find(name=>name.endsWith('_connected_child_transport.sql'));
  await db.exec(await readFile('supabase/migrations/'+connected,'utf8'));
+ const patches=(await readdir('supabase/migrations')).find(name=>name.endsWith('_targeted_transport_updates.sql'));
+ await db.exec(await readFile('supabase/migrations/'+patches,'utf8'));
 });
 beforeEach(async()=>{
  await db.exec('reset role;truncate transportation_routes,children,hub_state,transportation_day_stops;');
@@ -124,4 +126,20 @@ test('archiving stops regular trips and an in-transit move rolls back the whole 
  await db.query("update transportation_routes set record_data=record_data||$1",[{runStatus:"Dropped Off"}]);
  await db.query("update children set enrollment_status='Archived' where id=$1",[first]);
  assert.equal((await db.query('select route_status from transportation_routes')).rows[0].route_status,'Not Riding');
+});
+
+
+test('pickup patches never delete another newly added route; stale writes roll back atomically',async()=>{
+ await save([row(1)],false);
+ const original=(await db.query("select record_data from transportation_routes where legacy_id='1'")).rows[0].record_data;
+ await save([row(2,'brightwheel:synthetic-b','Synthetic Care B')],false);
+ const after={...original,runStatus:'Picked Up',runDate:'2030-01-01'};
+ await db.query('select patch_transport_records($1)',[[{id:'1',before:original,after}]]);
+ assert.equal((await db.query('select count(*) n from transportation_routes')).rows[0].n,2);
+ await assert.rejects(db.query('select patch_transport_records($1)',[[{id:'1',before:original,after:{...original,runStatus:'Arrived'}}]]),/changed on another screen/);
+ assert.equal((await db.query("select record_data from transportation_routes where legacy_id='1'")).rows[0].record_data.runStatus,'Picked Up');
+ assert.equal((await db.query('select patch_transport_records($1) n',[[{id:'1',before:original,after}]])).rows[0].n,0);
+ await assert.rejects(db.query('select patch_transport_records($1)',[[{id:'1',before:after,after:{...after,childId:'outside-child'}}]]),/linked child/);
+ await assert.rejects(db.query('select patch_transport_records($1)',[[{id:'1',before:after,after:{...after,runStatus:'Arrived'}},{id:'not-found',before:{},after:{}}]]),/no longer available/);
+ assert.equal((await db.query("select record_data from transportation_routes where legacy_id='1'")).rows[0].record_data.runStatus,'Picked Up');
 });

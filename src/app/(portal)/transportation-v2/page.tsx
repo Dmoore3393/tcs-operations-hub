@@ -47,7 +47,7 @@ import {
   UserCheck,
   WifiOff,
 } from "lucide-react";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 type RunStatus = "Waiting" | "Picked Up" | "Arrived" | "Checked In" | "Dropped Off";
 type LiveRoute = TransportationRoute & {
@@ -124,6 +124,8 @@ export default function TransportationV2Page() {
   const [isOnline, setIsOnline] = useState(true);
   const [pendingOffline, setPendingOffline] = useState(0);
   const [replayingOffline, setReplayingOffline] = useState(false);
+  const [offlineRetry, setOfflineRetry] = useState(0);
+  const replayAttempt = useRef("");
   const [lastSyncAt, setLastSyncAt] = useState("");
   const [staffingLocations, setStaffingLocations] = useState<StaffingLocation[]>([]);
   const [transportCoverage, setTransportCoverage] = useState<StaffActivityRow[]>([]);
@@ -154,7 +156,7 @@ export default function TransportationV2Page() {
     function syncListener(event: Event) {
       const detail = (event as CustomEvent<HubSyncDetail>).detail;
       if (detail.key !== "tcs-routes") return;
-      if (detail.state === "saved") {
+      if (detail.state === "saved" && detail.operation === "write") {
         clearOfflineTransportActions();
         setPendingOffline(0);
         setReplayingOffline(false);
@@ -163,6 +165,7 @@ export default function TransportationV2Page() {
       if (detail.state === "error") {
         setPendingOffline(readOfflineTransportActions().length);
         setReplayingOffline(false);
+        setCoverageMessage(detail.message || "Transportation has not saved yet. Retry when the connection is available.");
       }
     }
     window.addEventListener(HUB_SYNC_EVENT, syncListener);
@@ -196,10 +199,14 @@ export default function TransportationV2Page() {
   }, [today]);
 
   useEffect(() => {
+    if (!isOnline) { replayAttempt.current = ""; return; }
     if (!routesHydrated || !isOnline || replayingOffline) return;
     const queued = readOfflineTransportActions();
     if (!queued.length) return;
+    const attempt = `${offlineRetry}:${queued.map(item => item.id).join(",")}`;
+    if (replayAttempt.current === attempt) return;
     const timer = window.setTimeout(() => {
+      replayAttempt.current = attempt;
       setReplayingOffline(true);
       setRoutes((current) => current.map((route) => {
         const patches = queued.filter((item) => item.routeId === String(route.id));
@@ -208,7 +215,7 @@ export default function TransportationV2Page() {
       }));
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [isOnline, replayingOffline, routesHydrated, setRoutes]);
+  }, [isOnline, replayingOffline, routesHydrated, setRoutes, offlineRetry]);
 
   const [trip,setTrip]=useState('All trips');
   const todayRoutes = useMemo(
@@ -428,7 +435,7 @@ export default function TransportationV2Page() {
               {isOnline ? <ShieldCheck className="mt-0.5 h-5 w-5 flex-none text-emerald-700" /> : <WifiOff className="mt-0.5 h-5 w-5 flex-none text-red-700" />}
               <div><p className="font-black">{isOnline ? "Transportation connection is online" : "Offline mode — route actions are being protected"}</p><p className="mt-1 text-xs font-semibold leading-5">{isOnline ? (pendingOffline ? `${pendingOffline} queued route action${pendingOffline === 1 ? "" : "s"} waiting to sync.` : "Route confirmations can sync to The Hub.") : "Pickup and handoff status changes are queued without storing child medical details on this device. Call-outs may be out of date; confirm with leadership before pickup. Keep this screen open until service returns."}</p></div>
             </div>
-            <div className="text-xs font-bold">{pendingOffline > 0 ? `${pendingOffline} pending` : lastSyncAt ? `Last synced ${timeLabel(lastSyncAt)}` : "Ready"}</div>
+            <div className="text-base font-bold">{pendingOffline > 0 ? `${pendingOffline} pending` : lastSyncAt ? `Last synced ${timeLabel(lastSyncAt)}` : "Ready"}{pendingOffline > 0 && isOnline && <button disabled={replayingOffline} className="ml-3 min-h-11 underline" onClick={() => setOfflineRetry(value => value + 1)}>Retry saved actions</button>}</div>
           </div>
         </section>
 

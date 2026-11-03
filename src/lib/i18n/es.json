@@ -2937,5 +2937,8 @@
   "Handoff completed": "Entrega completada",
   "School:": "Escuela:",
   "Complete any in-transit handoff before resetting": "Completa la entrega de cualquier niño en traslado antes de reiniciar",
-  "Review the missing information in Brightwheel or the vehicle binder before departure, then confirm that review on each child’s card.": "Revisa la información faltante en Brightwheel o en la carpeta del vehículo antes de salir y confirma la revisión en la tarjeta de cada niño o niña."
+  "Review the missing information in Brightwheel or the vehicle binder before departure, then confirm that review on each child’s card.": "Revisa la información faltante en Brightwheel o en la carpeta del vehículo antes de salir y confirma la revisión en la tarjeta de cada niño o niña.",
+  "Retry saved actions": "Reintentar acciones pendientes",
+  "This trip changed on another screen. Refresh transportation and review it before trying again": "Este viaje cambió en otra pantalla. Actualiza Transporte y revísalo antes de intentar de nuevo",
+  "Transportation has not saved yet. Retry when the connection is available.": "Los cambios de transporte aún no se han guardado. Intenta de nuevo cuando haya conexión."
 }

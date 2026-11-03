@@ -7,9 +7,10 @@ import { announceHubSync } from "@/lib/sync-events";
 import { supabase } from "@/lib/supabase/client";
 import { migratePersistentValue } from "@/lib/storage-migrations";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
-import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { dayNames } from "@/lib/location-config";
 import { withRequestTimeout } from "@/lib/request-timeout";
+import { transportRecordPatches } from "@/lib/transport-record-patches";
 
 type HubStateRow = {
   state_key: string;
@@ -107,6 +108,10 @@ export function usePersistentState<T>(key: string, initialValue: T) {
   const skipNextSaveRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const relationalRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const transportBaseRef = useRef<unknown[]>([]);
+  const transportDirtyRef = useRef(false);
+  const transportRevisionRef = useRef(0);
+  const transportSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   // Normalized relational collections. Every record is its own row and RLS is
   // evaluated against that row's location_id.
@@ -134,6 +139,11 @@ export function usePersistentState<T>(key: string, initialValue: T) {
       setLoadError("");
 
       const rows = (data ?? []) as unknown as RelationalRow[];
+      // A realtime refresh must not discard a pickup waiting to be saved.
+      if (key === "tcs-routes") {
+        if (transportDirtyRef.current) return;
+        transportBaseRef.current = rows.map(row => row.record_data);
+      }
       if (rows.length) {
         skipNextSaveRef.current = true;
         setValue(relationalValue<T>(key, rows));
@@ -303,6 +313,8 @@ export function usePersistentState<T>(key: string, initialValue: T) {
       skipNextSaveRef.current = false;
       return;
     }
+    if (key === "tcs-routes" && !transportDirtyRef.current) return;
+    const transportRevision = transportRevisionRef.current;
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     announceHubSync({ state: "saving", key, message: config ? `Saving ${config.label}…` : "Saving shared changes…" });
@@ -314,6 +326,30 @@ export function usePersistentState<T>(key: string, initialValue: T) {
             announceHubSync({ state: "error", key, message: `${config.label} must be saved as a collection.` });
             return;
           }
+          if (key === "tcs-routes") {
+            const snapshot = JSON.parse(JSON.stringify(value)) as unknown[];
+            const previous = transportSaveQueueRef.current;
+            const save = previous.then(async () => {
+              const changes = transportRecordPatches(transportBaseRef.current, snapshot);
+              const result = await withRequestTimeout(async signal => await supabase!.rpc("patch_transport_records", { p_changes: changes }).abortSignal(signal));
+              if (result.error) throw new Error(result.error.message);
+              transportBaseRef.current = snapshot;
+            });
+            transportSaveQueueRef.current = save.catch(() => {});
+            try { await save; }
+            catch (error) {
+              announceHubSync({ state: "error", key, message: error instanceof Error ? error.message : "Could not save this trip. Try again." });
+              return;
+            }
+            // Only clear offline work after the newest local change has committed.
+            if (transportRevision !== transportRevisionRef.current) return;
+            transportDirtyRef.current = false;
+            announceHubSync({ state: "saved", key, operation: "write", message: "Transportation changes saved" });
+            setRetryAttempt(attempt => attempt + 1);
+            const { data: { session } } = await supabase!.auth.getSession();
+            if (session?.access_token) void fetch("/api/transportation-assignments/dispatch", { method: "POST", keepalive: true, headers: { Authorization: `Bearer ${session.access_token}` } }).catch(() => {});
+            return;
+          }
           const { error } = await supabase!.rpc("sync_tcs_collection", {
             p_collection_key: key,
             p_items: value,
@@ -323,11 +359,6 @@ export function usePersistentState<T>(key: string, initialValue: T) {
             return;
           }
           announceHubSync({ state: "saved", key, message: `All ${config.label} changes saved` });
-          if(key==="tcs-routes") {
-            // Dispatch only after the transaction commits; inbox polling also recovers queued jobs.
-            const {data:{session}}=await supabase!.auth.getSession();
-            if(session?.access_token)void fetch("/api/transportation-assignments/dispatch",{method:"POST",keepalive:true,headers:{Authorization:`Bearer ${session.access_token}`}}).catch(()=>{});
-          }
           return;
         }
 
@@ -374,8 +405,13 @@ export function usePersistentState<T>(key: string, initialValue: T) {
     };
   }, [canWrite, config, hasStateAccess, hydrated, key, loadError, profile, user, value]);
 
+  const setTransportValue: Dispatch<SetStateAction<T>> = useCallback(next => {
+    transportDirtyRef.current = true;
+    transportRevisionRef.current++;
+    setValue(next);
+  }, []);
   const exposedSetter: Dispatch<SetStateAction<T>> = canWrite
-    ? setValue
+    ? key === "tcs-routes" ? setTransportValue : setValue
     : () => {
         announceHubSync({ state: "error", key, message: "This account has read-only access to this section." });
       };
@@ -383,6 +419,6 @@ export function usePersistentState<T>(key: string, initialValue: T) {
   return [value, exposedSetter, hydrated, {
     loading: hasStateAccess && !hydrated,
     error: loadError,
-    retry: () => { setLoadError(""); setHydrated(false); setRetryAttempt((attempt) => attempt + 1); },
+    retry: () => { transportDirtyRef.current = false; setLoadError(""); setHydrated(false); setRetryAttempt((attempt) => attempt + 1); },
   }] as const;
 }
