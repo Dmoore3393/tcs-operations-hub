@@ -161,7 +161,7 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/family-care-calendar": { title: "Family Care Calendar", subtitle: "Parent schedule requests, closures, approvals, and dated care planning" },
   "/daily-care": { title: "Daily Care", subtitle: "Bottles, diapers, potty progress, rest, and daily notes" },
   "/meals": { title: "Meals & Menus", subtitle: "Weekly menus, food served, and individual child intake" },
-  "/kidkare": { title: "KidKare Enrollment", subtitle: "Track every child at every location they attend" },
+  "/kidkare": { title: "KidKare", subtitle: "Daily submissions, monthly claims, and child enrollment" },
   "/cacfp-command-center": { title: "CACFP Command Center", subtitle: "KidKare enrollment, menus, meal services, and claim-readiness review" },
   "/timesheets": { title: "Timesheets", subtitle: "Signatures, handoffs, completion, scanning, and department submission" },
   "/payroll-ops": { title: "Payroll Hours Dashboard", subtitle: "Scheduled versus actual hours, overtime risk, and payroll export" },
