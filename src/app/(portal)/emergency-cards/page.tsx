@@ -65,13 +65,14 @@ function normalizedPhone(value?: string) {
 export default function EmergencyCardsPage() {
   const { session, isSystemOwner, isLocationLicensee } = useAuth();
   const { location: hubLocation } = useHubLocation();
-  const [routes] = usePersistentState<EmergencyRoute[]>("tcs-routes", starterRoutes as EmergencyRoute[]);
+  const [routes, , routesReady] = usePersistentState<EmergencyRoute[]>("tcs-routes", starterRoutes as EmergencyRoute[]);
   const [children, setChildren] = useState<ChildRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [locationFilter, setLocationFilter] = useState("All Locations");
   const [routeFilter, setRouteFilter] = useState("All Routes / Vehicles");
+  const [requestedRouteRefs, setRequestedRouteRefs] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [openCard, setOpenCard] = useState<ChildRecord | null>(null);
   const [queryHandled, setQueryHandled] = useState(false);
@@ -127,10 +128,12 @@ export default function EmergencyCardsPage() {
   useEffect(() => {
     if (loading || queryHandled || typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
+    if (params.has("route") && !routesReady) return;
     const childId = Number(params.get("child"));
     const childName = params.get("name") || "";
-    const route = params.get("route") || "";
-    if (route && routeOptions.some((option) => option.value === route)) setRouteFilter(route);
+    const requested = [...new Set(params.getAll("route"))].filter(value => routeOptions.some(option => option.value === value));
+    if (requested.length > 1) { setRequestedRouteRefs(requested); setRouteFilter("__selected_school_stops__"); }
+    else if (requested.length === 1) setRouteFilter(requested[0]);
     const match = children.find((child) =>
       (Number.isSafeInteger(childId) && child.id === childId) ||
       (childName && normalizedPersonName(childDisplayName(child)) === normalizedPersonName(childName)),
@@ -140,12 +143,13 @@ export default function EmergencyCardsPage() {
       setSelectedIds([match.id]);
     }
     setQueryHandled(true);
-  }, [children, loading, queryHandled, routeOptions]);
+  }, [children, loading, queryHandled, routeOptions, routesReady]);
 
   const routeChildSet = useMemo(() => {
     if (routeFilter === "All Routes / Vehicles") return null;
+    if (routeFilter === "__selected_school_stops__") return new Set(routeOptions.filter(option => requestedRouteRefs.includes(option.value)).flatMap(option => [...option.children]));
     return routeOptions.find((option) => option.value === routeFilter)?.children ?? new Set<string>();
-  }, [routeFilter, routeOptions]);
+  }, [routeFilter, routeOptions, requestedRouteRefs]);
 
   const filtered = useMemo(() => children.filter((child) => {
     if (child.enrollmentStatus === "Archived") return false;
@@ -227,7 +231,7 @@ export default function EmergencyCardsPage() {
           {locationOptions.map((option) => <option key={option}>{option}</option>)}
         </select>
         <select value={routeFilter} onChange={(event) => setRouteFilter(event.target.value)}>
-          <option>All Routes / Vehicles</option>
+          <option>All Routes / Vehicles</option>{requestedRouteRefs.length > 1 && <option value="__selected_school_stops__">My Route Today</option>}
           {routeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
       </section>
@@ -272,7 +276,7 @@ export default function EmergencyCardsPage() {
         <div className="print-cover">
           <h1>TCS Emergency Vehicle Packet</h1>
           <p>Generated {new Date().toLocaleString()}</p>
-          <p>{routeFilter === "All Routes / Vehicles" ? locationFilter : routeOptions.find((option) => option.value === routeFilter)?.label}</p>
+          <p>{routeFilter === "All Routes / Vehicles" ? locationFilter : routeFilter === "__selected_school_stops__" ? "My Route Today" : routeOptions.find((option) => option.value === routeFilter)?.label}</p>
           <strong>{selectedChildren.length} emergency card{selectedChildren.length === 1 ? "" : "s"}</strong>
         </div>
         {selectedChildren.map((child) => <PrintableEmergencyCard key={child.id} child={child} />)}

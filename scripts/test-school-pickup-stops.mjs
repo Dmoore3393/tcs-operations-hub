@@ -35,3 +35,31 @@ test('morning school drop-offs keep child identity and pickup sources separate f
  assert.equal(page.saved[0].tripPeriod,'Morning');assert.equal(page.saved[0].pickupLocation,'Halcom');assert.equal(page.saved[0].dropoff,'7:45 AM');assert.equal(page.saved[0].childId,'first-child');assert.notEqual(page.saved[0].id,base.id);
  assert.equal(groupSchoolPickupStops([base,{...base,id:99,tripPeriod:'Morning',pickupLocation:'Halcom'}]).length,2);
 });
+
+test('school stops ignore old group names while preserving separate drivers, times and per-child destinations',()=>{
+ const first={...base,routeName:'Old Group A'},second={...base,id:2,childId:'second-child',routeName:'Old Group B',location:'42nd Street',dropoffLocation:'42nd Street'};
+ const groups=groupSchoolPickupStops([first,second],true);assert.equal(groups.length,1);assert.equal(groups[0].routes.length,2);assert.equal(second.routeName,'Old Group B');
+ for(const change of [{school:'Another School'},{tripPeriod:'Morning',pickupLocation:'Halcom'},{driver:'Other Driver'},{vehicle:'Other Van'},{pickup:'3:00 PM'},{days:'Saturday'}])assert.equal(groupSchoolPickupStops([first,{...second,...change}],true).length,2);
+});
+test('school-trip form needs no separate group name, and saves the selected children without inventing one',async()=>{
+ const page=await editor();let nodes=page.render();assert.equal(nodes.some(node=>node.props?.label==='Route / group name'),false);
+ nodes.find(node=>node.type==='input'&&node.props.type==='checkbox').props.onChange();nodes=page.render();nodes.find(node=>node.type==='form').props.onSubmit({preventDefault(){}});
+ assert.equal(page.saved.length,1);assert.equal(page.saved[0].routeName,undefined);assert.equal(page.saved[0].childId,'first-child');
+});
+test('school labels do not split children by old group names or care destinations, while staff duty references stay stable',async()=>{
+ const {transportRouteGroup,transportCoverageGroup,transportEmergencyGroup}=await import(url(await readFile('src/lib/transport-trips.ts','utf8')));
+ const first={...base,routeName:'Old Group A'},second={...base,id:2,routeName:'Old Group B',location:'42nd Street'};
+ assert.equal(transportRouteGroup(first),transportRouteGroup(second));assert.match(transportRouteGroup(first),/Synthetic Elementary/);assert.doesNotMatch(transportRouteGroup(first),/Old Group/);
+ assert.notEqual(transportRouteGroup(first),transportRouteGroup({...first,school:'Another School'}));
+ assert.notEqual(transportRouteGroup(first),transportRouteGroup({...first,driver:'Other Driver'}));
+ assert.equal(transportCoverageGroup(first),'Old Group A');assert.equal(transportCoverageGroup({...first,tripPeriod:'Morning'}),'Morning • Old Group A');assert.equal(transportEmergencyGroup({...first,tripPeriod:'Morning'}),'Old Group A');
+});
+
+test('emergency-card link includes every child group at a school stop and resolves date-specific overrides by route ID',async()=>{
+ const {transportEmergencyHref}=await import(url(await readFile('src/lib/transport-trips.ts','utf8')));
+ const recurring=[{...base,routeName:'Legacy A'},{...base,id:2,routeName:'Legacy B'},{...base,id:3,routeName:'',driver:'Original Driver'}];
+ const selected=recurring.map(route=>({...route,driver:'Covering Driver',school:'Another School'}));
+ const link=transportEmergencyHref(selected,recurring),query=new URL(link,'https://synthetic.invalid').searchParams;
+ assert.deepEqual(query.getAll('route'),['Legacy A','Legacy B','Halcom • Original Driver']);
+ assert.equal(transportEmergencyHref([]),'/emergency-cards');assert.equal(new URL(transportEmergencyHref([recurring[0],recurring[0]],recurring),'https://synthetic.invalid').searchParams.getAll('route').length,1);
+});

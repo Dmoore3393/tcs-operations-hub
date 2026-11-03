@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { transportUsesBrightwheel, transportHandoffPatch } from "@/lib/transport-care-handoff";
 import { transportChildKey } from "@/lib/transport-child-schools";
-import {transportTripPeriod,transportPickup,transportDestination,transportRouteGroup} from "@/lib/transport-trips";
+import {transportTripPeriod,transportPickup,transportDestination,transportRouteGroup,transportCoverageGroup,transportEmergencyHref} from "@/lib/transport-trips";
 import MyAssignedRoutes from "@/components/transportation/MyAssignedRoutes";
 import TransportCallouts from "@/components/transportation/TransportCallouts";
 import {useTransportDay} from "@/hooks/useTransportDay";
@@ -266,9 +266,9 @@ export default function TransportationV2Page() {
   }
 
   function isFinalHandoffForRoute(route: LiveRoute) {
-    const key = routeKey(route);
+    const key = transportCoverageGroup(route);
     return todayRoutes
-      .filter((item) => routeKey(item) === key)
+      .filter((item) => transportCoverageGroup(item) === key)
       .every((item) => item.id === route.id || statusFor(item, today) === "Checked In");
   }
 
@@ -280,7 +280,7 @@ export default function TransportationV2Page() {
       locationId: location.id,
       staffName,
       date: today,
-      routeName: routeKey(route),
+      routeName: transportCoverageGroup(route),
     });
     if (!result.ok && result.error) setCoverageMessage(`Transportation saved, but staffing coverage could not be updated: ${result.error}`);
     else setCoverageMessage(`${staffName} is now marked off floor for transportation. Coverage recalculated.`);
@@ -294,7 +294,7 @@ export default function TransportationV2Page() {
       locationId: location.id,
       staffName,
       date: today,
-      routeName: routeKey(route),
+      routeName: transportCoverageGroup(route),
     });
     if (!result.ok && result.error) setCoverageMessage(`Transportation handoff saved, but staffing coverage could not close: ${result.error}`);
     else setCoverageMessage(`${staffName} returned from transportation. Floor coverage recalculated.`);
@@ -453,7 +453,7 @@ export default function TransportationV2Page() {
         {locationArrivals.length > 0 && <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm"><div className="flex items-start gap-3"><BellRing className="mt-0.5 h-6 w-6 text-[#1769d2]" /><div><p className="text-xs font-black uppercase tracking-[.16em] text-[#1769d2]">Location arrival notice</p><h2 className="mt-1 text-xl font-black text-[#102a56]">A transported child has arrived</h2><p className="mt-1 text-sm font-semibold text-slate-600">Program directors and authorized staff only need the arrival notice. Missing-drop-off alerts stay with Danielle and Jen.</p></div></div></section>}
 
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#1769d2]">My Route Today</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">Choose the route you are running</h2><p className="mt-1 text-sm font-semibold text-slate-500">Pickup and destination confirmation happen one child at a time.</p></div><div className="flex flex-wrap gap-2"><Link href={effectiveRoute ? `/emergency-cards?route=${encodeURIComponent(myRoute[0]?.routeName||effectiveRoute)}` : "/emergency-cards"} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#9f2f35] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#7e2228]"><HeartPulse className="h-4 w-4" /> EMERGENCY MEDICAL CARDS</Link></div></div>
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#1769d2]">My Route Today</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">Choose the route you are running</h2><p className="mt-1 text-sm font-semibold text-slate-500">Pickup and destination confirmation happen one child at a time.</p></div><div className="flex flex-wrap gap-2"><Link href={transportEmergencyHref(myRoute,routes)} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#9f2f35] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#7e2228]"><HeartPulse className="h-4 w-4" /> EMERGENCY MEDICAL CARDS</Link></div></div>
           <div className="mt-5 flex flex-wrap gap-2">{routeNames.map((name) => <button key={name} onClick={() => setSelectedRoute(name)} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${effectiveRoute === name ? "border-[#1769d2] bg-[#eef6ff] text-[#102a56]" : "border-slate-200 bg-white text-slate-600"}`}>{name}</button>)}{!routeNames.length && <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">No active routes are scheduled for today at this location.</p>}</div>
         </section>
 
@@ -462,7 +462,7 @@ export default function TransportationV2Page() {
           <div className={`rounded-3xl border p-5 ${currentRouteNeedsAttention.length ? "border-red-300 bg-red-50" : "border-emerald-300 bg-emerald-50"}`}>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-start gap-3">{currentRouteNeedsAttention.length ? <AlertTriangle className="mt-0.5 h-6 w-6 flex-none text-red-700" /> : <ShieldCheck className="mt-0.5 h-6 w-6 flex-none text-emerald-700" />}<div><p className={`text-xs font-black uppercase tracking-[.14em] ${currentRouteNeedsAttention.length ? "text-red-700" : "text-emerald-700"}`}>Route emergency readiness</p><h3 className={`mt-1 text-xl font-black ${currentRouteNeedsAttention.length ? "text-red-950" : "text-emerald-950"}`}>{currentRouteReadyCount}/{myRoute.length} children with complete Hub emergency records</h3><p className="mt-1 text-sm font-semibold text-slate-700">{currentRouteNeedsAttention.length ? (transportUsesBrightwheel ? "Review the missing Hub information below. During the transition, confirm each child’s current Brightwheel or vehicle-binder emergency record before pickup." : "Pickup is blocked for children whose emergency record is not ready. Review the missing information before departure.") : "Emergency contacts, consent status, provider information, and allergy status are ready for this route."}</p></div></div>
-              <Link href={`/emergency-cards?route=${encodeURIComponent(myRoute[0]?.routeName||effectiveRoute)}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#8f2a30] px-4 py-2.5 text-sm font-black text-white"><HeartPulse className="h-4 w-4" /> Review / Print Backup</Link>
+              <Link href={transportEmergencyHref(myRoute,routes)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#8f2a30] px-4 py-2.5 text-sm font-black text-white"><HeartPulse className="h-4 w-4" /> Review / Print Backup</Link>
             </div>
             {currentRouteNeedsAttention.length > 0 && <div className="mt-4 grid gap-2 md:grid-cols-2">{currentRouteNeedsAttention.map(({ route, readiness }) => <div key={route.id} className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs"><strong className="text-red-950"><span translate="no" className="contents">{route.child}</span></strong><p className="mt-1 text-red-700">{readiness ? readiness.missing.slice(0, 3).join(" • ") : "Child emergency record not found"}</p></div>)}</div>}
           </div>
