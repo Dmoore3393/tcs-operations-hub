@@ -2,6 +2,7 @@ import { encryptDocument } from "@/lib/server/document-crypto";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 import { tcsLocationSlug } from "@/lib/server/location-slug";
 import { randomUUID } from "node:crypto";
+import { KIDKARE_CLAIM_DOCUMENT, KIDKARE_SCREENSHOT_LIMIT, KIDKARE_SCREENSHOT_TYPES, isKidKareScreenshot, kidKareToday, monthEnd, validClaimMonth } from "@/lib/kidkare-submissions";
 
 export const runtime = "nodejs";
 
@@ -41,6 +42,8 @@ export async function POST(request: Request) {
     const documentType = String(form.get("documentType") ?? "").trim();
     const childLegacyId = String(form.get("childLegacyId") ?? "").trim();
     const anchorDateText = String(form.get("anchorDate") ?? "").trim();
+    const kidKareClaim = documentType === KIDKARE_CLAIM_DOCUMENT;
+    const claimMonth = String(form.get("claimMonth") ?? "");
 
     if (!(file instanceof File) || !locationName || !documentType) {
       return Response.json({ error: "Choose a location, document type, and file." }, { status: 400 });
@@ -51,22 +54,36 @@ export async function POST(request: Request) {
     if (!ALLOWED_TYPES.has(file.type)) {
       return Response.json({ error: "Upload a PDF, JPEG, PNG, HEIC, or HEIF file." }, { status: 400 });
     }
+    if (kidKareClaim && (!validClaimMonth(claimMonth) || claimMonth > kidKareToday().slice(0, 7) || childLegacyId)) {
+      return Response.json({ error: "Choose the month this location’s KidKare claim covers, without selecting a child." }, { status: 400 });
+    }
+    if (kidKareClaim && (!KIDKARE_SCREENSHOT_TYPES.includes(file.type) || file.size > KIDKARE_SCREENSHOT_LIMIT)) {
+      return Response.json({ error: "Choose a PNG, JPEG, HEIC, or HEIF screenshot under 4 MB." }, { status: 400 });
+    }
 
     const slug = tcsLocationSlug(locationName);
     if (!slug) return Response.json({ error: "Choose a valid TCS location." }, { status: 400 });
 
     const { data: location, error: locationError } = await userClient
       .from("locations")
-      .select("id,name,full_name")
+      .select("id,name,full_name,program_type,is_active")
+      .eq("organization_id", profile.organization_id)
       .eq("slug", slug)
       .maybeSingle();
     if (locationError) throw locationError;
     if (!location) throw new Response("You do not have access to that location.", { status: 403 });
+    if (kidKareClaim) {
+      const access = await userClient.rpc("can_write_location_module", { p_location_id: location.id, p_module: "kidkare" });
+      if (access.error || !access.data) throw new Response("KidKare access to this home is required.", { status: 403 });
+      if (location.program_type !== "Family Childcare" || (!location.is_active && claimMonth >= kidKareToday().slice(0, 7))) {
+        return Response.json({ error: "Choose an in-home location. Closed homes accept evidence for past months only." }, { status: 400 });
+      }
+    }
 
     const { data: policy, error: policyError } = await userClient
       .from("retention_policies")
       .select("id,retention_years,anchor_event")
-      .eq("document_type", documentType)
+      .eq("document_type", kidKareClaim ? "CACFP / Meal Record" : documentType)
       .eq("is_active", true)
       .maybeSingle();
     if (policyError) throw policyError;
@@ -105,10 +122,18 @@ export async function POST(request: Request) {
     }
 
     const plain = Buffer.from(await file.arrayBuffer());
+    if (kidKareClaim && !isKidKareScreenshot(plain, file.type)) return Response.json({ error: "This file is not a supported screenshot. Save it as a PNG or JPEG and try again." }, { status: 400 });
     const encrypted = encryptDocument(plain);
+    if (kidKareClaim) {
+      const existing = await userClient.from("document_records").select("id,document_type,original_filename,retention_until,created_at")
+        .eq("organization_id", profile.organization_id).eq("location_id", location.id).eq("document_type", KIDKARE_CLAIM_DOCUMENT)
+        .eq("source_reference", claimMonth).eq("sha256", encrypted.sha256).eq("status", "Active").limit(1).maybeSingle();
+      if (existing.error) throw existing.error;
+      if (existing.data) return Response.json({ ok: true, document: existing.data });
+    }
     const documentId = randomUUID();
     const storagePath = `${profile.organization_id}/${location.id}/${documentId}.enc`;
-    const anchorDate = anchorDateText ? new Date(`${anchorDateText}T12:00:00Z`) : new Date();
+    const anchorDate = kidKareClaim ? new Date(`${monthEnd(claimMonth)}T12:00:00Z`) : anchorDateText ? new Date(`${anchorDateText}T12:00:00Z`) : new Date();
     if (Number.isNaN(anchorDate.getTime())) return Response.json({ error: "The retention anchor date is invalid." }, { status: 400 });
     const retentionUntil = addYears(anchorDate, activePolicy.retention_years);
 
@@ -137,6 +162,7 @@ export async function POST(request: Request) {
         retention_until: retentionUntil,
         legal_hold: false,
         status: "Active",
+        ...(kidKareClaim ? { source_system: "KidKare", source_reference: claimMonth, document_scope: "Operations", confidentiality: "Location Leadership" } : {}),
       })
       .select("id,document_type,original_filename,retention_until,created_at")
       .single();

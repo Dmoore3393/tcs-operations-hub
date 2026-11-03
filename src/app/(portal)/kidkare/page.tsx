@@ -33,6 +33,7 @@ import {
 import { useMemo, useState } from "react";
 import { staffInitials, useAuth } from "@/components/providers/AuthProvider";
 import { localIsoDate } from "@/lib/date-utils";
+import KidKareSubmissions from "@/components/kidkare/KidKareSubmissions";
 
 const statuses: KidKareStatus[] = ["Not Started", "Information Needed", "Submitted", "Enrolled", "Needs Correction"];
 
@@ -239,6 +240,8 @@ export default function KidKarePage() {
         </section>
 
         <DemoNotice />
+
+        <KidKareSubmissions />
 
         <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div><p className="text-sm font-black uppercase tracking-[0.18em] text-[#1769d2]">KidKare today</p><h2 className="mt-1 text-3xl font-black text-[#102a56]">Welcome back! 👋</h2><p className="mt-1 text-sm font-semibold text-slate-500">Here’s what needs attention in KidKare right now.</p></div>
