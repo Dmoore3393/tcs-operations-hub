@@ -238,7 +238,7 @@ function normalizeChild(row: DbRow) {
     emergencyInstructions: text(record.emergencyInstructions),
     fileAudits: safeFileAudits(record.fileAudits),
     immunizationRecord: safeImmunizationRecord(record.immunizationRecord),
-    schoolAgeSupport: safeSchoolAgeSupport(record.schoolAgeSupport),
+    schoolAgeSupport: safeSchoolAgeSupport({...object(record.schoolAgeSupport),schoolName:text(object(record.schoolAgeSupport).schoolName)||text(row.school_name)}),
     familyMessages: safeFamilyMessages(record.familyMessages),
     familyAccess: safeFamilyAccess(record.familyAccess),
     custodyAccessAlert: Boolean(record.custodyAccessAlert),
@@ -392,7 +392,7 @@ export async function GET(request: Request) {
     const [childrenResult, locationsResult] = await Promise.all([
       userClient
         .from("children")
-        .select("legacy_id,first_name,last_name,date_of_birth,age_group,enrollment_status,attendance_status,guardian_name,record_data,updated_at")
+        .select("legacy_id,first_name,last_name,date_of_birth,age_group,enrollment_status,attendance_status,guardian_name,school_name,record_data,updated_at")
         .order("last_name", { ascending: true })
         .order("first_name", { ascending: true }),
       userClient
@@ -476,13 +476,13 @@ export async function POST(request: Request) {
         .from("children")
         .update(payload)
         .eq("id", existing.data.id)
-        .select("legacy_id,first_name,last_name,date_of_birth,age_group,enrollment_status,attendance_status,guardian_name,record_data,updated_at")
+        .select("legacy_id,first_name,last_name,date_of_birth,age_group,enrollment_status,attendance_status,guardian_name,school_name,record_data,updated_at")
         .maybeSingle();
     } else {
       saved = await userClient
         .from("children")
         .insert(payload)
-        .select("legacy_id,first_name,last_name,date_of_birth,age_group,enrollment_status,attendance_status,guardian_name,record_data,updated_at")
+        .select("legacy_id,first_name,last_name,date_of_birth,age_group,enrollment_status,attendance_status,guardian_name,school_name,record_data,updated_at")
         .maybeSingle();
     }
     if (saved.error) throw saved.error;

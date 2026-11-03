@@ -5,6 +5,7 @@ import {transportTripPeriod,transportPickup,transportDestination,transportRouteG
 import MyAssignedRoutes from "@/components/transportation/MyAssignedRoutes";
 import TransportCallouts from "@/components/transportation/TransportCallouts";
 import {useTransportDay} from "@/hooks/useTransportDay";
+import {useTransportChildren} from "@/hooks/useTransportChildren";
 import {childForSchoolRoute} from "@/lib/school-pickup-stops";
 import SchoolStopGroups from "@/components/transportation/SchoolStopGroups";
 import MainLayout from "@/components/layout/MainLayout";
@@ -14,7 +15,7 @@ import { usePersistentState } from "@/hooks/usePersistentState";
 import { localIsoDate } from "@/lib/date-utils";
 import { emergencyCardReadiness } from "@/lib/emergency-cards";
 import { sendHubNotificationEvent } from "@/lib/notification-client";
-import { initialChildren, type ChildRecord } from "@/lib/children";
+import { type ChildRecord } from "@/lib/children";
 import { starterCareLogs, type CareLogEntry } from "@/lib/employee-care";
 import {
   starterRoutes,
@@ -84,15 +85,6 @@ function timeLabel(value?: string) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-function scheduledToday(days: string) {
-  const index = new Date().getDay();
-  const short = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][index];
-  const full = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][index];
-  const text = (days || "").toLowerCase().replaceAll("–", "-").replaceAll("—", "-");
-  if (!text.trim()) return true;
-  if ((text.includes("mon-fri") || text.includes("m-f") || text.includes("monday-friday")) && index >= 1 && index <= 5) return true;
-  return text.includes(short) || text.includes(full);
-}
 
 function destinationLocation(value?: string): Exclude<LocationKey, "All Locations"> | null {
   const text = (value || "").toLowerCase();
@@ -108,7 +100,7 @@ function destinationLocation(value?: string): Exclude<LocationKey, "All Location
 function matchesLocation(route: LiveRoute, activeLocation: string) {
   if (activeLocation === "All Locations") return true;
   const destination = (transportTripPeriod(route)==='Morning'?null:destinationLocation(route.dropoffLocation));
-  return route.location === activeLocation || destination === activeLocation;
+  return normalizeLocation(route.location) === activeLocation || destination === activeLocation;
 }
 
 function isLeadership(name: string, email: string) {
@@ -122,7 +114,8 @@ export default function TransportationV2Page() {
   const [routes, setRoutes, routesHydrated] = usePersistentState<LiveRoute[]>("tcs-routes", starterRoutes as LiveRoute[]);
   const [schools] = usePersistentState<SchoolRecord[]>("tcs-schools-v2", starterSchools);
   const [vehicles] = usePersistentState<VehicleRecord[]>("tcs-vehicles-v2", starterVehicles);
-  const [children, setChildren] = usePersistentState<ChildRecord[]>("tcs-children-v1", initialChildren);
+  const childRoster=useTransportChildren();
+  const children=childRoster.children;
   const [careLogs, setCareLogs] = usePersistentState<CareLogEntry[]>("tcs-daily-care-v1", starterCareLogs);
   const [selectedRoute, setSelectedRoute] = useState("");
   const [isOnline, setIsOnline] = useState(true);
@@ -202,8 +195,8 @@ export default function TransportationV2Page() {
     if (!routesHydrated || !isOnline || replayingOffline) return;
     const queued = readOfflineTransportActions();
     if (!queued.length) return;
-    setReplayingOffline(true);
     const timer = window.setTimeout(() => {
+      setReplayingOffline(true);
       setRoutes((current) => current.map((route) => {
         const patches = queued.filter((item) => item.routeId === String(route.id));
         if (!patches.length) return route;
@@ -366,14 +359,7 @@ export default function TransportationV2Page() {
 
     if (isFinalHandoffForRoute(route)) void finishTransportationCoverage(route);
 
-    setChildren((current) => current.map((item) => item.id === child.id ? {
-      ...item,
-      ...(attendancePayload.child?.record ?? {}),
-      attendanceToday: "Present",
-      attendanceDate: today,
-      checkedInAt: iso,
-      checkedInBy: actor,
-    } : item));
+    void childRoster.refresh();
 
     const alreadyLogged = careLogs.some((entry) => entry.childId === child.id && entry.location === location && entry.date === today && entry.action === "Transportation Check-In");
     if (!alreadyLogged) {
@@ -412,7 +398,7 @@ export default function TransportationV2Page() {
         <Suspense fallback={<p>Loading assigned routes…</p>}><MyAssignedRoutes routes={routes}/></Suspense>
         {(dispatch.error||dispatch.actionError)&&<section role="alert" className="rounded-xl bg-red-50 p-4 text-base text-red-950">{dispatch.error||dispatch.actionError}<button className="ml-3 min-h-11 underline" onClick={()=>void dispatch.refresh()}>Try again</button></section>}
         {!dispatch.ready&&!dispatch.error&&<p role="status" className="text-base">Checking today’s route changes and call-outs…</p>}
-        <TransportCallouts stops={dispatch.stops.filter(stop=>activeLocation==="All Locations"||stop.snapshot.location===activeLocation)} canRestore={dispatch.canCallOut} saving={dispatch.saving} onRestore={route=>void dispatch.change(route,"restore")}/>
+        <TransportCallouts stops={dispatch.stops.filter(stop=>activeLocation==="All Locations"||normalizeLocation(stop.snapshot.location)===activeLocation)} canRestore={dispatch.canCallOut} saving={dispatch.saving} onRestore={route=>void dispatch.change(route,"restore")}/>
         {coverageMessage && <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-black text-blue-950 shadow-sm">{coverageMessage}</section>}
 
         <section className={`rounded-2xl border p-4 shadow-sm ${isOnline ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-red-300 bg-red-50 text-red-950"}`}>
@@ -475,6 +461,7 @@ export default function TransportationV2Page() {
           }}</SchoolStopGroups>
         </section>}
 
+        {childRoster.error&&<p role="alert" className="rounded-xl bg-red-50 p-4 text-red-900">{childRoster.error} <button className="min-h-11 underline" onClick={()=>void childRoster.refresh()}>Try again</button></p>}
         <section className="grid gap-5 xl:grid-cols-3"><Panel title="Recent Pickups" icon={<UserCheck className="h-5 w-5" />}>{todayRoutes.filter((route) => route.pickedUpAt).sort((a, b) => String(b.pickedUpAt).localeCompare(String(a.pickedUpAt))).slice(0, 5).map((route) => <Row key={route.id} top={route.child} bottom={`${timeLabel(route.pickedUpAt)} • ${route.school}`} />)}</Panel><Panel title="Schools" icon={<MapPin className="h-5 w-5" />}>{schools.filter((school) => school.status === "Active").slice(0, 5).map((school) => <Row key={school.id} top={school.school} bottom={`${school.area} • ${school.dismissal || "dismissal not entered"}`} />)}</Panel><Panel title="Transportation Reminders" icon={<ShieldCheck className="h-5 w-5" />}><Row top="One child at a time" bottom="Never bulk-confirm pickups or handoffs." /><Row top="Arrival is not check-in" bottom="TCS destination handoff requires a separate location check-in." /><Row top="Field trip exception review" bottom="Missing destination handoffs alert Danielle and Jen only." /></Panel></section>
       </div>
     </MainLayout>

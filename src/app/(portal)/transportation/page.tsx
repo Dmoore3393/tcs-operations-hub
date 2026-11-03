@@ -8,9 +8,13 @@ import TransportSchoolSelect from "@/components/transportation/TransportSchoolSe
 import DailyTransportPlanner from "@/components/transportation/DailyTransportPlanner";
 import TransportCallouts from "@/components/transportation/TransportCallouts";
 import {useTransportDay} from "@/hooks/useTransportDay";
-import {initialChildren,type ChildRecord} from "@/lib/children";
+import type {ChildRecord} from "@/lib/children";
+import {useTransportChildren} from "@/hooks/useTransportChildren";
+import ChildSchoolRoster from "@/components/transportation/ChildSchoolRoster";
+import {childSchool,transportChildKey,transportSchoolDirectory,transportCareLocation} from "@/lib/transport-child-schools";
+import {hubRequest} from "@/lib/hub-request";
 import SchoolStopEditor from "@/components/transportation/SchoolStopEditor";
-import {groupSchoolPickupStops,mergeSchoolStopRows,type SchoolStopRoute} from "@/lib/school-pickup-stops";
+import {groupSchoolPickupStops,type SchoolStopRoute} from "@/lib/school-pickup-stops";
 import SchoolStopGroups from "@/components/transportation/SchoolStopGroups";
 import MainLayout from "@/components/layout/MainLayout";
 import { TcsKidsScene } from "@/components/brand/TcsKidsScene";
@@ -38,18 +42,15 @@ import { sendHubNotificationEvent } from "@/lib/notification-client";
 import { localIsoDate } from "@/lib/date-utils";
 import {
   AlertTriangle,
-  Building2,
   Bus,
   Car,
   CheckCircle2,
   Clock3,
-  MapPin,
   Navigation,
   Pencil,
   Plus,
   RotateCcw,
   Search,
-  ShieldCheck,
   UserCheck,
   Users,
 } from "lucide-react";
@@ -61,7 +62,7 @@ const blankRoute: TransportationRoute = {
   child: "",
   school: "",
   area: "Lancaster",
-  driver: "Akeyla",
+  driver: "",
   vehicle: "Ford Flex 1",
   pickup: "",
   dropoff: "",
@@ -143,17 +144,6 @@ function routeRunStatus(route: LiveTransportationRoute, today: string): RunStatu
   return route.runDate === today ? (route.runStatus ?? "Waiting") : "Waiting";
 }
 
-function isScheduledToday(days: string) {
-  const now = new Date();
-  const dayIndex = now.getDay();
-  const shortDay = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][dayIndex];
-  const fullDay = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][dayIndex];
-  const normalized = (days || "").toLowerCase().replaceAll("–", "-").replaceAll("—", "-");
-  if (!normalized.trim()) return true;
-  if ((normalized.includes("mon-fri") || normalized.includes("m-f") || normalized.includes("monday-friday")) && dayIndex >= 1 && dayIndex <= 5) return true;
-  return normalized.includes(shortDay) || normalized.includes(fullDay);
-}
-
 function timestampLabel(value?: string) {
   if (!value) return "";
   const date = new Date(value);
@@ -161,15 +151,19 @@ function timestampLabel(value?: string) {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-type Tab = "Daily Planner" | "Today" | "Routes" | "Schools" | "Vehicles";
+type Tab = "Children & Schools" | "Daily Planner" | "Today" | "Routes" | "Schools" | "Vehicles";
 type ReadinessState = Record<string, Record<string, boolean>>;
 
 export default function TransportationPage() {
   const { canManageSystem, isLocationLicensee, profile, session } = useAuth();
   const { location: activeLocation, availableLocations } = useHubLocation();
-  const [routes, setRoutes] = usePersistentState<LiveTransportationRoute[]>("tcs-routes", starterRoutes as LiveTransportationRoute[]);
-  const [routeChildren]=usePersistentState<ChildRecord[]>("tcs-children-v1",initialChildren);
+  const [routes, setRoutes, routesReady, routeLoad] = usePersistentState<LiveTransportationRoute[]>("tcs-routes", starterRoutes as LiveTransportationRoute[]);
+  const childRoster=useTransportChildren();
+  const routeChildren=childRoster.children;
+  const [tripChild,setTripChild]=useState<ChildRecord|undefined>();
+  const [routeSaving,setRouteSaving]=useState(false),[routeError,setRouteError]=useState("");
   const [schools, setSchools] = usePersistentState<SchoolRecord[]>("tcs-schools-v2", starterSchools);
+  const schoolOptions=useMemo(()=>transportSchoolDirectory(schools,routeChildren),[schools,routeChildren]);
   const [vehicles, setVehicles] = usePersistentState<VehicleRecord[]>("tcs-vehicles-v2", starterVehicles);
   const [readiness, setReadiness] = usePersistentState<ReadinessState>("tcs-vehicle-readiness-v2", {});
   const [tab, setTab] = useState<Tab>("Daily Planner");
@@ -189,13 +183,12 @@ export default function TransportationPage() {
   const dispatch=useTransportDay(routes,today);
   const actor = profile?.full_name?.trim() || profile?.email || "TCS Staff";
   const canManageRoutes = canManageSystem || isLocationLicensee;
-  const activeSchools = useMemo(() => schools.filter((school) => school.status === "Active"), [schools]);
   const availableVehicles = useMemo(() => vehicles.filter((vehicle) => vehicle.status !== "Out of Service"), [vehicles]);
   const locationRoutes = useMemo(
-    () => routes.filter((route) => route.status !== "Not Riding" && (activeLocation === "All Locations" || route.location === activeLocation)),
+    () => routes.filter((route) => route.status !== "Not Riding" && (activeLocation === "All Locations" || transportCareLocation(route.location) === activeLocation)),
     [activeLocation, routes],
   );
-  const todayRoutes = useMemo(() => dispatch.activeRoutes.filter(route=>activeLocation==="All Locations"||route.location===activeLocation), [dispatch.activeRoutes,activeLocation]);
+  const todayRoutes = useMemo(() => dispatch.activeRoutes.filter(route=>activeLocation==="All Locations"||transportCareLocation(route.location)===activeLocation), [dispatch.activeRoutes,activeLocation]);
   const routeKeys = useMemo(() => [...new Set(todayRoutes.map(routeGroupKey))], [todayRoutes]);
   const effectiveRouteKey = routeKeys.includes(selectedRouteKey) ? selectedRouteKey : (routeKeys[0] ?? "");
   const selectedTodayRoutes = useMemo(
@@ -224,17 +217,30 @@ export default function TransportationPage() {
   const selectedVehicle = selectedTodayRoutes.find((route) => route.vehicle)?.vehicle || "Not assigned";
 
   function openRoute(route?: TransportationRoute) {
+    setRouteError("");
     setEditingRoute(route ? { ...route } : { ...blankRoute, id: Date.now(), location: activeLocation === "All Locations" ? "Halcom" : activeLocation, vehicle: availableVehicles[0]?.name ?? "", routeName: activeLocation === "All Locations" ? "New Route" : `${activeLocation} Route`, stopOrder: Math.max(0, ...locationRoutes.map((item) => item.stopOrder ?? 0)) + 1, dropoffLocation: activeLocation === "All Locations" ? "Halcom" : activeLocation });
   }
 
-  function saveRoute(event: FormEvent) {
+  async function saveSchoolTrip(rows: (SchoolStopRoute & {expectedChildSchool?:string})[], saveSchools: boolean) {
+    if (!session?.access_token) throw new Error("Sign in again before saving the trip.");
+    if (!childRoster.ready || childRoster.error) throw new Error("Load the children before saving the trip.");
+    const allowed = new Set(['id','childId','child','location','school','area','driver','driverLaneId','vehicle','pickup','dropoff','days','status','notes','tripPeriod','pickupLocation','pickupStopId','routeName','stopOrder','pickupArea','dropoffLocation','expectedChildSchool']);
+    const selectedRows = rows.map(row => Object.fromEntries(Object.entries(row).filter(([key,value]) => allowed.has(key) && value !== undefined)));
+    await hubRequest("/api/transportation-setup",session.access_token,{method:"POST",body:JSON.stringify({action:"routes",routes:selectedRows,saveSchools})});
+    routeLoad.retry();
+    await childRoster.refresh();
+    setRouteMessage("School trip saved and linked to the existing child profiles.");
+  }
+
+  async function saveRoute(event: FormEvent) {
     event.preventDefault();
-    if (!editingRoute) return;
-    const saved = editingRoute;
-    setRoutes((current) => current.some((item) => item.id === saved.id)
-      ? current.map((item) => item.id === saved.id ? saved : item)
-      : [...current, saved]);
-    setEditingRoute(null);
+    if (!editingRoute || routeSaving) return;
+    const child=routeChildren.find(item=>transportChildKey(item)===editingRoute.childId);
+    if(!child){setRouteError("Choose an existing child profile.");return;}
+    setRouteSaving(true);setRouteError("");
+    try {await saveSchoolTrip([{...editingRoute,expectedChildSchool:childSchool(child)}],true);setEditingRoute(null);}
+    catch(error){setRouteError(error instanceof Error?error.message:"Could not save the trip. Try again.");}
+    finally{setRouteSaving(false);}
   }
 
   function openSchool(school?: SchoolRecord) {
@@ -406,18 +412,21 @@ export default function TransportationPage() {
         </section>
 
         <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
-          {(["Daily Planner", "Today", "Routes", "Schools", "Vehicles"] as const).map((item) => (
+          {(["Daily Planner", "Children & Schools", "Today", "Routes", "Schools", "Vehicles"] as const).map((item) => (
             <button key={item} onClick={() => setTab(item)} className={`rounded-xl px-4 py-2.5 text-sm font-black ${tab === item ? "bg-[#1769d2] text-white" : "text-slate-600 hover:bg-slate-50"}`}>
               {item === "Today" ? "My Route Today" : item}
             </button>
           ))}
         </div>
 
-        {tab === "Daily Planner" && <DailyTransportPlanner routes={routes} location={activeLocation} schools={schools}/>}
+        {(childRoster.error||routeLoad.error)&&<p role="alert" className="rounded-xl bg-red-50 p-4 text-red-900">{childRoster.error||routeLoad.error}<button className="ml-3 min-h-11 font-bold underline" onClick={()=>{void childRoster.refresh();routeLoad.retry();}}>Try again</button></p>}
+        {routeMessage&&<p role="status" className="rounded-xl bg-emerald-50 p-4 text-emerald-950">{routeMessage}</p>}
+        {tab === "Children & Schools" && (childRoster.ready?<ChildSchoolRoster roster={routeChildren} schools={schoolOptions} routes={routes} location={activeLocation} canManage={canManageRoutes} onSaved={async()=>{routeLoad.retry();await childRoster.refresh();}} onAddTrip={child=>{setTripChild(child);setEditingSchoolStop([]);}}/>:<p role="status">Loading children…</p>)}
+        {tab === "Daily Planner" && <><div className="flex flex-wrap gap-3"><button className="min-h-11 rounded-xl border border-emerald-700 bg-white px-4 font-bold text-emerald-900" onClick={()=>setTab("Children & Schools")}>Children & Schools</button>{canManageRoutes&&<button disabled={!childRoster.ready||!routesReady} className="min-h-11 rounded-xl bg-emerald-800 px-4 font-bold text-white" onClick={()=>{setTripChild(undefined);setEditingSchoolStop([]);}}>Add Morning / Afternoon Trip</button>}</div><DailyTransportPlanner routes={routes} location={activeLocation} schools={schoolOptions}/></>}
         {tab === "Today" && (
           <div className="space-y-5">
             {(dispatch.error||dispatch.actionError)&&<p role="alert" className="rounded-xl bg-red-50 p-4 text-base text-red-950">{dispatch.error||dispatch.actionError}<button className="ml-3 min-h-11 underline" onClick={()=>void dispatch.refresh()}>Try again</button></p>}
-            <TransportCallouts stops={dispatch.stops.filter(stop=>activeLocation==="All Locations"||stop.snapshot.location===activeLocation)} canRestore={dispatch.canCallOut} saving={dispatch.saving} onRestore={route=>void dispatch.change(route,"restore")}/>
+            <TransportCallouts stops={dispatch.stops.filter(stop=>activeLocation==="All Locations"||transportCareLocation(stop.snapshot.location)===activeLocation)} canRestore={dispatch.canCallOut} saving={dispatch.saving} onRestore={route=>void dispatch.change(route,"restore")}/>
             <section className="rounded-3xl border border-[#d8e8fb] bg-white p-5 shadow-sm sm:p-6">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-[#1769d2]">Driver mode</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">My Route Today</h2><p className="mt-1 text-sm font-semibold text-slate-500">Choose the route you are running. Confirm every child individually at pickup and again when the child is checked into the destination.</p></div>{effectiveRouteKey && <button onClick={coverRouteToday} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#ffc72c] px-5 py-3 text-sm font-black text-[#102a56] shadow-sm"><UserCheck className="h-4 w-4" /> I’m Covering This Route Today</button>}</div>
               <div className="mt-5 flex flex-wrap gap-2">{routeKeys.map((key) => <button key={key} onClick={() => { setSelectedRouteKey(key); setRouteMessage(""); }} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${effectiveRouteKey === key ? "border-[#1769d2] bg-[#eef6ff] text-[#102a56]" : "border-slate-200 bg-white text-slate-600 hover:border-blue-200"}`}>{key}</button>)}{!routeKeys.length && <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">No active route records are scheduled for today at the selected Hub location.</p>}</div>
@@ -447,7 +456,7 @@ export default function TransportationPage() {
 
         {tab === "Routes" && (
           <>
-            <section className="space-y-3 rounded-2xl border border-emerald-200 bg-white p-5 text-base"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-2xl font-black text-emerald-950">Morning and afternoon school trips</h2>{canManageRoutes&&<button onClick={()=>setEditingSchoolStop([])} className="min-h-11 rounded-xl bg-emerald-800 px-5 py-3 font-bold text-white">Add Morning / Afternoon Trip</button>}</div><p>Add morning school drop-offs or afternoon school pickups. Each child keeps an individual pickup and handoff.</p>{groupSchoolPickupStops(locationRoutes,true).map(stop=><article key={stop.key} className="rounded-xl border p-4"><h3 className="text-lg font-black">{transportTripPeriod(stop.routes[0])} • {stop.school} • {stop.pickup||"Pickup time not set"}</h3><p>{stop.driver} • {stop.vehicle} • {stop.routes.length} children</p><ul className="my-3 space-y-1">{stop.routes.map(route=><li key={route.id}><strong><span translate="no" className="contents">{route.child}</span></strong>: {transportPickup(route)} → {transportDestination(route)}</li>)}</ul>{canManageRoutes&&<button className="min-h-11 rounded-xl border border-emerald-700 px-4 py-2 font-bold text-emerald-900" onClick={()=>setEditingSchoolStop(stop.routes)}>Edit stop / add children</button>}</article>)}</section>
+            <section className="space-y-3 rounded-2xl border border-emerald-200 bg-white p-5 text-base"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-2xl font-black text-emerald-950">Morning and afternoon school trips</h2>{canManageRoutes&&<button disabled={!childRoster.ready||!routesReady} onClick={()=>{setTripChild(undefined);setEditingSchoolStop([]);}} className="min-h-11 rounded-xl bg-emerald-800 px-5 py-3 font-bold text-white">Add Morning / Afternoon Trip</button>}</div><p>Add morning school drop-offs or afternoon school pickups. Each child keeps an individual pickup and handoff.</p>{groupSchoolPickupStops(locationRoutes,true).map(stop=><article key={stop.key} className="rounded-xl border p-4"><h3 className="text-lg font-black">{transportTripPeriod(stop.routes[0])} • {stop.school} • {stop.pickup||"Pickup time not set"}</h3><p>{stop.driver} • {stop.vehicle} • {stop.routes.length} children</p><ul className="my-3 space-y-1">{stop.routes.map(route=><li key={route.id}><strong><span translate="no" className="contents">{route.child}</span></strong>: {transportPickup(route)} → {transportDestination(route)}</li>)}</ul>{canManageRoutes&&<button className="min-h-11 rounded-xl border border-emerald-700 px-4 py-2 font-bold text-emerald-900" onClick={()=>{setTripChild(undefined);setEditingSchoolStop(stop.routes);}}>Edit stop / add children</button>}</article>)}</section>
             <SectionCard action={canManageRoutes ? <PrimaryButton onClick={() => openRoute()}><Plus className="h-4 w-4" /> Add Route</PrimaryButton> : undefined}>
               <label className="relative block">
                 <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
@@ -578,15 +587,16 @@ export default function TransportationPage() {
           <Modal
             title={routes.some((item) => item.id === editingRoute.id) ? "Edit Route" : "Add Route"}
             description="School and vehicle choices come from the editable directory and fleet lists."
-            onClose={() => setEditingRoute(null)}
+            onClose={() => {if(!routeSaving)setEditingRoute(null);}}
             footer={<><SecondaryButton onClick={() => setEditingRoute(null)}>Cancel</SecondaryButton><PrimaryButton onClick={() => document.getElementById("route-save")?.click()}>Save Route</PrimaryButton></>}
           >
             <form onSubmit={saveRoute} className="grid gap-4 sm:grid-cols-2">
+              {routeError&&<p role="alert" className="text-red-900 sm:col-span-2">{routeError}</p>}<p className="sm:col-span-2">The selected school is saved on this child’s existing profile.</p>
               <Field label="Route / group name"><input required className={inputClass} value={editingRoute.routeName ?? ""} onChange={(event) => setEditingRoute({ ...editingRoute, routeName: event.target.value })} placeholder="Example: Dynasty Route" /></Field>
               <Field label="Stop order"><input min={1} type="number" className={inputClass} value={editingRoute.stopOrder ?? 1} onChange={(event) => setEditingRoute({ ...editingRoute, stopOrder: Number(event.target.value) || 1 })} /></Field>
               <Field label="Childcare location"><select required className={inputClass} value={editingRoute.location} onChange={(event) => setEditingRoute({ ...editingRoute, location: event.target.value })}>{availableLocations.filter((item) => item !== "All Locations").map((item) => <option key={item}>{item}</option>)}</select></Field>
-              <Field label="Existing child profile"><select className={inputClass} value={editingRoute.childId||""} onChange={event=>{const selected=routeChildren.find(child=>String(child.legacyId||child.id)===event.target.value);setEditingRoute({...editingRoute,childId:event.target.value,child:selected?`${selected.firstName} ${selected.lastName}`:editingRoute.child});}}><option value="">Choose a child, or keep an unlinked name</option>{routeChildren.filter(child=>child.enrollmentStatus!=="Archived").map(child=><option key={child.id} value={String(child.legacyId||child.id)}>{child.firstName} {child.lastName} • {child.location} • {child.dateOfBirth||"Birth date not recorded"}</option>)}</select></Field><Field label={editingRoute.childId?"Child name":"Unlinked child name"}><input required readOnly={Boolean(editingRoute.childId)} className={inputClass} value={editingRoute.child} onChange={event=>setEditingRoute({...editingRoute,child:event.target.value})}/></Field>
-              <Field label="School or destination"><TransportSchoolSelect schools={schools} value={editingRoute.school} onChange={school=>setEditingRoute({...editingRoute,school})}/></Field>
+              <Field label="Existing child profile"><select required className={inputClass} value={editingRoute.childId||""} onChange={event=>{const selected=routeChildren.find(child=>transportChildKey(child)===event.target.value);setEditingRoute({...editingRoute,childId:event.target.value,child:selected?`${selected.firstName} ${selected.lastName}`:"",location:selected?transportCareLocation(selected.location):editingRoute.location,dropoffLocation:selected?transportCareLocation(selected.location):editingRoute.dropoffLocation,school:selected?childSchool(selected)||editingRoute.school:editingRoute.school});}}><option value="">Choose an existing child</option>{routeChildren.filter(child=>child.enrollmentStatus==="Active").map(child=><option key={child.id} value={transportChildKey(child)}>{child.firstName} {child.lastName} • {child.location} • {child.dateOfBirth||"Birth date not recorded"}</option>)}</select></Field><Field label={editingRoute.childId?"Child name":"Unlinked child name"}><input required readOnly className={inputClass} value={editingRoute.child} onChange={event=>setEditingRoute({...editingRoute,child:event.target.value})}/></Field>
+              <Field label="School or destination"><TransportSchoolSelect schools={schoolOptions} value={editingRoute.school} onChange={school=>setEditingRoute({...editingRoute,school})}/></Field>
               <Field label="Area"><select className={inputClass} value={editingRoute.area} onChange={(event) => setEditingRoute({ ...editingRoute, area: event.target.value })}><option>Lancaster</option><option>Quartz Hill</option><option>Rosamond</option><option>Tehachapi</option><option>Other</option></select></Field>
               <Field label="Days"><input className={inputClass} value={editingRoute.days} onChange={(event) => setEditingRoute({ ...editingRoute, days: event.target.value })} /></Field>
               <Field label="Session"><select className={inputClass} value={editingRoute.tripPeriod||'Afternoon'} onChange={event=>setEditingRoute({...editingRoute,tripPeriod:event.target.value as 'Morning'|'Afternoon'})}><option>Morning</option><option>Afternoon</option></select></Field>
@@ -605,12 +615,12 @@ export default function TransportationPage() {
               <Field label="Destination / check-in location"><input className={inputClass} value={editingRoute.dropoffLocation ?? ""} onChange={(event) => setEditingRoute({ ...editingRoute, dropoffLocation: event.target.value })} placeholder="Halcom / Division / 42nd Street" /></Field>
               <Field label="Status"><select className={inputClass} value={editingRoute.status} onChange={(event) => setEditingRoute({ ...editingRoute, status: event.target.value as TransportationRoute["status"] })}><option>Confirmed</option><option>Needs Review</option><option>Not Riding</option></select></Field>
               <Field label="Notes"><input className={inputClass} value={editingRoute.notes} onChange={(event) => setEditingRoute({ ...editingRoute, notes: event.target.value })} /></Field>
-              <button id="route-save" className="hidden" type="submit">Save</button>
+              <button id="route-save" disabled={routeSaving} className="hidden" type="submit">Save</button>
             </form>
           </Modal>
         )}
 
-        {editingSchoolStop&&<SchoolStopEditor routes={editingSchoolStop} children={routeChildren} schools={schools} vehicles={vehicles} locations={availableLocations} onClose={()=>setEditingSchoolStop(null)} onSave={rows=>{setRoutes(current=>mergeSchoolStopRows(current,rows));setEditingSchoolStop(null);}}/>}
+        {editingSchoolStop&&<SchoolStopEditor initialChild={tripChild} routes={editingSchoolStop} roster={routeChildren} schools={schoolOptions} vehicles={vehicles} locations={availableLocations} onClose={()=>setEditingSchoolStop(null)} onSave={async(rows,saveSchools)=>{await saveSchoolTrip(rows,saveSchools);setEditingSchoolStop(null);setTripChild(undefined);}}/>}
         {canManageSystem && editingSchool && (
           <Modal
             title={schools.some((item) => item.id === editingSchool.id) ? "Edit School" : "Add School"}

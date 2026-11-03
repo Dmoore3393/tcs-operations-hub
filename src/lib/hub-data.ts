@@ -72,6 +72,7 @@ export type SchoolRecord = {
 };
 
 export const starterSchools: SchoolRecord[] = [
+  { id: 19, school: "Sundown Elementary School", district: "Westside Union School District", area: "Lancaster", address: "6151 West Ave. J-8, Lancaster, CA 93536", phone: "(661) 722-3026", startTime: "", dismissal: "", minimumDay: "", minimumDayName: "", status: "Active", notes: "Confirm the child’s current bell schedule before assigning pickup times." },
   { id: 1, school: "Amargosa Creek Middle School", district: "Lancaster School District", area: "Lancaster", address: "", phone: "", startTime: "", dismissal: "Varies", minimumDay: "Varies", minimumDayName: "Tuesday", status: "Active", notes: "Confirm bell schedule before route planning." },
   { id: 2, school: "Desert View Elementary School", district: "Lancaster School District", area: "Lancaster", address: "", phone: "", startTime: "", dismissal: "Varies", minimumDay: "Varies", minimumDayName: "Tuesday", status: "Active", notes: "" },
   { id: 3, school: "Fulton & Alsbury Academy", district: "Lancaster School District", area: "Lancaster", address: "", phone: "", startTime: "", dismissal: "Varies", minimumDay: "Varies", minimumDayName: "Tuesday", status: "Active", notes: "" },
