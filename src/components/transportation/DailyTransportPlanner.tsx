@@ -1,4 +1,5 @@
 "use client";
+import {transportCareLocation} from "@/lib/transport-child-schools";
 import {transportTripPeriod,transportPickup,transportDestination} from "@/lib/transport-trips";
 import TransportDriverSelect from "./TransportDriverSelect";
 import TransportSchoolSelect from "./TransportSchoolSelect";
@@ -13,7 +14,7 @@ export default function DailyTransportPlanner({routes,location,schools=[]}:{rout
  const [trip,setTrip]=useState('All trips');
  const [date,setDate]=useState(localIsoDate),[editing,setEditing]=useState<{route:DayRoute;version:number}|null>(null),[notice,setNotice]=useState('');
  const day=useTransportDay(routes,date);const past=date<localIsoDate();
- const rows=routes.filter(route=>route.status!=='Not Riding'&&(trip==='All trips'||transportTripPeriod(route)===trip)&&(location==='All Locations'||route.location===location)).map(route=>{const stop=day.stopFor(route);return{route:{...route,...stop?.plan_data},stop,scheduled:Boolean(stop?.is_planned)||scheduledOnDate(route.days,date)};});
+ const rows=routes.filter(route=>route.status!=='Not Riding'&&(trip==='All trips'||transportTripPeriod(route)===trip)&&(location==='All Locations'||transportCareLocation(route.location)===transportCareLocation(location))).map(route=>{const stop=day.stopFor(route);return{route:{...route,...stop?.plan_data},stop,scheduled:Boolean(stop?.is_planned)||scheduledOnDate(route.days,date)};});
  const sorted=rows.sort((a,b)=>(a.route.routeName||a.route.driver).localeCompare(b.route.routeName||b.route.driver)||(a.route.stopOrder||999)-(b.route.stopOrder||999));
  async function callout(route:DayRoute,restore:boolean){if(await day.change(route,restore?'restore':'callout'))setNotice(restore?'Restored for the selected date.':'Called out for the selected date. Linked stops for this child are removed from the pickup list.');}
  return <section id="daily-route-planner" className="space-y-4 rounded-3xl border border-emerald-200 bg-white p-5 text-base [&_input]:min-h-11 [&_input]:text-base [&_select]:min-h-11 [&_select]:text-base [&_button]:min-h-11">
