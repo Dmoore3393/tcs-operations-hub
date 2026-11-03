@@ -8,9 +8,9 @@ const exportsOf=(source,deps={})=>{const c={exports:{},Response,Date,URL,process
 const helpers=exportsOf(await fs.readFile('src/lib/auth-email-errors.ts','utf8'));
 const source=await fs.readFile('src/app/api/team-access/resend/route.ts','utf8');
 function fixture(inviteError=null,recoveryError=null,patch={}){
- const sent=[],writes=[],account={user_id:'synthetic',email:'synthetic@example.com',full_name:'Synthetic Staff',is_active:true,accepted_at:null,invited_at:null,...patch};let authorized=true;
+ const sent=[],writes=[],account={user_id:'synthetic',email:'synthetic@example.com',full_name:'Synthetic Staff',is_active:true,accepted_at:"completed",invited_at:null,...patch};let authorized=true;
  const admin={auth:{admin:{inviteUserByEmail:async(...args)=>{sent.push(['invite',...args]);return{error:inviteError}}}},from(table){const q={select(){return q},eq(){return q},ilike(){return q},maybeSingle:async()=>({data:account,error:null}),update(value){writes.push({table,value});return q},then(resolve){return Promise.resolve({error:null}).then(resolve)}};return q}};
- const api=exportsOf(source,{'@/lib/auth-email-errors':helpers,'@supabase/supabase-js':{createClient:()=>({auth:{resetPasswordForEmail:async(...args)=>{sent.push(['recovery',...args]);return{error:recoveryError}}}})},'@/lib/server/require-owner':{requireOwner:async()=>{if(!authorized)throw new Response('Owner required',{status:403});return{admin,user:{id:'owner'},profile:{organization_id:'org'}}},responseFromThrown:e=>e instanceof Response?e:Response.json({error:e.message},{status:500})}});
+ const api=exportsOf(source,{'@/lib/server/staff-setup-links':{sendPendingStaffSetup:async()=>{sent.push(['durable']);return{sentAs:'invite',validForHours:48}}},'@/lib/auth-email-errors':helpers,'@supabase/supabase-js':{createClient:()=>({auth:{resetPasswordForEmail:async(...args)=>{sent.push(['recovery',...args]);return{error:recoveryError}}}})},'@/lib/server/require-owner':{requireOwner:async()=>{if(!authorized)throw new Response('Owner required',{status:403});return{admin,user:{id:'owner'},profile:{organization_id:'org'}}},responseFromThrown:e=>e instanceof Response?e:Response.json({error:e.message},{status:500})}});
  return {sent,writes,deny:()=>{authorized=false},post:()=>api.POST(new Request('https://hub.test/api/team-access/resend',{method:'POST',body:JSON.stringify({user_id:'synthetic'})}))};
 }
 test('a throttle or delivery failure never triggers a second email or a false sent timestamp',async()=>{
@@ -24,4 +24,8 @@ test('unauthorized, inactive and recently invited accounts send no additional em
  const denied=fixture();denied.deny();assert.equal((await denied.post()).status,403);assert.equal(denied.sent.length,0);
  const inactive=fixture(null,null,{is_active:false});assert.equal((await inactive.post()).status,400);assert.equal(inactive.sent.length,0);
  const recent=fixture(null,null,{invited_at:new Date().toISOString()});const response=await recent.post();assert.equal(response.status,429);assert.equal(response.headers.get('Retry-After'),'60');assert.equal(recent.sent.length,0);
+});
+
+test('pending staff resends use the 48-hour invitation flow instead of the legacy password email',async()=>{
+ const f=fixture(null,null,{accepted_at:null});const r=await f.post();assert.equal(r.status,200);assert.equal((await r.json()).validForHours,48);assert.deepEqual(f.sent.map(x=>x[0]),['durable']);
 });

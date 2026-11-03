@@ -3014,5 +3014,20 @@
   "Transportation is turned off for this child. Uncheck No school / no pickup needed before adding a trip": "El transporte está desactivado para este niño. Desmarque No asiste a la escuela / no necesita transporte antes de agregar un viaje",
   "This child is in transit. Complete the handoff before changing their school, care location, enrollment or transportation preference": "Este niño está en camino. Complete la entrega antes de cambiar su escuela, ubicación de cuidado, inscripción o preferencia de transporte",
   "This child’s transportation preference changed. Refresh the children before saving": "La preferencia de transporte de este niño cambió. Actualice la lista antes de guardar",
-  "Could not save transportation. Try again.": "No se pudo guardar el transporte. Inténtelo de nuevo."
+  "Could not save transportation. Try again.": "No se pudo guardar el transporte. Inténtelo de nuevo.",
+  "Your staff invitation is valid for 48 hours. Confirm your contact details and choose your password. Birthday is optional.": "Su invitación de personal es válida durante 48 horas. Confirme sus datos de contacto y elija su contraseña. El cumpleaños es opcional.",
+  "Your staff account is ready. Use your email and the password you just created to sign in.": "Su cuenta de personal está lista. Inicie sesión con su correo electrónico y la contraseña que acaba de crear.",
+  "Finishing your account…": "Finalizando su cuenta…",
+  "Valid until": "Válido hasta",
+  ". This updates your existing employee profile.": ". Esto actualiza su perfil de empleado existente.",
+  "Request a new invitation if you have not finished setup. If your account is already activated, go to Sign In.": "Solicite una nueva invitación si no ha terminado la configuración. Si su cuenta ya está activada, vaya a Iniciar sesión.",
+  "If this email has a pending staff invitation, a new 48-hour setup link has been requested. Check your inbox and Spam.": "Si este correo tiene una invitación de personal pendiente, se ha solicitado un enlace nuevo válido durante 48 horas. Revise su bandeja de entrada y correo no deseado.",
+  "The invitation link is valid for 48 hours after sending.": "El enlace de invitación es válido durante 48 horas después del envío.",
+  "Use a password with at least 10 characters and enter the same password twice.": "Use una contraseña de al menos 10 caracteres e ingrese la misma contraseña dos veces.",
+  "Your setup session needs to be renewed. Please try again.": "Debe renovar su sesión de configuración. Inténtelo de nuevo.",
+  "The Hub could not verify your invitation. Please try again.": "The Hub no pudo verificar su invitación. Inténtelo de nuevo.",
+  "This setup link has expired or the account is already activated. Sign in if you finished setup, or request a new invitation.": "Este enlace ha vencido o la cuenta ya está activada. Inicie sesión si terminó la configuración o solicite una nueva invitación.",
+  "Your invitation is still being prepared. Try again in a moment.": "Su invitación todavía se está preparando. Inténtelo de nuevo en un momento.",
+  "Please wait 30 seconds before trying your setup link again.": "Espere 30 segundos antes de volver a intentar su enlace de configuración.",
+  "The setup email could not be requested. Please try again later or contact Danielle or Jennifer.": "No se pudo solicitar el correo de configuración. Inténtelo más tarde o comuníquese con Danielle o Jennifer."
 }

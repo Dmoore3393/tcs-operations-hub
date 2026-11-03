@@ -27,6 +27,7 @@ export default function EmployeeInviteDialog({employee,onClose,onInvited}:{emplo
  function chooseRole(value:AccessRole){setRole(value);if(value==="Location Licensee")setLocations(current=>current.slice(0,1));}
  return <Modal title={`Invite ${employee.full_name} to The Hub`} description="Create a login linked to this existing employee profile. Confirm the email, Hub access and locations before sending." onClose={()=>{if(!sending)onClose();}}>
   <div className="space-y-4 text-base [&_input]:text-base [&_select]:min-h-11 [&_select]:text-base">
+   <p className="rounded-xl bg-emerald-50 p-3 text-emerald-950">The invitation link is valid for 48 hours after sending.</p>
    {loading&&<p role="status">Loading saved contact details…</p>}
    {error&&<div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-900">{error}{!details&&<button type="button" className="ml-3 min-h-11 rounded-xl border px-3 font-bold" onClick={()=>{setLoading(true);setRetry(value=>value+1);}}>Try again</button>}</div>}
    {details&&<form onSubmit={send} className="space-y-4">

@@ -1,3 +1,4 @@
+import { issueStaffSetupLink, activateStaffSetupLink, revokeStaffSetupLink } from "@/lib/server/staff-setup-links";
 import {recommendedStaffInviteRole} from "@/lib/staff-invite-access";
 import {authEmailLimitResponse} from "@/lib/auth-email-errors";
 import { careLocations } from "@/lib/location-config";
@@ -44,6 +45,7 @@ export async function GET(request:Request) {
 }
 
 export async function POST(request: Request) {
+  let cleanup: (() => Promise<void>) | undefined;
   try {
     const { admin, user, profile } = await requireOwner(request);
     const body = (await request.json()) as InviteBody;
@@ -96,7 +98,9 @@ export async function POST(request: Request) {
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || new URL(request.url).origin;
     const inviteLanguage=selectedLane?.preferred_language;
-    const redirectTo = `${siteUrl}/accept-invite${inviteLanguage==="es"?"?lang=es":""}`;
+    const setup = await issueStaffSetupLink(admin, profile.organization_id, email, siteUrl, inviteLanguage);
+    cleanup = () => revokeStaffSetupLink(admin, setup.tokenHash);
+    const redirectTo = setup.redirectTo;
     const invitedAt = new Date().toISOString();
 
     const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
@@ -113,6 +117,7 @@ export async function POST(request: Request) {
     });
 
     if (inviteError || !inviteData.user) {
+      await cleanup();
       return authEmailLimitResponse(inviteError) || Response.json({ error: inviteError?.message ?? "Supabase did not create the invitation." }, { status: 400 });
     }
 
@@ -147,6 +152,7 @@ export async function POST(request: Request) {
         await admin.from("staff_access").delete().eq("user_id", invitedUser.id);
         await admin.auth.admin.deleteUser(invitedUser.id).catch(() => undefined);
         if(laneLink.error)throw laneLink.error;
+        await cleanup();
         return Response.json({error:"This employee profile changed or was already linked. Refresh Employees before trying again."},{status:409});
       }
     }
@@ -166,9 +172,12 @@ export async function POST(request: Request) {
     }, { onConflict: "organization_id,email" });
 
     if (invitationError) throw invitationError;
+    await activateStaffSetupLink(admin, setup.tokenHash, invitedUser.id);
+    cleanup = undefined;
 
     return Response.json({
       ok: true,
+      validForHours: 48,
       invitation: {
         user_id: invitedUser.id,
         email,
@@ -183,6 +192,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
+    if (cleanup) await cleanup().catch(() => undefined);
     return responseFromThrown(error);
   }
 }

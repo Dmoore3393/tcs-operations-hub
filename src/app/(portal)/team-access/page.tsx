@@ -197,7 +197,7 @@ export default function TeamAccessPage() {
         body: JSON.stringify({ user_id: account.user_id }),
       });
       await loadAccounts(account.user_id);
-      flash(`A new ${payload.sentAs === "password setup" ? "account setup" : "invitation"} email was sent to ${account.email}.`);
+      flash(`A new ${payload.sentAs === "password setup" ? "account setup" : "invitation"} email was sent to ${account.email}.${payload.validForHours ? " The setup link is valid for 48 hours." : ""}`);
     } catch (resendError) {
       setError(resendError instanceof Error ? resendError.message : "The setup email could not be sent.");
     } finally {
