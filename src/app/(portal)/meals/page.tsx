@@ -1,4 +1,6 @@
 "use client";
+import ChoiceSelect from "@/components/forms/ChoiceSelect";
+
 
 import MainLayout from "@/components/layout/MainLayout";
 import SafeImage from "@/components/media/SafeImage";
@@ -803,7 +805,7 @@ function MealsLocationPage({ currentLocation }: { currentLocation: Exclude<Locat
           <Field label="Date"><input type="date" className={inputClass} value={draft.date} onChange={(event) => loadMealSelection(event.target.value, draft.meal)} /></Field>
           <Field label="Meal"><select className={inputClass} value={draft.meal} onChange={(event) => loadMealSelection(draft.date, event.target.value as MealType)}>{mealTypes.map((meal) => <option key={meal}>{meal}</option>)}</select></Field>
           <Field label="Served time"><input type="time" className={inputClass} value={draft.servedTime} onChange={(event) => setDraft((current) => ({ ...current, servedTime: event.target.value }))} /></Field>
-          <Field label="Drink served"><input className={inputClass} value={draft.drinkServed} onChange={(event) => setDraft((current) => ({ ...current, drinkServed: event.target.value }))} placeholder="Milk, lactose-free milk, water…" /></Field>
+          <Field label="Drink served"><ChoiceSelect label="Drink served" allowCustom options={["Milk", "Lactose-free milk", "Water", "Approved milk substitute"]} value={draft.drinkServed} onChange={drinkServed=>setDraft({...draft,drinkServed})}/></Field>
           <div className="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-black uppercase tracking-wide text-slate-500">Planned menu</p><p className="mt-2 whitespace-pre-line text-sm font-bold leading-6 text-slate-800">{plannedFoods || "No menu has been entered for this meal yet."}</p></div>
           <Field label="What was actually served" wide><textarea className={`${inputClass} min-h-28`} value={draft.actualFoods} onChange={(event) => setDraft((current) => ({ ...current, actualFoods: event.target.value }))} placeholder="List the food offered to the children…" /></Field>
           <div className="sm:col-span-2 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">

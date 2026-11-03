@@ -1,4 +1,6 @@
 "use client";
+import ChoiceSelect from "@/components/forms/ChoiceSelect";
+import {gradeChoices} from "@/lib/form-options";
 
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -354,14 +356,14 @@ function ImmunizationModal({
         <section className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2 xl:grid-cols-4">
           <Field label="Requirement Set"><select value={record.program} onChange={(event) => onProgram(event.target.value as ImmunizationRecord["program"])} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold"><option>Child Care / Pre-K</option><option>TK/K-12</option></select></Field>
           {record.program === "TK/K-12" && <Field label="School Checkpoint"><select value={record.schoolCheckpoint} onChange={(event) => onPatch({ schoolCheckpoint: event.target.value as ImmunizationRecord["schoolCheckpoint"] })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold"><option>TK/K-12 Admission / Transfer</option><option>7th Grade Advancement</option></select></Field>}
-          {record.program === "TK/K-12" && <Field label="Grade"><input value={record.grade} onChange={(event) => onPatch({ grade: event.target.value })} placeholder="K, 1, 7…" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold" /></Field>}
+          {record.program === "TK/K-12" && <Field label="Grade"><ChoiceSelect label="Grade" options={gradeChoices} allowCustom value={record.grade} onChange={grade=>onPatch({grade})}/></Field>}
           <Field label="Current Tracker Status"><div className={`rounded-xl px-3 py-2.5 text-sm font-black ${statusStyle(status)}`}>{status}</div></Field>
         </section>
 
         <section className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4">
           <h3 className="font-black text-slate-950">Verified Record</h3>
           <div className="mt-3 grid gap-3 md:grid-cols-3">
-            <Field label="Record Source"><input value={record.recordSource} onChange={(event) => onPatch({ recordSource: event.target.value })} placeholder="CAIR / official immunization record" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold" /></Field>
+            <Field label="Record Source"><ChoiceSelect label="Record Source" options={["CAIR", "Official immunization record", "Medical provider"]} allowCustom value={record.recordSource} onChange={recordSource=>onPatch({recordSource})}/></Field>
             <Field label="Date Verified"><input type="date" value={record.verifiedAt} onChange={(event) => onPatch({ verifiedAt: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold" /></Field>
             <Field label="Verified By"><input value={record.verifiedBy} onChange={(event) => onPatch({ verifiedBy: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold" /></Field>
           </div>

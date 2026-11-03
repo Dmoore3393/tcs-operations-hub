@@ -1,4 +1,6 @@
 "use client";
+import ChoiceSelect from "@/components/forms/ChoiceSelect";
+import StaffNameSelect from "@/components/forms/StaffNameSelect";
 
 import MainLayout from "@/components/layout/MainLayout";
 import { useHubLocation } from "@/components/providers/LocationProvider";
@@ -42,7 +44,7 @@ function overdue(record: DigitalFormRecord) {
 }
 
 export default function DigitalFormsPage() {
-  const { location } = useHubLocation();
+  const { location, availableLocations } = useHubLocation();
   const [forms, setForms] = usePersistentState<DigitalFormRecord[]>("tcs-digital-forms-v1", starterDigitalForms);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<DigitalFormStatus | "All Statuses">("All Statuses");
@@ -92,10 +94,10 @@ export default function DigitalFormsPage() {
 
     {editing && <Modal title={forms.some((item) => item.id === editing.id) ? "Review Form" : "New Form Request"} description="This tracks signature and acknowledgment workflow. Parent Portal acknowledgment is available only to the verified email entered on the form." onClose={() => setEditing(null)} footer={<><SecondaryButton onClick={() => setEditing(null)}>Cancel</SecondaryButton><PrimaryButton onClick={() => document.getElementById("form-workflow-save")?.click()}>Save</PrimaryButton></>}>
       <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
-        <Field label="Location"><select className={inputClass} value={editing.location} onChange={(event) => setEditing({ ...editing, location: event.target.value })}><option>Halcom</option><option>21st Street</option><option>Division</option><option>33rd Street</option><option>42nd Street</option><option>Tehachapi</option></select></Field>
+        <Field label="Location"><ChoiceSelect label="Location" options={availableLocations.filter(item=>item!=="All Locations")} value={editing.location} onChange={location=>setEditing({...editing,location})}/></Field>
         <Field label="Subject type"><select className={inputClass} value={editing.subjectType} onChange={(event) => setEditing({ ...editing, subjectType: event.target.value as DigitalFormRecord["subjectType"] })}><option>Child</option><option>Employee</option><option>Family</option><option>Transportation</option></select></Field>
-        <Field label="Subject name"><input required className={inputClass} value={editing.subjectName} onChange={(event) => setEditing({ ...editing, subjectName: event.target.value })} /></Field>
-        <Field label="Form name"><input required className={inputClass} value={editing.formName} onChange={(event) => setEditing({ ...editing, formName: event.target.value })} /></Field>
+        <Field label="Subject name">{editing.subjectType==="Employee"?<StaffNameSelect label="Subject name" required allowCustom value={editing.subjectName} onChange={subjectName=>setEditing({...editing,subjectName})}/>:<ChoiceSelect label="Subject name" required allowCustom options={forms.filter(form=>form.subjectType===editing.subjectType).map(form=>form.subjectName)} value={editing.subjectName} onChange={subjectName=>setEditing({...editing,subjectName})}/>}</Field>
+        <Field label="Form name"><ChoiceSelect label="Form name" required allowCustom options={forms.filter(form=>form.subjectType===editing.subjectType).map(form=>form.formName)} value={editing.formName} onChange={formName=>setEditing({...editing,formName})}/></Field>
         <Field label="Signer name"><input className={inputClass} value={editing.signerName} onChange={(event) => setEditing({ ...editing, signerName: event.target.value })} /></Field><Field label="Signer email"><input type="email" className={inputClass} value={editing.signerEmail || ""} onChange={(event) => setEditing({ ...editing, signerEmail: event.target.value })} placeholder="Guardian email used for Parent Portal" /></Field>
         <Field label="Status"><select className={inputClass} value={editing.status} onChange={(event) => setEditing({ ...editing, status: event.target.value as DigitalFormStatus })}><option>Draft</option><option>Ready to Send</option><option>Sent</option><option>Signed</option><option>Needs Correction</option><option>Archived</option></select></Field>
         <Field label="Signature method"><select className={inputClass} value={editing.signatureMethod} onChange={(event) => setEditing({ ...editing, signatureMethod: event.target.value as SignatureMethod })}><option>Not Signed</option><option>In Person</option><option>Uploaded Signed Copy</option><option>Staff Acknowledgment</option><option>Parent Portal Acknowledgment</option><option disabled>Parent Portal (Future)</option></select></Field>

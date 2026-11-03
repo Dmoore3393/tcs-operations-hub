@@ -1,4 +1,5 @@
 "use client";
+import ChoiceSelect from "@/components/forms/ChoiceSelect";
 import {translateForDevice} from "@/lib/i18n/translate";
 
 import MainLayout from "@/components/layout/MainLayout";
@@ -208,7 +209,7 @@ export default function DailyCarePage() {
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <Field label="Date"><input type="date" className={inputClass} value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></Field>
           <Field label="Time"><input type="time" className={inputClass} value={form.time} onChange={(event) => setForm({ ...form, time: event.target.value })} /></Field>
-          <Field label="Care action"><input className={inputClass} value={form.action} onChange={(event) => setForm({ ...form, action: event.target.value })} /></Field>
+          <Field label="Care action"><ChoiceSelect label="Care action" allowCustom options={form.category==="Meal"?["Breakfast","AM Snack","Lunch","PM Snack","Dinner"]:form.category==="Rest"?["Rest period","Nap started","Woke up"]:[defaultAction(form.category)]} value={form.action} onChange={action=>setForm({...form,action})}/></Field>
           <Field label="Result"><select className={inputClass} value={form.result} onChange={(event) => setForm({ ...form, result: event.target.value })}>{resultOptions(form.category).map((option) => <option key={option}>{option}</option>)}</select></Field>
           <Field label={form.category === "Bottle" ? "Bottle / milk details" : form.category === "Diaper" ? "Condition, cream, or rash notes" : form.category === "Potty" ? "Prompt, accident, or clothing notes" : "Optional notes"} wide><textarea className={`${inputClass} min-h-28`} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Add only the details staff need to document…" /></Field>
           <Field label="Staff initials"><input className={`${inputClass} uppercase`} maxLength={4} value={form.initials} onChange={(event) => setForm({ ...form, initials: event.target.value.toUpperCase().replace(/[^A-Z]/g, "") })} placeholder="DM" /></Field>

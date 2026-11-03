@@ -1,4 +1,6 @@
 "use client";
+import ChoiceSelect from "@/components/forms/ChoiceSelect";
+import {relationshipChoices} from "@/lib/form-options";
 
 import { locationDisplayName } from "@/lib/location-config";
 
@@ -194,7 +196,7 @@ export default function ChildEditorModal({
                       <div className="grid gap-3 sm:grid-cols-3">
                         <Field label="Name"><input className={inputClass} value={form.emergencyContact1Name} onChange={(e) => setForm({ ...form, emergencyContact1Name: e.target.value })} /></Field>
                         <Field label="Phone"><input type="tel" className={inputClass} value={form.emergencyContact1Phone} onChange={(e) => setForm({ ...form, emergencyContact1Phone: e.target.value })} /></Field>
-                        <Field label="Relationship"><input className={inputClass} value={form.emergencyContact1Relationship} onChange={(e) => setForm({ ...form, emergencyContact1Relationship: e.target.value })} /></Field>
+                        <Field label="Relationship"><ChoiceSelect label="Emergency contact 1 relationship" options={relationshipChoices} allowCustom className={inputClass} value={form.emergencyContact1Relationship} onChange={emergencyContact1Relationship=>setForm({...form,emergencyContact1Relationship})}/></Field>
                       </div>
                     </div>
                     <div className="rounded-2xl border border-[#e5dcc8] bg-[#faf7ef] p-4">
@@ -202,7 +204,7 @@ export default function ChildEditorModal({
                       <div className="grid gap-3 sm:grid-cols-3">
                         <Field label="Name"><input className={inputClass} value={form.emergencyContact2Name} onChange={(e) => setForm({ ...form, emergencyContact2Name: e.target.value })} /></Field>
                         <Field label="Phone"><input type="tel" className={inputClass} value={form.emergencyContact2Phone} onChange={(e) => setForm({ ...form, emergencyContact2Phone: e.target.value })} /></Field>
-                        <Field label="Relationship"><input className={inputClass} value={form.emergencyContact2Relationship} onChange={(e) => setForm({ ...form, emergencyContact2Relationship: e.target.value })} /></Field>
+                        <Field label="Relationship"><ChoiceSelect label="Emergency contact 2 relationship" options={relationshipChoices} allowCustom className={inputClass} value={form.emergencyContact2Relationship} onChange={emergencyContact2Relationship=>setForm({...form,emergencyContact2Relationship})}/></Field>
                       </div>
                     </div>
                   </div>
