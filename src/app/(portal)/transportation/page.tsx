@@ -144,7 +144,7 @@ type LiveTransportationRoute = TransportationRoute & {
 };
 
 function routeGroupKey(route: LiveTransportationRoute) {
-  return transportRouteGroup({...route,routeName:route.routeName?.trim() || `${route.driver || "Transportation"} Route`});
+  return transportRouteGroup(route);
 }
 
 function routeRunStatus(route: LiveTransportationRoute, today: string): RunStatus {
@@ -248,7 +248,7 @@ export default function TransportationPage() {
 
   function openRoute(route?: TransportationRoute) {
     setRouteError("");
-    setEditingRoute(route ? { ...route } : { ...blankRoute, id: Date.now(), location: activeLocation === "All Locations" ? "Halcom" : activeLocation, vehicle: availableVehicles[0]?.name ?? "", routeName: activeLocation === "All Locations" ? "New Route" : `${activeLocation} Route`, stopOrder: Math.max(0, ...locationRoutes.map((item) => item.stopOrder ?? 0)) + 1, dropoffLocation: activeLocation === "All Locations" ? "Halcom" : activeLocation });
+    setEditingRoute(route ? { ...route } : { ...blankRoute, id: Date.now(), location: activeLocation === "All Locations" ? "Halcom" : activeLocation, vehicle: availableVehicles[0]?.name ?? "", stopOrder: Math.max(0, ...locationRoutes.map((item) => item.stopOrder ?? 0)) + 1, dropoffLocation: activeLocation === "All Locations" ? "Halcom" : activeLocation });
   }
 
   async function saveSchoolTrip(rows: (SchoolStopRoute & {expectedChildSchool?:string})[], saveSchools: boolean) {
@@ -588,10 +588,9 @@ export default function TransportationPage() {
           >
             <form onSubmit={saveRoute} className="grid gap-4 sm:grid-cols-2">
               {routeError&&<p role="alert" className="text-red-900 sm:col-span-2">{routeError}</p>}<p className="sm:col-span-2">The selected school is saved on this child’s existing profile.</p>
-              <Field label="Route / group name"><ChoiceSelect label="Route / group name" required allowCustom options={routes.map(route => route.routeName || "")} value={editingRoute.routeName ?? ""} onChange={routeName => setEditingRoute({ ...editingRoute, routeName })} /></Field>
               <Field label="Stop order"><input min={1} type="number" className={inputClass} value={editingRoute.stopOrder ?? 1} onChange={(event) => setEditingRoute({ ...editingRoute, stopOrder: Number(event.target.value) || 1 })} /></Field>
               <Field label="Childcare location"><select required className={inputClass} value={editingRoute.location} onChange={(event) => setEditingRoute({ ...editingRoute, location: event.target.value })}>{availableLocations.filter((item) => item !== "All Locations").map((item) => <option key={item}>{item}</option>)}</select></Field>
-              <Field label="Existing child profile"><select required className={inputClass} value={editingRoute.childId||""} onChange={event=>{const selected=routeChildren.find(child=>transportChildKey(child)===event.target.value);setEditingRoute({...editingRoute,childId:event.target.value,child:selected?`${selected.firstName} ${selected.lastName}`:"",location:selected?transportCareLocation(selected.location):editingRoute.location,dropoffLocation:selected?transportCareLocation(selected.location):editingRoute.dropoffLocation,school:selected?childSchool(selected)||editingRoute.school:editingRoute.school});}}><option value="">Choose an existing child</option>{routeChildren.filter(child=>child.enrollmentStatus==="Active").map(child=><option key={child.id} value={transportChildKey(child)}>{child.firstName} {child.lastName} • {child.location} • {child.dateOfBirth||"Birth date not recorded"}</option>)}</select></Field><Field label={editingRoute.childId?"Child name":"Unlinked child name"}><input required readOnly className={inputClass} value={editingRoute.child} onChange={event=>setEditingRoute({...editingRoute,child:event.target.value})}/></Field>
+              <Field label="Existing child profile"><select required className={inputClass} value={editingRoute.childId||""} onChange={event=>{const selected=routeChildren.find(child=>transportChildKey(child)===event.target.value);setEditingRoute({...editingRoute,childId:event.target.value,child:selected?`${selected.firstName} ${selected.lastName}`:"",location:selected?transportCareLocation(selected.location):editingRoute.location,dropoffLocation:selected?transportCareLocation(selected.location):editingRoute.dropoffLocation,school:selected?childSchool(selected)||editingRoute.school:editingRoute.school});}}><option value="">Choose an existing child</option>{routeChildren.filter(child=>child.enrollmentStatus==="Active"&&!child.noTransportationNeeded).map(child=><option key={child.id} value={transportChildKey(child)}>{child.firstName} {child.lastName} • {child.location} • {child.dateOfBirth||"Birth date not recorded"}</option>)}</select></Field><Field label={editingRoute.childId?"Child name":"Unlinked child name"}><input required readOnly className={inputClass} value={editingRoute.child} onChange={event=>setEditingRoute({...editingRoute,child:event.target.value})}/></Field>
               <Field label="School or destination"><TransportSchoolSelect schools={schoolOptions} value={editingRoute.school} onChange={school=>setEditingRoute({...editingRoute,school})}/></Field>
               <Field label="Area"><select className={inputClass} value={editingRoute.area} onChange={(event) => setEditingRoute({ ...editingRoute, area: event.target.value })}><option>Lancaster</option><option>Quartz Hill</option><option>Rosamond</option><option>Tehachapi</option><option>Other</option></select></Field>
               <Field label="Days"><ChoiceSelect label="Days" allowCustom options={weekdayChoices} value={editingRoute.days} onChange={days => setEditingRoute({ ...editingRoute, days })} /></Field>
@@ -616,7 +615,7 @@ export default function TransportationPage() {
           </Modal>
         )}
 
-        {editingSchoolStop&&<SchoolStopEditor routeNames={routes.map(route=>route.routeName||"")} initialPeriod={tripPeriod} initialChild={tripChild} routes={editingSchoolStop} roster={routeChildren} schools={schoolOptions} vehicles={vehicles} locations={availableLocations} onClose={()=>setEditingSchoolStop(null)} onSave={async(rows,saveSchools)=>{await saveSchoolTrip(rows,saveSchools);setEditingSchoolStop(null);setTripChild(undefined);}}/>}
+        {editingSchoolStop&&<SchoolStopEditor initialPeriod={tripPeriod} initialChild={tripChild} routes={editingSchoolStop} roster={routeChildren} schools={schoolOptions} vehicles={vehicles} locations={availableLocations} onClose={()=>setEditingSchoolStop(null)} onSave={async(rows,saveSchools)=>{await saveSchoolTrip(rows,saveSchools);setEditingSchoolStop(null);setTripChild(undefined);}}/>}
         {canManageSystem && editingSchool && (
           <Modal
             title={schools.some((item) => item.id === editingSchool.id) ? "Edit School" : "Add School"}

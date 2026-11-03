@@ -5,7 +5,7 @@ const keyText=(value:string|undefined)=>(value||'').trim().toLowerCase().replace
 export function groupSchoolPickupStops<T extends SchoolStopRoute>(routes:T[],recurring=false):SchoolPickupStop<T>[]{
  const groups=new Map<string,SchoolPickupStop<T>>();
  for(const route of routes){
-  const key=JSON.stringify([route.tripPeriod||'Afternoon',route.tripPeriod==='Morning'?keyText(route.pickupLocation||route.location):'',keyText(route.routeName)||keyText(route.driver),keyText(route.driver),keyText(route.vehicle),keyText(route.school),keyText(route.pickup),keyText(route.pickupArea),recurring?keyText(route.days):'']);
+  const key=JSON.stringify([route.tripPeriod||'Afternoon',route.tripPeriod==='Morning'?keyText(route.pickupLocation||route.location):'',keyText(route.driver),keyText(route.vehicle),keyText(route.school),keyText(route.pickup),keyText(route.pickupArea),recurring?keyText(route.days):'']);
   const group=groups.get(key);if(group)group.routes.push(route);else groups.set(key,{key,school:route.school,pickup:route.pickup,driver:route.driver,vehicle:route.vehicle,routes:[route]});
  }
  return [...groups.values()].sort((a,b)=>Math.min(...a.routes.map(route=>route.stopOrder||999))-Math.min(...b.routes.map(route=>route.stopOrder||999))||a.pickup.localeCompare(b.pickup)||a.school.localeCompare(b.school));

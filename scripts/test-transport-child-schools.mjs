@@ -8,7 +8,7 @@ const ids=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const org=ids(1),otherOrg=ids(2),owner=ids(3),staff=ids(4),loc=ids(5),otherLoc=ids(6),first=ids(7),second=ids(8),outside=ids(9);
 const db=new PGlite();
 before(async()=>{
- await db.exec(`create role anon;create role authenticated;create schema auth;
+ await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;
  create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
  grant usage on schema auth to authenticated;
  create function current_staff_organization_id() returns uuid language sql as $$select '${org}'::uuid$$;
@@ -19,7 +19,10 @@ before(async()=>{
  create table transportation_day_stops(snapshot jsonb,organization_id uuid,route_id uuid,service_date date,is_planned boolean,called_out boolean default false);
  grant select,insert,update on transportation_day_stops to authenticated;
  create table hub_state(organization_id uuid,state_key text,state_value jsonb);
- create function resolve_tcs_location_id(text,uuid) returns uuid language sql as $$select case when $1='Synthetic Care A' then '${loc}'::uuid when $1='Synthetic Care B' then '${otherLoc}'::uuid end$$;
+ create table locations(id uuid primary key,organization_id uuid,slug text,is_active boolean);
+ grant select on locations to authenticated,service_role;
+ alter table locations enable row level security;
+ create policy location_read on locations for select to authenticated using(organization_id=current_staff_organization_id() and (is_tcs_owner() or (auth.uid()='${staff}'::uuid and id='${loc}'::uuid)));
  grant select,insert,update on children,transportation_routes to authenticated;
  grant select on hub_state to authenticated;
  alter table children enable row level security;alter table transportation_routes enable row level security;
@@ -27,6 +30,17 @@ before(async()=>{
  create policy child_update on children for update to authenticated using(organization_id=current_staff_organization_id() and is_tcs_owner()) with check(organization_id=current_staff_organization_id() and is_tcs_owner());
  create policy route_read on transportation_routes for select to authenticated using(organization_id=current_staff_organization_id());
  create policy route_write on transportation_routes for all to authenticated using(organization_id=current_staff_organization_id() and is_tcs_owner()) with check(organization_id=current_staff_organization_id() and is_tcs_owner());`);
+ // Use the actual production lookup and original grants, not an always-callable stub.
+ const production=await readFile('supabase/production-hardening.sql','utf8');
+ for(const name of ['tcs_location_slug','resolve_tcs_location_id']){
+  const start=production.indexOf('create or replace function public.'+name+'('),end=production.indexOf('\n$$;',start)+4;
+  assert.ok(start>=0&&end>start);await db.exec(production.slice(start,end));
+ }
+ await db.exec('revoke execute on function resolve_tcs_location_id(text,uuid) from public,anon,authenticated;grant execute on function resolve_tcs_location_id(text,uuid) to service_role;set role authenticated;');
+ await assert.rejects(db.query('select resolve_tcs_location_id($1,$2)',['Halcom',org]),/permission denied for function resolve_tcs_location_id/);
+ await db.exec('reset role');
+ const lookup=(await readdir('supabase/migrations')).find(name=>name.endsWith('_transport_location_lookup_access.sql'));
+ await db.exec(await readFile('supabase/migrations/'+lookup,'utf8'));
  const migration=(await readdir('supabase/migrations')).find(name=>name.endsWith('_transportation_child_school_links.sql'));
  await db.exec(await readFile('supabase/migrations/'+migration,'utf8'));
  const connected=(await readdir('supabase/migrations')).find(name=>name.endsWith('_connected_child_transport.sql'));
@@ -37,7 +51,8 @@ before(async()=>{
  await db.exec(await readFile('supabase/migrations/'+exclusion,'utf8'));
 });
 beforeEach(async()=>{
- await db.exec('reset role;truncate transportation_routes,children,hub_state,transportation_day_stops;');
+ await db.exec('reset role;truncate transportation_routes,children,hub_state,transportation_day_stops,locations;');
+ await db.query("insert into locations values($1,$2,'halcom',true),($3,$2,'42nd-street',true),($4,$5,'halcom',true),($6,$2,'21st-street',false)",[loc,org,otherLoc,ids(11),otherOrg,ids(12)]);
  const data={medicalNotes:'Synthetic protected medical field',brightwheel:{id:'source-identity'},schoolAgeSupport:{accommodations:'Synthetic learning support'}};
  await db.query('insert into children values($1,$2,$3,$4,$5,$6,$7,$8,$9),($10,$2,$11,$12,$5,$6,$7,$8,$9),($13,$14,$3,$15,$5,$6,$7,$8,$9)',[first,org,loc,'brightwheel:synthetic-a','Synthetic','Same Name','Active','',data,second,otherLoc,'brightwheel:synthetic-b',outside,otherOrg,'outside-child']);
  await db.query('insert into hub_state values($1,$2,$3)',[org,'tcs-schools-v2',[{school:'Synthetic School',status:'Active'},{school:'Synthetic New School',status:'Active'}]]);
@@ -45,12 +60,12 @@ beforeEach(async()=>{
  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);await db.exec('set role authenticated');
 });
 after(()=>db.close());
-const row=(id,key='brightwheel:synthetic-a',location='Synthetic Care A')=>({id,childId:key,child:'Untrusted typed name',location,school:'Synthetic School',driver:'Synthetic Driver',vehicle:'Synthetic Van',pickup:'2:00 PM',days:'Mon-Fri',status:'Confirmed',tripPeriod:'Afternoon',dropoffLocation:location,expectedChildSchool:''});
+const row=(id,key='brightwheel:synthetic-a',location='Halcom')=>({id,childId:key,child:'Untrusted typed name',location,school:'Synthetic School',driver:'Synthetic Driver',vehicle:'Synthetic Van',pickup:'2:00 PM',days:'Mon-Fri',status:'Confirmed',tripPeriod:'Afternoon',dropoffLocation:location,expectedChildSchool:''});
 const save=(rows,schools=true)=>db.query('select save_transport_school_routes($1,$2)',[rows,schools]);
 test('imported stable IDs link same-name children separately and preserve unrelated profile fields',async()=>{
- await save([row(1),row(2,'brightwheel:synthetic-b','Synthetic Care B')]);
+ await save([row(1),row(2,'brightwheel:synthetic-b','42nd Street')]);
  const routes=(await db.query('select child_id,child_name,record_data from transportation_routes order by legacy_id')).rows;
- assert.deepEqual(routes.map(r=>r.child_id),[first,second]);assert.deepEqual(routes.map(r=>r.record_data.dropoffLocation),['Synthetic Care A','Synthetic Care B']);
+ assert.deepEqual(routes.map(r=>r.child_id),[first,second]);assert.deepEqual(routes.map(r=>r.record_data.dropoffLocation),['Halcom','42nd Street']);
  assert.ok(routes.every(r=>r.child_name==='Synthetic Same Name'));
  const children=(await db.query('select record_data,school_name from children order by legacy_id')).rows;
  assert.equal(children.length,2);assert.ok(children.every(c=>c.school_name==='Synthetic School'));
@@ -58,7 +73,7 @@ test('imported stable IDs link same-name children separately and preserve unrela
  assert.equal(children[0].record_data.brightwheel.id,'source-identity');
 });
 test('saving selected riders never deletes other trips or creates child profiles and rollback is atomic',async()=>{
- await save([row(1)],false);await save([row(2,'brightwheel:synthetic-b','Synthetic Care B')],false);
+ await save([row(1)],false);await save([row(2,'brightwheel:synthetic-b','42nd Street')],false);
  await db.query("update transportation_routes set record_data=record_data||$1 where legacy_id='1'",[{runHistory:[{date:'2020-01-01',status:'Picked Up'}]}]);
  await save([{...row(1),vehicle:'Updated van'}],false);
  assert.equal((await db.query('select count(*) n from transportation_routes')).rows[0].n,2);
@@ -106,14 +121,14 @@ test('child API reconstructs an imported child absent from raw JSON and returns 
 
 
 test('profile school and care moves update both sessions, retain custom destinations and preserve funding/history',async()=>{
- await save([{...row(1),tripPeriod:'Morning',pickupLocation:'Synthetic Care A',dropoffLocation:'Synthetic School'}]);
+ await save([{...row(1),tripPeriod:'Morning',pickupLocation:'Halcom',dropoffLocation:'Synthetic School'}]);
  await save([{...row(2),expectedChildSchool:'Synthetic School'}]);
  await save([{...row(3),school:'Dojo',dropoffLocation:'Synthetic Custom Destination'}],false);
- await db.query('update children set record_data=record_data||$1 where id=$2',[{location:'Synthetic Care A',fundingLocation:'Synthetic Funding Office',familyMessages:[{body:'Existing private message'}]},first]);
- await db.query('update children set location_id=$1,school_name=$2,record_data=record_data||$3 where id=$4',[otherLoc,'Synthetic New School',{location:'Synthetic Care B'},first]);
+ await db.query('update children set record_data=record_data||$1 where id=$2',[{location:'Halcom',fundingLocation:'Synthetic Funding Office',familyMessages:[{body:'Existing private message'}]},first]);
+ await db.query('update children set location_id=$1,school_name=$2,record_data=record_data||$3 where id=$4',[otherLoc,'Synthetic New School',{location:'42nd Street'},first]);
  const rows=(await db.query('select record_data from transportation_routes order by legacy_id')).rows.map(r=>r.record_data);
- assert.equal(rows[0].pickupLocation,'Synthetic Care B');assert.equal(rows[0].dropoffLocation,'Synthetic New School');
- assert.equal(rows[1].dropoffLocation,'Synthetic Care B');assert.equal(rows[1].school,'Synthetic New School');
+ assert.equal(rows[0].pickupLocation,'42nd Street');assert.equal(rows[0].dropoffLocation,'Synthetic New School');
+ assert.equal(rows[1].dropoffLocation,'42nd Street');assert.equal(rows[1].school,'Synthetic New School');
  assert.equal(rows[2].school,'Dojo');assert.equal(rows[2].dropoffLocation,'Synthetic Custom Destination');
  const child=(await db.query('select record_data from children where id=$1',[first])).rows[0].record_data;
  assert.equal(child.fundingLocation,'Synthetic Funding Office');assert.equal(child.familyMessages[0].body,'Existing private message');
@@ -124,7 +139,7 @@ test('profile school and care moves update both sessions, retain custom destinat
 test('archiving stops regular trips and an in-transit move rolls back the whole profile change',async()=>{
  await save([row(1)]);
  await db.query("update transportation_routes set record_data=record_data||jsonb_build_object('runDate',(now() at time zone 'America/Los_Angeles')::date::text,'runStatus','Picked Up')");
- await assert.rejects(db.query('update children set location_id=$1,record_data=record_data||$2 where id=$3',[otherLoc,{location:'Synthetic Care B'},first]),/in transit/);
+ await assert.rejects(db.query('update children set location_id=$1,record_data=record_data||$2 where id=$3',[otherLoc,{location:'42nd Street'},first]),/in transit/);
  assert.equal((await db.query('select location_id from children where id=$1',[first])).rows[0].location_id,loc);
  await db.query("update transportation_routes set record_data=record_data||$1",[{runStatus:"Dropped Off"}]);
  await db.query("update children set enrollment_status='Archived' where id=$1",[first]);
@@ -135,7 +150,7 @@ test('archiving stops regular trips and an in-transit move rolls back the whole 
 test('pickup patches never delete another newly added route; stale writes roll back atomically',async()=>{
  await save([row(1)],false);
  const original=(await db.query("select record_data from transportation_routes where legacy_id='1'")).rows[0].record_data;
- await save([row(2,'brightwheel:synthetic-b','Synthetic Care B')],false);
+ await save([row(2,'brightwheel:synthetic-b','42nd Street')],false);
  const after={...original,runStatus:'Picked Up',runDate:'2030-01-01'};
  await db.query('select patch_transport_records($1)',[[{id:'1',before:original,after}]]);
  assert.equal((await db.query('select count(*) n from transportation_routes')).rows[0].n,2);
@@ -149,9 +164,9 @@ test('pickup patches never delete another newly added route; stale writes roll b
 
 const exclude=(value,expected=!value,key='brightwheel:synthetic-a')=>db.query('select set_child_transportation_exclusion($1,$2,$3)',[key,value,expected]);
 test('no-transport checkbox stops both sessions, keeps profile and history, and restoring never silently resumes old trips',async()=>{
- await save([{...row(1),tripPeriod:'Morning',pickupLocation:'Synthetic Care A',dropoffLocation:'Synthetic School'}]);
+ await save([{...row(1),tripPeriod:'Morning',pickupLocation:'Halcom',dropoffLocation:'Synthetic School'}]);
  await save([{...row(2),expectedChildSchool:'Synthetic School'}]);
- await save([row(3,'brightwheel:synthetic-b','Synthetic Care B')]);
+ await save([row(3,'brightwheel:synthetic-b','42nd Street')]);
  await db.query("update transportation_routes set record_data=record_data||$1 where child_id=$2",[{runDate:'2020-01-01',runStatus:'Dropped Off',runHistory:[{date:'2020-01-01',status:'Dropped Off'}]},first]);
  await exclude(true);
  const trips=(await db.query('select record_data,route_status from transportation_routes where child_id=$1',[first])).rows;
@@ -192,4 +207,23 @@ test('a stale daily planner cannot assign an excluded child, and saved historica
  assert.equal((await db.query('select count(*) n from transportation_day_stops')).rows[0].n,1);
  await exclude(false);await db.query("insert into transportation_day_stops(snapshot,organization_id,route_id,service_date,is_planned) values($1,$2,$3,(now() at time zone 'America/Los_Angeles')::date,true)",[trip.record_data,org,trip.id]);
  assert.equal((await db.query('select count(*) n from transportation_day_stops')).rows[0].n,2);
+});
+
+test('location lookup uses live grants and row security: allowed sites work, other organizations and closed sites remain hidden',async()=>{
+ assert.equal((await db.query('select resolve_tcs_location_id($1,$2) id',['Moore Family Childcare • Halcom',org])).rows[0].id,loc);
+ assert.equal((await db.query('select resolve_tcs_location_id($1,$2) id',['Halcom',otherOrg])).rows[0].id,null);
+ assert.equal((await db.query('select resolve_tcs_location_id($1,$2) id',['21st Street',org])).rows[0].id,null);
+ assert.equal((await db.query("select prosecdef from pg_proc where proname='resolve_tcs_location_id'")).rows[0].prosecdef,false);
+ assert.equal((await db.query("select has_function_privilege('anon','resolve_tcs_location_id(text,uuid)','execute') allowed")).rows[0].allowed,false);
+ await db.query("select set_config('request.jwt.claim.sub',$1,false)",[staff]);
+ assert.equal((await db.query('select resolve_tcs_location_id($1,$2) id',['Halcom',org])).rows[0].id,loc);
+ assert.equal((await db.query('select resolve_tcs_location_id($1,$2) id',['42nd Street',org])).rows[0].id,null);
+ await db.exec('reset role;set role service_role');
+ assert.equal((await db.query('select resolve_tcs_location_id($1,$2) id',['Halcom',otherOrg])).rows[0].id,ids(11));
+});
+
+test('editing a school stop without a group field preserves old per-child route metadata',async()=>{
+ await save([{...row(1),routeName:'Legacy A'}, {...row(2,'brightwheel:synthetic-b','42nd Street'),routeName:'Legacy B'}]);
+ await save([{...row(1),expectedChildSchool:'Synthetic School',pickup:'3:00 PM'}, {...row(2,'brightwheel:synthetic-b','42nd Street'),expectedChildSchool:'Synthetic School',pickup:'3:00 PM'}]);
+ assert.deepEqual((await db.query('select record_data from transportation_routes order by legacy_id')).rows.map(r=>r.record_data.routeName),['Legacy A','Legacy B']);
 });
