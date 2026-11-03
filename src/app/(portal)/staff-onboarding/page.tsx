@@ -1,4 +1,7 @@
 "use client";
+import ChoiceSelect from "@/components/forms/ChoiceSelect";
+import StaffNameSelect from "@/components/forms/StaffNameSelect";
+import {positionChoices} from "@/lib/form-options";
 
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -386,15 +389,7 @@ export default function StaffOnboardingPage() {
                 />
               </Field>
               <Field label="Role / job title">
-                <input
-                  required
-                  maxLength={160}
-                  className={field}
-                  value={form.jobTitle}
-                  onChange={(event) =>
-                    setForm({ ...form, jobTitle: event.target.value })
-                  }
-                />
+                <ChoiceSelect label="Role / job title" required allowCustom options={positionChoices} className={field} value={form.jobTitle} onChange={jobTitle=>setForm({...form,jobTitle})}/>
               </Field>
               <Field label="Employment start date">
                 <input
@@ -429,15 +424,7 @@ export default function StaffOnboardingPage() {
                 </select>
               </Field>
               <Field label="Supervisor / default task owner">
-                <input
-                  maxLength={160}
-                  className={field}
-                  placeholder="Defaults to you"
-                  value={form.supervisor}
-                  onChange={(event) =>
-                    setForm({ ...form, supervisor: event.target.value })
-                  }
-                />
+                <StaffNameSelect label="Supervisor / default task owner" className={field} value={form.supervisor} onChange={supervisor=>setForm({...form,supervisor})}/>
               </Field>
               <Field label="Approved Hub account (optional)">
                 <select
@@ -854,14 +841,7 @@ function ItemEditor({
           </select>
         </Field>
         <Field label="Task owner">
-          <input
-            className={field}
-            maxLength={160}
-            readOnly={!canManage}
-            disabled={locked}
-            value={owner}
-            onChange={(event) => setOwner(event.target.value)}
-          />
+          <StaffNameSelect label="Task owner" className={field} disabled={!canManage||locked} value={owner} onChange={setOwner}/>
         </Field>
         <Field label="Due date">
           <input
@@ -986,15 +966,7 @@ function DetailsEditor({
           />
         </Field>
         <Field label="Role / job title">
-          <input
-            required
-            maxLength={160}
-            className={field}
-            value={values.jobTitle}
-            onChange={(event) =>
-              setValues({ ...values, jobTitle: event.target.value })
-            }
-          />
+          <ChoiceSelect label="Role / job title" required allowCustom options={positionChoices} className={field} value={values.jobTitle} onChange={jobTitle=>setValues({...values,jobTitle})}/>
         </Field>
         <Field label="Employment start date">
           <input
@@ -1024,15 +996,7 @@ function DetailsEditor({
           </select>
         </Field>
         <Field label="Supervisor">
-          <input
-            required
-            maxLength={160}
-            className={field}
-            value={values.supervisor}
-            onChange={(event) =>
-              setValues({ ...values, supervisor: event.target.value })
-            }
-          />
+          <StaffNameSelect label="Supervisor" required className={field} value={values.supervisor} onChange={supervisor=>setValues({...values,supervisor})}/>
         </Field>
       </div>
       <label className="flex min-h-11 items-center gap-3 font-semibold">

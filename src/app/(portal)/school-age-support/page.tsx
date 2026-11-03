@@ -1,4 +1,7 @@
 "use client";
+import ChoiceSelect from "@/components/forms/ChoiceSelect";
+import SchoolNameSelect from "@/components/forms/SchoolNameSelect";
+import {gradeChoices} from "@/lib/form-options";
 
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -199,8 +202,8 @@ export default function SchoolAgeSupportPage() {
         <header className="flex items-start justify-between gap-4 bg-gradient-to-r from-[#102f52] to-[#2e6c47] px-5 py-4 text-white"><div><p className="text-base font-black uppercase tracking-[.16em] text-blue-100">Restricted School Age support record</p><h2 className="mt-1 text-2xl font-black">{childName(editing)}</h2></div><button onClick={() => setEditing(null)} className="rounded-xl bg-white/10 p-2"><X className="h-5 w-5" /></button></header>
         <div className="space-y-5 p-5">
           <section className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-3">
-            <Field label="School"><input value={record.schoolName} onChange={(event) => setRecord({ ...record, schoolName: event.target.value })} className={inputClass} /></Field>
-            <Field label="Grade"><input value={record.grade} onChange={(event) => setRecord({ ...record, grade: event.target.value })} className={inputClass} /></Field>
+            <Field label="School"><SchoolNameSelect value={record.schoolName} onChange={schoolName=>setRecord({...record,schoolName})} className={inputClass}/></Field>
+            <Field label="Grade"><ChoiceSelect label="Grade" options={gradeChoices} allowCustom value={record.grade} onChange={grade=>setRecord({...record,grade})} className={inputClass}/></Field>
             <Field label="School Contact"><input value={record.schoolContactName} onChange={(event) => setRecord({ ...record, schoolContactName: event.target.value })} className={inputClass} /></Field>
             <Field label="Contact Email"><input type="email" value={record.schoolContactEmail} onChange={(event) => setRecord({ ...record, schoolContactEmail: event.target.value })} className={inputClass} /></Field>
             <Field label="Contact Phone"><input value={record.schoolContactPhone} onChange={(event) => setRecord({ ...record, schoolContactPhone: event.target.value })} className={inputClass} /></Field>

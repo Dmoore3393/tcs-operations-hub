@@ -1,17 +1,18 @@
 "use client";
+import ChoiceSelect from "@/components/forms/ChoiceSelect";
 import type {ChildRecord} from "@/lib/children";
 import {childSchool,transportChildKey,transportCareLocation} from "@/lib/transport-child-schools";
 import {transportTripPeriod,transportPickup,transportDestination} from "@/lib/transport-trips";
 import TransportDriverSelect from "./TransportDriverSelect";
 import TransportSchoolSelect from "./TransportSchoolSelect";
-import type {SchoolRecord} from "@/lib/hub-data";
+import type {SchoolRecord,VehicleRecord} from "@/lib/hub-data";
 import SchoolStopGroups from "@/components/transportation/SchoolStopGroups";
 import {useState} from "react";
 import {useTransportDay} from "@/hooks/useTransportDay";
 import {localIsoDate} from "@/lib/date-utils";
 import {scheduledOnDate,type DayRoute} from "@/lib/transportation-day";
 import {Modal,inputClass} from "@/components/hub/HubUI";
-export default function DailyTransportPlanner({routes,location,schools=[],roster=[]}:{routes:DayRoute[];location:string;schools?:SchoolRecord[];roster?:ChildRecord[]}){
+export default function DailyTransportPlanner({routes,location,schools=[],roster=[],vehicles=[],locations=[]}:{routes:DayRoute[];location:string;schools?:SchoolRecord[];roster?:ChildRecord[];vehicles?:VehicleRecord[];locations?:string[]}){
  const [trip,setTrip]=useState('All trips');
  const [date,setDate]=useState(localIsoDate),[editing,setEditing]=useState<{route:DayRoute;version:number}|null>(null),[notice,setNotice]=useState('');
  const day=useTransportDay(routes,date);const past=date<localIsoDate();
@@ -34,7 +35,7 @@ export default function DailyTransportPlanner({routes,location,schools=[],roster
   {editing&&<Modal title="Assign transportation for this day" description={`Only ${date} will change. The recurring route stays the same.`} onClose={()=>{if(!day.saving)setEditing(null);}}><form className="space-y-3 text-base" onSubmit={async event=>{event.preventDefault();const {driver,driverLaneId='',school,tripPeriod='Afternoon',pickupLocation='',vehicle,routeName='',stopOrder=1,pickup,dropoff,dropoffLocation='',notes}=editing.route;if(await day.change(editing.route,'save',{driver,driverLaneId,school,tripPeriod,pickupLocation,vehicle,routeName,stopOrder,pickup,dropoff,dropoffLocation,notes},editing.version)){setEditing(null);setNotice('Saved for this date. The assigned driver will receive a route alert.');}}}>
    <label className="block font-bold">Driver<TransportDriverSelect driver={editing.route.driver} driverLaneId={editing.route.driverLaneId} onChange={(driver,driverLaneId)=>setEditing({...editing,route:{...editing.route,driver,driverLaneId}})}/></label>
    <label className="block font-bold">School / pickup location<TransportSchoolSelect schools={schools} value={editing.route.school} onChange={school=>setEditing({...editing,route:{...editing.route,school}})}/></label>
-   {(['pickupLocation','vehicle','routeName','pickup','dropoff','dropoffLocation','notes'] as const).map((key,index)=><label key={key} className="block font-bold">{['Pickup location (morning)','Vehicle','Route / group name','Pick-up time','Drop-off time','Destination','Notes'][index]}<input className={`${inputClass} mt-1 w-full`} value={editing.route[key]||''} onChange={event=>setEditing({...editing,route:{...editing.route,[key]:event.target.value}})}/></label>)}
+   {(['pickupLocation','vehicle','routeName','pickup','dropoff','dropoffLocation','notes'] as const).map((key,index)=>{const label=['Pickup location (morning)','Vehicle','Route / group name','Pick-up time','Drop-off time','Destination','Notes'][index];return <label key={key} className="block font-bold">{label}{['pickup','dropoff','notes'].includes(key)?<input className={`${inputClass} mt-1 w-full`} value={editing.route[key]||''} onChange={event=>setEditing({...editing,route:{...editing.route,[key]:event.target.value}})}/>:<ChoiceSelect label={label} value={editing.route[key]||''} onChange={value=>setEditing({...editing,route:{...editing.route,[key]:value}})} allowCustom={key!=='vehicle'} options={key==='vehicle'?vehicles.filter(vehicle=>vehicle.status!=='Out of Service').map(vehicle=>vehicle.name):key==='routeName'?routes.map(route=>route.routeName||''):[...locations.filter(item=>item!=='All Locations'&&transportCareLocation(item)!=='21st Street'),...(key==='dropoffLocation'?schools.filter(school=>school.status==='Active').map(school=>school.school):[])]}/>}</label>;})}
    <label className="block font-bold">Stop order<input type="number" min="1" max="999" required className={`${inputClass} mt-1 w-full`} value={editing.route.stopOrder||1} onChange={event=>setEditing({...editing,route:{...editing.route,stopOrder:Number(event.target.value)}})}/></label>
    {day.actionError&&<p role="alert" className="text-red-900">{day.actionError}</p>}<button type="submit" disabled={day.saving} className="rounded-xl bg-emerald-800 px-5 py-3 font-bold text-white">{day.saving?'Saving…':'Save this day'}</button>
   </form></Modal>}

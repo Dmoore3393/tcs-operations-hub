@@ -1,4 +1,6 @@
 "use client";
+import ChoiceSelect from "@/components/forms/ChoiceSelect";
+
 
 import Link from "next/link";
 import MainLayout from "@/components/layout/MainLayout";
@@ -145,7 +147,7 @@ export default function LocationsPage() {
       <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
         <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold">Location name</span><input required className={inputClass} value={editing.name} onChange={(event) => setEditing({ ...editing, name: event.target.value })} /></label>
         <label><span className="mb-1.5 block text-sm font-bold">Short name / color identity</span><select className={inputClass} value={editing.shortName} onChange={(event) => setEditing({ ...editing, shortName: event.target.value as LocationRecord["shortName"] })}>{(Object.keys(locationThemes) as LocationKey[]).filter((item) => item !== "All Locations").map((item) => <option key={item}>{item}</option>)}</select></label>
-        <label><span className="mb-1.5 block text-sm font-bold">Program type</span><input className={inputClass} value={editing.type} onChange={(event) => setEditing({ ...editing, type: event.target.value })} /></label>
+        <label><span className="mb-1.5 block text-sm font-bold">Program type</span><ChoiceSelect label="Program type" allowCustom options={["Family Child Care Home", "Child Care Center", "School Age Center"]} value={editing.type} onChange={type=>setEditing({...editing,type})}/></label>
         <label><span className="mb-1.5 block text-sm font-bold">Capacity</span><input type="number" min="0" className={inputClass} value={editing.capacity} onChange={(event) => setEditing({ ...editing, capacity: Number(event.target.value) })} /></label>
         <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold">Address</span><input className={inputClass} value={editing.address} onChange={(event) => setEditing({ ...editing, address: event.target.value })} /></label>
         <label><span className="mb-1.5 block text-sm font-bold">Facility number</span><input className={inputClass} value={editing.facilityNumber} onChange={(event) => setEditing({ ...editing, facilityNumber: event.target.value })} /></label>
