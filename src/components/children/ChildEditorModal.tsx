@@ -1,6 +1,6 @@
 "use client";
 import ChoiceSelect from "@/components/forms/ChoiceSelect";
-import {relationshipChoices} from "@/lib/form-options";
+import {gradeChoices, relationshipChoices} from "@/lib/form-options";
 
 import { locationDisplayName } from "@/lib/location-config";
 
@@ -162,6 +162,10 @@ export default function ChildEditorModal({
                 </SectionCard>
 
                 <SectionCard icon={<MapPin className="h-5 w-5" />} title="School & Transportation" subtitle="The school saved here connects to this child’s regular morning and afternoon trips.">
+                  <p className="mb-3 text-base text-slate-700">Infants and toddlers do not need a school entered. Children in TK can have school transportation even when their care age group is Preschool.</p>
+                  <label className="mb-2 flex min-h-11 items-center gap-3 text-base font-bold text-emerald-950"><input type="checkbox" className="h-5 w-5 accent-emerald-700" checked={form.noTransportationNeeded === true} onChange={event => setForm({ ...form, noTransportationNeeded: event.target.checked })} />No school / no pickup needed</label>
+                  <p className="mb-3 text-base text-slate-700">Check only if this child needs no TCS transportation. Saving removes them from transportation planning and stops regular trips. Their child profile, care enrollment and school details stay saved. Uncheck to plan transportation again.</p>
+                  <Field label="School grade (optional)"><ChoiceSelect label="School grade (optional)" value={form.schoolGrade || ""} onChange={schoolGrade => setForm({ ...form, schoolGrade })} options={gradeChoices} allowCustom placeholder="Not entered (optional)" className={inputClass} /></Field>
                   <Field label="Child’s school (optional)"><select className={inputClass} value={form.schoolName || ""} onChange={event => setForm({ ...form, schoolName: event.target.value })}><option value="">School not recorded / not attending school</option>{form.schoolName && !schools.some(school => school.school === form.schoolName) && <option>{form.schoolName}</option>}{schools.filter(school => school.status === "Active" || school.school === form.schoolName).map(school => <option key={school.school}>{school.school}</option>)}</select></Field>
                   <p className="mt-3 text-base text-slate-700">Regular trips follow school changes. Care-location changes update trips using that care location; individual destinations and date-specific plans stay separate. Funding authorization stays in the Parent / Family section.</p>
                 </SectionCard>

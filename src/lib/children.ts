@@ -81,6 +81,7 @@ export type ChildRecord = {
   subsidy: string;
   weeklySchedule: string;
   transportation: string;
+  noTransportationNeeded?: boolean;
   allergies: string;
   medicalNotes: string;
   licensingStatus: LicensingStatus;
@@ -131,6 +132,8 @@ export type ChildRecord = {
 
 export type ChildFormState = {
   schoolName?: string;
+  schoolGrade?: string;
+  noTransportationNeeded?: boolean;
   firstName: string;
   lastName: string;
   age: string;

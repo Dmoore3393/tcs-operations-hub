@@ -29,15 +29,23 @@ function editHarness(existing) {
 const importedEdit={id:145317,legacyId:'brightwheel:synthetic-import',firstName:'Synthetic',lastName:'Imported',primaryGuardian:'Synthetic Parent',location:'Halcom',ageGroup:'School Age',updatedAt:'2026-11-03T10:00:00Z'};
 const post=child=>api.POST(new Request('https://synthetic.invalid/api/children',{method:'POST',body:JSON.stringify({action:'update',child})}));
 test('editing an imported numeric display ID updates the original text identity and preserves unedited support/history',async()=>{
- const held={schoolAgeSupport:{schoolName:'Synthetic School',accommodations:'Existing support'},familyMessages:[{id:'1',body:'Existing message'}],checkedInAt:'2026-11-03T08:00:00Z',checkedInBy:'Synthetic Staff',transportRestraint:'Booster Seat'};
+ const held={noTransportationNeeded:true,schoolAgeSupport:{schoolName:'Synthetic School',accommodations:'Existing support'},familyMessages:[{id:'1',body:'Existing message'}],checkedInAt:'2026-11-03T08:00:00Z',checkedInBy:'Synthetic Staff',transportRestraint:'Booster Seat'};
  const calls=editHarness({id:'synthetic-child',legacy_id:importedEdit.legacyId,record_data:held,school_name:'Synthetic School',updated_at:importedEdit.updatedAt});
  const result=await post(importedEdit);assert.equal(result.status,200,await result.text());
  assert.equal(calls.insert,0);assert.ok(calls.filters.some(([key,value])=>key==='legacy_id'&&value===importedEdit.legacyId));
  assert.ok(calls.filters.some(([key,value])=>key==='updated_at'&&value===importedEdit.updatedAt));
- assert.equal(calls.written.legacy_id,importedEdit.legacyId);assert.equal(calls.written.school_name,'Synthetic School');
+ assert.equal(calls.written.record_data.noTransportationNeeded,true);assert.equal(calls.written.legacy_id,importedEdit.legacyId);assert.equal(calls.written.school_name,'Synthetic School');
  assert.equal(calls.written.record_data.schoolAgeSupport.accommodations,'Existing support');assert.equal(calls.written.record_data.familyMessages[0].body,'Existing message');assert.equal(calls.written.record_data.checkedInAt,held.checkedInAt);
 });
 test('missing imported identity and stale child edits never create a duplicate or overwrite a newer profile',async()=>{
  let calls=editHarness(null);assert.equal((await post(importedEdit)).status,409);assert.equal(calls.insert,0);assert.equal(calls.written,null);
  calls=editHarness({id:'synthetic-child',record_data:{},updated_at:'2026-11-03T11:00:00Z'});assert.equal((await post(importedEdit)).status,409);assert.equal(calls.written,null);
+});
+
+test('a profile can explicitly turn transportation off and back on without clearing school details',async()=>{
+ for(const excluded of [true,false]){
+  const calls=editHarness({id:'synthetic-child',legacy_id:importedEdit.legacyId,record_data:{noTransportationNeeded:!excluded,schoolAgeSupport:{schoolName:'Synthetic School',grade:'TK'}},school_name:'Synthetic School',updated_at:importedEdit.updatedAt});
+  const result=await post({...importedEdit,noTransportationNeeded:excluded});assert.equal(result.status,200);
+  assert.equal(calls.written.record_data.noTransportationNeeded,excluded);assert.equal(calls.written.record_data.schoolAgeSupport.grade,'TK');assert.equal(calls.written.school_name,'Synthetic School');
+ }
 });
