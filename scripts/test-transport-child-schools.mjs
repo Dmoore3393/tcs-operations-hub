@@ -28,6 +28,10 @@ before(async()=>{
  create policy route_write on transportation_routes for all to authenticated using(organization_id=current_staff_organization_id() and is_tcs_owner()) with check(organization_id=current_staff_organization_id() and is_tcs_owner());`);
  const migration=(await readdir('supabase/migrations')).find(name=>name.endsWith('_transportation_child_school_links.sql'));
  await db.exec(await readFile('supabase/migrations/'+migration,'utf8'));
+ const connected=(await readdir('supabase/migrations')).find(name=>name.endsWith('_connected_child_transport.sql'));
+ await db.exec(await readFile('supabase/migrations/'+connected,'utf8'));
+ const patches=(await readdir('supabase/migrations')).find(name=>name.endsWith('_targeted_transport_updates.sql'));
+ await db.exec(await readFile('supabase/migrations/'+patches,'utf8'));
 });
 beforeEach(async()=>{
  await db.exec('reset role;truncate transportation_routes,children,hub_state,transportation_day_stops;');
@@ -86,7 +90,7 @@ test('an in-transit child cannot have their trip or school redirected',async()=>
 
 const config=url(await readFile('src/lib/location-config.ts','utf8'));
 let source=await readFile('src/app/api/children/route.ts','utf8');
-source=source.replace(/import \{ safeFamilyAccess \} from .*?;/,'const safeFamilyAccess=v=>Array.isArray(v)?v:[];').replace('"@/lib/location-config"',JSON.stringify(config)).replace(/import \{ requireStaff, staffErrorResponse \} from .*?;/,'const requireStaff=async()=>globalThis.transportChildTestAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
+source=source.replace(/import \{ flushTransportAssignmentNotices \} from .*?;/,'const flushTransportAssignmentNotices=async()=>{};').replace(/import \{ safeFamilyAccess \} from .*?;/,'const safeFamilyAccess=v=>Array.isArray(v)?v:[];').replace('"@/lib/location-config"',JSON.stringify(config)).replace(/import \{ requireStaff, staffErrorResponse \} from .*?;/,'const requireStaff=async()=>globalThis.transportChildTestAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
 const childApi=await import(url(source));
 test('child API reconstructs an imported child absent from raw JSON and returns the school with a stable key',async()=>{
  const rows=[{legacy_id:'brightwheel:synthetic-a',first_name:'Synthetic',last_name:'Imported',enrollment_status:'Active',school_name:'Synthetic School',record_data:{location:'Halcom'}}];
@@ -95,4 +99,47 @@ test('child API reconstructs an imported child absent from raw JSON and returns 
  const child=(await response.json()).children[0];assert.equal(child.legacyId,'brightwheel:synthetic-a');assert.equal(child.firstName,'Synthetic');assert.equal(child.schoolAgeSupport.schoolName,'Synthetic School');assert.ok(Number.isSafeInteger(child.id));
  const {transportChildKey,transportSchoolDirectory,transportCareLocation}=await import(url((await readFile('src/lib/transport-child-schools.ts','utf8')).replace('"./location-config"',JSON.stringify(config))));
  assert.equal(transportCareLocation('Moore Family Childcare • Halcom'),'Halcom');assert.equal(transportCareLocation('Lara Family Childcare • 42nd Street'),'42nd Street');assert.equal(transportChildKey(child),'brightwheel:synthetic-a');assert.equal(transportChildKey({}), '');assert.equal(transportSchoolDirectory([], [child])[0].school,'Synthetic School');
+});
+
+
+test('profile school and care moves update both sessions, retain custom destinations and preserve funding/history',async()=>{
+ await save([{...row(1),tripPeriod:'Morning',pickupLocation:'Synthetic Care A',dropoffLocation:'Synthetic School'}]);
+ await save([{...row(2),expectedChildSchool:'Synthetic School'}]);
+ await save([{...row(3),school:'Dojo',dropoffLocation:'Synthetic Custom Destination'}],false);
+ await db.query('update children set record_data=record_data||$1 where id=$2',[{location:'Synthetic Care A',fundingLocation:'Synthetic Funding Office',familyMessages:[{body:'Existing private message'}]},first]);
+ await db.query('update children set location_id=$1,school_name=$2,record_data=record_data||$3 where id=$4',[otherLoc,'Synthetic New School',{location:'Synthetic Care B'},first]);
+ const rows=(await db.query('select record_data from transportation_routes order by legacy_id')).rows.map(r=>r.record_data);
+ assert.equal(rows[0].pickupLocation,'Synthetic Care B');assert.equal(rows[0].dropoffLocation,'Synthetic New School');
+ assert.equal(rows[1].dropoffLocation,'Synthetic Care B');assert.equal(rows[1].school,'Synthetic New School');
+ assert.equal(rows[2].school,'Dojo');assert.equal(rows[2].dropoffLocation,'Synthetic Custom Destination');
+ const child=(await db.query('select record_data from children where id=$1',[first])).rows[0].record_data;
+ assert.equal(child.fundingLocation,'Synthetic Funding Office');assert.equal(child.familyMessages[0].body,'Existing private message');
+ assert.equal(child.schoolAgeSupport.schoolName,'Synthetic New School');assert.equal(child.schoolAgeSupport.accommodations,'Synthetic learning support');
+ await db.exec('reset role');
+ assert.equal((await db.query('select snapshot from transportation_day_stops')).rows[0].snapshot.school,'Historical School');
+});
+test('archiving stops regular trips and an in-transit move rolls back the whole profile change',async()=>{
+ await save([row(1)]);
+ await db.query("update transportation_routes set record_data=record_data||jsonb_build_object('runDate',(now() at time zone 'America/Los_Angeles')::date::text,'runStatus','Picked Up')");
+ await assert.rejects(db.query('update children set location_id=$1,record_data=record_data||$2 where id=$3',[otherLoc,{location:'Synthetic Care B'},first]),/in transit/);
+ assert.equal((await db.query('select location_id from children where id=$1',[first])).rows[0].location_id,loc);
+ await db.query("update transportation_routes set record_data=record_data||$1",[{runStatus:"Dropped Off"}]);
+ await db.query("update children set enrollment_status='Archived' where id=$1",[first]);
+ assert.equal((await db.query('select route_status from transportation_routes')).rows[0].route_status,'Not Riding');
+});
+
+
+test('pickup patches never delete another newly added route; stale writes roll back atomically',async()=>{
+ await save([row(1)],false);
+ const original=(await db.query("select record_data from transportation_routes where legacy_id='1'")).rows[0].record_data;
+ await save([row(2,'brightwheel:synthetic-b','Synthetic Care B')],false);
+ const after={...original,runStatus:'Picked Up',runDate:'2030-01-01'};
+ await db.query('select patch_transport_records($1)',[[{id:'1',before:original,after}]]);
+ assert.equal((await db.query('select count(*) n from transportation_routes')).rows[0].n,2);
+ await assert.rejects(db.query('select patch_transport_records($1)',[[{id:'1',before:original,after:{...original,runStatus:'Arrived'}}]]),/changed on another screen/);
+ assert.equal((await db.query("select record_data from transportation_routes where legacy_id='1'")).rows[0].record_data.runStatus,'Picked Up');
+ assert.equal((await db.query('select patch_transport_records($1) n',[[{id:'1',before:original,after}]])).rows[0].n,0);
+ await assert.rejects(db.query('select patch_transport_records($1)',[[{id:'1',before:after,after:{...after,childId:'outside-child'}}]]),/linked child/);
+ await assert.rejects(db.query('select patch_transport_records($1)',[[{id:'1',before:after,after:{...after,runStatus:'Arrived'}},{id:'not-found',before:{},after:{}}]]),/no longer available/);
+ assert.equal((await db.query("select record_data from transportation_routes where legacy_id='1'")).rows[0].record_data.runStatus,'Picked Up');
 });

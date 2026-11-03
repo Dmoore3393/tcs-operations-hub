@@ -1,5 +1,6 @@
 "use client";
-import {transportCareLocation} from "@/lib/transport-child-schools";
+import type {ChildRecord} from "@/lib/children";
+import {childSchool,transportChildKey,transportCareLocation} from "@/lib/transport-child-schools";
 import {transportTripPeriod,transportPickup,transportDestination} from "@/lib/transport-trips";
 import TransportDriverSelect from "./TransportDriverSelect";
 import TransportSchoolSelect from "./TransportSchoolSelect";
@@ -10,7 +11,7 @@ import {useTransportDay} from "@/hooks/useTransportDay";
 import {localIsoDate} from "@/lib/date-utils";
 import {scheduledOnDate,type DayRoute} from "@/lib/transportation-day";
 import {Modal,inputClass} from "@/components/hub/HubUI";
-export default function DailyTransportPlanner({routes,location,schools=[]}:{routes:DayRoute[];location:string;schools?:SchoolRecord[]}){
+export default function DailyTransportPlanner({routes,location,schools=[],roster=[]}:{routes:DayRoute[];location:string;schools?:SchoolRecord[];roster?:ChildRecord[]}){
  const [trip,setTrip]=useState('All trips');
  const [date,setDate]=useState(localIsoDate),[editing,setEditing]=useState<{route:DayRoute;version:number}|null>(null),[notice,setNotice]=useState('');
  const day=useTransportDay(routes,date);const past=date<localIsoDate();
@@ -23,8 +24,9 @@ export default function DailyTransportPlanner({routes,location,schools=[]}:{rout
   {(day.error||day.actionError)&&<p role="alert" className="rounded-xl bg-red-50 p-4 font-bold text-red-900">{day.error||day.actionError}</p>}
   {notice&&<p role="status" className="rounded-xl bg-emerald-50 p-3 font-bold text-emerald-950">{notice}</p>}
   {past&&<p className="text-slate-700">Past dates are view only.</p>}
-  {!day.ready?<p role="status">{day.error?'Refresh to load the daily route safely.':'Loading daily route…'}</p>:<><SchoolStopGroups routes={sorted.map(row=>row.route)}>{route=>{const {stop,scheduled}=sorted.find(row=>row.route.id===route.id)!;return <article key={route.id} className={`rounded-2xl border p-4 ${stop?.called_out?'border-red-200 bg-red-50':!scheduled?'bg-slate-50':'bg-white'}`}>
+  {!day.ready?<p role="status">{day.error?'Refresh to load the daily route safely.':'Loading daily route…'}</p>:<><SchoolStopGroups routes={sorted.map(row=>row.route)}>{route=>{const {stop,scheduled}=sorted.find(row=>row.route.id===route.id)!;const child=roster.find(child=>transportChildKey(child)===route.childId);const profileSchool=child?childSchool(child):"";return <article key={route.id} className={`rounded-2xl border p-4 ${stop?.called_out?'border-red-200 bg-red-50':!scheduled?'bg-slate-50':'bg-white'}`}>
    <h3 className="text-lg font-black"><span translate="no" className="contents">{route.child}</span></h3><p>{transportPickup(route)} → {transportDestination(route)}</p><p className="mt-2 font-bold">{stop?.called_out?'Called out':scheduled?'Scheduled':'Not on this day'} • {route.routeName||'Route not named'}</p><p>{transportTripPeriod(route)} • Driver: {route.driver||'Not assigned'} • Vehicle: {route.vehicle||'Not assigned'}</p><p>Pickup: {route.pickup||'Not set'} • Stop: {route.stopOrder||'Not set'}</p>
+   {stop?.is_planned&&profileSchool&&profileSchool!==route.school&&!["Dojo","Home Transportation"].includes(route.school)&&<p className="mt-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-950">This date uses a different school from the child’s profile ({profileSchool}). Review this day’s plan if that was not intentional.</p>}
    {stop&&<p className="mt-2 text-slate-700">Updated by {stop.updated_by_name} • {new Date(stop.updated_at).toLocaleString()}</p>}
    {!day.sourceFor(route)?.child_id&&<p className="mt-2 text-slate-700">This stop has no linked child ID. Call Out applies to this stop only; check any other stops for this child.</p>}
    <div className="mt-3 flex flex-wrap gap-2">{day.canPlan&&!past&&<button disabled={day.saving} onClick={()=>setEditing({route:{...route},version:stop?.version||0})} className="rounded-xl bg-emerald-800 px-4 py-2 font-bold text-white">{scheduled?'Edit this day':'Add to this day'}</button>}{day.canCallOut&&!past&&(scheduled||stop?.called_out)&&<button disabled={day.saving} onClick={()=>void callout(route,Boolean(stop?.called_out))} className={`rounded-xl px-4 py-2 font-bold text-white ${stop?.called_out?'bg-slate-800':'bg-red-800'}`}>{stop?.called_out?'Restore':'Call Out'}</button>}</div>

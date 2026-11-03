@@ -1,6 +1,10 @@
 "use client";
 
 import ChildEditorModal from "@/components/children/ChildEditorModal";
+import ChildTransportSummary from "@/components/transportation/ChildTransportSummary";
+import { usePersistentState } from "@/hooks/usePersistentState";
+import { starterSchools, type SchoolRecord } from "@/lib/hub-data";
+import { childSchool, transportChildKey, transportSchoolDirectory } from "@/lib/transport-child-schools";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { deriveFamiliesFromChildren } from "@/lib/family-derived";
@@ -75,6 +79,7 @@ const toForm = (child: ChildRecord): ChildFormState => {
   const normalized = applyChildAgeProfile(child);
   return ({
   firstName: normalized.firstName,
+  schoolName: childSchool(normalized),
   lastName: normalized.lastName,
   age: normalized.age,
   dateOfBirth: normalized.dateOfBirth,
@@ -123,7 +128,10 @@ const toForm = (child: ChildRecord): ChildFormState => {
 export default function ChildrenCenterLivePage() {
   const { session, isEmployee } = useAuth();
   const canManage = !isEmployee;
+  const accessToken = session?.access_token;
   const [children, setChildren] = useState<ChildRecord[]>([]);
+  const [schools] = usePersistentState<SchoolRecord[]>("tcs-schools-v2", starterSchools);
+  const schoolOptions = useMemo(() => transportSchoolDirectory(schools, children), [schools, children]);
   const [locations, setLocations] = useState<LiveLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -142,11 +150,11 @@ export default function ChildrenCenterLivePage() {
   const editQueryProcessed = useRef(false);
 
   const request = useCallback(async (method: "GET" | "POST", body?: Record<string, unknown>) => {
-    if (!session?.access_token) throw new Error("Your staff session is not ready yet.");
+    if (!accessToken) throw new Error("Your staff session is not ready yet.");
     const response = await fetch("/api/children", {
       method,
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
+        Authorization: `Bearer ${accessToken}`,
         ...(body ? { "Content-Type": "application/json" } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
@@ -161,10 +169,10 @@ export default function ChildrenCenterLivePage() {
     }
     if (!response.ok) throw new Error(typeof payload.error === "string" ? payload.error : "The child database request failed.");
     return payload;
-  }, [session?.access_token]);
+  }, [accessToken]);
 
   const load = useCallback(async () => {
-    if (!session?.access_token) return;
+    if (!accessToken) return;
     setLoading(true);
     try {
       const payload = await request("GET");
@@ -177,29 +185,37 @@ export default function ChildrenCenterLivePage() {
     } finally {
       setLoading(false);
     }
-  }, [request, session?.access_token]);
+  }, [request, accessToken]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
 
   useEffect(() => {
     if (loading || editQueryProcessed.current || typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    const editChildId = Number(params.get("editChild"));
-    if (!Number.isSafeInteger(editChildId) || editChildId <= 0) return;
-    editQueryProcessed.current = true;
-    const child = children.find((item) => item.id === editChildId);
+    const editChildId = params.get("editChild");
+    const viewChildId = params.get("child");
+    if (!editChildId && !viewChildId) return;
+    const target = editChildId || viewChildId;
+    const child = children.find((item) => transportChildKey(item) === target || String(item.id) === target);
     if (!child) return;
-    openEdit(child);
-    window.history.replaceState({}, "", window.location.pathname);
-  }, [children, loading]);
+    const timer = window.setTimeout(() => {
+      editQueryProcessed.current = true;
+      if (editChildId && canManage) {
+        setEditing(child); setForm(toForm(child)); setFamilyMode("new"); setSelectedFamilyId(""); setSelected(null);
+      } else setSelected(child);
+      window.history.replaceState({}, "", window.location.pathname);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [children, loading, canManage]);
 
   useEffect(() => {
     if (loading || tourHandoffProcessed.current || typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("fromTour") !== "1") return;
-    tourHandoffProcessed.current = true;
     const raw = sessionStorage.getItem("tcs-tour-child-handoff");
     if (!raw) return;
+    const timer = window.setTimeout(() => {
+    tourHandoffProcessed.current = true;
     try {
       const handoff = JSON.parse(raw) as Record<string, unknown>;
       const requestedLocation = String(handoff.location || "");
@@ -227,6 +243,8 @@ export default function ChildrenCenterLivePage() {
     } catch {
       sessionStorage.removeItem("tcs-tour-child-handoff");
     }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loading]);
 
   const live = children.filter((child) => child.enrollmentStatus !== "Archived");
@@ -271,10 +289,10 @@ export default function ChildrenCenterLivePage() {
     return { id: String(child.id), name: nameOf(child), month, day };
   }), birthdayMonth);
 
-  const flash = (message: string) => {
+  function flash(message: string) {
     setNotice(message);
     window.setTimeout(() => setNotice(""), 2600);
-  };
+  }
 
   function openAdd() {
     setEditing({} as ChildRecord);
@@ -321,6 +339,9 @@ export default function ChildrenCenterLivePage() {
     if (form.dateOfBirth && !ageProfile) return setError("Correct the date of birth or leave it blank.");
     const child: ChildRecord = {
       id: editing?.id || Date.now(),
+      legacyId: editing?.legacyId,
+      updatedAt: editing?.updatedAt,
+      schoolAgeSupport: { ...editing?.schoolAgeSupport, schoolName: form.schoolName || "" } as ChildRecord["schoolAgeSupport"],
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
       age: ageProfile?.age || "Age not entered",
@@ -368,7 +389,7 @@ export default function ChildrenCenterLivePage() {
     };
     setSaving(true);
     try {
-      const payload = await request("POST", { action: "save", child });
+      const payload = await request("POST", { action: editing?.id ? "update" : "save", child });
       const saved = payload.child as ChildRecord;
       setChildren((current) => current.some((item) => item.id === saved.id) ? current.map((item) => item.id === saved.id ? saved : item) : [...current, saved]);
       if (!emergencyCardReadiness(saved).ready) {
@@ -473,10 +494,10 @@ export default function ChildrenCenterLivePage() {
       <span className="woodland-animal right" aria-hidden="true">🦌</span>
     </section>
 
-    {editing && <ChildEditorModal title={editing.id ? `Edit ${nameOf(editing)}` : "Add Child"} form={form} setForm={setForm} families={families} familyMode={familyMode} setFamilyMode={setFamilyMode} selectedFamilyId={selectedFamilyId} chooseFamily={chooseFamily} saving={saving} onClose={() => setEditing(null)} onSubmit={saveChild} />}
+    {editing && <ChildEditorModal schools={schoolOptions} activeLocations={locations.map(location => location.fullName || location.name)} error={error} title={editing.id ? `Edit ${nameOf(editing)}` : "Add Child"} form={form} setForm={setForm} families={families} familyMode={familyMode} setFamilyMode={setFamilyMode} selectedFamilyId={selectedFamilyId} chooseFamily={chooseFamily} saving={saving} onClose={() => setEditing(null)} onSubmit={saveChild} />}
     {selected && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4">
       <button className="absolute inset-0" onClick={() => setSelected(null)} aria-label="Close" />
-      <section className="relative z-10 w-full max-w-2xl rounded-3xl bg-[#fffdf9] p-6 shadow-2xl">
+      <section className="relative z-10 max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-[#fffdf9] p-6 shadow-2xl">
         <div className="flex justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-wider text-[#718164]">Child File</p>
@@ -485,6 +506,7 @@ export default function ChildrenCenterLivePage() {
           </div>
           <button onClick={() => setSelected(null)}><X /></button>
         </div>
+        <ChildTransportSummary child={selected} canManage={canManage} />
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           <Detail l="Parent / Guardian" v={selected.primaryGuardian} />
           <Detail l="Second Parent / Guardian" v={selected.secondaryGuardian || "Not entered"} />

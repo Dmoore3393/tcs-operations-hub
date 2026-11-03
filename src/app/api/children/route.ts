@@ -1,6 +1,7 @@
 import { safeFamilyAccess } from "@/lib/family-access";
 import { isTehachapiLocation, locationDisplayName, TEHACHAPI_LOCATION_LABEL } from "@/lib/location-config";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
+import { flushTransportAssignmentNotices } from "@/lib/server/transport-assignment-notifications";
 
 export const runtime = "nodejs";
 
@@ -238,7 +239,7 @@ function normalizeChild(row: DbRow) {
     emergencyInstructions: text(record.emergencyInstructions),
     fileAudits: safeFileAudits(record.fileAudits),
     immunizationRecord: safeImmunizationRecord(record.immunizationRecord),
-    schoolAgeSupport: safeSchoolAgeSupport({...object(record.schoolAgeSupport),schoolName:text(object(record.schoolAgeSupport).schoolName)||text(row.school_name)}),
+    schoolAgeSupport: safeSchoolAgeSupport({...object(record.schoolAgeSupport),schoolName:text(row.school_name)||text(object(record.schoolAgeSupport).schoolName)}),
     familyMessages: safeFamilyMessages(record.familyMessages),
     familyAccess: safeFamilyAccess(record.familyAccess),
     custodyAccessAlert: Boolean(record.custodyAccessAlert),
@@ -419,28 +420,38 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { admin, userClient, profile, isOwner, isLicensee } = await requireStaff(request);
+    const context = await requireStaff(request);
+    const { admin, userClient, profile, isOwner, isLicensee } = context;
     if (!isOwner && !isLicensee) throw new Response("Only an Owner/Admin or assigned Licensee can create or edit child enrollment records.", { status: 403 });
 
     const body = object(await request.json().catch(() => ({})));
     const action = text(body.action) || "save";
     const rawChild = validateChild(body.child);
     const id = typeof rawChild.id === "number" && Number.isSafeInteger(rawChild.id) && rawChild.id > 0 ? rawChild.id : Date.now();
-    const child = safeChildRecord(rawChild, id);
-    const legacyId = String(id);
-    const locationId = await resolveLocationId(admin, profile.organization_id, child.location);
+    // Imported records have text source IDs. The numeric display ID is not their identity.
+    const legacyId = text(rawChild.legacyId) || String(id);
 
     const existing = await userClient
       .from("children")
-      .select("id,legacy_id,school_name,record_data")
+      .select("id,legacy_id,school_name,record_data,updated_at")
       .eq("organization_id", profile.organization_id)
       .eq("legacy_id", legacyId)
       .maybeSingle();
     if (existing.error) throw existing.error;
-
-    if (action === "archive") child.enrollmentStatus = child.enrollmentStatus === "Archived" ? "Active" : "Archived";
-
+    if (!existing.data && (text(rawChild.legacyId) || action === "archive" || action === "update")) {
+      throw new Response("This child profile could not be found. Refresh the roster before trying again; no new profile was created.", { status: 409 });
+    }
+    if (existing.data && text(rawChild.updatedAt) && text(rawChild.updatedAt) !== text(existing.data.updated_at)) {
+      throw new Response("This child profile changed while you were editing. Reopen it to see the latest details before saving.", { status: 409 });
+    }
     const existingRecord = object(existing.data?.record_data);
+    // A focused contact edit must not erase school support, medical history or attendance.
+    const child = safeChildRecord({ ...existingRecord, ...rawChild }, id);
+    if (action === "archive") child.enrollmentStatus = child.enrollmentStatus === "Archived" ? "Active" : "Archived";
+    const locationId = await resolveLocationId(admin, profile.organization_id, child.location);
+    const school = Object.hasOwn(rawChild, "schoolAgeSupport")
+      ? text(object(rawChild.schoolAgeSupport).schoolName)
+      : text(existing.data?.school_name) || text(object(existingRecord.schoolAgeSupport).schoolName);
     const fundingLocation = Object.hasOwn(rawChild, "fundingLocation") ? text(rawChild.fundingLocation) : text(existingRecord.fundingLocation);
     // Resolve the server-side ID in this organization; never accept a client-supplied ID.
     const fundingLocationId = fundingLocation ? await resolveLocationId(admin, profile.organization_id, fundingLocation) : "";
@@ -466,16 +477,19 @@ export async function POST(request: Request) {
       enrollment_status: child.enrollmentStatus,
       attendance_status: child.attendanceToday,
       guardian_name: child.primaryGuardian,
-      school_name: existing.data?.school_name ?? null,
-      record_data: { ...child, ...protectedPickupFields, fundingLocation, fundingLocationId },
+      school_name: school || null,
+      record_data: { ...existingRecord, ...child, ...protectedPickupFields, fundingLocation, fundingLocationId },
     };
 
     let saved;
     if (existing.data?.id) {
-      saved = await userClient
+      let update = userClient
         .from("children")
         .update(payload)
-        .eq("id", existing.data.id)
+        .eq("id", existing.data.id);
+      // Compare-and-save closes the race between reading and writing the same profile.
+      if (existing.data.updated_at) update = update.eq("updated_at", existing.data.updated_at);
+      saved = await update
         .select("legacy_id,first_name,last_name,date_of_birth,age_group,enrollment_status,attendance_status,guardian_name,school_name,record_data,updated_at")
         .maybeSingle();
     } else {
@@ -485,8 +499,12 @@ export async function POST(request: Request) {
         .select("legacy_id,first_name,last_name,date_of_birth,age_group,enrollment_status,attendance_status,guardian_name,school_name,record_data,updated_at")
         .maybeSingle();
     }
-    if (saved.error) throw saved.error;
-    if (!saved.data) throw new Error("The child record was not returned after saving.");
+    if (saved.error) {
+      if (saved.error.code === "P0001") return Response.json({ error: saved.error.message }, { status: /in transit|changed/i.test(saved.error.message) ? 409 : 400 });
+      throw saved.error;
+    }
+    if (!saved.data) throw new Response("This child profile changed. Reopen it before saving again.", { status: 409 });
+    try { await flushTransportAssignmentNotices(context); } catch { console.error("Child saved; driver alerts remain queued."); }
 
     return Response.json({ ok: true, child: normalizeChild(saved.data as unknown as DbRow) });
   } catch (error) {

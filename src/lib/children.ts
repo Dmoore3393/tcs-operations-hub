@@ -53,6 +53,7 @@ export function normalizeFundingSource(value: string) {
 }
 
 export type ChildRecord = {
+  updatedAt?: string;
   id: number;
   legacyId?: string;
   firstName: string;
@@ -129,6 +130,7 @@ export type ChildRecord = {
 };
 
 export type ChildFormState = {
+  schoolName?: string;
   firstName: string;
   lastName: string;
   age: string;

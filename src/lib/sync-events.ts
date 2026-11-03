@@ -4,6 +4,7 @@ export type HubSyncDetail = {
   state: HubSyncState;
   message?: string;
   key?: string;
+  operation?: "load" | "write";
 };
 
 export const HUB_SYNC_EVENT = "tcs-hub-sync";
