@@ -5,7 +5,7 @@ import ts from 'typescript';
 const url=s=>'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');
 const config=url(await readFile(new URL('../src/lib/location-config.ts',import.meta.url),'utf8'));
 let source=await readFile(new URL('../src/app/api/children/route.ts',import.meta.url),'utf8');
-source=source.replace(/import \{ safeFamilyAccess \} from .*?;/,'const safeFamilyAccess=v=>Array.isArray(v)?v:[];').replace('"@/lib/location-config"',JSON.stringify(config)).replace(/import \{ requireStaff, staffErrorResponse \} from .*?;/,'const requireStaff=async()=>globalThis.__childEditAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
+source=source.replace(/import \{ flushTransportAssignmentNotices \} from .*?;/,'const flushTransportAssignmentNotices=async()=>{};').replace(/import \{ safeFamilyAccess \} from .*?;/,'const safeFamilyAccess=v=>Array.isArray(v)?v:[];').replace('"@/lib/location-config"',JSON.stringify(config)).replace(/import \{ requireStaff, staffErrorResponse \} from .*?;/,'const requireStaff=async()=>globalThis.__childEditAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
 const api=await import(url(source));
 test('editing child contact fields retains server-held import identity, extras and historical eligibility',async()=>{
  const held={fundingLocation:'The School Age Center • Division',fundingLocationId:'synthetic-location',brightwheel:{id:'synthetic-bw'},additionalGuardianContacts:[{name:'Third Guardian',phone:'555',email:''}],careStatusNote:'Known departure',timesheetServicePeriods:['October 2026'],neverStartedCare:false};let written;
@@ -17,4 +17,27 @@ test('editing child contact fields retains server-held import identity, extras a
  for(const key of Object.keys(held))assert.deepEqual(written.record_data[key],held[key]);
  assert.equal(written.date_of_birth,null);assert.equal(written.record_data.subsidy,'');
  assert.equal(written.record_data.secondaryGuardianPhone,'555-0100');assert.equal(written.record_data.secondaryGuardianEmail,'second@example.invalid');
+});
+
+function editHarness(existing) {
+ const calls={insert:0,filters:[],written:null};
+ const admin={from(){const q={select(){return q},eq(){return q},then(resolve,reject){return Promise.resolve({data:[{id:'synthetic-care',slug:'halcom'}]}).then(resolve,reject)}};return q}};
+ const userClient={from(){let updating=false;const q={select(){return q},eq(key,value){calls.filters.push([key,value]);return q},update(value){updating=true;calls.written=value;return q},insert(value){calls.insert++;calls.written=value;return q},maybeSingle(){return Promise.resolve({data:updating||calls.insert?calls.written:existing,error:null})}};return q}};
+ globalThis.__childEditAuth={admin,userClient,profile:{organization_id:'synthetic-org'},isOwner:true,isLicensee:false};
+ return calls;
+}
+const importedEdit={id:145317,legacyId:'brightwheel:synthetic-import',firstName:'Synthetic',lastName:'Imported',primaryGuardian:'Synthetic Parent',location:'Halcom',ageGroup:'School Age',updatedAt:'2026-11-03T10:00:00Z'};
+const post=child=>api.POST(new Request('https://synthetic.invalid/api/children',{method:'POST',body:JSON.stringify({action:'update',child})}));
+test('editing an imported numeric display ID updates the original text identity and preserves unedited support/history',async()=>{
+ const held={schoolAgeSupport:{schoolName:'Synthetic School',accommodations:'Existing support'},familyMessages:[{id:'1',body:'Existing message'}],checkedInAt:'2026-11-03T08:00:00Z',checkedInBy:'Synthetic Staff',transportRestraint:'Booster Seat'};
+ const calls=editHarness({id:'synthetic-child',legacy_id:importedEdit.legacyId,record_data:held,school_name:'Synthetic School',updated_at:importedEdit.updatedAt});
+ const result=await post(importedEdit);assert.equal(result.status,200,await result.text());
+ assert.equal(calls.insert,0);assert.ok(calls.filters.some(([key,value])=>key==='legacy_id'&&value===importedEdit.legacyId));
+ assert.ok(calls.filters.some(([key,value])=>key==='updated_at'&&value===importedEdit.updatedAt));
+ assert.equal(calls.written.legacy_id,importedEdit.legacyId);assert.equal(calls.written.school_name,'Synthetic School');
+ assert.equal(calls.written.record_data.schoolAgeSupport.accommodations,'Existing support');assert.equal(calls.written.record_data.familyMessages[0].body,'Existing message');assert.equal(calls.written.record_data.checkedInAt,held.checkedInAt);
+});
+test('missing imported identity and stale child edits never create a duplicate or overwrite a newer profile',async()=>{
+ let calls=editHarness(null);assert.equal((await post(importedEdit)).status,409);assert.equal(calls.insert,0);assert.equal(calls.written,null);
+ calls=editHarness({id:'synthetic-child',record_data:{},updated_at:'2026-11-03T11:00:00Z'});assert.equal((await post(importedEdit)).status,409);assert.equal(calls.written,null);
 });

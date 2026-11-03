@@ -2,7 +2,7 @@
 
 import { locationDisplayName } from "@/lib/location-config";
 
-import type { FamilyRecord } from "@/lib/hub-data";
+import type { FamilyRecord, SchoolRecord } from "@/lib/hub-data";
 import {
   deriveChildAgeProfile,
   fundingSources,
@@ -27,9 +27,12 @@ import { useEffect, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 const inputClass =
-  "w-full rounded-xl border border-[#d7c9ad] bg-white px-3.5 py-2.5 text-sm text-slate-950 outline-none transition placeholder:text-slate-600 focus:border-[#5f7b50] focus:ring-4 focus:ring-[#dfe9d8] disabled:bg-[#f4f1ea] disabled:text-slate-500";
+  "min-h-11 w-full rounded-xl border border-[#d7c9ad] bg-white px-3.5 py-2.5 text-base text-slate-950 outline-none transition placeholder:text-slate-600 focus:border-[#5f7b50] focus:ring-4 focus:ring-[#dfe9d8] disabled:bg-[#f4f1ea] disabled:text-slate-500";
 
 type Props = {
+  schools?: SchoolRecord[];
+  activeLocations?: readonly string[];
+  error?: string;
   title: string;
   form: ChildFormState;
   setForm: (form: ChildFormState) => void;
@@ -44,6 +47,9 @@ type Props = {
 };
 
 export default function ChildEditorModal({
+  schools = [],
+  activeLocations = locations,
+  error = "",
   title,
   form,
   setForm,
@@ -68,7 +74,7 @@ export default function ChildEditorModal({
 
   const modal = (
     <div className="fixed inset-0 z-[9999] bg-[#102417]/75 p-2 backdrop-blur-sm sm:p-4 lg:p-6">
-      <button aria-label="Close child form" className="absolute inset-0" onClick={onClose} />
+      <button aria-label="Close child form" disabled={saving} className="absolute inset-0" onClick={onClose} />
 
       <section className="relative z-10 mx-auto flex h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-[#b79b70] bg-[#f8f3e5] shadow-[0_32px_90px_rgba(7,24,12,.45)] sm:h-[calc(100dvh-2rem)] lg:h-[calc(100dvh-3rem)]">
         <header className="shrink-0 border-b border-[#d8cdb1] bg-gradient-to-r from-[#294d31] via-[#3f663f] to-[#6f8751] px-4 py-4 text-white sm:px-6">
@@ -120,7 +126,7 @@ export default function ChildEditorModal({
                     }} /></Field>
                     <Field label="Current age"><input readOnly className={inputClass} placeholder="Calculated from date of birth" value={form.age} /></Field>
                     <Field label="Age group"><select disabled className={inputClass} value={form.ageGroup} onChange={(e) => setForm({ ...form, ageGroup: e.target.value as AgeGroup })}><option>Unknown</option><option>Infant</option><option>Toddler</option><option>Preschool</option><option>School Age</option></select></Field>
-                    <Field label="Location"><select className={inputClass} value={locationDisplayName(form.location)} onChange={(e) => setForm({ ...form, location: e.target.value })}>{locations.map((location) => <option key={location}>{location}</option>)}</select></Field>
+                    <Field label="Care location"><select className={inputClass} value={locationDisplayName(form.location)} onChange={(e) => setForm({ ...form, location: e.target.value })}>{!activeLocations.includes(locationDisplayName(form.location)) && <option value={locationDisplayName(form.location)} disabled>{locationDisplayName(form.location)} (not active)</option>}{activeLocations.map((location) => <option key={location}>{location}</option>)}</select></Field>
                     <Field label="Classroom"><input readOnly className={inputClass} value={form.classroom} /></Field>
                     <Field label="Enrollment status"><select className={inputClass} value={form.enrollmentStatus} onChange={(e) => setForm({ ...form, enrollmentStatus: e.target.value as EnrollmentStatus })}><option>Active</option><option>Pending</option><option>Archived</option></select></Field>
                     <Field label="Planned start date"><input type="date" className={inputClass} value={form.plannedStartDate} onChange={(e) => setForm({ ...form, plannedStartDate: e.target.value })} /></Field>
@@ -151,6 +157,11 @@ export default function ChildEditorModal({
                     <Field label="Funding authorization location"><select className={inputClass} value={form.fundingLocation ? locationDisplayName(form.fundingLocation) : ""} onChange={(e) => setForm({ ...form, fundingLocation: e.target.value })}><option value="">Same as care location</option>{locations.map((location) => <option key={location}>{location}</option>)}</select></Field>
                     <Field label="Funding (optional)"><select className={inputClass} disabled={lockFamily} value={form.subsidy} onChange={(e) => setForm({ ...form, subsidy: e.target.value })}><option value="">Not entered (optional)</option>{form.subsidy === "CCRC" && <option value="CCRC" disabled>CCRC — choose Stage 1 or Stage 2</option>}{fundingSources.map((source) => <option key={source}>{source}</option>)}</select></Field>
                   </Grid>
+                </SectionCard>
+
+                <SectionCard icon={<MapPin className="h-5 w-5" />} title="School & Transportation" subtitle="The school saved here connects to this child’s regular morning and afternoon trips.">
+                  <Field label="Child’s school (optional)"><select className={inputClass} value={form.schoolName || ""} onChange={event => setForm({ ...form, schoolName: event.target.value })}><option value="">School not recorded / not attending school</option>{form.schoolName && !schools.some(school => school.school === form.schoolName) && <option>{form.schoolName}</option>}{schools.filter(school => school.status === "Active" || school.school === form.schoolName).map(school => <option key={school.school}>{school.school}</option>)}</select></Field>
+                  <p className="mt-3 text-base text-slate-700">Regular trips follow school changes. Care-location changes update trips using that care location; individual destinations and date-specific plans stay separate. Funding authorization stays in the Parent / Family section.</p>
                 </SectionCard>
 
                 <SectionCard icon={<HeartPulse className="h-5 w-5" />} title="Care & Safety" subtitle="Daily schedule, transportation, allergies, and support information">
@@ -210,6 +221,7 @@ export default function ChildEditorModal({
           </div>
 
           <footer className="shrink-0 border-t border-[#d8cdb1] bg-[#fffdf7]/98 px-3 py-3 shadow-[0_-10px_24px_rgba(60,52,38,.08)] backdrop-blur sm:px-6">
+            {error && <p role="alert" className="mb-3 rounded-xl bg-red-50 p-3 text-base font-bold text-red-900">{error}</p>}
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="hidden text-xs font-semibold text-[#74806a] md:block"><MapPin className="mr-1 inline h-3.5 w-3.5" />Make sure the selected location is correct before saving.</p>
               <div className="flex w-full gap-2 sm:w-auto">

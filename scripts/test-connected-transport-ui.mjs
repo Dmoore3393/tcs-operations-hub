@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {createRequire} from 'node:module';
+import vm from 'node:vm';
+import test from 'node:test';
+import ts from 'typescript';
+const require=createRequire(import.meta.url);
+const url=source=>'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');
+const config=url(await readFile('src/lib/location-config.ts','utf8'));
+const helpers=await import(url((await readFile('src/lib/transport-child-schools.ts','utf8')).replace('"./location-config"',JSON.stringify(config))));
+const trips=await import(url(await readFile('src/lib/transport-trips.ts','utf8')));
+const handoff=await import(url(await readFile('src/lib/transport-care-handoff.ts','utf8')));
+test('a child profile shows only its linked morning and afternoon trips and stable profile links',async()=>{
+ const child={id:123,legacyId:'brightwheel:synthetic-one',firstName:'Synthetic',lastName:'Child',location:'Halcom',enrollmentStatus:'Active',schoolAgeSupport:{schoolName:'Synthetic School'}};
+ const rows=[{id:1,childId:child.legacyId,tripPeriod:'Morning',pickupLocation:'Halcom',school:'Synthetic School',days:'Mon-Fri',pickup:'7:00 AM',driver:'Synthetic Driver',vehicle:'Synthetic Van'}, {id:2,childId:child.legacyId,tripPeriod:'Afternoon',school:'Synthetic School',dropoffLocation:'42nd Street',days:'Mon-Fri',pickup:'2:00 PM'}, {id:3,childId:'different-child',driver:'Do not show',school:'Different School'}];
+ const deps={'next/link':{default:({children,...props})=>require('react').createElement('a',props,children)},'@/hooks/usePersistentState':{usePersistentState:()=>[rows,()=>{},true,{retry(){}}]},'@/lib/hub-data':{starterRoutes:[]},'@/lib/transport-child-schools':helpers,'@/lib/transport-trips':trips};
+ const context={exports:{},require:name=>deps[name]||require(name)};
+ vm.runInNewContext(ts.transpileModule(await readFile('src/components/transportation/ChildTransportSummary.tsx','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,context);
+ const html=require('react-dom/server').renderToStaticMarkup(require('react').createElement(context.exports.default,{child,canManage:true}));
+ assert.match(html,/Morning/);assert.match(html,/Afternoon/);assert.match(html,/42nd Street/);assert.doesNotMatch(html,/Do not show|Different School/);
+ assert.match(html,/child=brightwheel%3Asynthetic-one/);assert.match(html,/route=1/);assert.match(html,/route=2/);
+});
+test('Brightwheel handoff records a timestamp without falsely checking a child into care',async()=>{
+ assert.equal(handoff.transportUsesBrightwheel,true);
+ const patch=handoff.transportHandoffPatch('2026-11-03','2026-11-03T16:00:00Z','Synthetic Driver');
+ assert.equal(patch.runStatus,'Dropped Off');assert.equal(patch.droppedOffAt,'2026-11-03T16:00:00Z');assert.ok(!Object.hasOwn(patch,'checkedInAt'));
+ const source=await readFile('src/app/(portal)/transportation-v2/page.tsx','utf8');
+ const file=ts.createSourceFile('page.tsx',source,ts.ScriptTarget.ES2022,true,ts.ScriptKind.TSX);let fn;
+ const visit=node=>{if(ts.isFunctionDeclaration(node)&&node.name?.text==='checkIntoLocation')fn=node.getText(file);ts.forEachChild(node,visit)};visit(file);
+ let confirmations=0,attendanceWrites=0;
+ const context={exports:{},transportUsesBrightwheel:true,confirmCareHandoff:()=>{confirmations++},fetch:()=>{attendanceWrites++;throw Error('Must not write Hub attendance')}};
+ vm.runInNewContext(ts.transpileModule('export '+fn,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,context);
+ await context.exports.checkIntoLocation({id:1,child:'Synthetic Child'});
+ assert.equal(confirmations,1);assert.equal(attendanceWrites,0);
+});
