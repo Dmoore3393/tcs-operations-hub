@@ -16,7 +16,8 @@ before(async()=>{
  create function is_tcs_licensee() returns boolean language sql as $$select false$$;
  create table children(id uuid primary key,organization_id uuid,location_id uuid,legacy_id text,first_name text,last_name text,enrollment_status text,school_name text,record_data jsonb,unique(organization_id,legacy_id));
  create table transportation_routes(id uuid primary key default gen_random_uuid(),organization_id uuid,location_id uuid,child_id uuid references children(id),legacy_id text,child_name text,school_name text,driver_name text,vehicle_name text,route_status text,record_data jsonb,unique(organization_id,legacy_id));
- create table transportation_day_stops(snapshot jsonb);
+ create table transportation_day_stops(snapshot jsonb,organization_id uuid,route_id uuid,service_date date,is_planned boolean,called_out boolean default false);
+ grant select,insert,update on transportation_day_stops to authenticated;
  create table hub_state(organization_id uuid,state_key text,state_value jsonb);
  create function resolve_tcs_location_id(text,uuid) returns uuid language sql as $$select case when $1='Synthetic Care A' then '${loc}'::uuid when $1='Synthetic Care B' then '${otherLoc}'::uuid end$$;
  grant select,insert,update on children,transportation_routes to authenticated;
@@ -32,13 +33,15 @@ before(async()=>{
  await db.exec(await readFile('supabase/migrations/'+connected,'utf8'));
  const patches=(await readdir('supabase/migrations')).find(name=>name.endsWith('_targeted_transport_updates.sql'));
  await db.exec(await readFile('supabase/migrations/'+patches,'utf8'));
+ const exclusion=(await readdir('supabase/migrations')).find(name=>name.endsWith('_child_transport_exclusion.sql'));
+ await db.exec(await readFile('supabase/migrations/'+exclusion,'utf8'));
 });
 beforeEach(async()=>{
  await db.exec('reset role;truncate transportation_routes,children,hub_state,transportation_day_stops;');
  const data={medicalNotes:'Synthetic protected medical field',brightwheel:{id:'source-identity'},schoolAgeSupport:{accommodations:'Synthetic learning support'}};
  await db.query('insert into children values($1,$2,$3,$4,$5,$6,$7,$8,$9),($10,$2,$11,$12,$5,$6,$7,$8,$9),($13,$14,$3,$15,$5,$6,$7,$8,$9)',[first,org,loc,'brightwheel:synthetic-a','Synthetic','Same Name','Active','',data,second,otherLoc,'brightwheel:synthetic-b',outside,otherOrg,'outside-child']);
  await db.query('insert into hub_state values($1,$2,$3)',[org,'tcs-schools-v2',[{school:'Synthetic School',status:'Active'},{school:'Synthetic New School',status:'Active'}]]);
- await db.query('insert into transportation_day_stops values($1)',[{school:'Historical School',child:'Synthetic Same Name'}]);
+ await db.query('insert into transportation_day_stops(snapshot) values($1)',[{school:'Historical School',child:'Synthetic Same Name'}]);
  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);await db.exec('set role authenticated');
 });
 after(()=>db.close());
@@ -142,4 +145,51 @@ test('pickup patches never delete another newly added route; stale writes roll b
  await assert.rejects(db.query('select patch_transport_records($1)',[[{id:'1',before:after,after:{...after,childId:'outside-child'}}]]),/linked child/);
  await assert.rejects(db.query('select patch_transport_records($1)',[[{id:'1',before:after,after:{...after,runStatus:'Arrived'}},{id:'not-found',before:{},after:{}}]]),/no longer available/);
  assert.equal((await db.query("select record_data from transportation_routes where legacy_id='1'")).rows[0].record_data.runStatus,'Picked Up');
+});
+
+const exclude=(value,expected=!value,key='brightwheel:synthetic-a')=>db.query('select set_child_transportation_exclusion($1,$2,$3)',[key,value,expected]);
+test('no-transport checkbox stops both sessions, keeps profile and history, and restoring never silently resumes old trips',async()=>{
+ await save([{...row(1),tripPeriod:'Morning',pickupLocation:'Synthetic Care A',dropoffLocation:'Synthetic School'}]);
+ await save([{...row(2),expectedChildSchool:'Synthetic School'}]);
+ await save([row(3,'brightwheel:synthetic-b','Synthetic Care B')]);
+ await db.query("update transportation_routes set record_data=record_data||$1 where child_id=$2",[{runDate:'2020-01-01',runStatus:'Dropped Off',runHistory:[{date:'2020-01-01',status:'Dropped Off'}]},first]);
+ await exclude(true);
+ const trips=(await db.query('select record_data,route_status from transportation_routes where child_id=$1',[first])).rows;
+ assert.equal(trips.length,2);assert.ok(trips.every(r=>r.route_status==='Not Riding'&&r.record_data.status==='Not Riding'&&r.record_data.runHistory.length===1));
+ let child=(await db.query('select * from children where id=$1',[first])).rows[0];
+ assert.equal(child.record_data.noTransportationNeeded,true);assert.equal(child.enrollment_status,'Active');assert.equal(child.school_name,'Synthetic School');assert.equal(child.record_data.brightwheel.id,'source-identity');
+ assert.equal((await db.query('select route_status from transportation_routes where child_id=$1',[second])).rows[0].route_status,'Confirmed');
+ await exclude(false);child=(await db.query('select record_data from children where id=$1',[first])).rows[0];assert.equal(child.record_data.noTransportationNeeded,false);
+ assert.ok((await db.query('select route_status from transportation_routes where child_id=$1',[first])).rows.every(r=>r.route_status==='Not Riding'));
+ await db.exec('reset role');assert.equal((await db.query('select snapshot from transportation_day_stops')).rows[0].snapshot.school,'Historical School');
+});
+test('exclusion cannot hide a child in transit; rejection leaves profile and both trips unchanged',async()=>{
+ await save([row(1)]);await save([{...row(2),expectedChildSchool:'Synthetic School'}]);
+ await db.query("update transportation_routes set record_data=record_data||jsonb_build_object('runDate',(now() at time zone 'America/Los_Angeles')::date::text,'runStatus','Picked Up') where legacy_id='2'");
+ await assert.rejects(exclude(true),/in transit/);
+ assert.ok((await db.query('select route_status from transportation_routes')).rows.every(r=>r.route_status==='Confirmed'));
+ assert.notEqual((await db.query('select record_data from children where id=$1',[first])).rows[0].record_data.noTransportationNeeded,true);
+});
+test('stale tabs cannot add or reactivate excluded riders and ordinary staff cannot toggle the preference',async()=>{
+ await save([row(1)]);await exclude(true);
+ await assert.rejects(save([{...row(2),expectedChildSchool:'Synthetic School'}]),/Transportation is turned off/);
+ await assert.rejects(db.query("update transportation_routes set route_status='Confirmed',record_data=record_data||$1",[{status:'Confirmed'}]),/Transportation is turned off/);
+ await assert.rejects(exclude(false,false),/changed/);
+ await assert.rejects(exclude(true,false,'outside-child'),/existing child/);
+ await db.query("select set_config('request.jwt.claim.sub',$1,false)",[staff]);await assert.rejects(exclude(false),/access required/);
+ assert.equal((await db.query("select has_function_privilege('anon','set_child_transportation_exclusion(text,boolean,boolean)','execute') allowed")).rows[0].allowed,false);
+});
+test('combined profile edit keeps removed riders off trips even when their school is cleared',async()=>{
+ await save([row(1)]);
+ await db.query("update children set school_name=null,record_data=record_data||$1 where id=$2",[{noTransportationNeeded:true},first]);
+ assert.equal((await db.query('select route_status from transportation_routes')).rows[0].route_status,'Not Riding');
+});
+
+test('a stale daily planner cannot assign an excluded child, and saved historical snapshots remain intact',async()=>{
+ await save([row(1)]);await exclude(true);
+ const trip=(await db.query('select id,record_data from transportation_routes')).rows[0];
+ await assert.rejects(db.query("insert into transportation_day_stops(snapshot,organization_id,route_id,service_date,is_planned) values($1,$2,$3,(now() at time zone 'America/Los_Angeles')::date,true)",[trip.record_data,org,trip.id]),/Transportation is turned off/);
+ assert.equal((await db.query('select count(*) n from transportation_day_stops')).rows[0].n,1);
+ await exclude(false);await db.query("insert into transportation_day_stops(snapshot,organization_id,route_id,service_date,is_planned) values($1,$2,$3,(now() at time zone 'America/Los_Angeles')::date,true)",[trip.record_data,org,trip.id]);
+ assert.equal((await db.query('select count(*) n from transportation_day_stops')).rows[0].n,2);
 });

@@ -2,6 +2,7 @@
 import ChoiceSelect from "@/components/forms/ChoiceSelect";
 import SchoolNameSelect from "@/components/forms/SchoolNameSelect";
 import {gradeChoices} from "@/lib/form-options";
+import { schoolProfileApplies } from "@/lib/transport-child-schools";
 
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -95,7 +96,7 @@ export default function SchoolAgeSupportPage() {
   const schoolAgeChildren = useMemo(() => {
     const query = search.trim().toLowerCase();
     return children
-      .filter((child) => child.enrollmentStatus !== "Archived" && child.ageGroup === "School Age")
+      .filter((child) => child.enrollmentStatus !== "Archived" && schoolProfileApplies(child))
       .filter((child) => matchesLocation(child.location, location))
       .filter((child) => !query || `${childName(child)} ${child.primaryGuardian} ${child.schoolAgeSupport?.schoolName || ""}`.toLowerCase().includes(query))
       .sort((a, b) => childName(a).localeCompare(childName(b)));
@@ -165,7 +166,7 @@ export default function SchoolAgeSupportPage() {
     {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-900">{error}</div>}
 
     <section className="grid gap-3 sm:grid-cols-3">
-      <Metric icon={<Users className="h-5 w-5" />} label="School Age Children" value={schoolAgeChildren.length} tone="blue" />
+      <Metric icon={<Users className="h-5 w-5" />} label="School & TK Children" value={schoolAgeChildren.length} tone="blue" />
       <Metric icon={<AlertTriangle className="h-5 w-5" />} label="Needs Support Review" value={attention.length} tone={attention.length ? "amber" : "green"} />
       <Metric icon={<CheckCircle2 className="h-5 w-5" />} label="Records Current" value={Math.max(0, schoolAgeChildren.length - attention.length)} tone="green" />
     </section>

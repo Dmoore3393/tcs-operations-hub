@@ -238,7 +238,7 @@ export default function TransportationPage() {
       if (!child) { setRouteMessage("This child is not available. Refresh the children or check their enrollment status."); return; }
       setTab("Children & Schools"); setFocusChild(key);
       const period = query.get("trip");
-      if (canManageRoutes && child.enrollmentStatus === "Active" && (period === "Morning" || period === "Afternoon")) {
+      if (canManageRoutes && !child.noTransportationNeeded && child.enrollmentStatus === "Active" && (period === "Morning" || period === "Afternoon")) {
         const existing = routes.find(route => route.childId === key && route.status !== "Not Riding" && (query.get("route") ? String(route.id) === query.get("route") : transportTripPeriod(route) === period && route.school === childSchool(child)));
         setTripPeriod(period); setTripChild(existing ? undefined : child); setEditingSchoolStop(existing ? [existing] : []);
       }

@@ -9,10 +9,13 @@ export async function POST(request: Request) {
     const context = await requireStaff(request);
     if (!context.isOwner && !context.isLicensee) return Response.json({ error: "Only administration and licensees can change children’s schools or route setup." }, { status: 403 });
     const body = await request.json().catch(() => null);
-    if (!body || !["school", "routes"].includes(body.action)) return Response.json({ error: "Choose a school or school trip to save." }, { status: 400 });
+    if (!body || !["school", "routes", "transportation-needed"].includes(body.action)) return Response.json({ error: "Choose a school or school trip to save." }, { status: 400 });
+    if (body.action === "transportation-needed" && (typeof body.childId !== "string" || !body.childId || typeof body.excluded !== "boolean" || typeof body.expectedExcluded !== "boolean")) return Response.json({ error: "Choose an existing child and transportation preference." }, { status: 400 });
     if (body.action === "school" && (typeof body.childId !== "string" || !body.childId || typeof body.school !== "string" || typeof body.expectedSchool !== "string")) return Response.json({ error: "Choose an existing child and school." }, { status: 400 });
     if (body.action === "routes" && (!Array.isArray(body.routes) || !body.routes.length || body.routes.length > 100)) return Response.json({ error: "Choose between one and 100 children." }, { status: 400 });
-    const result = body.action === "school"
+    const result = body.action === "transportation-needed"
+      ? await context.userClient.rpc("set_child_transportation_exclusion", { p_child_key: body.childId, p_excluded: body.excluded, p_expected_excluded: body.expectedExcluded })
+      : body.action === "school"
       ? await context.userClient.rpc("set_transport_child_school", { p_child_key: body.childId, p_school: body.school, p_expected_school: body.expectedSchool })
       : await context.userClient.rpc("save_transport_school_routes", { p_routes: body.routes, p_save_schools: body.saveSchools === true });
     if (result.error) return Response.json({ error: result.error.message || "Could not save transportation. Try again." }, { status: /changed|in transit/i.test(result.error.message) ? 409 : 400 });
