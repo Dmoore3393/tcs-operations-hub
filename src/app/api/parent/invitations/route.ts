@@ -1,4 +1,5 @@
 import { safeFamilyAccess } from "@/lib/family-access";
+import { authEmailLimitResponse } from "@/lib/auth-email-errors";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 
 type DbRow = Record<string, unknown>;
@@ -91,6 +92,8 @@ export async function POST(request: Request) {
       });
 
       if (error) {
+        const limited = authEmailLimitResponse(error);
+        if (limited) return limited;
         const message = error.message || "Could not send the Parent Portal invitation.";
         if (/already|registered|exists/i.test(message) && existingUser) {
           throw new Response(

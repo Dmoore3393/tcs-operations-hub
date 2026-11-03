@@ -1,4 +1,5 @@
 "use client";
+import {useEmailCooldown} from "@/hooks/useEmailCooldown";
 
 import MainLayout from "@/components/layout/MainLayout";
 import StaffContactEditor from "@/components/StaffContactEditor";
@@ -68,6 +69,7 @@ export default function TeamAccessPage() {
   const [saving, setSaving] = useState(false);
   const [inviting, setInviting] = useState(false);
   const [resendingId, setResendingId] = useState("");
+  const emailCooldown = useEmailCooldown();
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
@@ -138,6 +140,7 @@ export default function TeamAccessPage() {
   }
 
   async function sendInvitation() {
+    if(inviting)return;
     setInviting(true);
     setError("");
     try {
@@ -184,6 +187,8 @@ export default function TeamAccessPage() {
   }
 
   async function resendSetup(account: TeamAccessAccount) {
+    if(resendingId||emailCooldown.remaining)return;
+    emailCooldown.start();
     setResendingId(account.user_id);
     setError("");
     try {
@@ -275,7 +280,7 @@ export default function TeamAccessPage() {
 
           <div className="mt-5 flex flex-wrap gap-3">
             <PrimaryButton onClick={() => void saveAccess()} disabled={saving}>{saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{saving ? "Saving…" : "Save Access"}</PrimaryButton>
-            {editing.status === "Invite Pending" && <button onClick={() => void resendSetup(editing)} disabled={resendingId === editing.user_id} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-60">{resendingId === editing.user_id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} Send New Setup Link</button>}
+            {editing.status === "Invite Pending" && <button onClick={() => void resendSetup(editing)} disabled={!!resendingId||emailCooldown.remaining>0} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-60">{resendingId === editing.user_id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} {emailCooldown.remaining ? "Wait before requesting another email" : "Send New Setup Link"}</button>}
           </div>
         </SectionCard>
 

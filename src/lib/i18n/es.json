@@ -2835,5 +2835,10 @@
   "Unpaid": "Sin goce de sueldo",
   "Vacation": "Vacaciones",
   "Wet": "Mojado",
-  "Working": "Trabajando"
+  "Working": "Trabajando",
+  "Email sending is temporarily paused because The Hub reached its email limit. Check the inbox and Spam for the newest setup email. Wait before requesting another. If this continues, contact Danielle or Jennifer.": "El envío de correos está pausado temporalmente porque The Hub alcanzó su límite. Busque el correo de configuración más reciente en la bandeja de entrada y en Spam. Espere antes de solicitar otro. Si el problema continúa, comuníquese con Danielle o Jennifer.",
+  "A setup email was just requested. Check the inbox and Spam, and wait one minute before requesting another.": "Se acaba de solicitar un correo de configuración. Revise la bandeja de entrada y Spam, y espere un minuto antes de solicitar otro.",
+  "Wait before requesting another email": "Espere antes de solicitar otro correo",
+  "The setup email could not be sent. Please try again later.": "No se pudo enviar el correo de configuración. Inténtelo más tarde.",
+  "This staff account is inactive.": "Esta cuenta del personal está inactiva."
 }

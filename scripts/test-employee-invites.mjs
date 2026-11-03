@@ -6,7 +6,8 @@ const url=source=>'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(
 const roles=url(await readFile('src/lib/team-access.ts','utf8'));
 const config=url(await readFile('src/lib/location-config.ts','utf8'));
 const inviteRoleURL=url(await readFile('src/lib/staff-invite-access.ts','utf8'));
-const source=(await readFile('src/app/api/team-access/invite/route.ts','utf8')).replace('"@/lib/staff-invite-access"',JSON.stringify(inviteRoleURL)).replace('"@/lib/team-access"',JSON.stringify(roles)).replace('"@/lib/location-config"',JSON.stringify(config)).replace(/import \{ requireOwner, responseFromThrown \} from .*?;/,'const requireOwner=async()=>{if(!globalThis.inviteAuth)throw new Response("Owner required",{status:403});return globalThis.inviteAuth};const responseFromThrown=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
+const emailErrorsURL=url(await readFile("src/lib/auth-email-errors.ts","utf8"));
+const source=(await readFile('src/app/api/team-access/invite/route.ts','utf8')).replace('"@/lib/auth-email-errors"',JSON.stringify(emailErrorsURL)).replace('"@/lib/staff-invite-access"',JSON.stringify(inviteRoleURL)).replace('"@/lib/team-access"',JSON.stringify(roles)).replace('"@/lib/location-config"',JSON.stringify(config)).replace(/import \{ requireOwner, responseFromThrown \} from .*?;/,'const requireOwner=async()=>{if(!globalThis.inviteAuth)throw new Response("Owner required",{status:403});return globalThis.inviteAuth};const responseFromThrown=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
 const api=await import(url(source));
 const lane='00000000-0000-4000-8000-000000000001';
 let tables,events,race,readError;

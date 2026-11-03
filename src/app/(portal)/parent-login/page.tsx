@@ -1,4 +1,6 @@
 "use client";
+import {authEmailErrorMessage} from "@/lib/auth-email-errors";
+import {useEmailCooldown} from "@/hooks/useEmailCooldown";
 
 import LegalFooter from "@/components/LegalFooter";
 
@@ -17,6 +19,7 @@ export default function ParentLoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
+  const emailCooldown = useEmailCooldown();
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -108,6 +111,8 @@ export default function ParentLoginPage() {
       return;
     }
 
+    if(sendingReset||emailCooldown.remaining)return;
+    emailCooldown.start();
     setSendingReset(true);
     setError("");
     setMessage("");
@@ -117,8 +122,8 @@ export default function ParentLoginPage() {
       });
       if (resetError) throw resetError;
       setMessage("If this email has an active Parent Portal account, a secure password-reset link has been sent.");
-    } catch {
-      setError("The password reset email could not be sent. Contact your TCS location if you need account help.");
+    } catch (caught) {
+      setError(authEmailErrorMessage(caught,"The password reset email could not be sent. Contact your TCS location if you need account help."));
     } finally {
       setSendingReset(false);
     }
@@ -151,7 +156,7 @@ export default function ParentLoginPage() {
 
             <label className="block"><span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-600">Password</span><div className="relative"><LockKeyhole className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" /><input type={showPassword ? "text" : "password"} required autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Your password" className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-11 text-sm font-semibold outline-none focus:border-emerald-400" /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></label>
 
-            <div className="flex justify-end"><button type="button" disabled={sendingReset} onClick={() => void forgotPassword()} className="text-xs font-black text-emerald-800 disabled:opacity-50">{sendingReset ? "Sending reset…" : "Forgot Password?"}</button></div>
+            <div className="flex justify-end"><button type="button" disabled={sendingReset||emailCooldown.remaining>0} onClick={() => void forgotPassword()} className="text-xs font-black text-emerald-800 disabled:opacity-50">{sendingReset ? "Sending reset…" : emailCooldown.remaining ? "Wait before requesting another email" : "Forgot Password?"}</button></div>
 
             <button disabled={signingIn} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#245a39] px-4 py-3 text-sm font-black text-white disabled:opacity-50">{signingIn ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} Sign In to Parent Portal</button>
           </form>

@@ -1,4 +1,5 @@
 import {recommendedStaffInviteRole} from "@/lib/staff-invite-access";
+import {authEmailLimitResponse} from "@/lib/auth-email-errors";
 import { careLocations } from "@/lib/location-config";
 import {
   ACCESS_ROLES,
@@ -112,7 +113,7 @@ export async function POST(request: Request) {
     });
 
     if (inviteError || !inviteData.user) {
-      return Response.json({ error: inviteError?.message ?? "Supabase did not create the invitation." }, { status: 400 });
+      return authEmailLimitResponse(inviteError) || Response.json({ error: inviteError?.message ?? "Supabase did not create the invitation." }, { status: 400 });
     }
 
     const invitedUser = inviteData.user;
