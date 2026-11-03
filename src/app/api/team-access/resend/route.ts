@@ -1,3 +1,4 @@
+import { sendPendingStaffSetup } from "@/lib/server/staff-setup-links";
 import { createClient } from "@supabase/supabase-js";
 import { authEmailLimitResponse, isExistingAuthAccountError } from "@/lib/auth-email-errors";
 import { requireOwner, responseFromThrown } from "@/lib/server/require-owner";
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
 
     const { data: account, error: accountError } = await admin
       .from("staff_access")
-      .select("user_id,email,full_name,role,locations,permissions,accepted_at,invited_at,is_active")
+      .select("user_id,organization_id,email,full_name,role,locations,permissions,accepted_at,invited_at,is_active")
       .eq("user_id", userId)
       .eq("organization_id", profile.organization_id)
       .maybeSingle();
@@ -28,6 +29,10 @@ export async function POST(request: Request) {
     }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || new URL(request.url).origin;
+    if (!account.accepted_at) {
+      const result = await sendPendingStaffSetup(admin, account, siteUrl);
+      return Response.json({ ok: true, ...result }, { headers: { "Cache-Control": "no-store" } });
+    }
     const redirectTo = `${siteUrl}/accept-invite`;
     const sentAt = new Date().toISOString();
 
