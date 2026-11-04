@@ -18,6 +18,7 @@ export async function POST(request:Request){try{
  if(body.action==='callout'&&body.reason!==undefined&&!['sick','no_transportation'].includes(body.reason))return Response.json({error:'Choose Out sick or No transportation.'},{status:400});
  const result=await c.admin.rpc('save_transport_day_stop',{p_org:c.profile.organization_id,p_actor:c.user.id,p_route:body.routeId,p_day:body.date,p_action:body.action,p_plan:body.action==='callout'?{calloutReason:body.reason||'no_transportation'}:body.plan||{},p_expected_version:body.expectedVersion});
  if(result.error){const msg=result.error.message||'Could not update daily transportation.';return Response.json({error:msg},{status:/changed/.test(msg)?409:/assigned|Leadership|administration/.test(msg)?403:400});}
- if(body.action==='save')try{await flushTransportAssignmentNotices(c);}catch(error){console.error('Daily route saved; assignment notice remains queued',error instanceof Error?error.message:'dispatch failed');}
+ // Dispatch from the saving request so the driver's app does not need to be open.
+ try{await flushTransportAssignmentNotices(c);}catch(error){console.error('Daily transportation saved; alert dispatch failed',error instanceof Error?error.message:'dispatch failed');}
  return Response.json({ok:true,changedStops:result.data});
  }catch(error){return staffErrorResponse(error);}}

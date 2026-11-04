@@ -36,6 +36,8 @@ jobs:
         run: node --test scripts/test-account-deletion.mjs scripts/test-request-timeout.mjs scripts/test-native-api.mjs scripts/test-native-family-notifications.mjs scripts/test-route-access.mjs scripts/test-hub-tool-groups.mjs scripts/test-staff-scheduler.mjs scripts/test-maintenance-access.mjs scripts/test-transportation-day.mjs scripts/test-school-pickup-stops.mjs scripts/test-transport-child-schools.mjs scripts/test-transport-driver-assignments.mjs scripts/test-connected-transport-ui.mjs scripts/test-form-choices.mjs scripts/test-school-attendance.mjs
       - name: Typecheck application
         run: npx tsc --noEmit
+      - name: Verify driver pushes with the Hub closed
+        run: node --test scripts/test-transport-background-push.mjs
       - name: Verify communications isolation and daily follow-through
         run: node --test scripts/test-communications-database.mjs scripts/test-communications-api.mjs scripts/test-daily-follow-through.mjs
       - name: Verify reviewed and atomic Brightwheel imports

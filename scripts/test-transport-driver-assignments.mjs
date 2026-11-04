@@ -28,7 +28,7 @@ test('saved routes notify exact staff identities atomically; employee access is 
  create policy "location insert" on transportation_routes for insert to authenticated with check(organization_id=current_staff_organization_id() and can_access_location(location_id));
  create policy "location update" on transportation_routes for update to authenticated using(organization_id=current_staff_organization_id() and can_access_location(location_id));
  create policy "location delete" on transportation_routes for delete to authenticated using(organization_id=current_staff_organization_id());`);
- const names=await readdir('supabase/migrations');for(const suffix of ['_daily_transport_plans.sql','_transportation_driver_assignments.sql','_morning_transportation.sql','_daily_transport_absence_reasons.sql'])await db.exec(await readFile('supabase/migrations/'+names.find(name=>name.endsWith(suffix)),'utf8'));
+ const names=await readdir('supabase/migrations');for(const suffix of ['_daily_transport_plans.sql','_transportation_driver_assignments.sql','_morning_transportation.sql','_daily_transport_absence_reasons.sql','_transport_callout_push_notices.sql'])await db.exec(await readFile('supabase/migrations/'+names.find(name=>name.endsWith(suffix)),'utf8'));
  await db.query('insert into organizations values($1)',[org]);await db.query("insert into locations values($1,$2,true,'Synthetic Site')",[loc,org]);
  for(const [user,role] of [[owner,'Owner / Admin'],[driver,'Employee'],[other,'Employee']]){await db.query('insert into auth.users values($1)',[user]);await db.query("insert into staff_access values($1,$2,'Synthetic Same',$3,$4,true)",[user,org,role,[]]);await db.query('insert into staff_location_assignments values($1,$2,$3)',[org,user,loc]);}
  assert.deepEqual((await db.query('select permissions from staff_access where user_id=$1',[driver])).rows[0].permissions,['transportation']);
@@ -54,6 +54,46 @@ test('saved routes notify exact staff identities atomically; employee access is 
  delivered=(await flush()).rows;assert.equal(delivered.length,1);assert.match(delivered[0].notification.body,/Morning/);
  assert.equal((await db.query("select plan_data->>'pickupLocation' source from transportation_day_stops where service_date='2030-01-08'")).rows[0].source,'Synthetic Home');
  await assert.rejects(db.query('select save_transport_day_stop($1,$2,$3,$4,$5,$6,0)',[org,owner,route,'2030-01-09','save',JSON.stringify({tripPeriod:'Night'})]),/Choose Morning or Afternoon/);
+ // Call-outs target that day's driver, without the driver opening or polling the Hub.
+ const callDay='2030-01-10';
+ const change=async(uuid,action,plan={},date=callDay)=>{
+  const version=(await db.query('select version from transportation_day_stops where route_id=$1 and service_date=$2',[uuid,date])).rows[0]?.version||0;
+  return db.query('select save_transport_day_stop($1,$2,$3,$4,$5,$6,$7)',[org,owner,uuid,date,action,JSON.stringify(plan),version]);
+ };
+ await change(route,'save',{driver:'Synthetic Same',driverLaneId:otherLane});await flush();
+ await change(route,'callout',{calloutReason:'sick'});
+ delivered=(await flush()).rows;assert.equal(delivered.length,1);assert.equal(delivered[0].user_id,other);
+ assert.equal(delivered[0].notification.title,'Transportation cancelled');assert.match(delivered[0].notification.body,/Synthetic Child 1.*Do not pick up/);assert.doesNotMatch(delivered[0].notification.body,/sick/i);assert.equal(delivered[0].notification.href,'/transportation?routeDate='+callDay);
+ await change(route,'callout',{calloutReason:'no_transportation'});assert.equal((await flush()).rows.length,0,'repeat call-out and reason edits do not spam the driver');
+ await change(route,'restore');delivered=(await flush()).rows;assert.equal(delivered.length,1);assert.equal(delivered[0].notification.title,'Transportation restored');assert.equal(delivered[0].user_id,other);
+ await change(route,'callout');await change(route,'restore');await change(route,'callout');
+ delivered=(await flush()).rows;assert.equal(delivered.length,1,'only the latest pending state is delivered');assert.equal(delivered[0].notification.title,'Transportation cancelled');
+ await change(route,'restore');await flush();
+ await db.exec('begin');await change(route,'callout');await db.exec('rollback');assert.equal((await flush()).rows.length,0,'rolled-back call-outs send nothing');
+ await assert.rejects(db.query('select save_transport_day_stop($1,$2,$3,$4,$5,$6,0)',[org,owner,route,callDay,'callout','{}']),/changed/);assert.equal((await flush()).rows.length,0,'failed saves send nothing');
+ // One child on two remaining trips: one notice per actual driver, no unrelated staff.
+ const child=id(20),linkedA=id(21),linkedB=id(22);
+ await db.query("insert into children values($1,$2,$3,'synthetic-linked','Synthetic','Linked')",[child,org,loc]);
+ await add(linkedA,21);await add(linkedB,22);
+ await db.query("update transportation_routes set child_id=$1,record_data=record_data||$2 where id=any($3::uuid[])",[child,JSON.stringify({child:'Synthetic Linked'}),[linkedA,linkedB]]);await flush();
+ await change(linkedA,'callout');delivered=(await flush()).rows;assert.equal(delivered.length,1,'linked trips sharing a driver are deduped');assert.equal(delivered[0].user_id,driver);
+ await change(linkedA,'restore');await flush();
+ await change(linkedB,'save',{driver:'Synthetic Same',driverLaneId:otherLane});await flush();
+ await change(linkedA,'callout');delivered=(await flush()).rows;assert.deepEqual(delivered.map(n=>n.user_id).sort(),[driver,other].sort(),'both assigned drivers receive linked-trip cancellation');
+ await change(linkedA,'restore');await flush();
+ await db.query('update transportation_routes set record_data=record_data||$1 where id=$2',[JSON.stringify({runDate:callDay,runStatus:'Dropped Off',tripPeriod:'Morning'}),linkedA]);await flush();
+ await change(linkedB,'callout');delivered=(await flush()).rows;assert.equal(delivered.length,1,'a completed morning trip creates no new cancellation');assert.equal(delivered[0].user_id,other);
+ // A different day's recurring stop is not part of today's route.
+ await change(linkedB,'restore');await flush();
+ await db.query('update transportation_routes set record_data=record_data||$1 where id=$2',[JSON.stringify({runDate:'',runStatus:'',days:'Friday'}),linkedA]);await flush();
+ await change(linkedB,'callout');delivered=(await flush()).rows;assert.equal(delivered.length,1);assert.equal(delivered[0].user_id,other);
+ // Access revocation between save and dispatch prevents the alert.
+ await change(nextRoute,'callout');await db.query('update staff_access set is_active=false where user_id=$1',[driver]);assert.equal((await flush()).rows.length,0);await db.query('update staff_access set is_active=true where user_id=$1',[driver]);await change(nextRoute,'restore');await flush();
+ // Date-specific coverage resolves a unique staff identity rather than an old driver.
+ await db.query("update staff_lane_profiles set full_name='Synthetic Cover' where id=$1",[otherLane]);
+ await db.query('update transportation_routes set record_data=record_data||$1 where id=$2',[JSON.stringify({coveringDriver:'Synthetic Cover',coveringDate:'2030-01-11'}),nextRoute]);
+ await change(nextRoute,'callout',{},'2030-01-11');delivered=(await flush()).rows;assert.equal(delivered.length,1);assert.equal(delivered[0].user_id,other);
+ for(const [days,date,expected] of [['Monday-Friday',callDay,true],['Friday',callDay,false],['Sat-Sun',callDay,false],['Fri-Mon','2030-01-07',true],['weekends','2030-01-12',true],['Mon, Thu',callDay,true],['',callDay,true]])assert.equal((await db.query('select transport_scheduled_on_date($1,$2) yes',[days,date])).rows[0].yes,expected);
  await db.query('update staff_lane_profiles set is_active=false where id=$1',[lane]);await assert.rejects(add(id(10),3),/active driver/);
  }finally{await db.close();}
 });
