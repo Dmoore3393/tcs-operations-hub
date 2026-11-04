@@ -3,8 +3,10 @@ import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {useAuth} from "@/components/providers/AuthProvider";
 import {hubRequest} from "@/lib/hub-request";
 import {mergeTransportDay,transportDayCallouts,type TransportCalloutReason,type DayRoute,type TransportDayStop} from "@/lib/transportation-day";
+import type {TransportDriver} from "@/lib/transport-driver-view";
 type Source={id:string;legacy_id:string;child_id:string|null};
-type Payload={stops:TransportDayStop[];sources:Source[];canPlan:boolean;canCallOut:boolean};
+type Payload={stops:TransportDayStop[];sources:Source[];drivers?:TransportDriver[];canPlan:boolean;canCallOut:boolean};
+const noDrivers:TransportDriver[]=[];
 export function useTransportDay<T extends DayRoute>(routes:T[],date:string){
  const {session}=useAuth();const token=session?.access_token;
  const [payload,setPayload]=useState<Payload>({stops:[],sources:[],canPlan:false,canCallOut:false});
@@ -21,5 +23,5 @@ export function useTransportDay<T extends DayRoute>(routes:T[],date:string){
   if(!token||!ready||saving)return false;const source=sourceFor(route);if(!source){setActionError('This route needs to finish syncing before it can be changed. Refresh and try again.');return false;}
   setSaving(true);setActionError('');try{await hubRequest('/api/transportation-day',token,{method:'POST',body:JSON.stringify({routeId:source.id,date,action,plan,expectedVersion,reason})});await load();return true;}catch(reason){setActionError(reason instanceof Error?reason.message:'Could not update daily transportation.');return false;}finally{setSaving(false);}
  }
- return {ready,error,actionError,saving,activeRoutes,callouts,stops:payload.stops.filter(stop=>stop.service_date===date),canPlan:payload.canPlan,canCallOut:payload.canCallOut,sourceFor,stopFor,change,refresh:load};
+ return {ready,error,actionError,saving,activeRoutes,callouts,drivers:payload.drivers||noDrivers,stops:payload.stops.filter(stop=>stop.service_date===date),canPlan:payload.canPlan,canCallOut:payload.canCallOut,sourceFor,stopFor,change,refresh:load};
 }

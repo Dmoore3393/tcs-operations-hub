@@ -4,15 +4,15 @@ import Link from "next/link";
 import { transportUsesBrightwheel, transportHandoffPatch } from "@/lib/transport-care-handoff";
 import { transportChildKey } from "@/lib/transport-child-schools";
 import {transportTripPeriod,transportPickup,transportDestination,transportRouteGroup,transportCoverageGroup,transportEmergencyHref} from "@/lib/transport-trips";
+import {isMyTransportRoute,transportDriverChoices,transportDriverFor} from "@/lib/transport-driver-view";
 import MyAssignedRoutes from "@/components/transportation/MyAssignedRoutes";
 import TransportCallouts from "@/components/transportation/TransportCallouts";
 import {useTransportDay} from "@/hooks/useTransportDay";
 import {useTransportChildren} from "@/hooks/useTransportChildren";
-import {childForSchoolRoute} from "@/lib/school-pickup-stops";
+import {childForSchoolRoute,groupSchoolPickupStops} from "@/lib/school-pickup-stops";
 import SchoolStopGroups from "@/components/transportation/SchoolStopGroups";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { useHubLocation } from "@/components/providers/LocationProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { localIsoDate } from "@/lib/date-utils";
 import { emergencyCardReadiness } from "@/lib/emergency-cards";
@@ -100,12 +100,6 @@ function destinationLocation(value?: string): Exclude<LocationKey, "All Location
   return null;
 }
 
-function matchesLocation(route: TransportationRoute & {dropoffLocation?:string}, activeLocation: string) {
-  if (activeLocation === "All Locations") return true;
-  const destination = (transportTripPeriod(route)==='Morning'?null:destinationLocation(route.dropoffLocation));
-  return normalizeLocation(route.location) === activeLocation || destination === activeLocation;
-}
-
 function isLeadership(name: string, email: string) {
   const identity = `${name} ${email}`.toLowerCase();
   return identity.includes("danielle") || identity.includes("jennifer") || identity.includes("jen thomason");
@@ -113,14 +107,14 @@ function isLeadership(name: string, email: string) {
 
 export default function TransportationV2Page() {
   const { profile, session, canManageSystem, isLocationLicensee } = useAuth();
-  const { location: activeLocation } = useHubLocation();
   const [routes, setRoutes, routesHydrated, routeState] = usePersistentState<LiveRoute[]>("tcs-routes", starterRoutes as LiveRoute[]);
   const [schools] = usePersistentState<SchoolRecord[]>("tcs-schools-v2", starterSchools);
   const [vehicles] = usePersistentState<VehicleRecord[]>("tcs-vehicles-v2", starterVehicles);
   const childRoster=useTransportChildren();
   const children=childRoster.children;
   const [careLogs, setCareLogs] = usePersistentState<CareLogEntry[]>("tcs-daily-care-v1", starterCareLogs);
-  const [selectedRoute, setSelectedRoute] = useState("");
+  const [view, setView] = useState<"mine" | "all">("mine");
+  const [selectedDriver, setSelectedDriver] = useState("");
   const [isOnline, setIsOnline] = useState(true);
   const [pendingOffline, setPendingOffline] = useState(0);
   const [replayingOffline, setReplayingOffline] = useState(false);
@@ -219,26 +213,28 @@ export default function TransportationV2Page() {
 
   const [trip,setTrip]=useState('All trips');
   const todayRoutes = useMemo(
-    () => dispatch.activeRoutes.filter((route) => matchesLocation(route, activeLocation)&&(trip==='All trips'||transportTripPeriod(route)===trip)),
-    [dispatch.activeRoutes, activeLocation,trip],
+    () => dispatch.activeRoutes.filter(route => (trip==='All trips'||transportTripPeriod(route)===trip)&&(view==='all'||isMyTransportRoute(route,profile,today,dispatch.drivers))),
+    [dispatch.activeRoutes,dispatch.drivers,profile,today,trip,view],
   );
-  const todayCallouts=useMemo(()=>dispatch.callouts.filter(stop=>matchesLocation(stop.snapshot,activeLocation)&&(trip==='All trips'||transportTripPeriod(stop.snapshot)===trip)),[dispatch.callouts,activeLocation,trip]);
+  const todayCallouts=useMemo(()=>dispatch.callouts.filter(stop=>(trip==='All trips'||transportTripPeriod(stop.snapshot)===trip)&&(view==='all'||isMyTransportRoute(stop.snapshot,profile,today,dispatch.drivers))),[dispatch.callouts,dispatch.drivers,profile,today,trip,view]);
   const assignedRoutes=useMemo(()=>[...todayRoutes,...todayCallouts.map(stop=>stop.snapshot)],[todayRoutes,todayCallouts]);
-  const routeNames=useMemo(()=>[...new Set(assignedRoutes.map(routeKey))],[assignedRoutes]);
-  const effectiveRoute = routeNames.includes(selectedRoute) ? selectedRoute : routeNames[0] || "";
-  const myRoute = useMemo(
-    () => todayRoutes.filter((route) => routeKey(route) === effectiveRoute).sort((a, b) => (a.stopOrder ?? 999) - (b.stopOrder ?? 999) || a.pickup.localeCompare(b.pickup)),
-    [todayRoutes, effectiveRoute],
-  );
-
-  const myCallouts=todayCallouts.filter(stop=>routeKey(stop.snapshot)===effectiveRoute);
-  const assignedRoute=myRoute[0]||myCallouts[0]?.snapshot;
-  const waiting = todayRoutes.filter((route) => statusFor(route, today) === "Waiting").length;
-  const onboard = todayRoutes.filter((route) => statusFor(route, today) === "Picked Up").length;
-  const arrived = todayRoutes.filter((route) => statusFor(route, today) === "Arrived").length;
-  const checkedIn = todayRoutes.filter((route) => statusFor(route, today) === "Checked In").length;
+  const drivers=useMemo(()=>transportDriverChoices(assignedRoutes,today,dispatch.drivers),[assignedRoutes,today,dispatch.drivers]);
+  const effectiveDriver = view==='all'&&drivers.some(driver=>driver.key===selectedDriver)?selectedDriver:'';
+  const visibleRoutes = todayRoutes.filter(route=>!effectiveDriver||transportDriverFor(route,today,dispatch.drivers).key===effectiveDriver);
+  const visibleCallouts=todayCallouts.filter(stop=>!effectiveDriver||transportDriverFor(stop.snapshot,today,dispatch.drivers).key===effectiveDriver);
+  const visibleAssignments=[...visibleRoutes,...visibleCallouts.map(stop=>stop.snapshot)];
+  const stopCount=groupSchoolPickupStops(visibleAssignments,false,route=>transportDriverFor(route,today,dispatch.drivers)).length;
+  const routeLocations=[...new Set(visibleAssignments.map(route=>route.location))];
+  const routeVehicles=[...new Set(visibleAssignments.map(route=>route.vehicle).filter(Boolean))];
+  const coverageKeys=new Set(visibleRoutes.map(route=>transportationDutyKey(today,transportCoverageGroup(route),routeDriver(route))));
+  const coverageBlocks=transportCoverage.filter(block=>coverageKeys.has(block.source_key||''));
+  const onRouteCount=coverageBlocks.filter(block=>block.end_time.startsWith('23:59')).length;
+  const waiting = visibleRoutes.filter((route) => statusFor(route, today) === "Waiting").length;
+  const onboard = visibleRoutes.filter((route) => statusFor(route, today) === "Picked Up").length;
+  const arrived = visibleRoutes.filter((route) => statusFor(route, today) === "Arrived").length;
+  const checkedIn = visibleRoutes.filter((route) => statusFor(route, today) === "Checked In").length;
   const fleetReady = vehicles.filter((vehicle) => vehicle.status === "Ready").length;
-  const currentRouteEmergency = myRoute.map((route) => {
+  const currentRouteEmergency = visibleRoutes.map((route) => {
     const child = childForSchoolRoute(route,children);
     const readiness = child ? emergencyCardReadiness(child) : null;
     return { route, child, readiness, ready: Boolean(child && readiness?.ready) };
@@ -246,7 +242,7 @@ export default function TransportationV2Page() {
   const currentRouteReadyCount = currentRouteEmergency.filter((item) => item.ready).length;
   const currentRouteNeedsAttention = currentRouteEmergency.filter((item) => !item.ready);
 
-  const locationArrivals = todayRoutes.filter((route) => {
+  const locationArrivals = visibleRoutes.filter((route) => {
     const status = statusFor(route, today);
     return status === "Arrived" && (transportTripPeriod(route)==='Morning'?null:destinationLocation(route.dropoffLocation)) !== null;
   });
@@ -263,7 +259,7 @@ export default function TransportationV2Page() {
   }
 
   function staffingLocationForRoute(route: LiveRoute) {
-    const candidates = [route.location, route.dropoffLocation, activeLocation].filter(Boolean).join(" ");
+    const candidates = [route.location, route.dropoffLocation].filter(Boolean).join(" ");
     const key = normalizeLocation(candidates);
     if (key === "All Locations") return null;
     return staffingLocations.find((item) => locationKeyForDbLocation(item) === key) ?? null;
@@ -271,7 +267,7 @@ export default function TransportationV2Page() {
 
   function isFinalHandoffForRoute(route: LiveRoute) {
     const key = transportCoverageGroup(route);
-    return todayRoutes
+    return dispatch.activeRoutes
       .filter((item) => transportCoverageGroup(item) === key)
       .every((item) => item.id === route.id || statusFor(item, today) === "Checked In");
   }
@@ -422,12 +418,18 @@ export default function TransportationV2Page() {
   return (
     <MainLayout>
       <div className="mx-auto max-w-[1580px] space-y-6 pb-12">
-        <section className="rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><span className="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-100 text-emerald-900" aria-hidden="true"><Bus className="h-8 w-8 pointer-events-none"/></span><div><h1 className="text-2xl font-black text-emerald-950">Transportation</h1><p className="text-base text-slate-700">Morning school drop-offs and afternoon pickups</p></div></div>{canManageTransportation&&<Link href="/transportation-setup" className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-emerald-800 px-5 py-3 text-base font-bold text-white"><Pencil className="h-5 w-5" aria-hidden="true"/>Routes & call-outs</Link>}</div><p className="mt-3 text-base text-slate-700">Choose your route below, then confirm each child at pickup, arrival and handoff.</p></section>
+        <section className="rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><span className="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-100 text-emerald-900" aria-hidden="true"><Bus className="h-8 w-8 pointer-events-none"/></span><div><h1 className="text-2xl font-black text-emerald-950">Transportation</h1><p className="text-base text-slate-700">Morning school drop-offs and afternoon pickups</p></div></div>{canManageTransportation&&<Link href="/transportation-setup" className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-emerald-800 px-5 py-3 text-base font-bold text-white"><Pencil className="h-5 w-5" aria-hidden="true"/>Routes & call-outs</Link>}</div><p className="mt-3 text-base text-slate-700">My Route brings your school stops and children from every location together. Confirm each child at pickup, arrival and handoff.</p></section>
 
         {transportUsesBrightwheel && <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-base text-amber-950"><h2 className="font-black">Care attendance stays in Brightwheel</h2><p>Record each school pickup and destination handoff here. Complete childcare check-ins and check-outs in Brightwheel until families move to The Hub.</p></section>}
+        <section className="rounded-2xl border border-emerald-200 bg-white p-4">
+          <div className="flex flex-wrap gap-3" role="group" aria-label="Route view">
+            <button type="button" aria-pressed={view==='mine'} onClick={()=>setView('mine')} className={`min-h-12 rounded-xl px-5 py-3 text-base font-bold ${view==='mine'?'bg-emerald-800 text-white':'border border-emerald-300 text-emerald-950'}`}>My Route</button>
+            <button type="button" aria-pressed={view==='all'} onClick={()=>setView('all')} className={`min-h-12 rounded-xl px-5 py-3 text-base font-bold ${view==='all'?'bg-emerald-800 text-white':'border border-emerald-300 text-emerald-950'}`}>All Routes</button>
+          </div>
+          <p className="mt-3 text-base text-slate-700">{view==='mine'?`${actor} · Your entire route across all locations. No location switching needed.`:'Browse every accessible driver’s route across locations. Return to My Route when running your own pickups.'}</p>
+        </section>
         <section className="flex flex-wrap gap-3 rounded-2xl border border-emerald-200 bg-white p-4" aria-label="Transportation sessions">{['All trips','Morning','Afternoon'].map(session=><button key={session} type="button" aria-pressed={trip===session} onClick={()=>setTrip(session)} className={`min-h-12 rounded-xl px-5 py-3 text-base font-bold ${trip===session?'bg-emerald-800 text-white':'border border-emerald-300 bg-white text-emerald-950'}`}>{session==='Morning'?'Morning · School drop-offs':session==='Afternoon'?'Afternoon · School pickups':'All trips'}</button>)}</section>
-        {dispatch.ready && routesHydrated && !routeState.error && !assignedRoutes.length && <section className="rounded-2xl border border-emerald-200 bg-white p-5 text-base"><h2 className="text-xl font-black text-emerald-950">No trips scheduled in this view</h2><p className="mt-2">Choose All Locations to see other sites, or add a school trip using an existing child profile.</p>{canManageTransportation && <Link href="/transportation-setup?tab=children" className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 font-bold text-white">Children & Schools</Link>}</section>}
-        <Suspense fallback={<p>Loading assigned routes…</p>}><MyAssignedRoutes routes={routes}/></Suspense>
+        {dispatch.ready && routesHydrated && !routeState.error && !assignedRoutes.length && <section className="rounded-2xl border border-emerald-200 bg-white p-5 text-base"><h2 className="text-xl font-black text-emerald-950">{view==='mine'?'No trips assigned to you in this view':'No trips scheduled in this view'}</h2><p className="mt-2">{view==='mine'?'Your assignments will appear here across all locations. You can still browse All Routes, or choose All trips to include both morning and afternoon.':'Choose All trips, or add a school trip using an existing child profile.'}</p>{view==='mine'&&<button type="button" onClick={()=>setView('all')} className="mt-3 min-h-11 rounded-xl border border-emerald-300 px-4 font-bold text-emerald-950">Browse all routes</button>}{canManageTransportation && <Link href="/transportation-setup?tab=children" className="mt-3 ml-3 inline-flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 font-bold text-white">Children & Schools</Link>}</section>}
         {(dispatch.error||dispatch.actionError)&&<section role="alert" className="rounded-xl bg-red-50 p-4 text-base text-red-950">{dispatch.error||dispatch.actionError}<button className="ml-3 min-h-11 underline" onClick={()=>void dispatch.refresh()}>Try again</button></section>}
         {!dispatch.ready&&!dispatch.error&&<p role="status" className="text-base">Checking today’s route changes and call-outs…</p>}
         {coverageMessage && <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-black text-blue-950 shadow-sm">{coverageMessage}</section>}
@@ -442,36 +444,36 @@ export default function TransportationV2Page() {
           </div>
         </section>
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-          <Metric label="Assigned Routes" value={routeNames.length} icon={<Bus className="h-5 w-5" />} />
+        <div className={`grid gap-4 sm:grid-cols-2 ${view==='all'?'xl:grid-cols-6':'xl:grid-cols-5'}`}>
+          <Metric label="School stops" value={stopCount} icon={<Bus className="h-5 w-5" />} />
           <Metric label="Waiting" value={waiting} icon={<Clock3 className="h-5 w-5" />} tone="amber" />
           <Metric label="In Transit" value={onboard} icon={<Navigation className="h-5 w-5" />} tone="blue" />
           <Metric label="Arrived" value={arrived} icon={<MapPin className="h-5 w-5" />} tone="purple" />
           <Metric label="Handoffs complete" value={checkedIn} icon={<CheckCircle2 className="h-5 w-5" />} tone="green" />
-          <Metric label="Fleet Ready" value={`${fleetReady}/${vehicles.length}`} icon={<ShieldCheck className="h-5 w-5" />} tone="slate" />
+          {view==='all'&&<Metric label="Fleet Ready" value={`${fleetReady}/${vehicles.length}`} icon={<ShieldCheck className="h-5 w-5" />} tone="slate" />}
         </div>
 
-        {leader && leadershipExceptions.length > 0 && <section className="rounded-3xl border border-amber-300 bg-amber-50 p-5 shadow-sm"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-6 w-6 text-amber-700" /><div><p className="text-xs font-black uppercase tracking-[.16em] text-amber-700">Danielle + Jen only</p><h2 className="mt-1 text-xl font-black text-amber-950">Transportation handoffs to review</h2><p className="mt-1 text-sm font-semibold text-amber-900">These children were picked up but have not completed the destination handoff yet. This is intentionally leadership-only so field trips and off-site care can be checked without alarming site staff.</p></div></div><div className="mt-4 grid gap-3 md:grid-cols-2">{leadershipExceptions.map((route) => <div key={route.id} className="rounded-2xl bg-white p-4 ring-1 ring-amber-200"><p className="font-black text-slate-950"><span translate="no" className="contents">{route.child}</span></p><p className="mt-1 text-sm font-bold text-amber-800">{statusFor(route, today)} • {routeKey(route)}</p><p className="mt-1 text-xs font-semibold text-slate-500">Expected: {route.dropoffLocation || "destination not entered"}</p></div>)}</div></section>}
+        {view==='all' && leader && leadershipExceptions.length > 0 && <section className="rounded-3xl border border-amber-300 bg-amber-50 p-5 shadow-sm"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-6 w-6 text-amber-700" /><div><p className="text-xs font-black uppercase tracking-[.16em] text-amber-700">Danielle + Jen only</p><h2 className="mt-1 text-xl font-black text-amber-950">Transportation handoffs to review</h2><p className="mt-1 text-sm font-semibold text-amber-900">These children were picked up but have not completed the destination handoff yet. This is intentionally leadership-only so field trips and off-site care can be checked without alarming site staff.</p></div></div><div className="mt-4 grid gap-3 md:grid-cols-2">{leadershipExceptions.map((route) => <div key={route.id} className="rounded-2xl bg-white p-4 ring-1 ring-amber-200"><p className="font-black text-slate-950"><span translate="no" className="contents">{route.child}</span></p><p className="mt-1 text-sm font-bold text-amber-800">{statusFor(route, today)} • {routeKey(route)}</p><p className="mt-1 text-xs font-semibold text-slate-500">Expected: {route.dropoffLocation || "destination not entered"}</p></div>)}</div></section>}
 
         {locationArrivals.length > 0 && <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm"><div className="flex items-start gap-3"><BellRing className="mt-0.5 h-6 w-6 text-[#1769d2]" /><div><p className="text-xs font-black uppercase tracking-[.16em] text-[#1769d2]">Location arrival notice</p><h2 className="mt-1 text-xl font-black text-[#102a56]">A transported child has arrived</h2><p className="mt-1 text-sm font-semibold text-slate-600">Program directors and authorized staff only need the arrival notice. Missing-drop-off alerts stay with Danielle and Jen.</p></div></div></section>}
 
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#1769d2]">My Route Today</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">Choose the route you are running</h2><p className="mt-1 text-sm font-semibold text-slate-500">Pickup and destination confirmation happen one child at a time.</p></div><div className="flex flex-wrap gap-2"><Link href={transportEmergencyHref(myRoute,routes)} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#9f2f35] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#7e2228]"><HeartPulse className="h-4 w-4" /> EMERGENCY MEDICAL CARDS</Link></div></div>
-          <div className="mt-5 flex flex-wrap gap-2">{routeNames.map((name) => <button key={name} onClick={() => setSelectedRoute(name)} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${effectiveRoute === name ? "border-[#1769d2] bg-[#eef6ff] text-[#102a56]" : "border-slate-200 bg-white text-slate-600"}`}>{name}</button>)}{!routeNames.length && <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">No routes are assigned for today at this location.</p>}</div>
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#1769d2]">{view==='mine'?'My Route Today':'All Routes Today'}</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">{view==='mine'?'Your complete route':'Browse driver routes'}</h2><p className="mt-1 text-base text-slate-600">All locations · {stopCount} school {stopCount===1?'stop':'stops'} · {visibleRoutes.length} scheduled {visibleRoutes.length===1?'trip':'trips'}{visibleCallouts.length?` · ${visibleCallouts.length} called out`:''}</p></div>{visibleRoutes.length>0&&<Link href={transportEmergencyHref(visibleRoutes,routes)} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#9f2f35] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#7e2228]"><HeartPulse className="h-4 w-4" /> EMERGENCY MEDICAL CARDS</Link>}</div>
+          {view==='all'&&<label className="mt-4 block text-base font-bold text-slate-800">Driver<select aria-label="Browse driver routes" value={effectiveDriver} onChange={event=>setSelectedDriver(event.target.value)} className="mt-2 block min-h-12 w-full rounded-xl border border-slate-300 bg-white p-3 sm:max-w-md"><option value="">All drivers</option>{drivers.map(driver=><option key={driver.key} value={driver.key}>{driver.name}</option>)}</select></label>}
         </section>
 
-        {effectiveRoute && <section className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><Summary label="Route" value={effectiveRoute} /><Summary label="Driver" value={myRoute.find((route) => route.coveringDate === today && route.coveringDriver)?.coveringDriver || assignedRoute?.driver || "Not assigned"} /><Summary label="Vehicle" value={assignedRoute?.vehicle || "Not assigned"} /><Summary label="Floor Coverage" value={(() => { const driver = myRoute[0] ? routeDriver(myRoute[0]) : ""; const key = driver ? transportationDutyKey(today, effectiveRoute, driver) : ""; const block = transportCoverage.find((item) => item.source_key === key); if (!block) return "On floor / route not started"; return block.end_time.startsWith("23:59") ? `Off floor since ${timeLabel(block.start_time)}` : `Returned ${timeLabel(block.end_time)}`; })()} /></div>
-          <TransportCallouts stops={myCallouts} date={today} canRestore={dispatch.canCallOut} saving={dispatch.saving||!isOnline} onRestore={route=>{setSelectedRoute(routeKey(route));void dispatch.change(route,"restore");}}/>
-          {myRoute.length>0&&<div className={`rounded-3xl border p-5 ${currentRouteNeedsAttention.length ? "border-red-300 bg-red-50" : "border-emerald-300 bg-emerald-50"}`}>
+        {visibleAssignments.length>0 && <section className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><Summary label="Driver" value={view==='mine'?actor:drivers.find(driver=>driver.key===effectiveDriver)?.name||'All drivers'} /><Summary label="Care locations" value={routeLocations.join(' • ')} /><Summary label="Vehicle" value={routeVehicles.join(' • ')||'Not assigned'} /><Summary label="Floor Coverage" value={onRouteCount?'Off floor — transportation':coverageBlocks.length?'Returned from transportation':'On floor / route not started'} /></div>
+          <TransportCallouts stops={visibleCallouts} date={today} driverFor={route=>transportDriverFor(route,today,dispatch.drivers)} canRestore={dispatch.canCallOut} saving={dispatch.saving||!isOnline} onRestore={route=>{void dispatch.change(route,"restore");}}/>
+          {visibleRoutes.length>0&&<div className={`rounded-3xl border p-5 ${currentRouteNeedsAttention.length ? "border-red-300 bg-red-50" : "border-emerald-300 bg-emerald-50"}`}>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-start gap-3">{currentRouteNeedsAttention.length ? <AlertTriangle className="mt-0.5 h-6 w-6 flex-none text-red-700" /> : <ShieldCheck className="mt-0.5 h-6 w-6 flex-none text-emerald-700" />}<div><p className={`text-xs font-black uppercase tracking-[.14em] ${currentRouteNeedsAttention.length ? "text-red-700" : "text-emerald-700"}`}>Route emergency readiness</p><h3 className={`mt-1 text-xl font-black ${currentRouteNeedsAttention.length ? "text-red-950" : "text-emerald-950"}`}>{currentRouteReadyCount}/{myRoute.length} children with complete Hub emergency records</h3><p className="mt-1 text-sm font-semibold text-slate-700">{currentRouteNeedsAttention.length ? (transportUsesBrightwheel ? "Review the missing Hub information below. During the transition, confirm each child’s current Brightwheel or vehicle-binder emergency record before pickup." : "Pickup is blocked for children whose emergency record is not ready. Review the missing information before departure.") : "Emergency contacts, consent status, provider information, and allergy status are ready for this route."}</p></div></div>
-              <Link href={transportEmergencyHref(myRoute,routes)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#8f2a30] px-4 py-2.5 text-sm font-black text-white"><HeartPulse className="h-4 w-4" /> Review / Print Backup</Link>
+              <div className="flex items-start gap-3">{currentRouteNeedsAttention.length ? <AlertTriangle className="mt-0.5 h-6 w-6 flex-none text-red-700" /> : <ShieldCheck className="mt-0.5 h-6 w-6 flex-none text-emerald-700" />}<div><p className={`text-xs font-black uppercase tracking-[.14em] ${currentRouteNeedsAttention.length ? "text-red-700" : "text-emerald-700"}`}>Route emergency readiness</p><h3 className={`mt-1 text-xl font-black ${currentRouteNeedsAttention.length ? "text-red-950" : "text-emerald-950"}`}>{currentRouteReadyCount}/{visibleRoutes.length} children with complete Hub emergency records</h3><p className="mt-1 text-sm font-semibold text-slate-700">{currentRouteNeedsAttention.length ? (transportUsesBrightwheel ? "Review the missing Hub information below. During the transition, confirm each child’s current Brightwheel or vehicle-binder emergency record before pickup." : "Pickup is blocked for children whose emergency record is not ready. Review the missing information before departure.") : "Emergency contacts, consent status, provider information, and allergy status are ready for this route."}</p></div></div>
+              <Link href={transportEmergencyHref(visibleRoutes,routes)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#8f2a30] px-4 py-2.5 text-sm font-black text-white"><HeartPulse className="h-4 w-4" /> Review / Print Backup</Link>
             </div>
             {currentRouteNeedsAttention.length > 0 && <div className="mt-4 grid gap-2 md:grid-cols-2">{currentRouteNeedsAttention.map(({ route, readiness }) => <div key={route.id} className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs"><strong className="text-red-950"><span translate="no" className="contents">{route.child}</span></strong><p className="mt-1 text-red-700">{readiness ? readiness.missing.slice(0, 3).join(" • ") : "Child emergency record not found"}</p></div>)}</div>}
           </div>}
           <div className="rounded-3xl border border-blue-100 bg-[#f7fbff] p-5"><div className="flex items-start gap-3"><Navigation className="mt-0.5 h-5 w-5 text-[#1769d2]" /><p className="text-sm font-semibold leading-6 text-slate-700"><strong>Required chain:</strong> Tap Picked Up only when the child is physically with you. At the destination, tap Arrived. Confirm the handoff only after the child is with the receiving staff or school. Follow the care-attendance instructions above.</p></div></div>
-          <SchoolStopGroups routes={myRoute}>{(route) => {
+          <SchoolStopGroups routes={visibleRoutes} driverFor={route=>transportDriverFor(route,today,dispatch.drivers)}>{(route) => {
             const status = statusFor(route, today);
             const destination = (transportTripPeriod(route)==='Morning'?null:destinationLocation(route.dropoffLocation));
             const emergency = currentRouteEmergency.find((item) => item.route.id === route.id);
@@ -484,7 +486,7 @@ export default function TransportationV2Page() {
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link href={emergency?.child?`/emergency-cards?child=${emergency.child.id}`:"/emergency-cards"} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800"><HeartPulse className="h-4 w-4" /> EMERGENCY CARD</Link>
                 {status === "Waiting" && <Action disabled={!emergencyReady || !emergency?.child || emergency.child.enrollmentStatus !== "Active"} title={!emergencyReady ? "Emergency record must be ready before pickup." : undefined} onClick={() => markPickedUp(route)}><UserCheck className="h-4 w-4" /> {emergencyReady ? "PICKED UP" : "EMERGENCY RECORD NOT READY"}</Action>}
-                {status === "Waiting" && dispatch.canCallOut && <><Action disabled={dispatch.saving || !isOnline} onClick={() => {setSelectedRoute(routeKey(route));void dispatch.change(route,"callout",{},dispatch.stopFor(route)?.version||0,"sick");}} tone="purple">Out sick today</Action><Action disabled={dispatch.saving || !isOnline} onClick={() => {setSelectedRoute(routeKey(route));void dispatch.change(route,"callout");}} tone="purple">No transportation today</Action></>}
+                {status === "Waiting" && dispatch.canCallOut && <><Action disabled={dispatch.saving || !isOnline} onClick={() => {void dispatch.change(route,"callout",{},dispatch.stopFor(route)?.version||0,"sick");}} tone="purple">Out sick today</Action><Action disabled={dispatch.saving || !isOnline} onClick={() => {void dispatch.change(route,"callout");}} tone="purple">No transportation today</Action></>}
                 {status === "Picked Up" && <Action onClick={() => markArrived(route)} tone="purple"><MapPin className="h-4 w-4" /> ARRIVED AT DESTINATION</Action>}
                 {status === "Arrived" && destination && <Action onClick={() => checkIntoLocation(route)} tone="green"><CheckCircle2 className="h-4 w-4" /> {transportUsesBrightwheel ? "CONFIRM HANDOFF AT" : "CHECK CHILD INTO"} {destination.toUpperCase()}</Action>}
                 {status === "Arrived" && !destination && <Action onClick={() => confirmExternalDropoff(route)} tone="green"><CheckCircle2 className="h-4 w-4" /> {transportTripPeriod(route)==='Morning'?'CONFIRM SCHOOL DROP-OFF':'CONFIRM DROP-OFF COMPLETE'}</Action>}
@@ -495,9 +497,10 @@ export default function TransportationV2Page() {
           }}</SchoolStopGroups>
         </section>}
 
+        <Suspense fallback={<p>Loading assigned routes…</p>}><MyAssignedRoutes routes={routes}/></Suspense>
         {routeState.error && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-900">{routeState.error} <button className="min-h-11 underline" onClick={routeState.retry}>Try again</button></p>}
         {childRoster.error&&<p role="alert" className="rounded-xl bg-red-50 p-4 text-red-900">{childRoster.error} <button className="min-h-11 underline" onClick={()=>void childRoster.refresh()}>Try again</button></p>}
-        <section className="grid gap-5 xl:grid-cols-3"><Panel title="Recent Pickups" icon={<UserCheck className="h-5 w-5" />}>{todayRoutes.filter((route) => route.runDate === today && route.pickedUpAt).sort((a, b) => String(b.pickedUpAt).localeCompare(String(a.pickedUpAt))).slice(0, 5).map((route) => <Row key={route.id} top={route.child} bottom={`${timeLabel(route.pickedUpAt)} • ${route.school}`} />)}</Panel><Panel title="Schools" icon={<MapPin className="h-5 w-5" />}>{schools.filter((school) => school.status === "Active").slice(0, 5).map((school) => <Row key={school.id} top={school.school} bottom={`${school.area} • ${school.dismissal || "dismissal not entered"}`} />)}</Panel><Panel title="Transportation Reminders" icon={<ShieldCheck className="h-5 w-5" />}><Row top="One child at a time" bottom="Never bulk-confirm pickups or handoffs." /><Row top="Arrival is not check-in" bottom={transportUsesBrightwheel ? "Record handoff here; complete care attendance in Brightwheel." : "TCS destination handoff requires a separate location check-in."} /><Row top="Field trip exception review" bottom="Missing destination handoffs alert Danielle and Jen only." /></Panel></section>
+        <section className="grid gap-5 xl:grid-cols-3"><Panel title="Recent Pickups" icon={<UserCheck className="h-5 w-5" />}>{visibleRoutes.filter((route) => route.runDate === today && route.pickedUpAt).sort((a, b) => String(b.pickedUpAt).localeCompare(String(a.pickedUpAt))).slice(0, 5).map((route) => <Row key={route.id} top={route.child} bottom={`${timeLabel(route.pickedUpAt)} • ${route.school}`} />)}</Panel><Panel title="Schools" icon={<MapPin className="h-5 w-5" />}>{schools.filter((school) => school.status === "Active").slice(0, 5).map((school) => <Row key={school.id} top={school.school} bottom={`${school.area} • ${school.dismissal || "dismissal not entered"}`} />)}</Panel><Panel title="Transportation Reminders" icon={<ShieldCheck className="h-5 w-5" />}><Row top="One child at a time" bottom="Never bulk-confirm pickups or handoffs." /><Row top="Arrival is not check-in" bottom={transportUsesBrightwheel ? "Record handoff here; complete care attendance in Brightwheel." : "TCS destination handoff requires a separate location check-in."} /><Row top="Field trip exception review" bottom="Missing destination handoffs alert Danielle and Jen only." /></Panel></section>
       </div>
     </MainLayout>
   );
@@ -507,6 +510,6 @@ function Metric({ label, value, icon, tone = "blue" }: { label: string; value: R
 function Summary({ label, value }: { label: string; value: string }) { return <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-base font-black uppercase tracking-wider text-slate-600">{label}</p><p className="mt-1 font-black text-slate-900">{value}</p></div>; }
 function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200"><p className="text-base font-black uppercase tracking-wider text-slate-600">{label}</p><p className="mt-1 text-sm font-black text-slate-900">{value}</p></div>; }
 function Status({ status }: { status: RunStatus }) { const styles: Record<RunStatus, string> = { Waiting: "bg-amber-100 text-amber-800", "Picked Up": "bg-blue-100 text-blue-800", Arrived: "bg-purple-100 text-purple-800", "Checked In": "bg-emerald-100 text-emerald-800", "Dropped Off": "bg-emerald-100 text-emerald-800" }; return <span className={`rounded-full px-3 py-1.5 text-xs font-black ${styles[status]}`}>{status === "Picked Up" ? "IN TRANSIT" : status === "Checked In" || status === "Dropped Off" ? "HANDOFF COMPLETE" : status.toUpperCase()}</span>; }
-function Action({ children, onClick, tone = "blue", disabled = false, title }: { children: React.ReactNode; onClick: () => void; tone?: "blue" | "purple" | "green"; disabled?: boolean; title?: string }) { const styles = { blue: "bg-[#1769d2]", purple: "bg-purple-600", green: "bg-[#34a853]" }; return <button disabled={disabled} title={title} onClick={onClick} className={`inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black text-white shadow-sm ${disabled ? "cursor-not-allowed bg-slate-400 opacity-75" : styles[tone]}`}>{children}</button>; }
+function Action({ children, onClick, tone = "blue", disabled = false, title }: { children: React.ReactNode; onClick: () => void; tone?: "blue" | "purple" | "green"; disabled?: boolean; title?: string }) { const styles = { blue: "bg-[#1769d2]", purple: "bg-purple-600", green: "bg-[#34a853]" }; return <button disabled={disabled} title={title} onClick={onClick} className={`inline-flex min-h-12 min-w-40 flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black text-white shadow-sm ${disabled ? "cursor-not-allowed bg-slate-400 opacity-75" : styles[tone]}`}>{children}</button>; }
 function Panel({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) { return <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-2 text-[#102a56]">{icon}<h3 className="font-black">{title}</h3></div><div className="mt-4 space-y-3">{children}</div></section>; }
 function Row({ top, bottom }: { top: string; bottom: string }) { return <div className="rounded-2xl bg-slate-50 p-3"><p className="text-sm font-black text-slate-900">{top}</p><p className="mt-1 text-xs font-semibold text-slate-500">{bottom}</p></div>; }
