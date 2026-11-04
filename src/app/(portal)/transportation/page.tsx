@@ -143,7 +143,7 @@ type LiveTransportationRoute = TransportationRoute & {
   runHistory?: TransportationRunEvent[];
 };
 
-function routeGroupKey(route: LiveTransportationRoute) {
+function routeGroupKey(route: TransportationRoute) {
   return transportRouteGroup(route);
 }
 
@@ -199,7 +199,8 @@ export default function TransportationPage() {
     [activeLocation, routes],
   );
   const todayRoutes = useMemo(() => dispatch.activeRoutes.filter(route=>activeLocation==="All Locations"||transportCareLocation(route.location)===activeLocation), [dispatch.activeRoutes,activeLocation]);
-  const routeKeys = useMemo(() => [...new Set(todayRoutes.map(routeGroupKey))], [todayRoutes]);
+  const todayCallouts=useMemo(()=>dispatch.callouts.filter(stop=>activeLocation==='All Locations'||transportCareLocation(stop.snapshot.location)===activeLocation),[dispatch.callouts,activeLocation]);
+  const routeKeys=useMemo(()=>[...new Set([...todayRoutes,...todayCallouts.map(stop=>stop.snapshot)].map(routeGroupKey))],[todayRoutes,todayCallouts]);
   const effectiveRouteKey = routeKeys.includes(selectedRouteKey) ? selectedRouteKey : (routeKeys[0] ?? "");
   const selectedTodayRoutes = useMemo(
     () => todayRoutes
@@ -223,8 +224,9 @@ export default function TransportationPage() {
   const selectedWaiting = selectedTodayRoutes.filter((route) => routeRunStatus(route, today) === "Waiting").length;
   const selectedOnboard = selectedTodayRoutes.filter((route) => ["Picked Up","Arrived"].includes(routeRunStatus(route, today))).length;
   const selectedCheckedIn = selectedTodayRoutes.filter((route) => routeRunStatus(route, today) === "Checked In").length;
-  const selectedDriver = selectedTodayRoutes.find((route) => route.coveringDate === today && route.coveringDriver)?.coveringDriver || selectedTodayRoutes[0]?.driver || "Not assigned";
-  const selectedVehicle = selectedTodayRoutes.find((route) => route.vehicle)?.vehicle || "Not assigned";
+  const selectedCallouts=todayCallouts.filter(stop=>routeGroupKey(stop.snapshot)===effectiveRouteKey);
+  const selectedDriver = selectedTodayRoutes.find((route) => route.coveringDate === today && route.coveringDriver)?.coveringDriver || selectedTodayRoutes[0]?.driver || selectedCallouts[0]?.snapshot.driver || "Not assigned";
+  const selectedVehicle = selectedTodayRoutes.find((route) => route.vehicle)?.vehicle || selectedCallouts[0]?.snapshot.vehicle || "Not assigned";
 
   useEffect(() => {
     if (!childRoster.ready || !routesReady || linkOpened.current) return;
@@ -400,7 +402,7 @@ export default function TransportationPage() {
         </section>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          <StatCard label="Active Routes" value={routeKeys.length} icon={<Bus className="h-5 w-5" />} />
+          <StatCard label="Assigned Routes" value={routeKeys.length} icon={<Bus className="h-5 w-5" />} />
           <StatCard label="Drivers On Duty" value={activeDriverCount} icon={<UserCheck className="h-5 w-5" />} tone="blue" />
           <StatCard label="Waiting" value={waitingCount} icon={<Clock3 className="h-5 w-5" />} tone="amber" />
           <StatCard label="In Transit" value={inTransitCount} icon={<Users className="h-5 w-5" />} tone="purple" />
@@ -422,7 +424,6 @@ export default function TransportationPage() {
         {tab === "Today" && (
           <div className="space-y-5">
             {(dispatch.error||dispatch.actionError)&&<p role="alert" className="rounded-xl bg-red-50 p-4 text-base text-red-950">{dispatch.error||dispatch.actionError}<button className="ml-3 min-h-11 underline" onClick={()=>void dispatch.refresh()}>Try again</button></p>}
-            <TransportCallouts stops={dispatch.stops.filter(stop=>activeLocation==="All Locations"||transportCareLocation(stop.snapshot.location)===activeLocation)} canRestore={dispatch.canCallOut} saving={dispatch.saving} onRestore={route=>void dispatch.change(route,"restore")}/>
             <section className="rounded-3xl border border-[#d8e8fb] bg-white p-5 shadow-sm sm:p-6">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-[#1769d2]">Driver mode</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">My Route Today</h2><p className="mt-1 text-sm font-semibold text-slate-500">Choose the route you are running. Confirm every child individually at pickup and again when the child is checked into the destination.</p></div>{effectiveRouteKey && <button onClick={coverRouteToday} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#ffc72c] px-5 py-3 text-sm font-black text-[#102a56] shadow-sm"><UserCheck className="h-4 w-4" /> I’m Covering This Route Today</button>}</div>
               <div className="mt-5 flex flex-wrap gap-2">{routeKeys.map((key) => <button key={key} onClick={() => { setSelectedRouteKey(key); setRouteMessage(""); }} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${effectiveRouteKey === key ? "border-[#1769d2] bg-[#eef6ff] text-[#102a56]" : "border-slate-200 bg-white text-slate-600 hover:border-blue-200"}`}>{key}</button>)}{!routeKeys.length && <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">No active route records are scheduled for today at the selected Hub location.</p>}</div>
@@ -432,6 +433,7 @@ export default function TransportationPage() {
               <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5"><MiniSummary label="Route" value={effectiveRouteKey} /><MiniSummary label="Driver Today" value={selectedDriver} /><MiniSummary label="Vehicle" value={selectedVehicle} /><MiniSummary label="In Transit" value={String(selectedOnboard)} /><MiniSummary label="Checked In" value={`${selectedCheckedIn}/${selectedTodayRoutes.length}`} /></section>
               <section className="rounded-3xl border border-blue-100 bg-[#f7fbff] p-5 shadow-sm sm:p-6"><div className="flex items-start gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#1769d2] text-white"><Navigation className="h-5 w-5" /></div><div><h3 className="text-lg font-black text-[#102a56]">Required custody steps</h3><p className="mt-1 text-sm font-semibold leading-6 text-slate-600">1. Tap <strong>PICKED UP</strong> only when the child is physically with you. 2. The child stays <strong>IN TRANSIT</strong> while riding. 3. At the destination, tap <strong>CHECK INTO LOCATION</strong>. 4. Reconcile the route before you finish. Site staff are notified only when the child arrives; missing-arrival review stays with Danielle and Jen.</p></div></div></section>
 
+              <TransportCallouts stops={selectedCallouts} date={today} canRestore={dispatch.canCallOut} saving={dispatch.saving} onRestore={route=>void dispatch.change(route,"restore")}/>
               <SchoolStopGroups routes={selectedTodayRoutes}>{(route) => {
                 const runStatus = routeRunStatus(route, today);
                 const destination = transportDestination(route);
@@ -439,7 +441,7 @@ export default function TransportationPage() {
                   <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-[#1769d2]">{routeGroupKey(route)} • Stop {route.stopOrder ?? "—"}</p><div className="mt-1 flex flex-wrap items-center gap-2"><h3 className="text-xl font-black text-slate-950"><span translate="no" className="contents">{route.child}</span></h3><StatusBadge tone={runStatus === "Checked In" ? "green" : runStatus === "Picked Up" ? "blue" : "amber"}>{runStatus === "Picked Up" ? "In Transit" : runStatus}</StatusBadge></div><p className="mt-1 text-sm font-bold text-slate-600">{route.school || "School not entered"} • Pickup {route.pickup || "time not entered"}</p></div>{canManageRoutes && <button onClick={() => setTab("Daily Planner")} className="rounded-xl border border-slate-200 p-2 text-slate-500"><Pencil className="h-4 w-4" /></button>}</div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2"><InfoBox label="PICK UP AT" value={transportPickup(route) || "Not entered"} /><InfoBox label="CHECK INTO" value={destination || "Not entered"} /></div>
                   {route.notes && <p className="mt-3 rounded-xl bg-white px-3 py-2 text-xs font-semibold leading-5 text-red-700 ring-1 ring-slate-100"><strong>Transportation note:</strong> <span translate="no" className="contents">{route.notes}</span></p>}
-                  {transportTripPeriod(route)==="Morning"&&<Link href="/transportation" className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 py-3 font-bold text-white">Open morning pickup and school handoff</Link>}{dispatch.canCallOut&&runStatus==="Waiting"&&<button disabled={dispatch.saving} onClick={()=>void dispatch.change(route,"callout")} className="mt-3 min-h-11 rounded-xl bg-red-800 px-4 py-3 text-base font-bold text-white">Call Out</button>}
+                  {transportTripPeriod(route)==="Morning"&&<Link href="/transportation" className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 py-3 font-bold text-white">Open morning pickup and school handoff</Link>}{dispatch.canCallOut&&runStatus==="Waiting"&&<div className="mt-3 flex flex-wrap gap-2"><button disabled={dispatch.saving} onClick={()=>void dispatch.change(route,"callout",{},dispatch.stopFor(route)?.version||0,"sick")} className="min-h-11 rounded-xl bg-red-800 px-4 py-3 text-base font-bold text-white">Out sick today</button><button disabled={dispatch.saving} onClick={()=>void dispatch.change(route,"callout")} className="min-h-11 rounded-xl bg-red-800 px-4 py-3 text-base font-bold text-white">No transportation today</button></div>}
                   <div className="mt-4 flex flex-wrap gap-2"><Link href="/transportation" className="inline-flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 py-3 font-bold text-white">Open pickup & handoff screen</Link>{canManageRoutes && runStatus !== "Waiting" && <button disabled={runStatus === "Picked Up" || runStatus === "Arrived"} title="Complete any in-transit handoff before resetting" onClick={() => resetToday(route)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 px-3 py-3 font-bold"><RotateCcw className="h-4 w-4" /> Reset</button>}</div>
                   {runStatus !== "Waiting" && <div className="mt-3 space-y-1 text-xs font-semibold text-slate-500">{route.pickedUpAt && <p>Picked up {timestampLabel(route.pickedUpAt)} by {route.pickedUpBy || "staff"}</p>}{route.checkedInAt && <p>Checked into {destination} {timestampLabel(route.checkedInAt)} by {route.checkedInBy || "staff"}</p>}</div>}
                 </article>;

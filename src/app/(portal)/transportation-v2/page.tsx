@@ -72,7 +72,7 @@ type LiveRoute = TransportationRoute & {
   runHistory?: Array<{ date: string; status: string; at: string; by: string; location: string; emergencyRecordSource?: string }>;
 };
 
-function routeKey(route: LiveRoute) {
+function routeKey(route: TransportationRoute) {
   return transportRouteGroup(route);
 }
 
@@ -100,7 +100,7 @@ function destinationLocation(value?: string): Exclude<LocationKey, "All Location
   return null;
 }
 
-function matchesLocation(route: LiveRoute, activeLocation: string) {
+function matchesLocation(route: TransportationRoute & {dropoffLocation?:string}, activeLocation: string) {
   if (activeLocation === "All Locations") return true;
   const destination = (transportTripPeriod(route)==='Morning'?null:destinationLocation(route.dropoffLocation));
   return normalizeLocation(route.location) === activeLocation || destination === activeLocation;
@@ -222,13 +222,17 @@ export default function TransportationV2Page() {
     () => dispatch.activeRoutes.filter((route) => matchesLocation(route, activeLocation)&&(trip==='All trips'||transportTripPeriod(route)===trip)),
     [dispatch.activeRoutes, activeLocation,trip],
   );
-  const routeNames = useMemo(() => [...new Set(todayRoutes.map(routeKey))], [todayRoutes]);
+  const todayCallouts=useMemo(()=>dispatch.callouts.filter(stop=>matchesLocation(stop.snapshot,activeLocation)&&(trip==='All trips'||transportTripPeriod(stop.snapshot)===trip)),[dispatch.callouts,activeLocation,trip]);
+  const assignedRoutes=useMemo(()=>[...todayRoutes,...todayCallouts.map(stop=>stop.snapshot)],[todayRoutes,todayCallouts]);
+  const routeNames=useMemo(()=>[...new Set(assignedRoutes.map(routeKey))],[assignedRoutes]);
   const effectiveRoute = routeNames.includes(selectedRoute) ? selectedRoute : routeNames[0] || "";
   const myRoute = useMemo(
     () => todayRoutes.filter((route) => routeKey(route) === effectiveRoute).sort((a, b) => (a.stopOrder ?? 999) - (b.stopOrder ?? 999) || a.pickup.localeCompare(b.pickup)),
     [todayRoutes, effectiveRoute],
   );
 
+  const myCallouts=todayCallouts.filter(stop=>routeKey(stop.snapshot)===effectiveRoute);
+  const assignedRoute=myRoute[0]||myCallouts[0]?.snapshot;
   const waiting = todayRoutes.filter((route) => statusFor(route, today) === "Waiting").length;
   const onboard = todayRoutes.filter((route) => statusFor(route, today) === "Picked Up").length;
   const arrived = todayRoutes.filter((route) => statusFor(route, today) === "Arrived").length;
@@ -422,11 +426,10 @@ export default function TransportationV2Page() {
 
         {transportUsesBrightwheel && <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-base text-amber-950"><h2 className="font-black">Care attendance stays in Brightwheel</h2><p>Record each school pickup and destination handoff here. Complete childcare check-ins and check-outs in Brightwheel until families move to The Hub.</p></section>}
         <section className="flex flex-wrap gap-3 rounded-2xl border border-emerald-200 bg-white p-4" aria-label="Transportation sessions">{['All trips','Morning','Afternoon'].map(session=><button key={session} type="button" aria-pressed={trip===session} onClick={()=>setTrip(session)} className={`min-h-12 rounded-xl px-5 py-3 text-base font-bold ${trip===session?'bg-emerald-800 text-white':'border border-emerald-300 bg-white text-emerald-950'}`}>{session==='Morning'?'Morning · School drop-offs':session==='Afternoon'?'Afternoon · School pickups':'All trips'}</button>)}</section>
-        {dispatch.ready && routesHydrated && !routeState.error && !todayRoutes.length && <section className="rounded-2xl border border-emerald-200 bg-white p-5 text-base"><h2 className="text-xl font-black text-emerald-950">No trips scheduled in this view</h2><p className="mt-2">Choose All Locations to see other sites, or add a school trip using an existing child profile.</p>{canManageTransportation && <Link href="/transportation-setup?tab=children" className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 font-bold text-white">Children & Schools</Link>}</section>}
+        {dispatch.ready && routesHydrated && !routeState.error && !assignedRoutes.length && <section className="rounded-2xl border border-emerald-200 bg-white p-5 text-base"><h2 className="text-xl font-black text-emerald-950">No trips scheduled in this view</h2><p className="mt-2">Choose All Locations to see other sites, or add a school trip using an existing child profile.</p>{canManageTransportation && <Link href="/transportation-setup?tab=children" className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 font-bold text-white">Children & Schools</Link>}</section>}
         <Suspense fallback={<p>Loading assigned routes…</p>}><MyAssignedRoutes routes={routes}/></Suspense>
         {(dispatch.error||dispatch.actionError)&&<section role="alert" className="rounded-xl bg-red-50 p-4 text-base text-red-950">{dispatch.error||dispatch.actionError}<button className="ml-3 min-h-11 underline" onClick={()=>void dispatch.refresh()}>Try again</button></section>}
         {!dispatch.ready&&!dispatch.error&&<p role="status" className="text-base">Checking today’s route changes and call-outs…</p>}
-        <TransportCallouts stops={dispatch.stops.filter(stop=>activeLocation==="All Locations"||normalizeLocation(stop.snapshot.location)===activeLocation)} canRestore={dispatch.canCallOut} saving={dispatch.saving} onRestore={route=>void dispatch.change(route,"restore")}/>
         {coverageMessage && <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-black text-blue-950 shadow-sm">{coverageMessage}</section>}
 
         <section className={`rounded-2xl border p-4 shadow-sm ${isOnline ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-red-300 bg-red-50 text-red-950"}`}>
@@ -440,7 +443,7 @@ export default function TransportationV2Page() {
         </section>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-          <Metric label="Active Routes" value={routeNames.length} icon={<Bus className="h-5 w-5" />} />
+          <Metric label="Assigned Routes" value={routeNames.length} icon={<Bus className="h-5 w-5" />} />
           <Metric label="Waiting" value={waiting} icon={<Clock3 className="h-5 w-5" />} tone="amber" />
           <Metric label="In Transit" value={onboard} icon={<Navigation className="h-5 w-5" />} tone="blue" />
           <Metric label="Arrived" value={arrived} icon={<MapPin className="h-5 w-5" />} tone="purple" />
@@ -454,18 +457,19 @@ export default function TransportationV2Page() {
 
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#1769d2]">My Route Today</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">Choose the route you are running</h2><p className="mt-1 text-sm font-semibold text-slate-500">Pickup and destination confirmation happen one child at a time.</p></div><div className="flex flex-wrap gap-2"><Link href={transportEmergencyHref(myRoute,routes)} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#9f2f35] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#7e2228]"><HeartPulse className="h-4 w-4" /> EMERGENCY MEDICAL CARDS</Link></div></div>
-          <div className="mt-5 flex flex-wrap gap-2">{routeNames.map((name) => <button key={name} onClick={() => setSelectedRoute(name)} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${effectiveRoute === name ? "border-[#1769d2] bg-[#eef6ff] text-[#102a56]" : "border-slate-200 bg-white text-slate-600"}`}>{name}</button>)}{!routeNames.length && <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">No active routes are scheduled for today at this location.</p>}</div>
+          <div className="mt-5 flex flex-wrap gap-2">{routeNames.map((name) => <button key={name} onClick={() => setSelectedRoute(name)} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${effectiveRoute === name ? "border-[#1769d2] bg-[#eef6ff] text-[#102a56]" : "border-slate-200 bg-white text-slate-600"}`}>{name}</button>)}{!routeNames.length && <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">No routes are assigned for today at this location.</p>}</div>
         </section>
 
         {effectiveRoute && <section className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><Summary label="Route" value={effectiveRoute} /><Summary label="Driver" value={myRoute.find((route) => route.coveringDate === today && route.coveringDriver)?.coveringDriver || myRoute[0]?.driver || "Not assigned"} /><Summary label="Vehicle" value={myRoute[0]?.vehicle || "Not assigned"} /><Summary label="Floor Coverage" value={(() => { const driver = myRoute[0] ? routeDriver(myRoute[0]) : ""; const key = driver ? transportationDutyKey(today, effectiveRoute, driver) : ""; const block = transportCoverage.find((item) => item.source_key === key); if (!block) return "On floor / route not started"; return block.end_time.startsWith("23:59") ? `Off floor since ${timeLabel(block.start_time)}` : `Returned ${timeLabel(block.end_time)}`; })()} /></div>
-          <div className={`rounded-3xl border p-5 ${currentRouteNeedsAttention.length ? "border-red-300 bg-red-50" : "border-emerald-300 bg-emerald-50"}`}>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><Summary label="Route" value={effectiveRoute} /><Summary label="Driver" value={myRoute.find((route) => route.coveringDate === today && route.coveringDriver)?.coveringDriver || assignedRoute?.driver || "Not assigned"} /><Summary label="Vehicle" value={assignedRoute?.vehicle || "Not assigned"} /><Summary label="Floor Coverage" value={(() => { const driver = myRoute[0] ? routeDriver(myRoute[0]) : ""; const key = driver ? transportationDutyKey(today, effectiveRoute, driver) : ""; const block = transportCoverage.find((item) => item.source_key === key); if (!block) return "On floor / route not started"; return block.end_time.startsWith("23:59") ? `Off floor since ${timeLabel(block.start_time)}` : `Returned ${timeLabel(block.end_time)}`; })()} /></div>
+          <TransportCallouts stops={myCallouts} date={today} canRestore={dispatch.canCallOut} saving={dispatch.saving||!isOnline} onRestore={route=>void dispatch.change(route,"restore")}/>
+          {myRoute.length>0&&<div className={`rounded-3xl border p-5 ${currentRouteNeedsAttention.length ? "border-red-300 bg-red-50" : "border-emerald-300 bg-emerald-50"}`}>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-start gap-3">{currentRouteNeedsAttention.length ? <AlertTriangle className="mt-0.5 h-6 w-6 flex-none text-red-700" /> : <ShieldCheck className="mt-0.5 h-6 w-6 flex-none text-emerald-700" />}<div><p className={`text-xs font-black uppercase tracking-[.14em] ${currentRouteNeedsAttention.length ? "text-red-700" : "text-emerald-700"}`}>Route emergency readiness</p><h3 className={`mt-1 text-xl font-black ${currentRouteNeedsAttention.length ? "text-red-950" : "text-emerald-950"}`}>{currentRouteReadyCount}/{myRoute.length} children with complete Hub emergency records</h3><p className="mt-1 text-sm font-semibold text-slate-700">{currentRouteNeedsAttention.length ? (transportUsesBrightwheel ? "Review the missing Hub information below. During the transition, confirm each child’s current Brightwheel or vehicle-binder emergency record before pickup." : "Pickup is blocked for children whose emergency record is not ready. Review the missing information before departure.") : "Emergency contacts, consent status, provider information, and allergy status are ready for this route."}</p></div></div>
               <Link href={transportEmergencyHref(myRoute,routes)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#8f2a30] px-4 py-2.5 text-sm font-black text-white"><HeartPulse className="h-4 w-4" /> Review / Print Backup</Link>
             </div>
             {currentRouteNeedsAttention.length > 0 && <div className="mt-4 grid gap-2 md:grid-cols-2">{currentRouteNeedsAttention.map(({ route, readiness }) => <div key={route.id} className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs"><strong className="text-red-950"><span translate="no" className="contents">{route.child}</span></strong><p className="mt-1 text-red-700">{readiness ? readiness.missing.slice(0, 3).join(" • ") : "Child emergency record not found"}</p></div>)}</div>}
-          </div>
+          </div>}
           <div className="rounded-3xl border border-blue-100 bg-[#f7fbff] p-5"><div className="flex items-start gap-3"><Navigation className="mt-0.5 h-5 w-5 text-[#1769d2]" /><p className="text-sm font-semibold leading-6 text-slate-700"><strong>Required chain:</strong> Tap Picked Up only when the child is physically with you. At the destination, tap Arrived. Confirm the handoff only after the child is with the receiving staff or school. Follow the care-attendance instructions above.</p></div></div>
           <SchoolStopGroups routes={myRoute}>{(route) => {
             const status = statusFor(route, today);
@@ -480,7 +484,7 @@ export default function TransportationV2Page() {
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link href={emergency?.child?`/emergency-cards?child=${emergency.child.id}`:"/emergency-cards"} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800"><HeartPulse className="h-4 w-4" /> EMERGENCY CARD</Link>
                 {status === "Waiting" && <Action disabled={!emergencyReady || !emergency?.child || emergency.child.enrollmentStatus !== "Active"} title={!emergencyReady ? "Emergency record must be ready before pickup." : undefined} onClick={() => markPickedUp(route)}><UserCheck className="h-4 w-4" /> {emergencyReady ? "PICKED UP" : "EMERGENCY RECORD NOT READY"}</Action>}
-                {status === "Waiting" && dispatch.canCallOut && <Action disabled={dispatch.saving || !isOnline} onClick={() => void dispatch.change(route, "callout")} tone="purple">Call Out today</Action>}
+                {status === "Waiting" && dispatch.canCallOut && <><Action disabled={dispatch.saving || !isOnline} onClick={() => void dispatch.change(route,"callout",{},dispatch.stopFor(route)?.version||0,"sick")} tone="purple">Out sick today</Action><Action disabled={dispatch.saving || !isOnline} onClick={() => void dispatch.change(route,"callout")} tone="purple">No transportation today</Action></>}
                 {status === "Picked Up" && <Action onClick={() => markArrived(route)} tone="purple"><MapPin className="h-4 w-4" /> ARRIVED AT DESTINATION</Action>}
                 {status === "Arrived" && destination && <Action onClick={() => checkIntoLocation(route)} tone="green"><CheckCircle2 className="h-4 w-4" /> {transportUsesBrightwheel ? "CONFIRM HANDOFF AT" : "CHECK CHILD INTO"} {destination.toUpperCase()}</Action>}
                 {status === "Arrived" && !destination && <Action onClick={() => confirmExternalDropoff(route)} tone="green"><CheckCircle2 className="h-4 w-4" /> {transportTripPeriod(route)==='Morning'?'CONFIRM SCHOOL DROP-OFF':'CONFIRM DROP-OFF COMPLETE'}</Action>}
