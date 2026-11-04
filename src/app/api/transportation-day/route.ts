@@ -6,10 +6,13 @@ export const dynamic="force-dynamic";
 export async function GET(request:Request){try{
  const c=await requireStaff(request);if(!c.isOwner&&!c.isLicensee&&!c.profile.permissions.includes('transportation'))return Response.json({error:'Transportation access required.'},{status:403});
  const date=new URL(request.url).searchParams.get('date')||'';if(!validTransportDate(date))return Response.json({error:'Choose a valid date.'},{status:400});
- const result=await c.userClient.from('transportation_day_stops').select('*').eq('organization_id',c.profile.organization_id).eq('service_date',date);
- if(result.error)throw result.error;
- const sources=await c.userClient.from('transportation_routes').select('id,legacy_id,child_id').eq('organization_id',c.profile.organization_id);if(sources.error)throw sources.error;
- return Response.json({stops:result.data||[],sources:sources.data||[],canPlan:c.isOwner,canCallOut:c.isOwner||c.isLicensee},{headers:{'Cache-Control':'private, no-store','Vary':'Authorization'}});
+ const [result,sources,drivers]=await Promise.all([
+  c.userClient.from('transportation_day_stops').select('*').eq('organization_id',c.profile.organization_id).eq('service_date',date),
+  c.userClient.from('transportation_routes').select('id,legacy_id,child_id').eq('organization_id',c.profile.organization_id),
+  c.userClient.from('staff_lane_profiles').select('id,full_name').eq('organization_id',c.profile.organization_id).eq('is_active',true),
+ ]);
+ for(const query of [result,sources,drivers])if(query.error)throw query.error;
+ return Response.json({stops:result.data||[],sources:sources.data||[],drivers:(drivers.data||[]).map(row=>({id:row.id,name:row.full_name})),canPlan:c.isOwner,canCallOut:c.isOwner||c.isLicensee},{headers:{'Cache-Control':'private, no-store','Vary':'Authorization'}});
  }catch(error){return staffErrorResponse(error);}}
 export async function POST(request:Request){try{
  const c=await requireStaff(request);if(!c.isOwner&&!c.isLicensee)return Response.json({error:'Only administration and assigned licensees can call out children.'},{status:403});

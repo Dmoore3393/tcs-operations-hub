@@ -1,7 +1,7 @@
 "use client";
 import {transportCalloutLabel,type DayRoute,type TransportDayStop} from "@/lib/transportation-day";
 import {transportTripPeriod,transportPickup,transportDestination} from "@/lib/transport-trips";
-export default function TransportCallouts({stops,date,canRestore=false,onRestore,saving=false}:{stops:TransportDayStop[];date:string;canRestore?:boolean;onRestore?:(route:DayRoute)=>void;saving?:boolean}){
+export default function TransportCallouts({stops,date,canRestore=false,onRestore,saving=false,driverFor}:{stops:TransportDayStop[];date:string;canRestore?:boolean;onRestore?:(route:DayRoute)=>void;saving?:boolean;driverFor?:(route:DayRoute)=>{name:string}}){
  const out=stops.filter(stop=>stop.called_out);if(!out.length)return null;
  const dateLabel=new Date(date+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
  return <section className="rounded-2xl border border-red-200 bg-red-50 p-5 text-base text-red-950" aria-label={`No transportation for ${dateLabel}`}>
@@ -11,7 +11,7 @@ export default function TransportCallouts({stops,date,canRestore=false,onRestore
    <strong><span translate="no" className="contents">{route.child}</span></strong>
    <p className="mt-1 font-bold">{transportCalloutLabel(stop)}</p>
    <p>{transportTripPeriod(route)}: {transportPickup(route)} → {transportDestination(route)}</p>
-   <p>Assigned driver: <span translate="no">{route.driver||'Not assigned'}</span> · {route.vehicle||'Vehicle not set'}</p>
+   <p>Assigned driver: <span translate="no">{driverFor?.(route).name||route.driver||'Not assigned'}</span> · {route.vehicle||'Vehicle not set'}</p>
    <p className="mt-1">Marked by <span translate="no">{stop.updated_by_name}</span></p>
    {canRestore&&onRestore&&<button disabled={saving} onClick={()=>onRestore(route)} className="mt-2 min-h-11 rounded-xl border border-red-300 px-4 py-2 font-bold disabled:opacity-50">Restore transportation</button>}
   </article>;})}</div>
