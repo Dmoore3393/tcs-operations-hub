@@ -4,7 +4,7 @@ import test,{before,beforeEach,after} from 'node:test';
 import ts from 'typescript';
 import {PGlite} from '@electric-sql/pglite';
 const url=s=>'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(s,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText).toString('base64');
-const libSource=await readFile('src/lib/transportation-day.ts','utf8'),libUrl=url(libSource),{scheduledOnDate,mergeTransportDay,validTransportDate}=await import(libUrl);
+const libSource=await readFile('src/lib/transportation-day.ts','utf8'),libUrl=url(libSource),{scheduledOnDate,mergeTransportDay,transportDayCallouts,transportCalloutLabel,validTransportDate}=await import(libUrl);
 const day='2030-01-07';
 test('date planner handles weekdays, ranges, full day names and weekends without changing recurrence',()=>{
  assert.equal(scheduledOnDate('Mon–Fri',day),true);assert.equal(scheduledOnDate('Monday-Friday','2030-01-05'),false);assert.equal(scheduledOnDate('Friday-Monday','2030-01-06'),true);assert.equal(scheduledOnDate('Mon, Wed, Fri','2030-01-08'),false);assert.equal(validTransportDate('2030-02-30'),false);
@@ -32,6 +32,8 @@ before(async()=>{
  create function is_tcs_licensee() returns boolean language sql stable as $$select exists(select 1 from staff_access where user_id=auth.uid() and is_active and role='Location Licensee')$$;
  create function can_access_location(uuid) returns boolean language sql stable as $$select is_tcs_owner() or exists(select 1 from staff_location_assignments where user_id=auth.uid() and location_id=$1)$$;`);
  const name=(await readdir('supabase/migrations')).find(name=>name.endsWith('_daily_transport_plans.sql'));await db.exec(await readFile('supabase/migrations/'+name,'utf8'));
+ await db.exec('create function public.transport_driver_lane(uuid,jsonb,uuid) returns uuid language sql as $$select null::uuid$$');
+ const reasonMigration=(await readdir('supabase/migrations')).find(name=>name.endsWith('_daily_transport_absence_reasons.sql'));await db.exec(await readFile('supabase/migrations/'+reasonMigration,'utf8'));
 });
 beforeEach(async()=>{
  await db.exec('reset role;truncate transportation_day_stops,audit_log,transportation_routes,children,staff_location_assignments,staff_access,locations,organizations,auth.users;');
@@ -89,18 +91,82 @@ test('planner exposes next-day dispatch for admins, call-outs for licensees, and
  const {createRequire}=await import('node:module'),{default:vm}=await import('node:vm');const require=createRequire(import.meta.url);let index=0,mode='owner',selectedDate;const states=[],calls=[];
  const react={useState(initial){const slot=index++;if(!(slot in states))states[slot]=typeof initial==='function'?initial():initial;return[states[slot],value=>states[slot]=typeof value==='function'?value(states[slot]):value]}};
  const trips=await import(url(await readFile('src/lib/transport-trips.ts','utf8')));
- const deps={'@/components/forms/ChoiceSelect':{default:()=>null},'@/lib/transport-child-schools':{transportCareLocation:value=>value},'@/lib/transport-trips':trips,'./TransportDriverSelect':{default:()=>null},'./TransportSchoolSelect':{default:()=>null},react,'@/lib/date-utils':{localIsoDate:()=>day},'@/lib/transportation-day':{scheduledOnDate},'@/components/hub/HubUI':{Modal:()=>null,inputClass:''},'@/components/transportation/SchoolStopGroups':{default:({routes,children})=>routes.map(children)},'@/hooks/useTransportDay':{useTransportDay:(_routes,date)=>{selectedDate=date;return{ready:true,stops:[],saving:false,canPlan:mode==='owner',canCallOut:mode!=='driver',stopFor:()=>null,sourceFor:()=>({child_id:child}),change:async(...args)=>{calls.push(args);return true},refresh:async()=>{}}}}};
+ const deps={'@/components/forms/ChoiceSelect':{default:()=>null},'@/lib/transport-child-schools':{transportCareLocation:value=>value},'@/lib/transport-trips':trips,'./TransportDriverSelect':{default:()=>null},'./TransportSchoolSelect':{default:()=>null},react,'@/lib/date-utils':{localIsoDate:()=>day},'@/lib/transportation-day':{scheduledOnDate,transportCalloutLabel},'@/components/hub/HubUI':{Modal:()=>null,inputClass:''},'@/components/transportation/SchoolStopGroups':{default:({routes,children})=>routes.map(children)},'@/hooks/useTransportDay':{useTransportDay:(_routes,date)=>{selectedDate=date;return{ready:true,stops:[],saving:false,canPlan:mode==='owner',canCallOut:mode!=='driver',stopFor:()=>null,sourceFor:()=>({child_id:child}),change:async(...args)=>{calls.push(args);return true},refresh:async()=>{}}}}};
  const context={exports:{},require:name=>deps[name]||require(name)};vm.runInNewContext(ts.transpileModule(await readFile('src/components/transportation/DailyTransportPlanner.tsx','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,context);
  const flatten=node=>Array.isArray(node)?node.flatMap(flatten):node&&typeof node==='object'?(typeof node.type==='function'?flatten(node.type(node.props)):[node,...flatten(node.props?.children)]):[];const props={location:'Synthetic',routes:[{id:1,location:'Synthetic',child:'Synthetic Child',school:'Synthetic School',driver:'Synthetic Driver',vehicle:'Synthetic Van',days:'Mon-Fri',status:'Confirmed'}]};const render=()=>{index=0;return flatten(context.exports.default(props));};
- let nodes=render();assert.ok(nodes.some(node=>node.type==='button'&&node.props.children==='Edit this day'));nodes.find(node=>node.type==='button'&&node.props.children==='Tomorrow').props.onClick();nodes=render();assert.equal(selectedDate,'2030-01-08');mode='licensee';nodes=render();assert.ok(!nodes.some(node=>node.props?.children==='Edit this day'));nodes.find(node=>node.type==='button'&&node.props.children==='Call Out').props.onClick();await new Promise(setImmediate);assert.equal(calls[0][1],'callout');assert.equal(calls[0][0].id,1);mode='driver';nodes=render();assert.ok(!nodes.some(node=>node.type==='button'&&['Edit this day','Call Out','Restore'].includes(node.props.children)));
+ let nodes=render();assert.ok(nodes.some(node=>node.type==='button'&&node.props.children==='Edit this day'));nodes.find(node=>node.type==='button'&&node.props.children==='Tomorrow').props.onClick();nodes=render();assert.equal(selectedDate,'2030-01-08');mode='licensee';nodes=render();assert.ok(!nodes.some(node=>node.props?.children==='Edit this day'));nodes.find(node=>node.type==='button'&&node.props.children==='Out sick').props.onClick();await new Promise(setImmediate);assert.equal(calls[0][1],'callout');assert.equal(calls[0][4],'sick');assert.equal(calls[0][0].id,1);mode='driver';nodes=render();assert.ok(!nodes.some(node=>node.type==='button'&&['Edit this day','Out sick','No transportation','Restore transportation'].includes(node.props.children)));
 });
 
 test('daily-route connection failures retain cached offline routes and never hide an in-transit handoff',async()=>{
  const {createRequire}=await import('node:module'),{default:vm}=await import('node:vm');const require=createRequire(import.meta.url);let cursor=0,fail=false;const states=[],effects=[],timers=[];
  const react={useState(initial){const slot=cursor++;if(!(slot in states))states[slot]=typeof initial==='function'?initial():initial;return[states[slot],value=>states[slot]=typeof value==='function'?value(states[slot]):value]},useRef(initial){const slot=cursor++;if(!(slot in states))states[slot]={current:initial};return states[slot]},useCallback:fn=>fn,useMemo:fn=>fn(),useEffect:fn=>effects.push(fn)};
  const trips=await import(url(await readFile('src/lib/transport-trips.ts','utf8')));
- const deps={'@/components/forms/ChoiceSelect':{default:()=>null},'@/lib/transport-child-schools':{transportCareLocation:value=>value},'@/lib/transport-trips':trips,'./TransportDriverSelect':{default:()=>null},'./TransportSchoolSelect':{default:()=>null},react,'@/components/providers/AuthProvider':{useAuth:()=>({session:{access_token:'synthetic'}})},'@/lib/transportation-day':{mergeTransportDay},'@/lib/hub-request':{hubRequest:async()=>{if(fail)throw Error('Synthetic connection lost');return{stops:[],sources:[],canPlan:false,canCallOut:false}}}};
+ const deps={'@/components/forms/ChoiceSelect':{default:()=>null},'@/lib/transport-child-schools':{transportCareLocation:value=>value},'@/lib/transport-trips':trips,'./TransportDriverSelect':{default:()=>null},'./TransportSchoolSelect':{default:()=>null},react,'@/components/providers/AuthProvider':{useAuth:()=>({session:{access_token:'synthetic'}})},'@/lib/transportation-day':{mergeTransportDay,transportDayCallouts},'@/lib/hub-request':{hubRequest:async()=>{if(fail)throw Error('Synthetic connection lost');return{stops:[],sources:[],canPlan:false,canCallOut:false}}}};
  const context={exports:{},window:{setTimeout:fn=>{timers.push(fn);return 1},setInterval:()=>2,clearTimeout(){},clearInterval(){}},require:name=>deps[name]||require(name)};vm.runInNewContext(ts.transpileModule(await readFile('src/hooks/useTransportDay.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,context);
  const routes=[{id:1,days:'Mon-Fri',status:'Confirmed'},{id:2,days:'Mon-Fri',status:'Confirmed',runDate:day,runStatus:'Picked Up'}];const render=()=>{cursor=0;return context.exports.useTransportDay(routes,day)};
  let result=render();assert.equal(result.ready,false);assert.deepEqual(Array.from(result.activeRoutes,route=>route.id),[2]);effects[0]();timers[0]();await new Promise(setImmediate);result=render();assert.equal(result.ready,true);assert.equal(result.activeRoutes.length,2);fail=true;await result.refresh();result=render();assert.equal(result.ready,true);assert.equal(result.activeRoutes.length,2);assert.ok(result.error);
+});
+
+
+test('sick and no-transportation reasons are date-specific, audited, validated and reversible',async()=>{
+ await save(owner);await save(licensee,r1,'callout',1,{calloutReason:'sick'});
+ let stops=(await db.query('select * from transportation_day_stops order by route_id')).rows;
+ assert.equal(stops.length,2);assert.ok(stops.every(stop=>stop.called_out&&stop.callout_reason==='sick'));
+ assert.equal(stops[0].plan_data.driver,'Synthetic Tomorrow Driver');
+ assert.equal((await db.query("select metadata from audit_log where metadata->>'kind'='daily_transport_callout'")).rows[0].metadata.callout_reason,'sick');
+ assert.equal((await db.query('select count(*) n from transportation_day_stops where service_date=$1',['2030-01-08'])).rows[0].n,0);
+ await assert.rejects(save(owner,r1,'callout',2,{calloutReason:'private medical details'}),/Choose Out sick/);
+ await assert.rejects(save(owner,r1,'callout',1,{calloutReason:'no_transportation'}),/changed/);
+ await save(licensee,r1,'callout',2,{calloutReason:'no_transportation'});
+ stops=(await db.query('select * from transportation_day_stops')).rows;assert.ok(stops.every(stop=>stop.callout_reason==='no_transportation'));
+ await save(licensee,r1,'restore',3,{});
+ stops=(await db.query('select * from transportation_day_stops')).rows;assert.ok(stops.every(stop=>!stop.called_out&&stop.callout_reason===null));
+ assert.equal(stops.find(stop=>stop.route_id===r1).plan_data.driver,'Synthetic Tomorrow Driver');
+});
+
+test('calling out an afternoon trip preserves a completed morning handoff',async()=>{
+ await db.query('update transportation_routes set record_data=record_data||$1 where id=$2',[JSON.stringify({runDate:day,runStatus:'Dropped Off',droppedOffAt:day+'T16:00:00Z'}),r1]);
+ const before=(await db.query('select record_data from transportation_routes where id=$1',[r1])).rows[0].record_data;
+ await assert.rejects(save(owner,r1,'callout',0,{calloutReason:'sick'}),/trip is complete/);
+ await save(owner,r2,'callout',0,{calloutReason:'sick'});
+ assert.deepEqual((await db.query('select record_data from transportation_routes where id=$1',[r1])).rows[0].record_data,before);
+ assert.deepEqual((await db.query('select route_id from transportation_day_stops where called_out')).rows.map(stop=>stop.route_id),[r2]);
+});
+
+test('cancelled children remain assigned to the correct daily driver, including when every child is out',()=>{
+ const route={id:1,child:'Synthetic child',days:'Mon-Fri',status:'Confirmed',driver:'Regular Driver',driverLaneId:'regular',school:'School'};
+ const stop={route_id:r1,snapshot:route,service_date:day,called_out:true,callout_reason:'sick',is_planned:true,plan_data:{driver:'Daily Driver',driverLaneId:'daily'}};
+ assert.equal(mergeTransportDay([route],[stop],day).length,0);
+ const out=transportDayCallouts([route],[stop],day);assert.equal(out.length,1);assert.equal(out[0].snapshot.driverLaneId,'daily');assert.equal(out[0].snapshot.driver,'Daily Driver');assert.equal(transportCalloutLabel(out[0]),'No transportation — out sick');
+ assert.equal(transportCalloutLabel({...stop,callout_reason:null}),'No transportation');
+ assert.equal(transportDayCallouts([route],[stop],'2030-01-08').length,0);
+ assert.equal(transportDayCallouts([route],[{...stop,called_out:false}],day).length,0);
+ for(const runStatus of ['Picked Up','Arrived','Checked In','Dropped Off'])assert.equal(transportDayCallouts([{...route,runDate:day,runStatus}],[stop],day).length,0);
+ assert.equal(transportDayCallouts([{...route,days:'Sat'}],[{...stop,is_planned:false}],day).length,0);
+ assert.equal(stop.snapshot.driverLaneId,'regular');
+});
+
+test('API forwards only a valid daily absence reason and defaults older clients to no transportation',async()=>{
+ const calls=[];globalThis.dispatchAuth={isOwner:true,isLicensee:false,profile:{organization_id:org},user:{id:owner},admin:{rpc:async(name,args)=>{calls.push(args);return{data:2}}}};
+ const request=reason=>new Request('https://hub.test/api/transportation-day',{method:'POST',body:JSON.stringify({date:day,routeId:r1,action:'callout',expectedVersion:0,reason,plan:{driver:'must not change'}})});
+ assert.equal((await api.POST(request('invalid'))).status,400);assert.equal(calls.length,0);
+ assert.equal((await api.POST(request('sick'))).status,200);assert.deepEqual(calls[0].p_plan,{calloutReason:'sick'});
+ assert.equal((await api.POST(request(undefined))).status,200);assert.deepEqual(calls[1].p_plan,{calloutReason:'no_transportation'});
+});
+
+
+test('driver assignment view lists only their absent children and does not show a false empty state',async()=>{
+ const {createRequire}=await import('node:module'),{default:vm}=await import('node:vm');const require=createRequire(import.meta.url);
+ const trips=await import(url(await readFile('src/lib/transport-trips.ts','utf8')));
+ const compile=async(file,deps)=>{const context={exports:{},require:name=>deps[name]||require(name)};vm.runInNewContext(ts.transpileModule(await readFile(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,context);return context.exports.default};
+ const Callouts=await compile('src/components/transportation/TransportCallouts.tsx',{'@/lib/transportation-day':{transportCalloutLabel},'@/lib/transport-trips':trips});
+ const makeStop=(id,driverLaneId,child)=>({route_id:String(id),service_date:day,called_out:true,callout_reason:'sick',snapshot:{id,child,driverLaneId,driver:'Synthetic Driver',school:'Synthetic School',tripPeriod:'Afternoon',location:'Synthetic Site'},plan_data:{},updated_by_name:'Synthetic Admin'});
+ const stops=[makeStop(1,'driver-1','Synthetic Assigned Child'),makeStop(2,'driver-2','Synthetic Other Child')];
+ const deps={react:{useState:initial=>[typeof initial==='function'?initial():initial,()=>{}]},'next/navigation':{useSearchParams:()=>new URLSearchParams({routeDate:day})},'@/components/providers/AuthProvider':{useAuth:()=>({profile:{lane_profile_id:'driver-1'}})},'@/hooks/useTransportDay':{useTransportDay:()=>({activeRoutes:[],callouts:stops,ready:true})},'@/lib/date-utils':{localIsoDate:()=>day},'@/lib/transportation-day':{validTransportDate},'@/lib/transport-trips':trips,'./SchoolStopGroups':{default:({routes,children})=>routes.map(children)},'./TransportCallouts':{default:Callouts}};
+ const View=await compile('src/components/transportation/MyAssignedRoutes.tsx',deps);
+ const flatten=node=>Array.isArray(node)?node.flatMap(flatten):node&&typeof node==='object'?(typeof node.type==='function'?flatten(node.type(node.props)):[node,...flatten(node.props?.children)]):[node];
+ let nodes=flatten(View({routes:[]}));let text=nodes.filter(node=>typeof node==='string').join(' ');
+ assert.match(text,/Synthetic Assigned Child/);assert.doesNotMatch(text,/Synthetic Other Child|No routes assigned/);assert.match(text,/No transportation — out sick/);assert.ok(!nodes.some(node=>node?.type==='button'));
+ let restored;nodes=flatten(Callouts({stops:[stops[0]],date:day,canRestore:true,onRestore:route=>restored=route}));nodes.find(node=>node?.type==='button').props.onClick();assert.equal(restored.id,1);
+ nodes=flatten(Callouts({stops:[stops[0]],date:day,canRestore:true,saving:true,onRestore:()=>{}}));assert.equal(nodes.find(node=>node?.type==='button').props.disabled,true);
 });

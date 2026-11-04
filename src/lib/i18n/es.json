@@ -3029,5 +3029,20 @@
   "This setup link has expired or the account is already activated. Sign in if you finished setup, or request a new invitation.": "Este enlace ha vencido o la cuenta ya está activada. Inicie sesión si terminó la configuración o solicite una nueva invitación.",
   "Your invitation is still being prepared. Try again in a moment.": "Su invitación todavía se está preparando. Inténtelo de nuevo en un momento.",
   "Please wait 30 seconds before trying your setup link again.": "Espere 30 segundos antes de volver a intentar su enlace de configuración.",
-  "The setup email could not be requested. Please try again later or contact Danielle or Jennifer.": "No se pudo solicitar el correo de configuración. Inténtelo más tarde o comuníquese con Danielle o Jennifer."
+  "The setup email could not be requested. Please try again later or contact Danielle or Jennifer.": "No se pudo solicitar el correo de configuración. Inténtelo más tarde o comuníquese con Danielle o Jennifer.",
+  "Out sick": "Ausente por enfermedad",
+  "Out sick today": "Ausente por enfermedad hoy",
+  "No transportation today": "Sin transporte hoy",
+  "No transportation — out sick": "Sin transporte — ausente por enfermedad",
+  "Restore transportation": "Restablecer transporte",
+  "Keep these children on the assigned driver’s list, but skip their pickups for this date.": "Estos niños permanecen en la lista del conductor asignado, pero no se deben recoger en esta fecha.",
+  "Assigned driver:": "Conductor asignado:",
+  "Marked by": "Registrado por",
+  "Transportation restored for the selected date.": "Transporte restablecido para la fecha seleccionada.",
+  "Saved for this date. This child stays under the assigned driver as No transportation; all remaining linked trips for the day are skipped.": "Guardado para esta fecha. Este niño sigue en la lista del conductor asignado como Sin transporte; se omiten sus viajes vinculados restantes del día.",
+  "This stop has no linked child ID. No transportation applies to this stop only; check any other stops for this child.": "Esta parada no tiene un identificador infantil vinculado. Sin transporte se aplica solo a esta parada; revise las demás paradas de este niño.",
+  "No routes are assigned for today at this location.": "No hay rutas asignadas para hoy en esta ubicación.",
+  "Choose Out sick or No transportation.": "Elija Ausente por enfermedad o Sin transporte.",
+  "No pickups scheduled in this view.": "No hay recogidas programadas en esta vista.",
+  "Assigned Routes": "Rutas asignadas"
 }

@@ -2,7 +2,7 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {useAuth} from "@/components/providers/AuthProvider";
 import {hubRequest} from "@/lib/hub-request";
-import {mergeTransportDay,type DayRoute,type TransportDayStop} from "@/lib/transportation-day";
+import {mergeTransportDay,transportDayCallouts,type TransportCalloutReason,type DayRoute,type TransportDayStop} from "@/lib/transportation-day";
 type Source={id:string;legacy_id:string;child_id:string|null};
 type Payload={stops:TransportDayStop[];sources:Source[];canPlan:boolean;canCallOut:boolean};
 export function useTransportDay<T extends DayRoute>(routes:T[],date:string){
@@ -14,11 +14,12 @@ export function useTransportDay<T extends DayRoute>(routes:T[],date:string){
  useEffect(()=>{const sequence=generation.current;const timer=window.setTimeout(()=>void load(),0);const interval=window.setInterval(()=>void load(),15000);return()=>{sequence.value++;window.clearTimeout(timer);window.clearInterval(interval);};},[load]);
  const ready=loadedDate===date;
  const activeRoutes=useMemo(()=>ready?mergeTransportDay(routes,payload.stops,date):routes.filter(route=>route.runDate===date&&["Picked Up","Arrived"].includes(route.runStatus||"")),[ready,routes,payload.stops,date]);
+ const callouts=useMemo(()=>ready?transportDayCallouts(routes,payload.stops,date):[],[ready,routes,payload.stops,date]);
  const sourceFor=(route:DayRoute)=>payload.sources.find(source=>source.legacy_id===String(route.id));
  const stopFor=(route:DayRoute)=>payload.stops.find(stop=>stop.service_date===date&&String(stop.snapshot.id)===String(route.id));
- async function change(route:DayRoute,action:'save'|'callout'|'restore',plan:Partial<DayRoute>={},expectedVersion=stopFor(route)?.version||0){
+ async function change(route:DayRoute,action:'save'|'callout'|'restore',plan:Partial<DayRoute>={},expectedVersion=stopFor(route)?.version||0,reason:TransportCalloutReason='no_transportation'){
   if(!token||!ready||saving)return false;const source=sourceFor(route);if(!source){setActionError('This route needs to finish syncing before it can be changed. Refresh and try again.');return false;}
-  setSaving(true);setActionError('');try{await hubRequest('/api/transportation-day',token,{method:'POST',body:JSON.stringify({routeId:source.id,date,action,plan,expectedVersion})});await load();return true;}catch(reason){setActionError(reason instanceof Error?reason.message:'Could not update daily transportation.');return false;}finally{setSaving(false);}
+  setSaving(true);setActionError('');try{await hubRequest('/api/transportation-day',token,{method:'POST',body:JSON.stringify({routeId:source.id,date,action,plan,expectedVersion,reason})});await load();return true;}catch(reason){setActionError(reason instanceof Error?reason.message:'Could not update daily transportation.');return false;}finally{setSaving(false);}
  }
- return {ready,error,actionError,saving,activeRoutes,stops:payload.stops.filter(stop=>stop.service_date===date),canPlan:payload.canPlan,canCallOut:payload.canCallOut,sourceFor,stopFor,change,refresh:load};
+ return {ready,error,actionError,saving,activeRoutes,callouts,stops:payload.stops.filter(stop=>stop.service_date===date),canPlan:payload.canPlan,canCallOut:payload.canCallOut,sourceFor,stopFor,change,refresh:load};
 }
