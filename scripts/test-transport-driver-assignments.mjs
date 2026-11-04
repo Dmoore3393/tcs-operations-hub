@@ -27,8 +27,15 @@ test('saved routes notify exact staff identities atomically; employee access is 
  create policy "location read" on transportation_routes for select to authenticated using(organization_id=current_staff_organization_id() and can_access_location(location_id));
  create policy "location insert" on transportation_routes for insert to authenticated with check(organization_id=current_staff_organization_id() and can_access_location(location_id));
  create policy "location update" on transportation_routes for update to authenticated using(organization_id=current_staff_organization_id() and can_access_location(location_id));
- create policy "location delete" on transportation_routes for delete to authenticated using(organization_id=current_staff_organization_id());`);
- const names=await readdir('supabase/migrations');for(const suffix of ['_daily_transport_plans.sql','_transportation_driver_assignments.sql','_morning_transportation.sql','_daily_transport_absence_reasons.sql','_transport_callout_push_notices.sql'])await db.exec(await readFile('supabase/migrations/'+names.find(name=>name.endsWith(suffix)),'utf8'));
+ create policy "location delete" on transportation_routes for delete to authenticated using(organization_id=current_staff_organization_id());
+ -- Match production: even an owner cannot SELECT another person's private account.
+ alter table staff_access enable row level security;
+ create policy staff_access_own_read on staff_access for select to authenticated using(user_id=auth.uid());
+ alter table staff_location_assignments enable row level security;
+ create policy staff_assignments_read on staff_location_assignments for select to authenticated using(user_id=auth.uid() or is_tcs_owner());
+ create function sync_staff_location_assignments_for_user(uuid) returns void language plpgsql as $$begin return;end$$;`);
+ const names=await readdir('supabase/migrations');for(const suffix of ['_daily_transport_plans.sql','_transportation_driver_assignments.sql','_morning_transportation.sql','_daily_transport_absence_reasons.sql','_transport_callout_push_notices.sql','_staff_driver_location_access.sql'])await db.exec(await readFile('supabase/migrations/'+names.find(name=>name.endsWith(suffix)),'utf8'));
+ await db.exec('create trigger staff_access_sync_location_assignments after insert or update of organization_id,role,is_active on staff_access for each row execute function sync_staff_location_assignments_trigger()');
  await db.query('insert into organizations values($1)',[org]);await db.query("insert into locations values($1,$2,true,'Synthetic Site')",[loc,org]);
  for(const [user,role] of [[owner,'Owner / Admin'],[driver,'Employee'],[other,'Employee']]){await db.query('insert into auth.users values($1)',[user]);await db.query("insert into staff_access values($1,$2,'Synthetic Same',$3,$4,true)",[user,org,role,[]]);await db.query('insert into staff_location_assignments values($1,$2,$3)',[org,user,loc]);}
  assert.deepEqual((await db.query('select permissions from staff_access where user_id=$1',[driver])).rows[0].permissions,['transportation']);
@@ -38,7 +45,9 @@ test('saved routes notify exact staff identities atomically; employee access is 
  const add=(uuid,n)=>db.query('insert into transportation_routes(id,organization_id,location_id,record_data,legacy_id) values($1,$2,$3,$4,$5)',[uuid,org,loc,JSON.stringify(data(n)),String(n)]);
  const flush=()=>db.query('select * from deliver_transport_assignment_notices($1,null,null)',[org]);
  await db.exec('begin');await add(route,1);await db.exec('rollback');assert.equal((await db.query('select * from transport_assignment_notices')).rows.length,0);
- await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);await db.exec('set role authenticated;begin');await add(route,1);await add(nextRoute,2);await db.exec('commit;reset role');
+ await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);await db.exec('set role authenticated;begin');
+ assert.equal((await db.query('select count(*) n from staff_access')).rows[0].n,1,'private account RLS remains unchanged');
+ await add(route,1);await add(nextRoute,2);await db.exec('commit;reset role');
  let delivered=(await flush()).rows;assert.equal(delivered.length,1);assert.equal(delivered[0].user_id,driver);assert.ok(!delivered[0].notification.body.includes('Child'));assert.equal((await flush()).rows.length,0);
  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[driver]);await db.exec('set role authenticated');
  await db.query('insert into transportation_routes(organization_id,location_id,record_data,legacy_id) values($1,$2,$3,$4) on conflict(organization_id,legacy_id) do update set record_data=excluded.record_data',[org,loc,JSON.stringify({...data(1),runDate:day,runStatus:'Checked In'}),'1']);
@@ -88,12 +97,35 @@ test('saved routes notify exact staff identities atomically; employee access is 
  await db.query('update transportation_routes set record_data=record_data||$1 where id=$2',[JSON.stringify({runDate:'',runStatus:'',days:'Friday'}),linkedA]);await flush();
  await change(linkedB,'callout');delivered=(await flush()).rows;assert.equal(delivered.length,1);assert.equal(delivered[0].user_id,other);
  // Access revocation between save and dispatch prevents the alert.
- await change(nextRoute,'callout');await db.query('update staff_access set is_active=false where user_id=$1',[driver]);assert.equal((await flush()).rows.length,0);await db.query('update staff_access set is_active=true where user_id=$1',[driver]);await change(nextRoute,'restore');await flush();
+ await change(nextRoute,'callout');await db.query('update staff_access set is_active=false where user_id=$1',[driver]);assert.equal((await flush()).rows.length,0);
+ assert.equal((await db.query('select * from transport_driver_access where user_id=$1',[driver])).rows.length,0,'paused access is removed from driver eligibility');
+ await assert.rejects(db.query('select transport_driver_lane($1,$2,$3)',[org,JSON.stringify(data(1)),loc]),/active Hub access/);
+ await db.query('update staff_access set is_active=true where user_id=$1',[driver]);await change(nextRoute,'restore');await flush();
  // Date-specific coverage resolves a unique staff identity rather than an old driver.
  await db.query("update staff_lane_profiles set full_name='Synthetic Cover' where id=$1",[otherLane]);
  await db.query('update transportation_routes set record_data=record_data||$1 where id=$2',[JSON.stringify({coveringDriver:'Synthetic Cover',coveringDate:'2030-01-11'}),nextRoute]);
  await change(nextRoute,'callout',{},'2030-01-11');delivered=(await flush()).rows;assert.equal(delivered.length,1);assert.equal(delivered[0].user_id,other);
  for(const [days,date,expected] of [['Monday-Friday',callDay,true],['Friday',callDay,false],['Sat-Sun',callDay,false],['Fri-Mon','2030-01-07',true],['weekends','2030-01-12',true],['Mon, Thu',callDay,true],['',callDay,true]])assert.equal((await db.query('select transport_scheduled_on_date($1,$2) yes',[days,date])).rows[0].yes,expected);
+ // Location checks still apply to maintenance; a transport flag grants no extra sites.
+ const maintenance=id(30),maintenanceLane=id(31),restrictedSite=id(32),foreignOrg=id(33);
+ await db.query('insert into auth.users values($1)',[maintenance]);
+ await db.query("insert into staff_access values($1,$2,'Synthetic Maintenance','Employee',$3,true)",[maintenance,org,['maintenance_view','transportation']]);
+ await db.query("insert into staff_lane_profiles values($1,$2,'Synthetic Maintenance',$3,true)",[maintenanceLane,org,maintenance]);
+ await db.query('insert into staff_location_assignments values($1,$2,$3)',[org,maintenance,loc]);
+ await db.query("insert into locations values($1,$2,true,'Other Synthetic Site')",[restrictedSite,org]);
+ const maintenanceData=JSON.stringify({driver:'Synthetic Maintenance',driverLaneId:maintenanceLane});
+ await db.exec('set role authenticated');
+ assert.equal((await db.query('select transport_driver_lane($1,$2,$3) id',[org,maintenanceData,loc])).rows[0].id,maintenanceLane);
+ await assert.rejects(db.query('select transport_driver_lane($1,$2,$3)',[org,maintenanceData,restrictedSite]),/active Hub access/);
+ await assert.rejects(db.query('update transport_driver_access set all_locations=true where user_id=$1',[maintenance]),/permission denied/);
+ assert.equal((await db.query("select has_function_privilege('authenticated','refresh_transport_driver_access(uuid)','execute') allowed")).rows[0].allowed,false);
+ await db.exec('reset role');
+ await db.query('insert into organizations values($1)',[foreignOrg]);
+ await db.query('update transport_driver_access set organization_id=$1 where user_id=$2',[foreignOrg,maintenance]);
+ await db.exec('set role authenticated');assert.equal((await db.query('select * from transport_driver_access where user_id=$1',[maintenance])).rows.length,0,'eligibility cannot cross organizations');await db.exec('reset role');
+ await db.query('select refresh_transport_driver_access($1)',[maintenance]);
+ await db.query('delete from staff_location_assignments where user_id=$1',[maintenance]);
+ await assert.rejects(db.query('select transport_driver_lane($1,$2,$3)',[org,maintenanceData,loc]),/active Hub access/);
  await db.query('update staff_lane_profiles set is_active=false where id=$1',[lane]);await assert.rejects(add(id(10),3),/active driver/);
  }finally{await db.close();}
 });
