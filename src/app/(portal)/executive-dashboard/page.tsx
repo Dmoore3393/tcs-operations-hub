@@ -4,7 +4,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import type { ChildRecord } from "@/lib/children";
-import { auditSummary } from "@/lib/child-file-audits";
+import { auditSummary, latestFileAudit } from "@/lib/child-file-audits";
 import { emergencyCardReadiness } from "@/lib/emergency-cards";
 import { defaultImmunizationProgram, immunizationStatus, normalizeImmunizationRecord } from "@/lib/immunization-tracker";
 import {
@@ -98,8 +98,7 @@ export default function ExecutiveDashboardPage() {
   const noShows = leads.reduce((sum, lead) => sum + (lead.tourHistory ?? []).filter((tour) => tour.status === "No Show").length, 0);
 
   const childReadinessScores = activeChildren.map((child) => {
-    const audits = Array.isArray(child.fileAudits) ? child.fileAudits : [];
-    const latestAudit = [...audits].sort((a, b) => (b.auditDate || b.updatedAt || "").localeCompare(a.auditDate || a.updatedAt || ""))[0];
+    const latestAudit = latestFileAudit(child.fileAudits);
     const fileReady = Boolean(latestAudit && auditSummary(latestAudit).complete && child.licensingStatus === "Complete" && child.missingDocuments.length === 0);
     const emergencyReady = emergencyCardReadiness(child).ready;
     const shotRecord = normalizeImmunizationRecord(child.immunizationRecord, defaultImmunizationProgram(child.ageGroup, child.location));

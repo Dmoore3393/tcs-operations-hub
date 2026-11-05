@@ -107,6 +107,8 @@ test("old cached N/A names clear without erasing real missing paperwork, manual 
   assert.equal(auditProfileDocuments(audit, [], "Missing Documents").licensingStatus, "Missing Documents");
   audit.auditDate = "2030-01-01"; next.auditDate = "2030-02-01"; next.id = "newer-audit";
   assert.equal(latestFileAudit([next, audit]).id, next.id);
+  audit.auditDate = next.auditDate; audit.updatedAt = "2030-02-01T10:00:00Z"; next.updatedAt = "2030-02-01T12:00:00Z";
+  assert.equal(latestFileAudit([audit, next]).id, next.id);
 });
 
 test("enrollment packets respect N/A on both templates and include a conditional form explicitly marked missing", async () => {
@@ -120,6 +122,12 @@ test("enrollment packets respect N/A on both templates and include a conditional
     const first = audit.items[0]; first.status = "N/A";
     const extended = auditItemFor(audit, 42); extended.status = "Missing";
     const child = { location, ageGroup: "School Age", transportation: "No transportation", allergies: "None reported", medicalNotes: "No current medical notes" };
+    if (template === "In-Home") {
+      const infant = { ...child, ageGroup: "Infant" };
+      assert.ok(applicableDocuments(infant, null).some(doc => doc.id === 7));
+      auditItemFor(audit, 7).status = "N/A";
+      assert.ok(!applicableDocuments(infant, audit).some(doc => doc.id === 7));
+    }
     const ids = applicableDocuments(child, audit).map(doc => doc.id);
     assert.ok(!ids.includes(first.documentId)); assert.ok(ids.includes(42));
     extended.status = "N/A";

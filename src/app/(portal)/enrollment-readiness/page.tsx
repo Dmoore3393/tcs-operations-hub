@@ -46,6 +46,7 @@ function applicableDocuments(child: ChildRecord, audit: ChildFileAudit | null) {
     if (status === "On File" || status === "Missing") return true;
     if (document.requirement === "Required" || document.requirement === "For Internal Use") return true;
     const name = document.name.toLowerCase();
+    if (name.includes("immunization")) return ["Infant", "Toddler", "Preschool"].includes(child.ageGroup);
     if (name.includes("transport")) return Boolean(transport);
     if (name.includes("infant sleeping")) return infant;
     if (name.includes("allergy") || name.includes("medication") || name.includes("physician") || name.includes("special diet") || name.includes("care plan")) return medical;

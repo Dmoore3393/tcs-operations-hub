@@ -5,7 +5,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { PageIntro, SectionCard, StatCard, StatusBadge } from "@/components/hub/HubUI";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { auditSummary, type ChildFileAudit } from "@/lib/child-file-audits";
+import { auditSummary, latestFileAudit } from "@/lib/child-file-audits";
 import type { ChildRecord } from "@/lib/children";
 import { emergencyCardReadiness } from "@/lib/emergency-cards";
 import { defaultImmunizationProgram, immunizationStatus, normalizeImmunizationRecord } from "@/lib/immunization-tracker";
@@ -35,13 +35,6 @@ function fileTone(status: FileRecord["status"]) {
   if (status === "Complete") return "green" as const;
   if (status === "Missing") return "red" as const;
   return "amber" as const;
-}
-
-function latestAudit(child: ChildRecord): ChildFileAudit | null {
-  const audits = Array.isArray(child.fileAudits) ? child.fileAudits : [];
-  return [...audits].sort((a, b) =>
-    (b.auditDate || b.updatedAt || "").localeCompare(a.auditDate || a.updatedAt || ""),
-  )[0] ?? null;
 }
 
 function childName(child: ChildRecord) {
@@ -99,7 +92,7 @@ export default function CompliancePage() {
   const total = scopedFiles.length;
 
   const childReadiness = useMemo(() => scopedChildren.map((child) => {
-    const audit = latestAudit(child);
+    const audit = latestFileAudit(child.fileAudits);
     const auditState = audit ? auditSummary(audit) : null;
     const emergency = emergencyCardReadiness(child);
     const immunizationRecord = normalizeImmunizationRecord(
