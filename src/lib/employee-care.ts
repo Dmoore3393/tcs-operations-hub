@@ -34,6 +34,7 @@ export type ShiftReport = {
   date: string;
   shiftWindow: string;
   completedBy: string;
+  completedByStaffId?: string;
   initials: string;
   positiveBehaviors: string;
   babyUpdates: string;
