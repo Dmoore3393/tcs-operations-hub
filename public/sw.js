@@ -14,6 +14,34 @@ self.addEventListener("fetch", (event) => {
 });
 
 
+// Store only hashes of recently displayed event IDs, never message text or child details.
+const shownEvents = new Map();
+let bannerQueue = Promise.resolve();
+
+async function displayOnce(tag, display) {
+  if (!tag) return display();
+  const cutoff = Date.now() - 86400000;
+  for (const [id, at] of shownEvents) if (at < cutoff) shownEvents.delete(id);
+  if (shownEvents.has(tag)) return;
+  let cache, receipts = [], hash;
+  const key = "/__hub_push_receipts";
+  try {
+    const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(tag));
+    hash = Array.from(new Uint8Array(bytes), n => n.toString(16).padStart(2,"0")).join("");
+    cache = await caches.open("hub-push-event-receipts-v1");
+    const saved = await cache.match(key);
+    if (saved) receipts = (await saved.json()).filter(entry => entry[1] >= cutoff);
+    if (receipts.some(entry => entry[0] === hash)) return;
+  } catch { /* Storage can be unavailable on a phone. Still deliver the alert. */ }
+  await display();
+  shownEvents.set(tag, Date.now());
+  if (shownEvents.size > 512) shownEvents.delete(shownEvents.keys().next().value);
+  if (cache && hash) {
+    receipts.push([hash, Date.now()]);
+    try { await cache.put(key, new Response(JSON.stringify(receipts.slice(-512)))); } catch {}
+  }
+}
+
 self.addEventListener("push", (event) => {
   let payload = {};
   try {
@@ -27,15 +55,15 @@ self.addEventListener("push", (event) => {
   const href = typeof payload.href === "string" && payload.href.startsWith("/") ? payload.href : "/notifications";
   const tag = typeof payload.tag === "string" && payload.tag ? payload.tag : "tcs-hub-notification";
 
-  event.waitUntil(
-    self.registration.showNotification(title, {
+  const delivery = bannerQueue.then(() => displayOnce(payload.tag, () => self.registration.showNotification(title, {
       body,
       icon: "/app-icon-192.png",
       badge: "/app-icon-192.png",
       tag,
       data: { href },
-    }),
-  );
+    })));
+  bannerQueue = delivery.catch(() => {});
+  event.waitUntil(delivery);
 });
 
 self.addEventListener("notificationclick", (event) => {
