@@ -33,7 +33,7 @@ jobs:
       - name: Verify per-home KidKare submissions and private claim evidence
         run: node --test scripts/test-kidkare-submissions.mjs
       - name: Verify account deletion, bounded loading, native API access, and family alert authorization
-        run: node --test scripts/test-account-deletion.mjs scripts/test-request-timeout.mjs scripts/test-native-api.mjs scripts/test-native-family-notifications.mjs scripts/test-route-access.mjs scripts/test-hub-tool-groups.mjs scripts/test-staff-scheduler.mjs scripts/test-maintenance-access.mjs scripts/test-transportation-day.mjs scripts/test-school-pickup-stops.mjs scripts/test-transport-child-schools.mjs scripts/test-transport-driver-assignments.mjs scripts/test-connected-transport-ui.mjs scripts/test-driver-route-view.mjs scripts/test-form-choices.mjs scripts/test-school-attendance.mjs
+        run: node --test scripts/test-account-deletion.mjs scripts/test-request-timeout.mjs scripts/test-native-api.mjs scripts/test-native-family-notifications.mjs scripts/test-route-access.mjs scripts/test-hub-tool-groups.mjs scripts/test-staff-scheduler.mjs scripts/test-maintenance-access.mjs scripts/test-transportation-day.mjs scripts/test-school-pickup-stops.mjs scripts/test-transport-child-schools.mjs scripts/test-transport-driver-assignments.mjs scripts/test-connected-transport-ui.mjs scripts/test-driver-route-view.mjs scripts/test-form-choices.mjs scripts/test-shift-report-authors.mjs scripts/test-school-attendance.mjs
       - name: Typecheck application
         run: npx tsc --noEmit
       - name: Verify driver pushes with the Hub closed

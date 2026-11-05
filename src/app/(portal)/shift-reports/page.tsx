@@ -1,6 +1,7 @@
 "use client";
 
 import MainLayout from "@/components/layout/MainLayout";
+import StaffNameSelect from "@/components/forms/StaffNameSelect";
 import { DemoNotice, PageIntro, PrimaryButton, SecondaryButton, SectionCard, StatCard, StatusBadge, inputClass } from "@/components/hub/HubUI";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -17,14 +18,12 @@ import {
   type ShiftReport,
   type ShiftReportType,
 } from "@/lib/employee-care";
-import { starterEmployees } from "@/lib/hub-data";
 import { careLocations, type LocationKey } from "@/lib/location-config";
 import { Check, Eye, FileText, Lock, MessageSquareText, ShieldCheck } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { localIsoDate } from "@/lib/date-utils";
-import { recordAuditEvent } from "@/lib/audit";
-
-const today = localIsoDate();
+import { supabase } from "@/lib/supabase/client";
+import { withRequestTimeout } from "@/lib/request-timeout";
 
 type ReportForm = Omit<ShiftReport, "id" | "status" | "submittedAt" | "reviewedBy" | "reviewerInitials" | "reviewedAt">;
 
@@ -33,7 +32,7 @@ function createForm(type: ShiftReportType, location: Exclude<LocationKey, "All L
   return {
     type,
     location,
-    date: today,
+    date: localIsoDate(),
     shiftWindow: type === "Opening" ? "6:00 AM–12:00 PM" : "12:00 PM–Close",
     completedBy: "",
     initials: "",
@@ -51,8 +50,8 @@ function createForm(type: ShiftReportType, location: Exclude<LocationKey, "All L
 export default function ShiftReportsPage() {
   const { location: activeLocation } = useHubLocation();
   const selectedLocation: Exclude<LocationKey, "All Locations"> = activeLocation === "All Locations" ? "Halcom" : activeLocation;
-  const [reports, setReports] = usePersistentState<ShiftReport[]>("tcs-shift-reports-v1", starterShiftReports);
-  const [handoffs, setHandoffs] = usePersistentState<HandoffItem[]>("tcs-shift-handoffs-v1", starterHandoffs);
+  const [reports, , , reportState] = usePersistentState<ShiftReport[]>("tcs-shift-reports-v1", starterShiftReports);
+  const [handoffs, , , handoffState] = usePersistentState<HandoffItem[]>("tcs-shift-handoffs-v1", starterHandoffs);
   const [careLogs] = usePersistentState<CareLogEntry[]>("tcs-daily-care-v1", starterCareLogs);
   const [healthRecords] = usePersistentState<HealthSafetyRecord[]>("tcs-health-safety-v1", starterHealthSafety);
   const [tab, setTab] = useState<"New Report" | "Report History" | "Pickup Handoff">("New Report");
@@ -62,7 +61,10 @@ export default function ShiftReportsPage() {
     return () => window.removeEventListener("hashchange", selectTab);
   }, []);
   const [form, setForm] = useState<ReportForm>(() => createForm("Opening", selectedLocation));
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const requestInFlight = useRef(false);
+  const formRequestId = useRef<string | null>(null);
   const [reviewInitials, setReviewInitials] = useState<Record<string, string>>({});
   const [handoffInitials, setHandoffInitials] = useState<Record<string, string>>({});
 
@@ -79,6 +81,9 @@ export default function ShiftReportsPage() {
   };
 
   function changeType(type: ShiftReportType) {
+    if (type === form.type) return;
+    formRequestId.current = null;
+    setMessage(null);
     setForm(createForm(type, form.location));
   }
 
@@ -90,51 +95,52 @@ export default function ShiftReportsPage() {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  function saveReport(status: "Draft" | "Submitted") {
-    if (!form.completedBy.trim() || form.initials.trim().length < 2) {
-      setMessage("Enter the employee name and initials before saving.");
+  async function writeReportAction(name: string, args: Record<string, unknown>) {
+    if (requestInFlight.current) return false;
+    requestInFlight.current = true;
+    setBusy(true);
+    setMessage(null);
+    try {
+      if (!supabase) throw new Error("Secure sign-in is not configured.");
+      const client = supabase;
+      const { error } = await withRequestTimeout(signal => client.rpc(name, args).abortSignal(signal));
+      if (error) throw new Error(error.message);
+      return true;
+    } catch (error) {
+      setMessage({ text: error instanceof Error ? error.message : "Could not save changes. Try again.", error: true });
+      return false;
+    } finally {
+      requestInFlight.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function saveReport(status: "Draft" | "Submitted") {
+    if (!form.completedByStaffId || !form.completedBy.trim() || form.initials.trim().length < 2) {
+      setMessage({ text: "Choose a staff member and enter their initials before saving.", error: true });
       return;
     }
-    const report: ShiftReport = {
-      ...form,
-      id: `report-${Date.now()}`,
-      initials: form.initials.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4),
-      status,
-      submittedAt: status === "Submitted" ? new Date().toISOString() : undefined,
-    };
-    setReports((current) => [report, ...current]);
-    if (status === "Submitted" && form.pickupInformation.trim()) {
-      const item: HandoffItem = {
-        id: `handoff-${Date.now()}`,
-        sourceReportId: report.id,
-        location: report.location,
-        date: report.date,
-        category: "Pickup Information",
-        details: report.pickupInformation.trim(),
-        priority: "Important",
-        completed: false,
-        completedByInitials: "",
-      };
-      setHandoffs((current) => [item, ...current]);
-    }
-    setMessage(status === "Submitted" ? `${report.type} report submitted for the incoming team.` : "Draft saved.");
-    setForm(createForm(report.type, report.location));
-    window.setTimeout(() => setMessage(""), 2400);
+    formRequestId.current ??= crypto.randomUUID();
+    if (!await writeReportAction("create_shift_report_with_staff", {
+      p_request_id: formRequestId.current, p_report: { ...form, status },
+    })) return;
+    formRequestId.current = null;
+    reportState.retry();
+    if (status === "Submitted" && form.pickupInformation.trim()) handoffState.retry();
+    setMessage({ text: status === "Submitted" ? `${form.type} report submitted for the incoming team.` : "Draft saved." });
+    setForm(createForm(form.type, form.location));
   }
 
   async function reviewReport(id: string) {
     const initials = (reviewInitials[id] ?? "").trim().toUpperCase();
     if (initials.length < 2) return;
-    const report = reports.find((item) => item.id === id);
-    if (!report) return;
-    setReports((current) => current.map((item) => item.id === id ? { ...item, status: "Reviewed", reviewedBy: "Director / Licensee", reviewerInitials: initials.slice(0, 4), reviewedAt: new Date().toISOString() } : item));
-    await recordAuditEvent({ action: "REVIEW", tableName: "shift_reports", legacyId: id, location: report.location, metadata: { reportType: report.type, reportDate: report.date, reviewerInitials: initials.slice(0, 4) } });
+    if (await writeReportAction("review_shift_report", { p_report_id: id, p_initials: initials })) reportState.retry();
   }
 
-  function completeHandoff(id: string) {
+  async function completeHandoff(id: string) {
     const initials = (handoffInitials[id] ?? "").trim().toUpperCase();
     if (initials.length < 2) return;
-    setHandoffs((current) => current.map((item) => item.id === id ? { ...item, completed: true, completedByInitials: initials.slice(0, 4), completedAt: new Date().toISOString() } : item));
+    if (await writeReportAction("complete_shift_report_handoff", { p_handoff_id: id, p_initials: initials })) handoffState.retry();
   }
 
   function addCareSnapshot() {
@@ -147,6 +153,9 @@ export default function ShiftReportsPage() {
     setForm((current) => ({ ...current, booBoos: [current.booBoos, summary].filter(Boolean).join("\n\n") }));
   }
 
+  const feedback = busy
+    ? <p role="status" className="mt-4 text-sm font-bold text-slate-600">Saving…</p>
+    : message && <p role={message.error ? "alert" : "status"} className={`mt-4 rounded-xl border px-4 py-3 text-sm font-bold ${message.error ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}>{message.text}</p>;
   const checklistItems = Object.keys(form.checklist);
   const checklistComplete = Object.values(form.checklist).filter(Boolean).length;
 
@@ -161,15 +170,23 @@ export default function ShiftReportsPage() {
       <StatCard label="Open Pickup Handoffs" value={openHandoffs.length} icon={<MessageSquareText className="h-5 w-5" />} tone="red" />
     </section>
 
-    <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">{(["New Report", "Report History", "Pickup Handoff"] as const).map((item) => <button key={item} onClick={() => setTab(item)} className={`rounded-xl px-4 py-2.5 text-sm font-black ${tab === item ? "bg-emerald-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>{item}</button>)}</div>
+    <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">{(["New Report", "Report History", "Pickup Handoff"] as const).map((item) => <button key={item} disabled={busy} onClick={() => { setTab(item); setMessage(null); }} className={`rounded-xl px-4 py-2.5 text-sm font-black ${tab === item ? "bg-emerald-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>{item}</button>)}</div>
 
-    {tab === "New Report" && <div className="grid gap-6 xl:grid-cols-[1.22fr_.78fr]">
+    {tab !== "New Report" && feedback}
+    {tab === "New Report" && <fieldset disabled={busy} className="grid min-w-0 gap-6 xl:grid-cols-[1.22fr_.78fr]">
       <SectionCard title={`${form.type} Report`} description="One general location update. Mention individual children only when it is necessary for the team handoff.">
         <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Report type"><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => changeType("Opening")} className={`rounded-xl border px-3 py-2.5 text-sm font-black ${form.type === "Opening" ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-slate-200"}`}>Opening</button><button type="button" onClick={() => changeType("Closing")} className={`rounded-xl border px-3 py-2.5 text-sm font-black ${form.type === "Closing" ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-slate-200"}`}>Closing</button></div></Field>
           <Field label="Location"><select className={inputClass} value={form.location} onChange={(event) => changeLocation(event.target.value as Exclude<LocationKey, "All Locations">)}>{careLocations.map((location) => <option key={location}>{location}</option>)}</select></Field>
           <Field label="Date"><input type="date" className={inputClass} value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></Field>
           <Field label="Shift window"><input className={inputClass} value={form.shiftWindow} onChange={(event) => setForm({ ...form, shiftWindow: event.target.value })} /></Field>
+        </div>
+
+        <div className="mb-5 grid gap-4 sm:grid-cols-2">
+          <Field label="Completed by"><StaffNameSelect label="Completed by" required valueBy="id" value={form.completedByStaffId ?? ""} onChange={(_, person) => setForm(current => ({
+            ...current, completedByStaffId: person?.id, completedBy: person?.full_name ?? "", initials: "",
+          }))} /></Field>
+          <Field label="Staff initials"><input className={`${inputClass} uppercase`} required maxLength={4} value={form.initials} onChange={(event) => setForm({ ...form, initials: event.target.value.toUpperCase().replace(/[^A-Z]/g, "") })} /></Field>
         </div>
 
         <div className="space-y-4">
@@ -182,11 +199,7 @@ export default function ShiftReportsPage() {
           <ReportArea title="💚 Operations / Team Notes" helper="Staffing, ratios, supplies, transportation, cleaning, or unfinished items for the next shift." value={form.operationsNotes} onChange={(value) => setText("operationsNotes", value)} />
         </div>
 
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <Field label="Completed by"><select className={inputClass} value={form.completedBy} onChange={(event) => setForm({ ...form, completedBy: event.target.value })}><option value="">Select employee</option>{starterEmployees.map((employee) => <option key={employee.id}>{employee.name}</option>)}</select></Field>
-          <Field label="Staff initials"><input className={`${inputClass} uppercase`} maxLength={4} value={form.initials} onChange={(event) => setForm({ ...form, initials: event.target.value.toUpperCase().replace(/[^A-Z]/g, "") })} placeholder="LM" /></Field>
-        </div>
-        {message && <div className={`mt-4 rounded-xl px-4 py-3 text-sm font-bold ${message.includes("submitted") || message.includes("saved") ? "border border-emerald-200 bg-emerald-50 text-emerald-900" : "border border-amber-200 bg-amber-50 text-amber-900"}`}>{message}</div>}
+        {feedback}
         <div className="mt-5 flex flex-wrap justify-end gap-3"><SecondaryButton onClick={() => saveReport("Draft")}>Save Draft</SecondaryButton><PrimaryButton onClick={() => saveReport("Submitted")}><Check className="h-4 w-4" /> Submit to Team</PrimaryButton></div>
       </SectionCard>
 
@@ -204,11 +217,11 @@ export default function ShiftReportsPage() {
         </SectionCard>
         <SectionCard title="Privacy Rule" description="Hard boundary for future parent features"><div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm leading-6 text-red-900"><p className="font-black">Opening and closing reports are staff-only forever.</p><p className="mt-2">They cannot be attached to a child update, copied into a parent feed, or automatically sent to families. Any family message must be written and sent separately through the future communication area.</p></div></SectionCard>
       </div>
-    </div>}
+    </fieldset>}
 
     {tab === "Report History" && <SectionCard title="Internal Report History" description="Directors and licensees can review submitted reports and leave the original staff entry unchanged.">
       <div className="space-y-4">{locationReports.map((report) => <article key={report.id} className="rounded-2xl border border-slate-200 p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-lg font-black text-slate-950">{report.type} Report • {report.location}</h3><StatusBadge tone={report.status === "Reviewed" ? "green" : report.status === "Submitted" ? "amber" : "slate"}>{report.status}</StatusBadge></div><p className="mt-1 text-sm font-semibold text-slate-500">{report.date} • {report.shiftWindow} • {report.completedBy} ({report.initials})</p></div>{report.status === "Submitted" && <div className="flex gap-2"><input className="w-24 rounded-xl border border-slate-300 px-3 py-2 text-center text-sm font-black uppercase" placeholder="DM" value={reviewInitials[report.id] ?? ""} onChange={(event) => setReviewInitials({ ...reviewInitials, [report.id]: event.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4) })} /><button onClick={() => void reviewReport(report.id)} disabled={(reviewInitials[report.id] ?? "").length < 2} className="tcs-primary-button rounded-xl px-3 py-2 text-xs font-black disabled:opacity-40">Review</button></div>}</div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-lg font-black text-slate-950">{report.type} Report • {report.location}</h3><StatusBadge tone={report.status === "Reviewed" ? "green" : report.status === "Submitted" ? "amber" : "slate"}>{report.status}</StatusBadge></div><p className="mt-1 text-sm font-semibold text-slate-500">{report.date} • {report.shiftWindow} • <span>Completed by</span> <span translate="no">{report.completedBy} ({report.initials})</span></p></div>{report.status === "Submitted" && <div className="flex gap-2"><input className="w-24 rounded-xl border border-slate-300 px-3 py-2 text-center text-sm font-black uppercase" placeholder="DM" value={reviewInitials[report.id] ?? ""} onChange={(event) => setReviewInitials({ ...reviewInitials, [report.id]: event.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4) })} /><button onClick={() => void reviewReport(report.id)} disabled={busy || (reviewInitials[report.id] ?? "").length < 2} className="tcs-primary-button rounded-xl px-3 py-2 text-xs font-black disabled:opacity-40">Review</button></div>}</div>
         <div className="mt-4 grid gap-3 md:grid-cols-2"><Summary title="Positive Behaviors" value={report.positiveBehaviors} /><Summary title="Baby Updates" value={report.babyUpdates} /><Summary title="Misbehaviors / Concerns" value={report.misbehaviors} /><Summary title="Boo-Boos" value={report.booBoos} /><Summary title="Parent Communication" value={report.parentCommunication} /><Summary title="Information for Pickup" value={report.pickupInformation} emphasized /><Summary title="Operations Notes" value={report.operationsNotes} /></div>
         {report.status === "Reviewed" && <p className="mt-4 text-xs font-black text-emerald-800">Reviewed by {report.reviewerInitials} • original report preserved</p>}
       </article>)}{!locationReports.length && <div className="rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">No reports saved for this location yet.</div>}</div>
@@ -216,7 +229,7 @@ export default function ShiftReportsPage() {
 
     {tab === "Pickup Handoff" && <SectionCard title="Pickup Handoff Board" description="Unresolved pickup reminders remain visible to the incoming team until someone initials them complete.">
       <div className="space-y-4">{handoffs.filter((item) => activeLocation === "All Locations" || item.location === activeLocation).map((item) => <article key={item.id} className={`rounded-2xl border p-5 ${item.completed ? "border-emerald-200 bg-emerald-50/40" : "border-amber-200 bg-amber-50/40"}`}>
-        <div className="flex flex-col gap-3 md:flex-row md:items-center"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm"><MessageSquareText className="h-5 w-5 text-amber-700" /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-black text-slate-950">{item.location} • {item.date}</p><StatusBadge tone={item.completed ? "green" : item.priority === "Urgent" ? "red" : "amber"}>{item.completed ? "Completed" : item.priority}</StatusBadge></div><p className="mt-1 text-sm leading-6 text-slate-700">{item.details}</p></div>{item.completed ? <span className="rounded-xl bg-white px-3 py-2 text-xs font-black text-emerald-800">Completed by {item.completedByInitials}</span> : <div className="flex gap-2"><input className="w-24 rounded-xl border border-slate-300 px-3 py-2 text-center text-sm font-black uppercase" placeholder="Initials" value={handoffInitials[item.id] ?? ""} onChange={(event) => setHandoffInitials({ ...handoffInitials, [item.id]: event.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4) })} /><button onClick={() => completeHandoff(item.id)} disabled={(handoffInitials[item.id] ?? "").length < 2} className="tcs-primary-button rounded-xl px-3 py-2 text-xs font-black disabled:opacity-40">Mark Shared</button></div>}</div>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm"><MessageSquareText className="h-5 w-5 text-amber-700" /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-black text-slate-950">{item.location} • {item.date}</p><StatusBadge tone={item.completed ? "green" : item.priority === "Urgent" ? "red" : "amber"}>{item.completed ? "Completed" : item.priority}</StatusBadge></div><p className="mt-1 text-sm leading-6 text-slate-700">{item.details}</p></div>{item.completed ? <span className="rounded-xl bg-white px-3 py-2 text-xs font-black text-emerald-800">Completed by {item.completedByInitials}</span> : <div className="flex gap-2"><input className="w-24 rounded-xl border border-slate-300 px-3 py-2 text-center text-sm font-black uppercase" placeholder="Initials" value={handoffInitials[item.id] ?? ""} onChange={(event) => setHandoffInitials({ ...handoffInitials, [item.id]: event.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4) })} /><button onClick={() => completeHandoff(item.id)} disabled={busy || (handoffInitials[item.id] ?? "").length < 2} className="tcs-primary-button rounded-xl px-3 py-2 text-xs font-black disabled:opacity-40">Mark Shared</button></div>}</div>
       </article>)}{!handoffs.length && <div className="rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">No pickup handoffs have been created yet.</div>}</div>
     </SectionCard>}
   </div></MainLayout>;

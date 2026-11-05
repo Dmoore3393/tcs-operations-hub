@@ -99,7 +99,9 @@ export function usePersistentState<T>(key: string, initialValue: T) {
   const { user, profile } = useAuth();
   const config = useMemo(() => relationalConfigForKey(key), [key]);
   const hasStateAccess = canReadStateKey(profile, key);
-  const canWrite = canWriteStateKey(profile, key);
+  // Shift reports and their pickup handoffs are written one row at a time by RPC.
+  // Their readers must never send a stale copy of the entire collection back.
+  const canWrite = key !== "tcs-shift-reports-v1" && key !== "tcs-shift-handoffs-v1" && canWriteStateKey(profile, key);
   const [productionInitial] = useState<T>(() => getProductionInitialValue(key, initialValue));
   const [value, setValue] = useState<T>(productionInitial);
   const [hydrated, setHydrated] = useState(() => !hasStateAccess);
