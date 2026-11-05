@@ -112,3 +112,13 @@ test('leadership pickup and drop-off push with the Hub closed even if optional H
  lane=false;await deliver('pickup');active=false;role='Owner / Admin';await deliver('handoff');
  active=true;org='other-org';await deliver('handoff');assert.equal(f.native.length,4);
 });
+
+test('identical phone deliveries display once while distinct event IDs with the same title still display',async()=>{
+ const handlers={},shown=[],cache=new Map();
+ const workerContext=()=>({crypto:globalThis.crypto,TextEncoder,Response,caches:{open:async()=>({match:async k=>cache.get(k)?.clone(),put:async(k,v)=>cache.set(k,v)})},self:{addEventListener:(k,v)=>handlers[k]=v,registration:{showNotification:async(t,o)=>shown.push(o.tag)}}});
+ vm.runInNewContext(worker,workerContext());
+ const push=tag=>new Promise((resolve,reject)=>handlers.push({data:{json:()=>({tag,title:'Same title'})},waitUntil:p=>p.then(resolve,reject)}));
+ await Promise.all([push('one'),push('one')]);
+ vm.runInNewContext(worker,workerContext());
+ await push('one');await push('two');assert.deepEqual(shown,['one','two']);
+});

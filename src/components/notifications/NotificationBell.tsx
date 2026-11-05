@@ -5,7 +5,7 @@ import type { HubNotification } from "@/lib/notifications";
 import { enableHubPushNotifications, hubNotificationPermission, isNativeHubApp, isStandaloneHubApp } from "@/lib/push-client";
 import { Bell, BellRing, CheckCheck, Smartphone, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type NotificationPayload = {
   notifications: HubNotification[];
@@ -40,9 +40,6 @@ export default function NotificationBell() {
   const [notifications, setNotifications] = useState<HubNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
-  const initialized = useRef(false);
-  const knownIds = useRef(new Set<string>());
-
   const recent = useMemo(() => notifications.slice(0, 6), [notifications]);
 
   useEffect(() => {
@@ -129,28 +126,7 @@ export default function NotificationBell() {
         setUnreadCount(nextUnread);
         updateAppBadge(nextUnread);
 
-        if (!initialized.current) {
-          next.forEach((item) => knownIds.current.add(item.id));
-          initialized.current = true;
-          return;
-        }
-
-        const newUnread = next.filter((item) => !item.readAt && !knownIds.current.has(item.id) && !item.eventKey?.startsWith("child-file-audit:"));
-        next.forEach((item) => knownIds.current.add(item.id));
-
-        if (!isNativeHubApp() && newUnread.length && "Notification" in window && Notification.permission === "granted") {
-          const registration = await navigator.serviceWorker?.ready;
-          const newest = newUnread[0];
-          if (registration) {
-            await registration.showNotification(newest.title, {
-              body: newest.body,
-              icon: "/app-icon-192.png",
-              badge: "/app-icon-192.png",
-              tag: newest.eventKey || newest.id,
-              data: { href: newest.href },
-            });
-          }
-        }
+        // The service worker owns phone banners; polling only refreshes the inbox.
       } catch {
         // Notification polling should never interrupt Hub workflows.
       }
