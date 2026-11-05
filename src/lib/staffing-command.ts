@@ -147,7 +147,7 @@ export function buildCoverageWindows(args: {
   const day = dateToDayName(date);
 
   const scheduleBlocks = schedules.flatMap((record) =>
-    (record.days[day]?.blocks ?? [])
+    (record.days[day]?.noCare ? [] : record.days[day]?.blocks ?? [])
       .filter((block) => block.location === locationKey)
       .map((block) => ({
         record,
@@ -184,7 +184,8 @@ export function buildCoverageWindows(args: {
     const end = sorted[index + 1];
     if (end <= start) continue;
     const midpoint = start + (end - start) / 2;
-    const present = scheduleBlocks.filter((block) => block.start <= midpoint && block.end > midpoint).map((block) => block.record);
+    const present = [...new Map(scheduleBlocks.filter(block => block.start <= midpoint && block.end > midpoint)
+      .map(block => [block.record.childId, block.record])).values()];
     const activeShifts = locationShifts
       .filter((item) => item.start <= midpoint && item.end > midpoint)
       .map((item) => item.shift)
@@ -251,6 +252,8 @@ export function buildCoverageWindows(args: {
       prior.end === row.start &&
       prior.status === row.status &&
       prior.childCount === row.childCount &&
+      prior.requiredStaff === row.requiredStaff &&
+      prior.children.every((child, i) => child.childId === row.children[i]?.childId) &&
       prior.staffNames.join("|") === row.staffNames.join("|") &&
       prior.offFloorNames.join("|") === row.offFloorNames.join("|")
     ) {

@@ -1,0 +1,392 @@
+.planner {
+  --pine: #154d40;
+  --mint: #eaf5ee;
+  --line: #d9e3df;
+  --ink: #18382f;
+  max-width: 1440px;
+  margin: 0 auto 2rem;
+  color: var(--ink);
+  display: grid;
+  gap: 1rem;
+}
+.head,
+.panelHead,
+.weekNav,
+.name,
+.peak > div,
+.ratioLink,
+.secondary,
+.dayStrip,
+.tableHead,
+.timeRow {
+  display: flex;
+  align-items: center;
+}
+.head,
+.panelHead,
+.tableHead,
+.timeRow {
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.head {
+  padding: 0.35rem 0;
+}
+.head h1 {
+  font-size: clamp(1.8rem, 4vw, 2.65rem);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.045em;
+}
+.planner h2 {
+  font-size: 1.16rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+.head p,
+.panelHead p,
+.ratioIntro p,
+.row small,
+.weekNav span {
+  font-size: 0.87rem;
+  color: #52675f;
+}
+.secondary,
+.weekNav button,
+.edit,
+.ratioLink {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.8rem;
+  background: white;
+}
+.secondary:hover,
+.edit:hover,
+.weekNav button:hover,
+.ratioLink:hover {
+  background: var(--mint);
+}
+.controls,
+.panel,
+.notes {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+}
+.controls {
+  padding: 1rem;
+}
+.filters {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) auto minmax(8rem, 0.6fr);
+  gap: 1rem;
+  align-items: end;
+}
+.filters label,
+.visitor {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.filters select,
+.filters input,
+.visitor select {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: white;
+  padding: 0.35rem 0.65rem;
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+.weekNav {
+  gap: 0.6rem;
+  text-align: center;
+}
+.weekNav div {
+  display: grid;
+  min-width: 9rem;
+}
+.weekNav button {
+  width: 42px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+.dayStrip {
+  gap: 0.4rem;
+  margin-top: 0.9rem;
+}
+.dayStrip button {
+  min-height: 48px;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  text-align: center;
+  font-size: 0.85rem;
+}
+.dayStrip button span,
+.dayStrip button strong {
+  display: block;
+}
+.dayStrip button[aria-pressed="true"] {
+  background: var(--pine);
+  color: white;
+  border-color: var(--pine);
+}
+.notes {
+  display: flex;
+  gap: 1rem 2rem;
+  align-items: center;
+  padding: 0.85rem 1.1rem;
+  flex-wrap: wrap;
+}
+.notes div {
+  display: grid;
+  gap: 0.1rem;
+}
+.notes div:first-child {
+  margin-right: auto;
+}
+.notes span {
+  font-size: 0.8rem;
+  color: #52675f;
+}
+.notes b {
+  font-size: 0.86rem;
+}
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.panel {
+  overflow: hidden;
+}
+.panelHead,
+.ratioIntro {
+  padding: 1rem 1.1rem;
+}
+.panelHead {
+  align-items: flex-start;
+}
+.search {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border: 1px solid var(--line);
+  margin: 0 1.1rem 1rem;
+  padding: 0 0.7rem;
+  border-radius: 9px;
+}
+.search input {
+  min-height: 42px;
+  min-width: 0;
+  flex: 1;
+  background: transparent;
+  outline: none;
+}
+.search:focus-within {
+  outline: 2px solid #44886d;
+}
+.visitor {
+  padding: 0 1.1rem 1rem;
+}
+.group h3,
+.tableHead {
+  padding: 0.5rem 1.1rem;
+  background: #f1f6f3;
+  border-block: 1px solid var(--line);
+  font-size: 0.8rem;
+  font-weight: 750;
+  color: #385c4e;
+}
+.group h3 span {
+  margin-left: 0.4rem;
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 1.1rem;
+  border-bottom: 1px solid #edf1ee;
+  min-height: 54px;
+}
+.row:last-child {
+  border: 0;
+}
+.name {
+  gap: 0.5rem;
+}
+.name small {
+  font-weight: 700;
+  font-size: 0.72rem;
+  padding: 0.07rem 0.4rem;
+  border-radius: 4px;
+  background: #f5e9d5;
+  color: #735218;
+}
+.here,
+.away {
+  display: block;
+  font-size: 0.87rem;
+  line-height: 1.45;
+}
+.away,
+.rowNote {
+  font-size: 0.83rem;
+  color: #52675f;
+}
+.edit {
+  flex: none;
+  color: var(--pine);
+  font-size: 0.8rem;
+}
+.peak {
+  padding: 1rem 1.2rem;
+  color: white;
+  background: var(--pine);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.2rem 0.6rem;
+}
+.peak > div {
+  gap: 0.5rem;
+  font-weight: 650;
+}
+.peak strong {
+  grid-area: 1 / 2 / 3 / 3;
+  align-self: center;
+  font-size: 2.55rem;
+  line-height: 1;
+}
+.peak p {
+  font-size: 0.95rem;
+  color: #e4f2e9;
+}
+.timeRow {
+  padding: 0.52rem 1.1rem;
+  border-bottom: 1px solid #edf1ee;
+  align-items: flex-start;
+}
+.timeRow b,
+.timeRow p {
+  font-size: 0.83rem;
+}
+.timeRow p {
+  color: #52675f;
+  line-height: 1.45;
+}
+.timeRow strong {
+  min-width: 1.4rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.ratioLink {
+  margin: 1rem 1.1rem;
+  color: var(--pine);
+}
+.success,
+.error,
+.warning,
+.empty {
+  padding: 0.7rem 1rem;
+  border-radius: 9px;
+  font-size: 0.9rem;
+}
+.success {
+  background: var(--mint);
+}
+.error {
+  background: #ffece8;
+  color: #862c22;
+}
+.error button {
+  text-decoration: underline;
+}
+.warning {
+  background: #fff4d8;
+}
+@media (max-width: 850px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+  .head {
+    flex-wrap: wrap;
+  }
+  .notes {
+    gap: 0.5rem 1rem;
+  }
+}
+@media (max-width: 580px) {
+  .controls {
+    padding: 0.65rem;
+  }
+  .filters {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+  .weekNav {
+    grid-column: 1/-1;
+    grid-row: 2;
+    justify-content: space-between;
+  }
+  .dayStrip {
+    gap: 2px;
+  }
+  .dayStrip button {
+    border-radius: 7px;
+    font-size: 0.78rem;
+  }
+  .notes,
+  .panelHead {
+    padding: 0.8rem;
+  }
+  .notes div:first-child {
+    width: 100%;
+  }
+  .row {
+    gap: 0.4rem;
+    padding: 0.6rem 0.8rem;
+  }
+  .peak {
+    padding: 0.85rem;
+  }
+  .search {
+    margin-inline: 0.8rem;
+  }
+  .edit,
+  .secondary {
+    padding-inline: 0.55rem;
+  }
+  .head,
+  .panelHead {
+    flex-wrap: wrap;
+  }
+}
+
+.jump {
+  display: none;
+}
+@media (max-width: 850px) {
+  .jump {
+    display: inline-flex;
+    align-items: center;
+    min-height: 42px;
+    justify-self: start;
+    font-weight: 700;
+    color: var(--pine);
+    text-decoration: underline;
+  }
+}

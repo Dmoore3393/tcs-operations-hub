@@ -12,6 +12,8 @@ import {
   type StaffingLocation,
   type StaffingRuleRow,
 } from "@/lib/staffing-command";
+import { useDatedCarePlan } from "@/hooks/useDatedCarePlan";
+import { effectiveScheduleRecords } from "@/lib/weekly-care-planner";
 import { supabase } from "@/lib/supabase/client";
 
 export type LiveCoverageWindow = CoverageWindow & {
@@ -36,6 +38,8 @@ export function useLiveStaffingSnapshot(args: {
   enabled?: boolean;
 }) {
   const { date, schedules, accessibleLocations, enabled = true } = args;
+  const dated = useDatedCarePlan(date,date,enabled);
+  const effective = useMemo(() => effectiveScheduleRecords(dated.data,schedules,date),[dated.data,schedules,date]);
   const [locations, setLocations] = useState<StaffingLocation[]>([]);
   const [shifts, setShifts] = useState<StaffShiftRow[]>([]);
   const [activities, setActivities] = useState<StaffActivityRow[]>([]);
@@ -67,7 +71,7 @@ export function useLiveStaffingSnapshot(args: {
     setLoading(false);
   }, [date, enabled]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const timer = setTimeout(() => void load(),0); return () => clearTimeout(timer); }, [load]);
 
   useEffect(() => {
     if (!enabled || !supabase) return;
@@ -85,9 +89,9 @@ export function useLiveStaffingSnapshot(args: {
   const coverageWindows = useMemo<LiveCoverageWindow[]>(() => locations.flatMap((location) => {
     const key = locationKeyForDbLocation(location);
     if (!key || !accessibleSet.has(key)) return [];
-    return buildCoverageWindows({ date, location, schedules, shifts, activities, rules })
+    return buildCoverageWindows({ date, location, schedules:effective, shifts, activities, rules })
       .map((window) => ({ ...window, location: key, capacity: location.capacity }));
-  }), [accessibleSet, activities, date, locations, rules, schedules, shifts]);
+  }), [accessibleSet, activities, date, locations, rules, effective, shifts]);
 
   const shiftViews = useMemo<LiveShiftView[]>(() => shifts.flatMap((shift) => {
     const location = locations.find((item) => item.id === shift.location_id);
@@ -110,9 +114,10 @@ export function useLiveStaffingSnapshot(args: {
     activities,
     rules,
     coverageWindows,
+    effectiveSchedules: effective,
     shiftViews,
-    loading,
-    error,
+    loading: loading || (enabled && !dated.ready && !dated.error),
+    error: error || dated.error,
     refresh: load,
   };
 }

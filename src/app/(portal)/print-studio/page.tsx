@@ -6,6 +6,8 @@ import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { initialChildren, type ChildRecord } from "@/lib/children";
+import { useDatedCarePlan } from "@/hooks/useDatedCarePlan";
+import { effectiveScheduleRecords } from "@/lib/weekly-care-planner";
 import { starterChildSchedules, type ChildScheduleRecord } from "@/lib/child-schedules";
 import { starterRoutes, starterShifts, starterTasks, starterVehicles, type Shift, type TransportationRoute, type VehicleRecord, type WorkTask } from "@/lib/hub-data";
 import { careLocations, starterLocationHours, type LocationHoursRecord, type LocationKey } from "@/lib/location-config";
@@ -49,11 +51,14 @@ export default function PrintStudioPage() {
   const [routes] = usePersistentState<TransportationRoute[]>("tcs-routes", starterRoutes);
   const [vehicles] = usePersistentState<VehicleRecord[]>("tcs-vehicles-v2", starterVehicles);
 
+  const dated = useDatedCarePlan(date,date,kind === "Daily Ratio Plan");
+  const effective = useMemo(() => kind === "Daily Ratio Plan" ? effectiveScheduleRecords(dated.data,schedules,date) : schedules,[kind,dated.data,schedules,date]);
   const owners = useMemo(() => ["All Staff", ...new Set(tasks.map((task) => task.owner))], [tasks]);
-  const svg = useMemo(() => buildPrintableSvg({ kind, location: selectedLocation, date, variant, title, subtitle, message, owner, children, schedules, shifts, hours, tasks, menus, routes, vehicles }), [children, date, hours, kind, menus, message, owner, routes, schedules, selectedLocation, shifts, subtitle, tasks, title, variant, vehicles]);
+  const svg = useMemo(() => buildPrintableSvg({ kind, location: selectedLocation, date, variant, title, subtitle, message, owner, children, schedules:effective, shifts, hours, tasks, menus, routes, vehicles }), [children, date, hours, kind, menus, message, owner, routes, effective, selectedLocation, shifts, subtitle, tasks, title, variant, vehicles]);
   const filename = `TCS-${selectedLocation.replaceAll(" ", "-")}-${kind.replaceAll(" ", "-")}-${date}`;
 
   async function exportPrintable(format: "PNG" | "PRINT") {
+    if (kind === "Daily Ratio Plan" && !dated.ready) return;
     await recordAuditEvent({ action: "EXPORT", tableName: "printable_studio", location: selectedLocation, metadata: { kind, format, date, variant } });
     if (format === "PNG") await downloadSvgAsPng(svg, filename);
     else printSvg(svg, `${selectedLocation} ${kind}`);
@@ -81,6 +86,7 @@ export default function PrintStudioPage() {
   return <MainLayout><div className="mx-auto max-w-[1550px] space-y-6">
     <PageIntro eyebrow="Graphics command center" title="AI Printable Studio" description="Turn live, authorized Hub information into polished phone-ready and printable graphics. Designs automatically use the selected location’s colors." actions={<><SecondaryButton onClick={applySuggestedCopy}><Bot className="h-4 w-4" /> Suggest Headline</SecondaryButton><PrimaryButton onClick={() => void exportPrintable("PNG")}><Download className="h-4 w-4" /> Save PNG</PrimaryButton></>} />
 
+    {kind === "Daily Ratio Plan" && !dated.ready && <p role="status">{dated.error || "Loading dated schedules…"}</p>}
     <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4 text-sm leading-6 text-purple-950"><Sparkles className="mr-2 inline h-4 w-4" /><strong>One studio, multiple tools:</strong> create ratio plans, staff work plans, menus, internal notices, and transportation boards without rebuilding the design each time.</div>
 
     <div className="grid gap-6 xl:grid-cols-[360px_1fr]">

@@ -126,7 +126,7 @@ export default function Home() {
     date: todayDate,
     accessibleLocations: visibleCareLocations,
     children,
-    schedules: childSchedules,
+    schedules: liveStaffing.effectiveSchedules,
     shifts: operationalShifts,
     routes,
     vehicles,

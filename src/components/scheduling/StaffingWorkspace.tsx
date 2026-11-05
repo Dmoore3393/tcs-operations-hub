@@ -13,6 +13,8 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { initialChildren, type ChildRecord } from "@/lib/children";
+import { useDatedCarePlan } from "@/hooks/useDatedCarePlan";
+import { effectiveScheduleRecords } from "@/lib/weekly-care-planner";
 import { compactTime, starterChildSchedules, type ChildScheduleRecord } from "@/lib/child-schedules";
 import { localIsoDate } from "@/lib/date-utils";
 import { normalizeLocation } from "@/lib/location-config";
@@ -237,6 +239,9 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
   const dates = useMemo(() => weekDates(selectedDate), [selectedDate]);
   const weekStart = dates[0];
   const weekEnd = dates[6];
+  const dated = useDatedCarePlan(weekStart,weekEnd);
+  const schedulesByDate = useMemo(() => new Map(dates.map(d => [d,effectiveScheduleRecords(dated.data,schedules,d)])),[dates,dated.data,schedules]);
+  const selectedSchedules = schedulesByDate.get(selectedDate)!;
 
   const load = useCallback(async () => {
     if (!supabase || !accessToken || (staffOnly && !isSystemOwner)) return;
@@ -332,22 +337,22 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
   const selectedWindows = useMemo(() => selectedLocation ? buildCoverageWindows({
     date: selectedDate,
     location: selectedLocation,
-    schedules,
+    schedules:selectedSchedules,
     shifts,
     activities,
     rules,
     timeOff: approvedTimeOff,
-  }) : [], [activities, approvedTimeOff, rules, schedules, selectedDate, selectedLocation, shifts]);
+  }) : [], [activities, approvedTimeOff, rules, selectedSchedules, selectedDate, selectedLocation, shifts]);
 
   const allDayWindows = useMemo(() => locations.flatMap((location) => buildCoverageWindows({
     date: selectedDate,
     location,
-    schedules,
+    schedules:selectedSchedules,
     shifts,
     activities,
     rules,
     timeOff: approvedTimeOff,
-  }).map((window) => ({ location, window }))), [activities, approvedTimeOff, locations, rules, schedules, selectedDate, shifts]);
+  }).map((window) => ({ location, window }))), [activities, approvedTimeOff, locations, rules, selectedSchedules, selectedDate, shifts]);
 
   const scheduledChildren = new Set(allDayWindows.flatMap(({ window }) => window.children.map((child) => child.childId))).size;
   const dayShiftRows = shifts.filter((shift) => shift.shift_date === selectedDate && shift.status !== "Cancelled");
@@ -630,7 +635,7 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
   const unlinkedShiftCount = selectedWeekShifts.filter((shift) => !shift.user_id).length;
   const unlinkedShiftNames = [...new Set(selectedWeekShifts.filter((shift) => !shift.user_id).map((shift) => shift.staff_name))];
   const weeklyCoverage = selectedLocation
-    ? dates.flatMap((date) => buildCoverageWindows({ date, location: selectedLocation, schedules, shifts, activities, rules,timeOff:approvedTimeOff }))
+    ? dates.flatMap((date) => buildCoverageWindows({ date, location: selectedLocation, schedules:schedulesByDate.get(date)!, shifts, activities, rules,timeOff:approvedTimeOff }))
     : [];
   const weeklyAttention = weeklyCoverage.filter((window) => ["gap", "over-capacity", "rule-needed"].includes(window.status)).length;
   const canPublishSchedule = isSystemOwner || isLocationLicensee;
@@ -685,7 +690,7 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
     {staffOnly && <section className="flex flex-wrap items-end gap-3 rounded-2xl border border-emerald-200 bg-white p-4 text-base"><label className="min-w-60 flex-1 font-bold text-emerald-950">Location<select aria-label="Staff schedule location" className={`${inputClass} mt-2 min-h-11 text-base`} value={selectedLocation?.id || ""} onChange={event=>{const site=locations.find(item=>item.id===event.target.value);if(site)chooseLocation(site);}}>{locations.map(site=><option key={site.id} value={site.id}>{site.full_name || site.name}</option>)}</select></label><label className="font-bold text-emerald-950">Department<select aria-label="Schedule department" className={`${inputClass} mt-2 min-h-11 text-base`} value={departmentFilter} onChange={event=>setDepartmentFilter(event.target.value)}><option>All departments</option>{departmentOptions.map(value=><option key={value}>{value}</option>)}</select></label><button className="min-h-11 rounded-xl border px-4 py-3 font-bold" onClick={()=>setSelectedDate(datePlus(weekStart,-7))}>Previous week</button><button className="min-h-11 rounded-xl border px-4 py-3 font-bold" onClick={()=>setSelectedDate(datePlus(weekStart,7))}>Next week</button><Link href="/scheduling" className="min-h-11 rounded-xl bg-emerald-100 px-4 py-3 font-bold text-emerald-950">Check staffing coverage</Link></section>}
     {!staffOnly && isSystemOwner && <Link href="/staff-schedules" className="inline-flex min-h-11 items-center rounded-xl bg-emerald-800 px-5 py-3 text-base font-bold text-white">Open Jennifer’s Staff Schedules</Link>}
     {message && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-900">{message}</div>}
-    {error && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-base font-bold text-red-900">{error}<button disabled={loading} className="ml-4 min-h-11 rounded-xl border border-red-300 px-4" onClick={()=>void load()}>Try again</button></div>}
+    {(error || dated.error) && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-base font-bold text-red-900">{error || dated.error}<button disabled={loading} className="ml-4 min-h-11 rounded-xl border border-red-300 px-4" onClick={()=>{void load(); void dated.reload();}}>Try again</button></div>}
 
     {staffOnly ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Staff on this week’s schedule" value={new Set(selectedWeekShifts.map(row=>row.user_id || row.staff_name.toLowerCase())).size}/><StatCard label="Shifts this week" value={selectedWeekShifts.length}/><StatCard label="Published revision" value={selectedPublication?.status==="Published" ? selectedPublication.revision : "Not published"}/><StatCard label="Acknowledgments pending" value={selectedPublication?.status==="Published" ? pendingAcknowledgementNames.length : "Publish first"}/></section> : <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard label="Children Scheduled" value={scheduledChildren} helper={shortDate(selectedDate)} icon={<Users className="h-5 w-5" />} />
@@ -729,7 +734,7 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
       {!staffOnly && <>
       <SectionCard title={view === "Day" ? `${shortDate(selectedDate)} • All Locations` : `Week of ${shortDate(weekStart)}`} description="Status is calculated from live child schedules, staff shifts, off-floor blocks, site capacity, and the staffing rules you configure.">
         {view === "Day" ? <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{locations.map((location) => {
-          const windows = buildCoverageWindows({ date: selectedDate, location, schedules, shifts, activities, rules });
+          const windows = buildCoverageWindows({ date: selectedDate, location, schedules:selectedSchedules, shifts, activities, rules });
           const status = worstStatus(windows.map((window) => window.status));
           const meta = statusMeta(status);
           const peak = windows.reduce((max, window) => Math.max(max, window.childCount), 0);
@@ -740,7 +745,7 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
             <div className="mt-5 grid grid-cols-4 gap-2 text-center"><MiniMetric label="Peak Kids" value={peak} /><MiniMetric label="Staff" value={new Set(locationShifts.map((row) => row.staff_name)).size} /><MiniMetric label={selectedDate === today ? "Checked In" : "Capacity"} value={selectedDate === today ? checkedIn : location.capacity} /><MiniMetric label="Capacity" value={location.capacity} /></div>
           </button>;
         })}</div> : selectedLocation && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">{dates.map((date) => {
-          const windows = buildCoverageWindows({ date, location: selectedLocation, schedules, shifts, activities, rules,timeOff:approvedTimeOff });
+          const windows = buildCoverageWindows({ date, location: selectedLocation, schedules:schedulesByDate.get(date)!, shifts, activities, rules,timeOff:approvedTimeOff });
           const status = worstStatus(windows.map((window) => window.status));
           const meta = statusMeta(status);
           const peak = windows.reduce((max, window) => Math.max(max, window.childCount), 0);
