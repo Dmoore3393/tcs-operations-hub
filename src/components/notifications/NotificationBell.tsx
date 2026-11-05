@@ -67,9 +67,10 @@ export default function NotificationBell() {
     const now = new Date();
     const scanDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     const storageKey = `tcs-file-audit-alert-scan:${scanDate}`;
-    if (window.localStorage.getItem(storageKey) === "done") return;
+    const lastScan = window.localStorage.getItem(storageKey);
+    if (lastScan === "done" || Date.now() - Number(lastScan) < 60000) return;
 
-    window.localStorage.setItem(storageKey, "running");
+    window.localStorage.setItem(storageKey, String(Date.now()));
     void fetch("/api/child-file-audits/alerts", {
       method: "POST",
       headers: {
@@ -134,7 +135,7 @@ export default function NotificationBell() {
           return;
         }
 
-        const newUnread = next.filter((item) => !item.readAt && !knownIds.current.has(item.id));
+        const newUnread = next.filter((item) => !item.readAt && !knownIds.current.has(item.id) && !item.eventKey?.startsWith("child-file-audit:"));
         next.forEach((item) => knownIds.current.add(item.id));
 
         if (!isNativeHubApp() && newUnread.length && "Notification" in window && Notification.permission === "granted") {
