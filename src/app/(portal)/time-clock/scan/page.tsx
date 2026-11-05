@@ -3,7 +3,8 @@
 import { isNativeDeviceAvailable, NativeDevice } from "@/lib/native-device";
 
 import { useAuth } from "@/components/providers/AuthProvider";
-import { locationFromSlug, normalizeLocation } from "@/lib/location-config";
+import { locationFromSlug } from "@/lib/location-config";
+import { locationSlugFromQr, stationAccessAllowed } from "@/lib/staff-clock-stations";
 import jsQR from "jsqr";
 import {
   ArrowLeft,
@@ -24,26 +25,6 @@ type ClockAction = "clock_in" | "clock_out";
 function actionFromUrl(): ClockAction {
   if (typeof window === "undefined") return "clock_in";
   return new URLSearchParams(window.location.search).get("action") === "clock_out" ? "clock_out" : "clock_in";
-}
-
-function locationSlugFromQr(rawValue: string) {
-  try {
-    const parsed = new URL(rawValue, window.location.origin);
-    const allowedHosts = new Set([
-      window.location.host,
-      "tcs-operations-hub.vercel.app",
-    ]);
-
-    if (!allowedHosts.has(parsed.host)) return null;
-
-    const pathname = parsed.pathname.replace(/\/$/, "");
-    if (pathname !== "/parent/check-in") return null;
-
-    const slug = parsed.searchParams.get("location")?.trim().toLowerCase() || "";
-    return slug && locationFromSlug(slug) ? slug : null;
-  } catch {
-    return null;
-  }
 }
 
 export default function StaffQrTimeClockScannerPage() {
@@ -80,13 +61,7 @@ export default function StaffQrTimeClockScannerPage() {
 
   const locationAllowed = useCallback((slug: string) => {
     const location = locationFromSlug(slug);
-    if (!location) return false;
-    if (isSystemOwner) return true;
-    if (!profile) return false;
-
-    const assigned = profile.locations ?? [];
-    if (assigned.includes("All Locations")) return true;
-    return assigned.some((item) => normalizeLocation(item) === location);
+    return Boolean(location && profile && stationAccessAllowed(location, profile.locations ?? [], isSystemOwner));
   }, [isSystemOwner, profile]);
 
   const startCamera = useCallback(async () => {
@@ -100,7 +75,7 @@ export default function StaffQrTimeClockScannerPage() {
       try {
         setState("scanning");
         const { value } = await NativeDevice.scanQR();
-        const slug = locationSlugFromQr(value);
+        const slug = locationSlugFromQr(value, window.location.href);
         if (!slug || !locationAllowed(slug)) throw new Error("Scan the posted QR code for a TCS location assigned to your account.");
         navigatingRef.current = true;
         setState("found");
@@ -171,7 +146,7 @@ export default function StaffQrTimeClockScannerPage() {
             });
 
             if (code?.data) {
-              const slug = locationSlugFromQr(code.data);
+              const slug = locationSlugFromQr(code.data, window.location.href);
 
               if (slug && locationAllowed(slug)) {
                 navigatingRef.current = true;
@@ -265,7 +240,7 @@ export default function StaffQrTimeClockScannerPage() {
           </div>
           <h1 className="mt-4 text-3xl font-black">Scan to {actionLabel}</h1>
           <p className="mx-auto mt-2 max-w-md text-sm font-semibold leading-6 text-emerald-50/70">
-            Scan the same TCS location QR families use. The Hub will select that work site and return you to the Time Clock to confirm {actionLabel.toLowerCase()}.
+            Scan the staff time-clock poster at your work site. Then enter your Staff PIN to confirm {actionLabel.toLowerCase()}.
           </p>
         </div>
 

@@ -21,6 +21,7 @@ import { AlertTriangle, Database, LockKeyhole, LogOut } from "lucide-react";
 import AppLoadingScreen from "@/components/pwa/AppLoadingScreen";
 import { useRouter } from "next/navigation";
 import { useHubPathname } from "@/hooks/useHubPathname";
+import { stationFromQuery, stationPath } from "@/lib/staff-clock-stations";
 import { normalizeHubPathname } from "@/lib/route-pathname";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
@@ -308,15 +309,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (loading || !isSupabaseConfigured) return;
     if (isParentPortalRoute(pathname) || isPublicInfoRoute(pathname)) return;
 
+    const station = ["/time-clock", "/login", "/accept-invite"].includes(pathname) ? stationFromQuery(window.location.search) : null;
     if (!session) {
-      if (pathname !== "/login" && pathname !== "/accept-invite") router.replace("/login");
+      if (pathname !== "/login" && pathname !== "/accept-invite") router.replace(station ? stationPath(station, "/login") : "/login");
       return;
     }
 
     if (!profile) return;
 
     if (!profile.accepted_at && pathname !== "/accept-invite") {
-      router.replace("/accept-invite");
+      router.replace(station ? stationPath(station, "/accept-invite") : "/accept-invite");
+      return;
+    }
+
+    if (station && profile.accepted_at && !isPasswordRecovery && (pathname === "/login" || pathname === "/accept-invite")) {
+      router.replace(stationPath(station));
       return;
     }
 
@@ -336,7 +343,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (cancelled || signingOutRef.current) return;
       if (
         loading || !isSupabaseConfigured || !session || profile ||
-        isParentPortalRoute(pathname) || isPublicInfoRoute(pathname) || pathname === "/login"
+        isParentPortalRoute(pathname) || isPublicInfoRoute(pathname) || pathname === "/login" ||
+        (pathname === "/time-clock" && stationFromQuery(window.location.search))
       ) {
         setCheckingFamilyAccess(false);
         return;
@@ -390,7 +398,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null);
       setAccessError("");
       // A full navigation drops stale in-memory Auth state and pending checks.
-      window.location.replace("/login");
+      const station = normalizeHubPathname(window.location.pathname) === "/time-clock" ? stationFromQuery(window.location.search) : null;
+      window.location.replace(station ? stationPath(station, "/login") : "/login");
     } catch {
       signingOutRef.current = false;
       setLoading(false);

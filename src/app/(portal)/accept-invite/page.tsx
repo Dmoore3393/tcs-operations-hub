@@ -11,6 +11,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {InvitationSessionError,prepareInvitationSession} from "@/lib/invitation-session";
 import {hubRequest} from "@/lib/hub-request";
+import { stationFromQuery, stationPath } from "@/lib/staff-clock-stations";
 import { useRouter } from "next/navigation";
 
 const fieldClass = "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100";
@@ -73,7 +74,8 @@ export default function AcceptInvitePage() {
       catch{setSignInRequired(true);setPassword("");setConfirmPassword("");setComplete(true);return;}
       setPassword("");setConfirmPassword("");setComplete(true);
       window.setTimeout(() => {
-        router.replace("/");
+        const station = stationFromQuery(window.location.search);
+        router.replace(station ? stationPath(station) : "/");
         router.refresh();
       }, 900);
     } catch (setupError) {
