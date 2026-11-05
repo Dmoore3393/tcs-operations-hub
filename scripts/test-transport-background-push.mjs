@@ -115,7 +115,8 @@ test('leadership pickup and drop-off push with the Hub closed even if optional H
 
 test('identical phone deliveries display once while distinct event IDs with the same title still display',async()=>{
  const handlers={},shown=[],cache=new Map();
- const workerContext=()=>({crypto:globalThis.crypto,TextEncoder,Response,caches:{open:async()=>({match:async k=>cache.get(k)?.clone(),put:async(k,v)=>cache.set(k,v)})},self:{addEventListener:(k,v)=>handlers[k]=v,registration:{showNotification:async(t,o)=>shown.push(o.tag)}}});
+ const indexedDB={open(){const open={result:{close(){},transaction(){const tx={objectStore(){return {get:k=>({result:cache.get(k)}),put:(v,k)=>{cache.set(k,v);return {result:k}}}}};queueMicrotask(()=>tx.oncomplete());return tx}}};queueMicrotask(()=>open.onsuccess());return open}};
+ const workerContext=()=>({crypto:globalThis.crypto,TextEncoder,indexedDB,self:{addEventListener:(k,v)=>handlers[k]=v,registration:{showNotification:async(t,o)=>shown.push(o.tag)}}});
  vm.runInNewContext(worker,workerContext());
  const push=tag=>new Promise((resolve,reject)=>handlers.push({data:{json:()=>({tag,title:'Same title'})},waitUntil:p=>p.then(resolve,reject)}));
  await Promise.all([push('one'),push('one')]);

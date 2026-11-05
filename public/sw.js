@@ -18,22 +18,39 @@ self.addEventListener("fetch", (event) => {
 const shownEvents = new Map();
 let bannerQueue = Promise.resolve();
 
+async function withReceipts(mode, operation) {
+  const db = await new Promise((resolve, reject) => {
+    const open = indexedDB.open("hub-push-receipts",1);
+    open.onupgradeneeded = () => open.result.createObjectStore("receipts");
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => resolve(open.result);
+  });
+  try {
+    return await new Promise((resolve,reject) => {
+      const tx = db.transaction("receipts",mode);
+      const req = operation(tx.objectStore("receipts"));
+      tx.oncomplete = () => resolve(req.result);
+      tx.onabort = () => reject(tx.error);
+      tx.onerror = () => reject(tx.error);
+    });
+  } finally { db.close(); }
+}
+
 async function displayOnce(tag, summary, display) {
   if (!tag) return display();
   const now = Date.now();
   const keys = [[tag, 86400000]];
   if (summary) keys.push([summary, 90000]);
   for (const [id, at] of shownEvents) if (now - at >= 86400000) shownEvents.delete(id);
-  let receipts = [], hashes = [], cache;
-  const path = "/__hub_push_receipts";
+  let receipts = [], hashes = [];
+  const path = "recent";
   try {
     hashes = await Promise.all(keys.map(async ([id]) => {
       const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(id));
       return Array.from(new Uint8Array(bytes), n => n.toString(16).padStart(2,"0")).join("");
     }));
-    cache = await caches.open("hub-push-event-receipts-v1");
-    const saved = await cache.match(path);
-    if (saved) receipts = (await saved.json()).filter(entry => now - entry[1] < 86400000);
+    const saved = await withReceipts("readonly",store => store.get(path));
+    if (Array.isArray(saved)) receipts = saved.filter(entry => now - entry[1] < 86400000);
   } catch { /* Fall back to this worker's in-memory receipts. */ }
   const recent = keys.map(([id, ttl], i) => now - (shownEvents.get(id) || 0) < ttl ||
     receipts.some(([h, at]) => h === hashes[i] && now - at < ttl));
@@ -46,8 +63,8 @@ async function displayOnce(tag, summary, display) {
     if (hashes[i]) receipts.push([hashes[i],now]);
   }
   while (shownEvents.size > 512) shownEvents.delete(shownEvents.keys().next().value);
-  if (cache && hashes.length) {
-    try { await cache.put(path, new Response(JSON.stringify(receipts.slice(-512)))); } catch {}
+  if (hashes.length) {
+    try { await withReceipts("readwrite",store => store.put(receipts.slice(-512),path)); } catch {}
   }
 }
 
