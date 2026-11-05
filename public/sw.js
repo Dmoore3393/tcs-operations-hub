@@ -18,27 +18,36 @@ self.addEventListener("fetch", (event) => {
 const shownEvents = new Map();
 let bannerQueue = Promise.resolve();
 
-async function displayOnce(tag, display) {
+async function displayOnce(tag, summary, display) {
   if (!tag) return display();
-  const cutoff = Date.now() - 86400000;
-  for (const [id, at] of shownEvents) if (at < cutoff) shownEvents.delete(id);
-  if (shownEvents.has(tag)) return;
-  let cache, receipts = [], hash;
-  const key = "/__hub_push_receipts";
+  const now = Date.now();
+  const keys = [[tag, 86400000]];
+  if (summary) keys.push([summary, 90000]);
+  for (const [id, at] of shownEvents) if (now - at >= 86400000) shownEvents.delete(id);
+  let receipts = [], hashes = [], cache;
+  const path = "/__hub_push_receipts";
   try {
-    const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(tag));
-    hash = Array.from(new Uint8Array(bytes), n => n.toString(16).padStart(2,"0")).join("");
+    hashes = await Promise.all(keys.map(async ([id]) => {
+      const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(id));
+      return Array.from(new Uint8Array(bytes), n => n.toString(16).padStart(2,"0")).join("");
+    }));
     cache = await caches.open("hub-push-event-receipts-v1");
-    const saved = await cache.match(key);
-    if (saved) receipts = (await saved.json()).filter(entry => entry[1] >= cutoff);
-    if (receipts.some(entry => entry[0] === hash)) return;
-  } catch { /* Storage can be unavailable on a phone. Still deliver the alert. */ }
-  await display();
-  shownEvents.set(tag, Date.now());
-  if (shownEvents.size > 512) shownEvents.delete(shownEvents.keys().next().value);
-  if (cache && hash) {
-    receipts.push([hash, Date.now()]);
-    try { await cache.put(key, new Response(JSON.stringify(receipts.slice(-512)))); } catch {}
+    const saved = await cache.match(path);
+    if (saved) receipts = (await saved.json()).filter(entry => now - entry[1] < 86400000);
+  } catch { /* Fall back to this worker's in-memory receipts. */ }
+  const recent = keys.map(([id, ttl], i) => now - (shownEvents.get(id) || 0) < ttl ||
+    receipts.some(([h, at]) => h === hashes[i] && now - at < ttl));
+  if (recent[0]) return;
+  if (!recent[1]) await display();
+  // Remember even a grouped event so its retry cannot ring later.
+  for (let i = 0; i < keys.length; i++) {
+    if (recent[i]) continue;
+    shownEvents.set(keys[i][0], now);
+    if (hashes[i]) receipts.push([hashes[i],now]);
+  }
+  while (shownEvents.size > 512) shownEvents.delete(shownEvents.keys().next().value);
+  if (cache && hashes.length) {
+    try { await cache.put(path, new Response(JSON.stringify(receipts.slice(-512)))); } catch {}
   }
 }
 
@@ -55,7 +64,11 @@ self.addEventListener("push", (event) => {
   const href = typeof payload.href === "string" && payload.href.startsWith("/") ? payload.href : "/notifications";
   const tag = typeof payload.tag === "string" && payload.tag ? payload.tag : "tcs-hub-notification";
 
-  const delivery = bannerQueue.then(() => displayOnce(payload.tag, () => self.registration.showNotification(title, {
+  // A route editor may save one assignment per rider at the same school.
+  const groupable = tag.startsWith("transport-assignment:") ||
+    (title === "Transportation update" && body === "A transportation route was changed. Open The Hub to review the current route.");
+  const summary = groupable ? JSON.stringify(["route-summary",title,body,href]) : null;
+  const delivery = bannerQueue.then(() => displayOnce(payload.tag, summary, () => self.registration.showNotification(title, {
       body,
       icon: "/app-icon-192.png",
       badge: "/app-icon-192.png",
