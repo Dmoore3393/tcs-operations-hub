@@ -1,4 +1,5 @@
-import { normalizeLocation, type LocationKey } from "@/lib/location-config";
+import { normalizeLocation } from "@/lib/location-config";
+import { activeClockLocation, stationAccessAllowed } from "@/lib/staff-clock-stations";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 import { staffClockPinConfigured, verifyStaffClockPin } from "@/lib/server/staff-clock-pin";
 
@@ -30,11 +31,6 @@ function pacificDate(value: string | Date = new Date()) {
     month: "2-digit",
     day: "2-digit",
   }).format(date);
-}
-function requestedLocationAllowed(requested: LocationKey, assigned: string[], isOwner: boolean) {
-  if (isOwner) return true;
-  if (assigned.includes("All Locations")) return true;
-  return assigned.some((item) => normalizeLocation(item) === requested);
 }
 function eventFromMetadata(metadata: unknown): ClockEventType | "" {
   const value = text(object(metadata).event);
@@ -450,7 +446,7 @@ export async function POST(request: Request) {
 
     const locationsResult = await admin
       .from("locations")
-      .select("id,slug,name,full_name")
+      .select("id,slug,name,full_name,is_active")
       .eq("organization_id", profile.organization_id);
     if (locationsResult.error) throw locationsResult.error;
 
@@ -481,13 +477,12 @@ export async function POST(request: Request) {
         throw new Response("Choose a valid TCS work location.", { status: 400 });
       }
 
-      if (clockSource === "Location QR" && !requestedLocationAllowed(requested, targetProfile.locations ?? [], isOwner)) {
+      if (clockSource === "Location QR" && !stationAccessAllowed(requested, targetProfile.locations ?? [], isOwner)) {
         throw new Response("That location is outside this staff account's assignment.", { status: 403 });
       }
 
-      location = locations.find((row) =>
-        normalizeLocation(`${text(row.slug)} ${text(row.name)} ${text(row.full_name)}`) === requested,
-      ) ?? null;
+      location = clockSource === "Location QR" ? activeClockLocation(locations, requested) ?? null
+        : locations.find(row => normalizeLocation(`${text(row.slug)} ${text(row.name)} ${text(row.full_name)}`) === requested) ?? null;
       if (!location) throw new Response("The selected work location was not found.", { status: 400 });
       locationLabel = requested;
     }

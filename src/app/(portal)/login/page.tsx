@@ -1,5 +1,6 @@
 "use client";
 
+import { stationFromQuery, stationPath } from "@/lib/staff-clock-stations";
 import LegalFooter from "@/components/LegalFooter";
 
 import { FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
@@ -55,7 +56,8 @@ export default function LoginPage() {
       return;
     }
 
-    router.replace("/");
+    const station = stationFromQuery(window.location.search);
+    router.replace(station ? stationPath(station) : "/");
     router.refresh();
   }
 

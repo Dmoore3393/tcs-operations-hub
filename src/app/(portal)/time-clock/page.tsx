@@ -4,6 +4,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { locationFromSlug } from "@/lib/location-config";
+import { staffClockStation, stationAccessAllowed, stationClockAction, stationFromQuery } from "@/lib/staff-clock-stations";
 import {
   Coffee,
   History,
@@ -18,8 +19,8 @@ import {
   UserCog,
   Wrench,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 type ClockEventType = "clock_in" | "clock_out" | "break_start" | "break_end";
 type ClockSource = "Location QR" | "Maintenance Manual" | "Admin Override" | "Active Shift" | "Legacy";
@@ -144,8 +145,13 @@ function stateFromEvents(events: ClockEvent[]) {
 }
 
 export default function TimeClockPage() {
+  return <Suspense><TimeClockScreen /></Suspense>;
+}
+
+function TimeClockScreen() {
   const router = useRouter();
-  const { session, user, isSystemOwner, isLocationLicensee } = useAuth();
+  const query = useSearchParams();
+  const { session, user, profile, isSystemOwner, isLocationLicensee } = useAuth();
   const { location, availableLocations } = useHubLocation();
 
   const firstLocation = location === "All Locations"
@@ -153,16 +159,21 @@ export default function TimeClockPage() {
     : location;
 
   const [payload, setPayload] = useState<Payload | null>(null);
-  const [workLocation, setWorkLocation] = useState<string>(firstLocation);
+  const [lastWorkLocation, setWorkLocation] = useState<string>(firstLocation);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingPin, setSavingPin] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const [qrAction, setQrAction] = useState<"clock_in" | "clock_out" | "">("");
-  const [qrReady, setQrReady] = useState(false);
-  const [clockPin, setClockPin] = useState("");
+  const fromPoster = query.has("station");
+  const hasScan = fromPoster || query.get("qr") === "1";
+  const slug = fromPoster ? stationFromQuery(query.toString()) : query.get("qr") === "1" ? staffClockStation(query.get("qrLocation")) : null;
+  const scannedSite = slug ? locationFromSlug(slug) : null;
+  const qrReady = Boolean(profile && scannedSite && stationAccessAllowed(scannedSite, profile.locations ?? [], isSystemOwner));
+  const workLocation = qrReady && scannedSite ? scannedSite : lastWorkLocation;
+  const requestedAction = fromPoster ? "auto" : query.get("qrAction") === "clock_out" ? "clock_out" : "clock_in";
+  const [enteredPin, setEnteredPin] = useState({ key: "", value: "" });
   const [newClockPin, setNewClockPin] = useState("");
 
   const [maintenanceLocation, setMaintenanceLocation] = useState<string>(firstLocation);
@@ -196,26 +207,6 @@ export default function TimeClockPage() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("qr") !== "1") return;
-
-    const scannedLocation = locationFromSlug(params.get("qrLocation") || "");
-    const scannedAction = params.get("qrAction") === "clock_out" ? "clock_out" : "clock_in";
-
-    if (!scannedLocation) {
-      setError("That scanned TCS location could not be recognized.");
-      router.replace("/time-clock");
-      return;
-    }
-
-    setWorkLocation(scannedLocation);
-    setQrAction(scannedAction);
-    setQrReady(true);
-    setClockPin("");
-    setNotice(`Location QR scanned: ${scannedLocation}. Enter your staff PIN to confirm ${scannedAction === "clock_out" ? "Clock Out" : "Clock In"}.`);
-  }, [router]);
-
   const mine = useMemo(
     () => payload?.events.filter((event) => event.actorUserId === user?.id) ?? [],
     [payload, user?.id],
@@ -234,6 +225,10 @@ export default function TimeClockPage() {
   );
 
   const state = stateFromEvents(todayMine);
+  const qrAction = stationClockAction(state, requestedAction, qrReady && Boolean(payload));
+  const pinKey = [user?.id, slug, qrAction].join("/");
+  const clockPin = enteredPin.key === pinKey ? enteredPin.value : "";
+  const setClockPin = (value: string) => setEnteredPin({ key: pinKey, value });
   const todayMinutes = durationMinutes(todayMine);
   const latestMine = todayMine.at(-1);
 
@@ -292,8 +287,6 @@ export default function TimeClockPage() {
       setClockPin("");
 
       if (source === "Location QR") {
-        setQrReady(false);
-        setQrAction("");
         router.replace("/time-clock");
       }
 
@@ -527,7 +520,7 @@ export default function TimeClockPage() {
                 <h2 className="font-black text-slate-950">Location QR Time Clock</h2>
               </div>
               <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-600">
-                Scan the same QR posted for family attendance. Regular staff must use the QR plus their personal staff PIN for Clock In and Clock Out.
+                Use the staff poster at your work site for both Clock In and Clock Out. Confirm each punch with your personal Staff PIN.
               </p>
             </div>
 
@@ -546,6 +539,7 @@ export default function TimeClockPage() {
             )}
           </div>
 
+          {hasScan && profile && !qrReady && <p role="alert" className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">{scannedSite ? "That location is outside this staff account’s assignment." : "That scanned TCS location could not be recognized."}</p>}
           {qrReady && qrAction && (
             <div className="mt-4 rounded-2xl border border-emerald-300 bg-white p-4">
               <div className="grid gap-4 lg:grid-cols-[1fr_220px_auto] lg:items-end">
@@ -569,11 +563,11 @@ export default function TimeClockPage() {
                 </label>
 
                 <div className="flex gap-2">
-                  <button onClick={() => { setQrReady(false); setQrAction(""); setClockPin(""); router.replace("/time-clock"); }} className="rounded-xl border border-slate-200 px-4 py-3 text-xs font-black text-slate-700">
+                  <button onClick={() => { setClockPin(""); router.replace("/time-clock"); }} className="rounded-xl border border-slate-200 px-4 py-3 text-xs font-black text-slate-700">
                     Cancel
                   </button>
                   <button
-                    disabled={saving || !/^\d{4,6}$/.test(clockPin) || (qrAction === "clock_in" ? state !== "Off Clock" : state !== "Working")}
+                    disabled={saving || loading || !payload?.myClockAccess.pinConfigured || !/^\d{4,6}$/.test(clockPin) || (qrAction === "clock_in" ? state !== "Off Clock" : state !== "Working")}
                     onClick={() => void act(qrAction, "Location QR", { pin: clockPin, location: workLocation })}
                     className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white disabled:bg-slate-300"
                   >
