@@ -31,6 +31,7 @@ type Payload = {
   notifications: HubNotification[];
   preferences: HubNotificationPreferences;
   unreadCount: number;
+  transportAlertLeader: boolean;
 };
 
 type RegisteredDevice = {
@@ -77,6 +78,7 @@ export default function NotificationsPage() {
   const { availableLocations, location } = useHubLocation();
   const [items, setItems] = useState<HubNotification[]>([]);
   const [preferences, setPreferences] = useState<HubNotificationPreferences>(defaultNotificationPreferences);
+  const [transportAlertLeader, setTransportAlertLeader] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [filter, setFilter] = useState<"all" | HubNotificationCategory>("all");
   const [loading, setLoading] = useState(true);
@@ -102,6 +104,7 @@ export default function NotificationsPage() {
       });
       if (!response.ok) return;
       const payload = await response.json() as Payload;
+      setTransportAlertLeader(payload.transportAlertLeader === true);
       setItems(payload.notifications ?? []);
       setPreferences(payload.preferences ?? defaultNotificationPreferences);
       setUnreadCount(payload.unreadCount ?? 0);
@@ -424,7 +427,8 @@ export default function NotificationsPage() {
             <h2 className="font-black text-slate-950">What should notify me?</h2>
             <p className="mt-1 text-xs leading-5 text-slate-500">These settings follow your staff account across devices.</p>
             <div className="mt-4 space-y-2">
-              <PreferenceRow label="All Hub notifications" helper="Master notification switch" checked={preferences.enabled} disabled={saving === "enabled"} onChange={(value) => void updatePreference("enabled", value)} />
+              {transportAlertLeader && <p className="rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-950">Your role receives every confirmed pickup and completed drop-off across all locations, including during Hub quiet hours. Enable Device Alerts on this phone to receive them with the Hub closed.</p>}
+              <PreferenceRow label={transportAlertLeader ? "Optional Hub notifications" : "All Hub notifications"} helper={transportAlertLeader ? "Manage other Hub alerts" : "Master notification switch"} checked={preferences.enabled} disabled={saving === "enabled"} onChange={(value) => void updatePreference("enabled", value)} />
               <PreferenceRow label="Transportation" helper="Route and transportation changes" checked={preferences.transportation} disabled={!preferences.enabled || saving === "transportation"} onChange={(value) => void updatePreference("transportation", value)} />
               <PreferenceRow label="Emergency Cards" helper="Emergency records needing attention" checked={preferences.emergency} disabled={!preferences.enabled || saving === "emergency"} onChange={(value) => void updatePreference("emergency", value)} />
               <PreferenceRow label="Tour Board" helper="Lead and follow-up activity" checked={preferences.tour} disabled={!preferences.enabled || saving === "tour"} onChange={(value) => void updatePreference("tour", value)} />

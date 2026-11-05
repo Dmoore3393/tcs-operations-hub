@@ -3,7 +3,7 @@ import { flushTransportCustodyPushes } from "@/lib/server/transport-custody-push
 import {flushTransportAssignmentNotices} from "@/lib/server/transport-assignment-notifications";
 import { type HubNotificationContext, type HubNotificationEventType, type HubNotificationPreferences } from "@/lib/notifications";
 import {visibleHubNotifications} from "@/lib/notification-access";
-import { dispatchHubNotification, loadNotificationState, saveNotificationState } from "@/lib/server/notifications";
+import { dispatchHubNotification, isTransportAlertLeader, loadNotificationState, saveNotificationState } from "@/lib/server/notifications";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 
 const allowedEvents = new Set<HubNotificationEventType>([
@@ -50,11 +50,13 @@ export async function GET(request: Request) {
       catch { console.error("Pending transportation pushes will retry."); }
     });
     try{await flushTransportAssignmentNotices(c);}catch(error){console.error('Assignment notices remain queued',error instanceof Error?error.message:'dispatch failed');}
-    const state = await loadNotificationState(admin, user.id);
+    const [state, transportAlertLeader] = await Promise.all([loadNotificationState(admin, user.id), isTransportAlertLeader(admin, profile, user.id)]);
+    const notifications = visibleHubNotifications({ ...profile, transportAlertLeader }, state.inbox);
     return Response.json({
-      notifications: visibleHubNotifications(profile,state.inbox),
+      notifications,
+      transportAlertLeader,
       preferences: state.preferences,
-      unreadCount: visibleHubNotifications(profile,state.inbox).filter((item) => !item.readAt).length,
+      unreadCount: notifications.filter((item) => !item.readAt).length,
     }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" },
     });
@@ -71,7 +73,7 @@ export async function PATCH(request: Request) {
       markAllRead?: boolean;
       preferences?: Partial<HubNotificationPreferences>;
     };
-    const state = await loadNotificationState(admin, user.id);
+    const [state, transportAlertLeader] = await Promise.all([loadNotificationState(admin, user.id), isTransportAlertLeader(admin, profile, user.id)]);
     const now = new Date().toISOString();
     const ids = new Set(Array.isArray(body.readIds) ? body.readIds.filter((id): id is string => typeof id === "string") : []);
 
@@ -87,10 +89,12 @@ export async function PATCH(request: Request) {
     };
 
     await saveNotificationState(admin, state.user, inbox, preferences);
+    const notifications = visibleHubNotifications({ ...profile, transportAlertLeader }, inbox);
     return Response.json({
-      notifications: visibleHubNotifications(profile,inbox),
+      notifications,
+      transportAlertLeader,
       preferences,
-      unreadCount: visibleHubNotifications(profile,inbox).filter((item) => !item.readAt).length,
+      unreadCount: notifications.filter((item) => !item.readAt).length,
     });
   } catch (error) {
     return staffErrorResponse(error);

@@ -14,7 +14,19 @@ export type HubNotification = {
   eventKey: string;
   archivedAt?: string;
   archiveReason?: string;
+  transportOrganizationId?: string;
+  requiredTransportConfirmation?: boolean;
 };
+
+/** Database event keys distinguish an actual pickup or completed handoff from an arrival or plan change. */
+export function isTransportPickupOrHandoff(key?: string) {
+  return /^transport-custody:[^:]+:(pickup|handoff):[0-9]+(?:\.[0-9]+)?$/.test(key || "");
+}
+
+export function isRequiredTransportConfirmation(item: Pick<HubNotification, "category" | "eventKey" | "requiredTransportConfirmation" | "transportOrganizationId">) {
+  return item.requiredTransportConfirmation === true && Boolean(item.transportOrganizationId)
+    && item.category === "transportation" && isTransportPickupOrHandoff(item.eventKey);
+}
 
 export type HubNotificationEventType =
   | "transportation_update"

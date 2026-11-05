@@ -1,4 +1,5 @@
 import "server-only";
+import { isTransportPickupOrHandoff } from "@/lib/notifications";
 
 import {
   createCipheriv,
@@ -169,7 +170,7 @@ export async function sendWebPush(
       Authorization: authorization,
       "Content-Encoding": "aes128gcm",
       "Content-Type": "application/octet-stream",
-      TTL: "300",
+      TTL: isTransportPickupOrHandoff(payload.tag) ? "43200" : "300",
       Urgency: "high",
     },
     body: new Uint8Array(body),
