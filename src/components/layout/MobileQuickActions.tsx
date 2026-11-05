@@ -63,6 +63,7 @@ const toolGroups: Array<{ title: string; items: ToolItem[] }> = [
       { href: "/attendance", label: "Check-In / Out", icon: ClipboardCheck },
       { href: "/daily-care", label: "Daily Care", icon: ClipboardCheck },
       { href: "/meals", label: "Meals & Menus", icon: Utensils },
+      { href: "/kidkare", label: "KidKare", icon: ShieldCheck },
       { href: "/health-safety", label: "Health & Safety", icon: HeartPulse },
       { href: "/emergency-cards", label: "Emergency Cards", icon: HeartPulse },
       { href: "/child-schedules", label: "Child Schedules", icon: CalendarClock },
