@@ -168,6 +168,7 @@ const routePermissionMap: Record<string, EmployeePermission> = {
   "/children/import-brightwheel": "children_basic",
   "/attendance": "schedules",
   "/child-schedules": "schedules",
+  "/child-schedules/regular": "schedules",
   "/family-care-calendar": "schedules",
   "/weekly-checkins": "daily_care",
   "/child-photos": "daily_care",

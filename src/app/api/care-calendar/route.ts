@@ -90,7 +90,7 @@ function scheduleDays(value: unknown) {
 
 export async function GET(request: Request) {
   try {
-    const { admin, user, profile, isOwner, isLicensee } = await requireStaff(request);
+    const { admin, userClient, user, profile, isOwner, isLicensee } = await requireStaff(request);
     if (!canReviewSchedules(profile, isOwner, isLicensee)) {
       throw new Response("Schedule-review access is required for the Family Care Calendar.", { status: 403 });
     }
@@ -122,9 +122,10 @@ export async function GET(request: Request) {
       : Promise.resolve({ data: [], error: null });
 
     const overrideQuery = locationIds.length
-      ? admin
+      ? userClient
           .from("child_schedule_overrides")
           .select("id,location_id,child_id,child_legacy_id,service_date,no_care,start_time,end_time,note,source_submission_id")
+          .is("planner_status", null)
           .eq("organization_id", profile.organization_id)
           .in("location_id", locationIds)
           .gte("service_date", start)
@@ -400,6 +401,8 @@ export async function PATCH(request: Request) {
         end_time: day.noCare ? null : day.endTime,
         note: day.note || null,
         source_submission_id: submissionId,
+        planner_status: null,
+        care_blocks: null,
         approved_by: user.id,
         approved_at: new Date().toISOString(),
       }));

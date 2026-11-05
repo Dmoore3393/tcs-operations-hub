@@ -15,7 +15,7 @@ export type ChildDaySchedule = {
 };
 
 export type ChildScheduleRecord = {
-  childId: number;
+  childId: number | string;
   childName: string;
   ageGroup: string;
   defaultLocation: Exclude<LocationKey, "All Locations">;
@@ -24,12 +24,12 @@ export type ChildScheduleRecord = {
 
 export const blankDay = (): ChildDaySchedule => ({ noCare: true, blocks: [], note: "" });
 
-function emptyWeek(): Record<DayName, ChildDaySchedule> {
+export function emptyWeek(): Record<DayName, ChildDaySchedule> {
   return Object.fromEntries(dayNames.map((day) => [day, blankDay()])) as Record<DayName, ChildDaySchedule>;
 }
 
 function makeRecord(
-  childId: number,
+  childId: number | string,
   childName: string,
   ageGroup: string,
   defaultLocation: Exclude<LocationKey, "All Locations">,
@@ -73,7 +73,7 @@ export function minutesToTime(minutes: number) {
   const normalized = Math.max(0, Math.min(minutes, 24 * 60));
   const hour = Math.floor(normalized / 60);
   const minute = normalized % 60;
-  const suffix = hour >= 12 ? "PM" : "AM";
+  const suffix = hour >= 12 && hour < 24 ? "PM" : "AM";
   const displayHour = hour % 12 || 12;
   return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
 }

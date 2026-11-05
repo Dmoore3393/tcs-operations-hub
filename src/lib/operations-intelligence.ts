@@ -476,7 +476,7 @@ export function buildSmartAlerts(input: OperationsIntelligenceInput) {
 export function buildBriefingSnapshot(input: OperationsIntelligenceInput, alerts = buildSmartAlerts(input)): OperationsBriefingSnapshot {
   const day = dateToDayName(input.date);
   const accessible = new Set(input.accessibleLocations);
-  const scheduledChildIds = new Set<number>();
+  const scheduledChildIds = new Set<ChildScheduleRecord["childId"]>();
   input.schedules.forEach((schedule) => {
     if ((schedule.days[day]?.blocks ?? []).some((block) => accessible.has(block.location))) scheduledChildIds.add(schedule.childId);
   });

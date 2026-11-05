@@ -74,7 +74,7 @@ export default function AIDirectorPage() {
       date: todayDate,
       accessibleLocations: accessibleCareLocations,
       children,
-      schedules,
+      schedules: liveStaffing.effectiveSchedules,
       shifts: [],
       routes,
       vehicles,
@@ -86,7 +86,7 @@ export default function AIDirectorPage() {
     };
     const alerts = buildSmartAlerts(input);
     return { snapshot: buildBriefingSnapshot(input, alerts), alerts };
-  }, [accessibleCareLocations, children, files, hours, liveStaffing.coverageWindows, liveStaffing.shiftViews, routes, schedules, tasks, todayDate, vehicles]);
+  }, [accessibleCareLocations, children, files, hours, liveStaffing.coverageWindows, liveStaffing.shiftViews, routes, liveStaffing.effectiveSchedules, tasks, todayDate, vehicles]);
 
   async function submit(event?: FormEvent) {
     event?.preventDefault();
