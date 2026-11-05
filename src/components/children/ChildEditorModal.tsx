@@ -218,7 +218,7 @@ export default function ChildEditorModal({
 
                 <SectionCard icon={<ShieldCheck className="h-5 w-5" />} title="Child File Status" subtitle="Track licensing documents that still need follow-up">
                   <div className="grid gap-4 lg:grid-cols-2">
-                    <Field label="Licensing status"><select className={inputClass} value={form.licensingStatus} onChange={(e) => setForm({ ...form, licensingStatus: e.target.value as LicensingStatus })}><option>Complete</option><option>Missing Documents</option></select></Field>
+                    <Field label="Licensing status"><select className={inputClass} value={form.licensingStatus} onChange={(e) => setForm({ ...form, licensingStatus: e.target.value as LicensingStatus })}><option>Complete</option><option>Needs Review</option><option>Missing Documents</option></select></Field>
                     {form.licensingStatus === "Missing Documents" && <Field label="Missing documents"><input className={inputClass} placeholder="Separate documents with commas" value={form.missingDocuments} onChange={(e) => setForm({ ...form, missingDocuments: e.target.value })} /></Field>}
                   </div>
                 </SectionCard>

@@ -187,22 +187,15 @@ export default function ChildFileAuditsPage() {
   const stats = useMemo(() => {
     let overdue = 0;
     let dueSoon = 0;
-    let missing = 0;
-    let expired = 0;
+    let needsAttention = 0;
     for (const child of filteredChildren) {
       const audit = latestFileAudit(child.fileAudits);
       const due = dueState(audit);
       if (due === "overdue" || due === "missing") overdue += 1;
       if (due === "soon") dueSoon += 1;
-      if (audit) {
-        const summary = auditSummary(audit);
-        if (summary.missingRequired.length) missing += 1;
-        if (summary.expired.length) expired += 1;
-      } else {
-        missing += 1;
-      }
+      if (!audit || !auditSummary(audit).complete || due === "overdue" || due === "missing") needsAttention += 1;
     }
-    return { overdue, dueSoon, missing, expired };
+    return { overdue, dueSoon, needsAttention };
   }, [filteredChildren]);
 
   function flash(message: string) {
@@ -359,7 +352,7 @@ export default function ChildFileAuditsPage() {
         <Metric label="Children in View" value={filteredChildren.length} icon={<ClipboardCheck />} tone="blue" />
         <Metric label="Audit Due / Not Set" value={stats.overdue} icon={<CalendarClock />} tone="red" />
         <Metric label="Due in 30 Days" value={stats.dueSoon} icon={<FileClock />} tone="amber" />
-        <Metric label="Files Needing Attention" value={Math.max(stats.missing, stats.expired)} icon={<FileWarning />} tone="purple" />
+        <Metric label="Files Needing Attention" value={stats.needsAttention} icon={<FileWarning />} tone="purple" />
       </section>
 
       <section className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:grid-cols-[minmax(0,1fr)_300px]">
@@ -384,7 +377,7 @@ export default function ChildFileAuditsPage() {
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <Info label="Last Audit" value={audit ? formatDate(audit.auditDate) : "Never audited"} />
                 <Info label="Next Audit" value={audit ? formatDate(audit.nextAuditDue) : "Not set"} />
-                <Info label="Required Missing" value={summary ? String(summary.missingRequired.length) : "—"} />
+                <Info label="Marked Missing" value={summary ? String(summary.markedMissing.length) : "—"} />
                 <Info label="Expired Items" value={summary ? String(summary.expired.length) : "—"} />
               </div>
 
@@ -456,7 +449,7 @@ function AuditModal({
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <AuditMetric label="Items Checked" value={`${summary.checked}/${summary.total}`} good={summary.checked === summary.total} />
-          <AuditMetric label="Required Missing" value={String(summary.missingRequired.length)} good={summary.missingRequired.length === 0} />
+          <AuditMetric label="Marked Missing" value={String(summary.markedMissing.length)} good={summary.markedMissing.length === 0} />
           <AuditMetric label="Expired" value={String(summary.expired.length)} good={summary.expired.length === 0} />
           <AuditMetric label="Expiring ≤30 Days" value={String(summary.expiringSoon.length)} good={summary.expiringSoon.length === 0} />
         </section>
@@ -511,7 +504,7 @@ function AuditModal({
       </div>
 
       <footer className="sticky bottom-0 z-20 flex flex-col gap-3 border-t border-slate-200 bg-white/95 px-4 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <div className="text-xs font-semibold text-slate-500"><strong className="text-slate-800">Next audit:</strong> {formatDate(audit.nextAuditDue)} • Required missing: {summary.missingRequired.length} • Expired: {summary.expired.length}</div>
+        <div className="text-xs font-semibold text-slate-500"><strong className="text-slate-800">Next audit:</strong> {formatDate(audit.nextAuditDue)} • <span>Marked Missing</span> {summary.markedMissing.length} • Expired: {summary.expired.length}</div>
         <div className="flex gap-2"><button onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-700">Cancel</button><button disabled={saving} onClick={onSave} className="inline-flex min-w-36 items-center justify-center gap-2 rounded-xl bg-[#9f2f20] px-4 py-2.5 text-sm font-black text-white disabled:opacity-50">{saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Audit</button></div>
       </footer>
     </div>
@@ -526,7 +519,7 @@ function HistoryModal({ child, onClose, onOpen }: { child: ChildRecord; onClose:
       <div className="max-h-[70vh] space-y-3 overflow-y-auto p-5">
         {audits.length === 0 ? <div className="py-12 text-center"><History className="mx-auto h-9 w-9 text-slate-300" /><p className="mt-3 font-black text-slate-700">No file audits saved yet.</p></div> : audits.map((audit) => {
           const summary = auditSummary(audit);
-          return <button key={audit.id} onClick={() => onOpen(audit)} className="w-full rounded-2xl border border-slate-200 p-4 text-left transition hover:border-orange-300 hover:bg-orange-50/30"><div className="flex items-start justify-between gap-3"><div><strong className="text-sm text-slate-950">{formatDate(audit.auditDate)}</strong><p className="mt-1 text-xs text-slate-500">{audit.template || "In-Home"} • Audited by {audit.auditedBy || "Not entered"} • Next audit {formatDate(audit.nextAuditDue)}</p></div><span className={`rounded-full px-2 py-1 text-base font-black ${!summary.complete ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{!summary.complete ? "Follow-Up Needed" : "Complete"}</span></div><div className="mt-3 flex flex-wrap gap-2 text-base font-bold text-slate-600"><span>{summary.checked}/{summary.total} checked</span><span>•</span><span>{summary.missingRequired.length} required missing</span><span>•</span><span>{summary.expired.length} expired</span></div></button>;
+          return <button key={audit.id} onClick={() => onOpen(audit)} className="w-full rounded-2xl border border-slate-200 p-4 text-left transition hover:border-orange-300 hover:bg-orange-50/30"><div className="flex items-start justify-between gap-3"><div><strong className="text-sm text-slate-950">{formatDate(audit.auditDate)}</strong><p className="mt-1 text-xs text-slate-500">{audit.template || "In-Home"} • Audited by {audit.auditedBy || "Not entered"} • Next audit {formatDate(audit.nextAuditDue)}</p></div><span className={`rounded-full px-2 py-1 text-base font-black ${!summary.complete ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{!summary.complete ? "Follow-Up Needed" : "Complete"}</span></div><div className="mt-3 flex flex-wrap gap-2 text-base font-bold text-slate-600"><span>{summary.checked}/{summary.total} checked</span><span>•</span><span>{summary.markedMissing.length} <span>Marked Missing</span></span><span>•</span><span>{summary.expired.length} expired</span></div></button>;
         })}
       </div>
     </section>

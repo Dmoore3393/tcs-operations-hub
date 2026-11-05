@@ -50,7 +50,7 @@ test("N/A is reviewed, never missing, expired or due soon, even on a required ro
     assert.deepEqual(auditStatusFlags(audit, summary), ["Transportation Child", "File Complete"]);
     b.status = "Missing";
     const changed = auditSummary(audit, asOf);
-    assert.equal(changed.missingRequired.length, 1);
+    assert.equal(changed.markedMissing.length, 1);
     assert.deepEqual(auditStatusFlags(audit, changed), ["Transportation Child", "Missing Documents"]);
     b.status = "On File"; b.expirationDate = "2029-01-01";
     assert.equal(auditSummary(audit, asOf).expired.length, 1);
@@ -66,7 +66,9 @@ test("unreviewed optional items request review without a missing flag; explicitl
   assert.deepEqual(auditSummary(audit, asOf).missingDocuments, [documentsForTemplate("In-Home").find(doc => doc.id === 41).name]);
   item.status = "N/A";
   const required = auditItemFor(audit, 1); required.status = "Not Checked";
-  assert.equal(auditSummary(audit, asOf).missingRequired[0].documentId, 1);
+  assert.deepEqual(auditSummary(audit, asOf).markedMissing, []);
+  assert.equal(auditSummary(audit, asOf).complete, false);
+  assert.deepEqual(auditProfileDocuments(audit, [documentsForTemplate("In-Home")[0].name], "Missing Documents"), {licensingStatus: "Needs Review", missingDocuments: []});
 });
 
 test("opening an earlier checklist adds unreviewed forms without changing historical results, IDs or notes", () => {
@@ -84,6 +86,8 @@ test("opening an earlier checklist adds unreviewed forms without changing histor
   assert.equal(auditItemFor(editor, 41).status, "Not Checked");
   assert.equal(auditItemFor(editor, 42).status, "Not Checked");
   assert.deepEqual(auditForReview(editor).items, editor.items);
+  assert.deepEqual(auditSummary(editor).markedMissing, []);
+  assert.equal(auditProfileDocuments(editor, [], "Complete").licensingStatus, "Needs Review");
 });
 
 test("old cached N/A names clear without erasing real missing paperwork, manual entries or archived notes", () => {

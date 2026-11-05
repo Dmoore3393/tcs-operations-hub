@@ -135,7 +135,7 @@ function buildAlert(row: DbRow, today: string) {
   const dueDays = audit.nextAuditDue ? dayDistance(today, audit.nextAuditDue) : null;
   const expiredIds = summary.expired.map(item => item.documentId).sort((a, b) => a - b);
   const expiringIds = summary.expiringSoon.map(item => item.documentId).sort((a, b) => a - b);
-  const missingIds = summary.missingRequired.map((item) => item.documentId).sort((a, b) => a - b);
+  const missingIds = summary.markedMissing.map((item) => item.documentId).sort((a, b) => a - b);
 
   const reasons: string[] = [];
   let title = "Child file needs attention";
@@ -164,8 +164,8 @@ function buildAlert(row: DbRow, today: string) {
   }
 
   if (missingIds.length) {
-    reasons.push(`${missingIds.length} required document${missingIds.length === 1 ? " is" : "s are"} missing or incomplete`);
-    if (title === "Child file needs attention") title = "Child file is missing required documents";
+    reasons.push(`${missingIds.length} document${missingIds.length === 1 ? " is" : "s are"} marked missing`);
+    if (title === "Child file needs attention") title = "Child file is missing documents";
     keyParts.push(`missing:${missingIds.join("-")}`);
   }
 

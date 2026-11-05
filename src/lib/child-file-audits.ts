@@ -263,21 +263,16 @@ export function auditSummary(audit: ChildFileAudit, asOf = todayLocalIso()) {
   const catalog = new Map(documents.map(doc => [doc.id, doc]));
   // Score the items actually reviewed on this edition. Later additions do not reopen a signed audit.
   const items = (Array.isArray(audit.items) ? audit.items : []).filter(item => item && catalog.has(item.documentId));
-  const missingRequired = items.filter(item => item.status === "Missing" ||
-    (item.status === "Not Checked" && catalog.get(item.documentId)?.requirement === "Required"));
+  const markedMissing = items.filter(item => item.status === "Missing");
   const expired = items.filter(item => auditItemExpiration(item, asOf) === "expired");
   const expiringSoon = items.filter(item => auditItemExpiration(item, asOf) === "soon");
-  const problemIds = new Set(missingRequired.map(item => item.documentId));
-  for (const item of expired) {
-    if (catalog.get(item.documentId)?.requirement === "Required") problemIds.add(item.documentId);
-  }
-  const missingDocuments = documents.filter(doc => problemIds.has(doc.id)).map(doc => doc.name);
+  const missingDocuments = markedMissing.map(item => catalog.get(item.documentId)!.name);
   const checked = items.filter(item => item.status !== "Not Checked").length;
 
   return {
     total: items.length,
     checked,
-    missingRequired,
+    markedMissing,
     missingDocuments,
     expired,
     expiringSoon,
@@ -294,8 +289,12 @@ export function auditStatusFlags(audit: ChildFileAudit, summary = auditSummary(a
 
 // Older profiles cached N/A rows as missing by name. Correct those on read, while retaining
 // manually listed paperwork. On an audit save, replace the previous audit's list as well.
-export function auditProfileDocuments(audit: ChildFileAudit | null, storedNames: string[], storedStatus: string, previousAudit?: ChildFileAudit | null): { missingDocuments: string[]; licensingStatus: "Missing Documents" | "Complete" } {
-  if (!audit) return { missingDocuments: storedNames, licensingStatus: storedStatus === "Missing Documents" ? "Missing Documents" : "Complete" };
+export function auditProfileDocuments(audit: ChildFileAudit | null, storedNames: string[], storedStatus: string, previousAudit?: ChildFileAudit | null): { missingDocuments: string[]; licensingStatus: "Missing Documents" | "Needs Review" | "Complete" } {
+  if (!audit) {
+    const licensingStatus = storedStatus === "Missing Documents" || storedStatus === "Needs Review" ? storedStatus : "Complete";
+    return { missingDocuments: storedNames, licensingStatus };
+  }
+  const summary = auditSummary(audit);
   const superseded = new Set(previousAudit ? auditSummary(previousAudit).missingDocuments : []);
   if (audit.template !== "School Age Center") {
     for (const doc of retiredHomeAuditDocuments) superseded.add(doc.name);
@@ -303,11 +302,12 @@ export function auditProfileDocuments(audit: ChildFileAudit | null, storedNames:
   const documents = documentsForAudit(audit);
   for (const doc of documents) {
     const status = audit.items?.find(item => item?.documentId === doc.id)?.status;
-    if (status === "N/A" || (status === "Not Checked" && doc.requirement !== "Required")) superseded.add(doc.name);
+    if (status === "N/A" || status === "Not Checked" || (status === "On File" && summary.expired.some(item => item.documentId === doc.id))) superseded.add(doc.name);
   }
-  const missingDocuments = [...new Set([...storedNames.filter(name => !superseded.has(name)), ...auditSummary(audit).missingDocuments])];
+  const missingDocuments = [...new Set([...storedNames.filter(name => !superseded.has(name)), ...summary.missingDocuments])];
   const unnamedManualFlag = previousAudit === undefined && !storedNames.length && storedStatus === "Missing Documents";
-  return { missingDocuments, licensingStatus: missingDocuments.length || unnamedManualFlag ? "Missing Documents" : "Complete" };
+  if (missingDocuments.length || unnamedManualFlag) return { missingDocuments, licensingStatus: "Missing Documents" };
+  return { missingDocuments, licensingStatus: summary.complete ? "Complete" : "Needs Review" };
 }
 
 export function currentAuditProfile(child: { fileAudits?: ChildFileAudit[]; missingDocuments: string[]; licensingStatus: string }) {
