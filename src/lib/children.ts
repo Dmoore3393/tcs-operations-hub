@@ -2,7 +2,7 @@ import type { ChildFileAudit } from "@/lib/child-file-audits";
 import type { ImmunizationRecord } from "@/lib/immunization-tracker";
 import type { FamilyAdultAccess } from "@/lib/family-access";
 import { TEHACHAPI_LOCATION_NAME } from "@/lib/location-config";
-export type LicensingStatus = "Complete" | "Missing Documents";
+export type LicensingStatus = "Complete" | "Needs Review" | "Missing Documents";
 export type EnrollmentStatus = "Active" | "Pending" | "Archived";
 export type AttendanceStatus = "Present" | "Checked Out" | "Not Scheduled" | "Absent";
 export type AgeGroup = "Infant" | "Toddler" | "Preschool" | "School Age" | "Unknown";

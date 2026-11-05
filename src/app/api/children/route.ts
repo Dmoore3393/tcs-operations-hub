@@ -1,3 +1,4 @@
+import { auditProfileDocuments, latestFileAudit, type ChildFileAudit, type ChildFileAuditItemStatus, type ChildFileAuditStatusFlag } from "@/lib/child-file-audits";
 import { safeFamilyAccess } from "@/lib/family-access";
 import { isTehachapiLocation, locationDisplayName, TEHACHAPI_LOCATION_LABEL } from "@/lib/location-config";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
@@ -113,9 +114,9 @@ const AUDIT_STATUS_FLAGS = new Set([
   "Medication on Site",
 ]);
 
-function safeFileAudits(value: unknown) {
+function safeFileAudits(value: unknown): ChildFileAudit[] {
   if (!Array.isArray(value)) return [];
-  return value.slice(-50).map((entry) => {
+  return value.slice(-50).map((entry): ChildFileAudit => {
     const audit = object(entry);
     const id = text(audit.id).slice(0, 120) || `audit-${Date.now()}`;
     const items = Array.isArray(audit.items)
@@ -124,7 +125,7 @@ function safeFileAudits(value: unknown) {
           const documentId = Number(item.documentId);
           return {
             documentId: Number.isInteger(documentId) && documentId > 0 && documentId <= 100 ? documentId : 0,
-            status: AUDIT_ITEM_STATUSES.has(text(item.status)) ? text(item.status) : "Not Checked",
+            status: AUDIT_ITEM_STATUSES.has(text(item.status)) ? text(item.status) as ChildFileAuditItemStatus : "Not Checked" as const,
             dateChecked: text(item.dateChecked).slice(0, 10),
             expirationDate: text(item.expirationDate).slice(0, 10),
             note: text(item.note).slice(0, 500),
@@ -144,7 +145,7 @@ function safeFileAudits(value: unknown) {
       grade: text(audit.grade).slice(0, 80),
       signature: text(audit.signature).slice(0, 160),
       notes: text(audit.notes).slice(0, 4000),
-      statusFlags: stringArray(audit.statusFlags).filter((flag) => AUDIT_STATUS_FLAGS.has(flag)).slice(0, 12),
+      statusFlags: stringArray(audit.statusFlags).filter((flag): flag is ChildFileAuditStatusFlag => AUDIT_STATUS_FLAGS.has(flag)).slice(0, 12),
       items,
       createdAt: text(audit.createdAt).slice(0, 40),
       updatedAt: text(audit.updatedAt).slice(0, 40),
@@ -179,6 +180,7 @@ function normalizeChild(row: DbRow) {
   const safeRecord = { ...record };
   delete safeRecord.pickupPinDigest;
   const legacyId = text(row.legacy_id);
+  const fileAudits = safeFileAudits(record.fileAudits);
   return {
     ...safeRecord,
     id: typeof record.id === "number" ? record.id : stableNumericId(legacyId),
@@ -202,8 +204,7 @@ function normalizeChild(row: DbRow) {
     noTransportationNeeded: record.noTransportationNeeded === true,
     allergies: text(record.allergies) || "None reported",
     medicalNotes: text(record.medicalNotes) || "No current medical notes",
-    licensingStatus: text(record.licensingStatus) || "Complete",
-    missingDocuments: stringArray(record.missingDocuments),
+    ...auditProfileDocuments(latestFileAudit(fileAudits), stringArray(record.missingDocuments), text(record.licensingStatus)),
     enrollmentStatus: text(record.enrollmentStatus) || text(row.enrollment_status) || "Active",
     plannedStartDate: text(record.plannedStartDate).slice(0, 10),
     plannedLastDay: text(record.plannedLastDay).slice(0, 10),
@@ -238,7 +239,7 @@ function normalizeChild(row: DbRow) {
     emergencyContact2Relationship: text(record.emergencyContact2Relationship),
     transportRestraint: text(record.transportRestraint),
     emergencyInstructions: text(record.emergencyInstructions),
-    fileAudits: safeFileAudits(record.fileAudits),
+    fileAudits,
     immunizationRecord: safeImmunizationRecord(record.immunizationRecord),
     schoolAgeSupport: safeSchoolAgeSupport({...object(record.schoolAgeSupport),schoolName:text(row.school_name)||text(object(record.schoolAgeSupport).schoolName)}),
     familyMessages: safeFamilyMessages(record.familyMessages),
@@ -305,7 +306,10 @@ function validateChild(value: unknown) {
 }
 
 function safeChildRecord(child: DbRow, id: number) {
-  const licensingStatus = text(child.licensingStatus) === "Missing Documents" ? "Missing Documents" : "Complete";
+  const fileAudits = safeFileAudits(child.fileAudits);
+  const status = text(child.licensingStatus);
+  const names = status === "Missing Documents" ? stringArray(child.missingDocuments).slice(0, 50) : [];
+  const fileStatus = auditProfileDocuments(latestFileAudit(fileAudits), names, status);
   const enrollmentStatus = ["Active", "Pending", "Archived"].includes(text(child.enrollmentStatus)) ? text(child.enrollmentStatus) : "Active";
   const attendanceToday = ["Present", "Checked Out", "Not Scheduled", "Absent"].includes(text(child.attendanceToday)) ? text(child.attendanceToday) : "Not Scheduled";
   const ageGroup = ["Unknown", "Infant", "Toddler", "Preschool", "School Age"].includes(text(child.ageGroup)) ? text(child.ageGroup) : "Unknown";
@@ -332,8 +336,7 @@ function safeChildRecord(child: DbRow, id: number) {
     noTransportationNeeded: child.noTransportationNeeded === true,
     allergies: (text(child.allergies) || "None reported").slice(0, 2000),
     medicalNotes: (text(child.medicalNotes) || "No current medical notes").slice(0, 4000),
-    licensingStatus,
-    missingDocuments: licensingStatus === "Missing Documents" ? stringArray(child.missingDocuments).slice(0, 50) : [],
+    ...fileStatus,
     enrollmentStatus,
     plannedStartDate: text(child.plannedStartDate).slice(0, 10),
     plannedLastDay: text(child.plannedLastDay).slice(0, 10),
@@ -365,7 +368,7 @@ function safeChildRecord(child: DbRow, id: number) {
     emergencyContact2Relationship: text(child.emergencyContact2Relationship).slice(0, 100),
     transportRestraint: text(child.transportRestraint).slice(0, 160),
     emergencyInstructions: text(child.emergencyInstructions).slice(0, 4000),
-    fileAudits: safeFileAudits(child.fileAudits),
+    fileAudits,
     immunizationRecord: safeImmunizationRecord(child.immunizationRecord),
     schoolAgeSupport: safeSchoolAgeSupport(child.schoolAgeSupport),
     familyMessages: safeFamilyMessages(child.familyMessages),

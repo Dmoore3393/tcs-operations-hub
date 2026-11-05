@@ -24,13 +24,24 @@ test('staff schedules, shared staff areas and destination arrival alerts remain 
 });
 const auditUrl=url(await readFile('src/lib/child-file-audits.ts','utf8')),audit=await import(auditUrl);
 const auditSource=await readFile('src/app/api/child-file-audits/alerts/route.ts','utf8');const auditAst=ts.createSourceFile('audit.ts',auditSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
-const auditNames=new Set(['object','text','stringArray','dayDistance','weekKey','safeAuditItem','safeAudit','latestAudit','documentIdsWithExpiration','dueBucket','buildAlert']);
+const auditNames=new Set(['object','text','stringArray','dayDistance','weekKey','safeAuditItem','safeAudit','latestAudit','dueBucket','buildAlert']);
 const functions=auditAst.statements.filter(node=>ts.isFunctionDeclaration(node)&&auditNames.has(node.name?.text)).map(node=>node.getText(auditAst)).join('\n');
-const {buildAlert}=await import(url(`import {auditSummary} from ${JSON.stringify(auditUrl)};import {normalizeLocation} from ${JSON.stringify(locationUrl)};const AUDIT_LOCATIONS=new Set(['Halcom','Division']);const itemStatuses=new Set(['Not Checked','On File','Missing','N/A']);${functions}\nexport {buildAlert};`));
+const {buildAlert}=await import(url(`import {auditSummary, latestFileAudit} from ${JSON.stringify(auditUrl)};import {normalizeLocation} from ${JSON.stringify(locationUrl)};const AUDIT_LOCATIONS=new Set(['Halcom','Division']);const itemStatuses=new Set(['Not Checked','On File','Missing','N/A']);${functions}\nexport {buildAlert};`));
 test('imported children and untouched file templates generate no missing-file warnings',()=>{
  const row={legacy_id:'synthetic-child',record_data:{location:'Halcom'}};assert.equal(buildAlert(row,'2026-11-01'),null);
  const template=audit.createBlankChildFileAudit('Synthetic Staff');assert.equal(buildAlert({...row,record_data:{...row.record_data,fileAudits:[template]}},'2026-11-01'),null);
  template.items[0].status='Missing';const alert=buildAlert({...row,record_data:{...row.record_data,fileAudits:[template]}},'2026-11-01');assert.ok(alert);assert.ok(!alert.eventKey.includes(':none:'));
+});
+test('a reviewed N/A row never contributes a missing or expiration alert, even with a stored date',()=>{
+ for(const template of ['In-Home','School Age Center']){
+  const file=audit.createBlankChildFileAudit('Synthetic Reviewer',template);file.nextAuditDue='2031-02-01';
+  for(const row of file.items) row.status='On File';
+  const [a,b]=file.items;Object.assign(a,{status:'N/A',expirationDate:'2029-11-01'});Object.assign(b,{status:'N/A',expirationDate:'2030-01-10'});
+  const input={legacy_id:'synthetic',record_data:{location:template==='In-Home'?'Halcom':'Division',fileAudits:[file]}};
+  assert.equal(buildAlert(input,'2030-01-01'),null);
+  const extended=file.items.find(item=>item.documentId===42);extended.status='Missing';
+  const alert=buildAlert(input,'2030-01-01');assert.match(alert.eventKey,/missing:42/);assert.doesNotMatch(alert.body,/expire/);
+ }
 });
 const serverSource=await readFile('src/lib/server/notifications.ts','utf8'),serverAst=ts.createSourceFile('server.ts',serverSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
 const serverNames=new Set(['stringArray','minutesFromClock','pacificMinutesNow','quietHoursActive','locationMatches','acceptsManualCategory','targetGroupMatches','dispatchManualHubNotification','dispatchFileAuditOversightNotification']);

@@ -1,5 +1,7 @@
 "use client";
 
+import { currentAuditProfile } from "@/lib/child-file-audits";
+
 import Link from "next/link";
 import MainLayout from "@/components/layout/MainLayout";
 import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
@@ -115,7 +117,7 @@ export default function ThomasonFamilyChildcareHomePage() {
     count: siteChildren.filter((child) => child.ageGroup === ageGroup).length,
   }));
   const families = new Set(siteChildren.map((child) => child.familyId ?? child.primaryGuardian).filter(Boolean)).size;
-  const childFileNeeds = siteChildren.filter((child) => child.licensingStatus === "Missing Documents");
+  const childFileNeeds = siteChildren.filter((child) => currentAuditProfile(child).licensingStatus === "Missing Documents");
   const staffFileNeeds = siteEmployees.filter((employee) => employee.fileStatus === "Needs Attention");
 
   if (!assignedToSite) {

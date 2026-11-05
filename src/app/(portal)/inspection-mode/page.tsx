@@ -4,7 +4,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { auditSummary, type ChildFileAudit } from "@/lib/child-file-audits";
+import { auditSummary, latestFileAudit } from "@/lib/child-file-audits";
 import type { ChildRecord } from "@/lib/children";
 import { emergencyCardReadiness } from "@/lib/emergency-cards";
 import { defaultImmunizationProgram, immunizationStatus, normalizeImmunizationRecord } from "@/lib/immunization-tracker";
@@ -28,13 +28,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 function childName(child: ChildRecord) {
   return `${child.firstName} ${child.lastName}`.trim();
-}
-
-function latestAudit(child: ChildRecord): ChildFileAudit | null {
-  const audits = Array.isArray(child.fileAudits) ? child.fileAudits : [];
-  return [...audits].sort((a, b) =>
-    (b.auditDate || b.updatedAt || "").localeCompare(a.auditDate || a.updatedAt || ""),
-  )[0] ?? null;
 }
 
 function matchesLocation(value: string, selected: string) {
@@ -80,7 +73,7 @@ export default function InspectionModePage() {
   const scopedForms = forms.filter((form) => location === "All Locations" || form.location === location);
 
   const rows = useMemo(() => scopedChildren.map((child) => {
-    const audit = latestAudit(child);
+    const audit = latestFileAudit(child.fileAudits);
     const auditState = audit ? auditSummary(audit) : null;
     const emergency = emergencyCardReadiness(child);
     const shotRecord = normalizeImmunizationRecord(

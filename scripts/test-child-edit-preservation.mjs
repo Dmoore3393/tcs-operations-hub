@@ -3,9 +3,10 @@ import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 import ts from 'typescript';
 const url=s=>'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');
+const auditUrl=url(await readFile(new URL('../src/lib/child-file-audits.ts',import.meta.url),'utf8'));
 const config=url(await readFile(new URL('../src/lib/location-config.ts',import.meta.url),'utf8'));
 let source=await readFile(new URL('../src/app/api/children/route.ts',import.meta.url),'utf8');
-source=source.replace(/import \{ flushTransportAssignmentNotices \} from .*?;/,'const flushTransportAssignmentNotices=async()=>{};').replace(/import \{ safeFamilyAccess \} from .*?;/,'const safeFamilyAccess=v=>Array.isArray(v)?v:[];').replace('"@/lib/location-config"',JSON.stringify(config)).replace(/import \{ requireStaff, staffErrorResponse \} from .*?;/,'const requireStaff=async()=>globalThis.__childEditAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
+source=source.replace('"@/lib/child-file-audits"',JSON.stringify(auditUrl)).replace(/import \{ flushTransportAssignmentNotices \} from .*?;/,'const flushTransportAssignmentNotices=async()=>{};').replace(/import \{ safeFamilyAccess \} from .*?;/,'const safeFamilyAccess=v=>Array.isArray(v)?v:[];').replace('"@/lib/location-config"',JSON.stringify(config)).replace(/import \{ requireStaff, staffErrorResponse \} from .*?;/,'const requireStaff=async()=>globalThis.__childEditAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
 const api=await import(url(source));
 test('editing child contact fields retains server-held import identity, extras and historical eligibility',async()=>{
  const held={fundingLocation:'The School Age Center • Division',fundingLocationId:'synthetic-location',brightwheel:{id:'synthetic-bw'},additionalGuardianContacts:[{name:'Third Guardian',phone:'555',email:''}],careStatusNote:'Known departure',timesheetServicePeriods:['October 2026'],neverStartedCare:false};let written;
@@ -48,4 +49,19 @@ test('a profile can explicitly turn transportation off and back on without clear
   const result=await post({...importedEdit,noTransportationNeeded:excluded});assert.equal(result.status,200);
   assert.equal(calls.written.record_data.noTransportationNeeded,excluded);assert.equal(calls.written.record_data.schoolAgeSupport.grade,'TK');assert.equal(calls.written.school_name,'Synthetic School');
  }
+});
+
+test('saving an older child file removes cached N/A names, preserves manual missing paperwork and retains the audit entry',async()=>{
+ const {createBlankChildFileAudit,documentsForTemplate}=await import(auditUrl);
+ const audit=createBlankChildFileAudit('Synthetic reviewer','In-Home');
+ for(const item of audit.items)item.status='On File';
+ const item=audit.items[0];Object.assign(item,{status:'N/A',note:'Synthetic reason',dateChecked:'2030-03-01'});
+ const name=documentsForTemplate('In-Home').find(doc=>doc.id===item.documentId).name;
+ const held={fileAudits:[audit],licensingStatus:'Missing Documents',missingDocuments:[name,'Separate manual document']};
+ const calls=editHarness({id:'synthetic-child',legacy_id:importedEdit.legacyId,record_data:held,updated_at:importedEdit.updatedAt});
+ const result=await post(importedEdit);assert.equal(result.status,200);
+ const {child}=await result.json();
+ assert.deepEqual(child.missingDocuments,['Separate manual document']);
+ assert.deepEqual(calls.written.record_data.missingDocuments,['Separate manual document']);
+ assert.deepEqual(calls.written.record_data.fileAudits[0].items[0],item);
 });
