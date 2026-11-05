@@ -9,6 +9,7 @@ import { migratePersistentValue } from "@/lib/storage-migrations";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { dayNames } from "@/lib/location-config";
+import { hubRequest } from "@/lib/hub-request";
 import { withRequestTimeout } from "@/lib/request-timeout";
 import { transportRecordPatches } from "@/lib/transport-record-patches";
 
@@ -118,8 +119,10 @@ export function usePersistentState<T>(key: string, initialValue: T) {
   useEffect(() => {
     if (!config || !supabase || !user || !profile || !hasStateAccess) return;
     let active = true;
+    let latestRead = 0;
 
     async function loadRelational(message = `Loading ${config!.label}…`) {
+      const read = ++latestRead;
       announceHubSync({ state: "loading", key, message });
       const { data, error } = await withRequestTimeout(async (signal) => await supabase!
         .from(config!.table)
@@ -128,7 +131,7 @@ export function usePersistentState<T>(key: string, initialValue: T) {
         .order("created_at", { ascending: true })
         .abortSignal(signal));
 
-      if (!active) return;
+      if (!active || read !== latestRead) return;
       if (error) {
         setLoadError(error.message);
         announceHubSync({ state: "error", key, message: `Could not load ${config!.label}: ${error.message}` });
@@ -196,8 +199,25 @@ export function usePersistentState<T>(key: string, initialValue: T) {
       )
       .subscribe();
 
+    // Mobile browsers can suspend realtime while the route is in the background.
+    const refreshRoutes = () => {
+      if (document.visibilityState === "visible" && !transportDirtyRef.current) {
+        void loadRelational("Refreshing transportation…").catch(failed);
+      }
+    };
+    const refreshRoutePage = key === "tcs-routes" && typeof window !== "undefined";
+    const poll = refreshRoutePage ? window.setInterval(refreshRoutes, 30000) : undefined;
+    if (refreshRoutePage) {
+      document.addEventListener("visibilitychange", refreshRoutes);
+      window.addEventListener("online", refreshRoutes);
+    }
     return () => {
       active = false;
+      if (refreshRoutePage) {
+        window.clearInterval(poll);
+        document.removeEventListener("visibilitychange", refreshRoutes);
+        window.removeEventListener("online", refreshRoutes);
+      }
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       if (relationalRefreshTimerRef.current) clearTimeout(relationalRefreshTimerRef.current);
       void supabase?.removeChannel(channel);
@@ -331,8 +351,13 @@ export function usePersistentState<T>(key: string, initialValue: T) {
             const previous = transportSaveQueueRef.current;
             const save = previous.then(async () => {
               const changes = transportRecordPatches(transportBaseRef.current, snapshot);
-              const result = await withRequestTimeout(async signal => await supabase!.rpc("patch_transport_records", { p_changes: changes }).abortSignal(signal));
-              if (result.error) throw new Error(result.error.message);
+              if (changes.length) {
+                const { data: { session } } = await supabase!.auth.getSession();
+                if (!session) throw new Error("Sign in again to save this trip.");
+                await hubRequest("/api/transportation-records", session.access_token, {
+                  method: "POST", body: JSON.stringify({ changes }),
+                });
+              }
               transportBaseRef.current = snapshot;
             });
             transportSaveQueueRef.current = save.catch(() => {});
@@ -346,8 +371,6 @@ export function usePersistentState<T>(key: string, initialValue: T) {
             transportDirtyRef.current = false;
             announceHubSync({ state: "saved", key, operation: "write", message: "Transportation changes saved" });
             setRetryAttempt(attempt => attempt + 1);
-            const { data: { session } } = await supabase!.auth.getSession();
-            if (session?.access_token) void fetch("/api/transportation-assignments/dispatch", { method: "POST", keepalive: true, headers: { Authorization: `Bearer ${session.access_token}` } }).catch(() => {});
             return;
           }
           const { error } = await supabase!.rpc("sync_tcs_collection", {

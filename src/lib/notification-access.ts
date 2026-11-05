@@ -16,6 +16,9 @@ export function canReceiveHubNotification(profile:Profile,item:Pick<HubNotificat
  if(!isEmployeeAccessRole(profile.role))return false;
  const permissions=profile.permissions||[];
  if((item.eventKey||'').startsWith('child-file-audit:')||['/files','/child-file-audits'].includes(path)||item.category==='tour')return false;
+ if(item.category==='transportation'&&path==='/notifications'&&(item.eventKey||'').startsWith('transport-custody:')){
+  return ['children_basic','daily_care','schedules','ratios'].some(permission=>permissions.includes(permission));
+ }
  if(item.category==='transportation')return (permissions.includes('transportation')&&employeeCanAccessRoute(permissions,path))||(['/transportation','/transportation-v2'].includes(path)&&item.title==='Child arrived'&&['children_basic','daily_care','schedules','ratios'].some(permission=>permissions.includes(permission)));
  if(path==='/scheduling'&&item.category==='schedule')path='/my-schedule';
  return employeeCanAccessRoute(permissions,path);

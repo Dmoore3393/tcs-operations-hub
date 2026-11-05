@@ -177,7 +177,8 @@ export async function sendApplePush(
       "apns-topic": registration.bundleId || config.bundleId,
       "apns-push-type": "alert",
       "apns-priority": "10",
-      "apns-expiration": "0",
+      "apns-expiration": payload.tag.startsWith("transport-") ? String(Math.floor(Date.now()/1000) + 3600) : "0",
+      ...(payload.tag.startsWith("transport-") ? { "apns-collapse-id": createHash("sha256").update(payload.tag).digest("hex") } : {}),
       "content-type": "application/json",
     });
 

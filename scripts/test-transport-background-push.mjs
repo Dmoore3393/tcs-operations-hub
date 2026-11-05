@@ -54,7 +54,7 @@ const server=await import(url(`
  const quietHoursActive=p=>p.quietHoursEnabled;
  const loadNotificationState=async()=>globalThis.deliveryFixture.state;
  const sendWebPush=async(subscription,payload)=>{globalThis.deliveryFixture.sent.push({subscription,payload});return {ok:true,stale:false}};
- const parseNativePushRegistrations=()=>[];const sendApplePush=async()=>{};const saveNativePushRegistrations=async()=>{};
+ const parseNativePushRegistrations=user=>user.app_metadata.native||[];const sendApplePush=async(device,payload)=>{globalThis.deliveryFixture.native.push(payload);return {ok:true,stale:false}};const saveNativePushRegistrations=async()=>{};
  ${declarations}
 `));
 test('stored route and cancellation notices use background Web Push for registered devices',async()=>{
@@ -64,4 +64,32 @@ test('stored route and cancellation notices use background Web Push for register
  for(const title of ['Your route assignment','Transportation cancelled','Transportation restored'])await server.deliverStoredTransportAlert(admin,user.id,{title,body:'Synthetic change',href:'/transportation',eventKey:title});
  assert.equal(f.sent.length,3);assert.equal(f.sent[1].payload.title,'Transportation cancelled');
  f.state.preferences.transportation=false;await server.deliverStoredTransportAlert(admin,user.id,{title:'Disabled'});assert.equal(f.sent.length,3);
+});
+
+test('confirmed custody reaches registered Web and native phones with the same child, driver, place and actual time',async()=>{
+ const user={id:'driver',app_metadata:{native:[{deviceToken:'mock'}],tcs_push_subscriptions:[{endpoint:'https://push.example.test/mock',keys:{p256dh:'mock',auth:'mock'}}]}};
+ const f={state:{user,preferences:{enabled:true,transportation:true}},sent:[],native:[]};globalThis.deliveryFixture=f;
+ const admin={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{is_active:true,organization_id:'org'},error:null})})})}),auth:{admin:{getUserById:async()=>({data:{user}})}}};
+ const note={title:'Synthetic Rider picked up',body:'Jan 7, 1:15 PM · Assigned Driver · Gray van. Picked up at School Two. Heading to South.',href:'/transportation?view=all#transportation-status',eventKey:'transport-custody:test'};
+ await server.deliverStoredTransportAlert(admin,user.id,note,'another-org');assert.equal(f.native.length,0);assert.equal(f.sent.length,0);
+ await server.deliverStoredTransportAlert(admin,user.id,note,'org');
+ assert.deepEqual(f.native[0],{title:note.title,body:note.body,href:note.href,tag:note.eventKey});assert.deepEqual(f.sent[0].payload,f.native[0]);
+});
+
+const recordApiSource=(await source('src/app/api/transportation-records/route.ts'))
+ .replace(/import \{ after \}[^;]+;/,'const after=work=>globalThis.custodySaveFixture.after.push(work);')
+ .replace(/import \{ requireStaff, staffErrorResponse \}[^;]+;/,'const requireStaff=async()=>globalThis.custodySaveFixture.auth;const staffErrorResponse=e=>Response.json({error:String(e)},{status:500});')
+ .replace(/import \{ flushTransportAssignmentNotices \}[^;]+;/,'const flushTransportAssignmentNotices=async()=>{};')
+ .replace(/import \{ flushTransportCustodyPushes \}[^;]+;/,'const flushTransportCustodyPushes=(...args)=>globalThis.custodySaveFixture.flush(...args);');
+const recordApi=await import(url(recordApiSource));
+test('a custody save schedules server delivery only after the signed-in write commits',async()=>{
+ const calls=[];const auth={isOwner:false,isLicensee:false,profile:{organization_id:'org',permissions:['transportation']},admin:{},
+  userClient:{rpc:async(name,args)=>{calls.push([name,args]);return {data:1,error:null}}}};
+ const f={auth,after:[],flush:async(...args)=>calls.push(args)};globalThis.custodySaveFixture=f;
+ const changes=[{routeId:'mock',patch:{runStatus:'Picked Up'}}];
+ const post=()=>recordApi.POST(new Request('https://hub.test/api/transportation-records',{method:'POST',body:JSON.stringify({changes})}));
+ assert.equal((await post()).status,200);assert.deepEqual(calls,[['patch_transport_records',{p_changes:changes}]]);assert.equal(f.after.length,1);
+ await f.after.pop()();assert.deepEqual(calls[1],[auth.admin,'org']);
+ auth.userClient.rpc=async()=>({error:{message:'Trip changed'},data:null});assert.equal((await post()).status,409);assert.equal(f.after.length,0);
+ auth.profile.permissions=[];assert.equal((await post()).status,403);assert.equal(f.after.length,0);
 });

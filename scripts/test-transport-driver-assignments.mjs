@@ -34,7 +34,7 @@ test('saved routes notify exact staff identities atomically; employee access is 
  alter table staff_location_assignments enable row level security;
  create policy staff_assignments_read on staff_location_assignments for select to authenticated using(user_id=auth.uid() or is_tcs_owner());
  create function sync_staff_location_assignments_for_user(uuid) returns void language plpgsql as $$begin return;end$$;`);
- const names=await readdir('supabase/migrations');for(const suffix of ['_daily_transport_plans.sql','_transportation_driver_assignments.sql','_morning_transportation.sql','_daily_transport_absence_reasons.sql','_transport_callout_push_notices.sql','_staff_driver_location_access.sql'])await db.exec(await readFile('supabase/migrations/'+names.find(name=>name.endsWith(suffix)),'utf8'));
+ const names=await readdir('supabase/migrations');for(const suffix of ['_daily_transport_plans.sql','_transportation_driver_assignments.sql','_morning_transportation.sql','_daily_transport_absence_reasons.sql','_transport_callout_push_notices.sql','_staff_driver_location_access.sql','_transport_driver_notice_details.sql'])await db.exec(await readFile('supabase/migrations/'+names.find(name=>name.endsWith(suffix)),'utf8'));
  await db.exec('create trigger staff_access_sync_location_assignments after insert or update of organization_id,role,is_active on staff_access for each row execute function sync_staff_location_assignments_trigger()');
  await db.query('insert into organizations values($1)',[org]);await db.query("insert into locations values($1,$2,true,'Synthetic Site')",[loc,org]);
  for(const [user,role] of [[owner,'Owner / Admin'],[driver,'Employee'],[other,'Employee']]){await db.query('insert into auth.users values($1)',[user]);await db.query("insert into staff_access values($1,$2,'Synthetic Same',$3,$4,true)",[user,org,role,[]]);await db.query('insert into staff_location_assignments values($1,$2,$3)',[org,user,loc]);}
@@ -48,7 +48,7 @@ test('saved routes notify exact staff identities atomically; employee access is 
  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);await db.exec('set role authenticated;begin');
  assert.equal((await db.query('select count(*) n from staff_access')).rows[0].n,1,'private account RLS remains unchanged');
  await add(route,1);await add(nextRoute,2);await db.exec('commit;reset role');
- let delivered=(await flush()).rows;assert.equal(delivered.length,1);assert.equal(delivered[0].user_id,driver);assert.ok(!delivered[0].notification.body.includes('Child'));assert.equal((await flush()).rows.length,0);
+ let delivered=(await flush()).rows;assert.equal(delivered.length,1);assert.equal(delivered[0].user_id,driver);assert.ok(!delivered[0].notification.body.includes('Child'));for(const detail of ['Synthetic School','3 PM','Synthetic Van','2 riders'])assert.ok(delivered[0].notification.body.includes(detail),detail);assert.equal((await flush()).rows.length,0);
  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[driver]);await db.exec('set role authenticated');
  await db.query('insert into transportation_routes(organization_id,location_id,record_data,legacy_id) values($1,$2,$3,$4) on conflict(organization_id,legacy_id) do update set record_data=excluded.record_data',[org,loc,JSON.stringify({...data(1),runDate:day,runStatus:'Checked In'}),'1']);
  await assert.rejects(db.query('update transportation_routes set record_data=record_data||$1 where id=$2',[JSON.stringify({driverLaneId:otherLane}),route]),/Only administration/);

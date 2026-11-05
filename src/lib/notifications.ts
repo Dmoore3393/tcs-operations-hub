@@ -88,7 +88,7 @@ export function notificationTemplate(type: HubNotificationEventType, context: Hu
         category: "transportation" as const,
         severity: "info" as const,
         title: "Child arrived",
-        body: `${child} arrived at ${destination} and has been checked into the location.`,
+        body: `${child} arrived at ${destination}. Handoff is pending.`,
         href: "/transportation",
       };
     case "transportation_checkin":
@@ -111,8 +111,8 @@ export function notificationTemplate(type: HubNotificationEventType, context: Hu
       return {
         category: "transportation" as const,
         severity: "attention" as const,
-        title: "Transportation update",
-        body: "A transportation route was changed. Open The Hub to review the current route.",
+        title: context.vehicle ? "Transportation vehicle update" : context.school ? "School stop updated" : "Transportation update",
+        body: context.reason?.trim().slice(0,350) || "Open Transportation to review the updated route.",
         href: "/transportation",
       };
     case "emergency_record_attention":

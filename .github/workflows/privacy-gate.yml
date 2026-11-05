@@ -37,7 +37,7 @@ jobs:
       - name: Typecheck application
         run: npx tsc --noEmit
       - name: Verify driver pushes with the Hub closed
-        run: node --test scripts/test-transport-background-push.mjs
+        run: node --test scripts/test-transport-background-push.mjs scripts/test-transport-custody.mjs
       - name: Verify communications isolation and daily follow-through
         run: node --test scripts/test-communications-database.mjs scripts/test-communications-api.mjs scripts/test-daily-follow-through.mjs
       - name: Verify reviewed and atomic Brightwheel imports
