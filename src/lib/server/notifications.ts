@@ -24,7 +24,7 @@ import {
   type NativePushRegistration,
 } from "@/lib/server/native-push";
 
-import { loadStoredNotificationState, saveStoredNotificationState } from "@/lib/server/notification-state-store";
+import { claimFileAuditAlert, loadStoredNotificationState, saveStoredNotificationState } from "@/lib/server/notification-state-store";
 const MAX_NOTIFICATIONS = 100;
 const PUSH_KEY = "tcs_push_subscriptions";
 const MAX_PUSH_SUBSCRIPTIONS = 8;
@@ -446,12 +446,11 @@ export async function dispatchFileAuditOversightNotification(args: {
       eventKey,
     };
 
-    await saveNotificationState(
-      args.admin,
-      state.user,
-      [notification, ...state.inbox].slice(0, MAX_NOTIFICATIONS),
-      state.preferences,
-    );
+    if (eventKey.startsWith("child-file-audit:")) {
+      if (!await claimFileAuditAlert(args.admin, state.user, notification, state.inbox, state.preferences)) continue;
+    } else {
+      await saveNotificationState(args.admin, state.user, [notification, ...state.inbox].slice(0, MAX_NOTIFICATIONS), state.preferences);
+    }
 
     const bypassQuietHours = notification.severity === "urgent";
     if (!quietHoursActive(state.preferences) || bypassQuietHours) {
