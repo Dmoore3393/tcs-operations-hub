@@ -3057,5 +3057,8 @@
   "Arrived at destination": "Llegó al destino",
   "Handoff complete": "Entrega completada",
   "Arrived and awaiting handoff": "Ya llegaron y están pendientes de entrega",
-  "See each driver’s last confirmed stop and each child’s pickup and handoff across locations.": "Vea la última parada confirmada de cada conductor y la recogida y entrega de cada niño en todas las sedes."
+  "See each driver’s last confirmed stop and each child’s pickup and handoff across locations.": "Vea la última parada confirmada de cada conductor y la recogida y entrega de cada niño en todas las sedes.",
+  "Your role receives every confirmed pickup and completed drop-off across all locations, including during Hub quiet hours. Enable Device Alerts on this phone to receive them with the Hub closed.": "Por su cargo, recibe avisos de cada recogida y entrega confirmada en todas las sedes, incluso durante las horas de silencio del Hub. Active las alertas del dispositivo en este teléfono para recibirlas con el Hub cerrado.",
+  "Optional Hub notifications": "Notificaciones opcionales del Hub",
+  "Manage other Hub alerts": "Administrar las demás alertas del Hub"
 }

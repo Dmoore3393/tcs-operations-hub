@@ -45,12 +45,16 @@ for(const open of [false,true])test(`service worker displays push with the app $
 // Exercise the actual server transport delivery without a browser/window or user session.
 const serverSource=await source('src/lib/server/notifications.ts');
 const ast=ts.createSourceFile('notifications.ts',serverSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
-const names=new Set(['parsePushSubscriptions','savePushSubscriptions','deliverPushChannels','deliverStoredTransportAlert']);
+const notificationUrl=url(await source('src/lib/notifications.ts')),teamUrl=url(await source('src/lib/team-access.ts')),locationUrl=url(await source('src/lib/location-config.ts'));
+const accessUrl=url((await source('src/lib/notification-access.ts')).replace('"@/lib/team-access"',JSON.stringify(teamUrl)).replace('"@/lib/location-config"',JSON.stringify(locationUrl)).replace('"@/lib/notifications"',JSON.stringify(notificationUrl)));
+const names=new Set(['isTransportAlertLeader','parsePushSubscriptions','savePushSubscriptions','deliverPushChannels','deliverStoredTransportAlert']);
 const declarations=ast.statements.filter(node=>ts.isFunctionDeclaration(node)&&names.has(node.name?.text)).map(node=>node.getText(ast)).join('\n');
 const server=await import(url(`
  const MAX_PUSH_SUBSCRIPTIONS=8,PUSH_KEY='tcs_push_subscriptions';
  const withStaffBackupLocations=async(_admin,p)=>p;
- const canReceiveHubNotification=()=>true;
+ import {canReceiveHubNotification} from ${JSON.stringify(accessUrl)};
+ import {isRequiredTransportConfirmation} from ${JSON.stringify(notificationUrl)};
+ import {isEmployeeAccessRole,isOwnerAccessRole,isLicenseeAccessRole} from ${JSON.stringify(teamUrl)};
  const quietHoursActive=p=>p.quietHoursEnabled;
  const loadNotificationState=async()=>globalThis.deliveryFixture.state;
  const sendWebPush=async(subscription,payload)=>{globalThis.deliveryFixture.sent.push({subscription,payload});return {ok:true,stale:false}};
@@ -60,8 +64,8 @@ const server=await import(url(`
 test('stored route and cancellation notices use background Web Push for registered devices',async()=>{
  const user={id:'driver',app_metadata:{tcs_push_subscriptions:[{endpoint:'https://push.example.test/synthetic',keys:{p256dh:'synthetic',auth:'synthetic'}}]}};
  const f={state:{user,preferences:{enabled:true,transportation:true,quietHoursEnabled:false}},sent:[]};globalThis.deliveryFixture=f;
- const admin={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{is_active:true},error:null})})})}),auth:{admin:{getUserById:async()=>({data:{user}})}}};
- for(const title of ['Your route assignment','Transportation cancelled','Transportation restored'])await server.deliverStoredTransportAlert(admin,user.id,{title,body:'Synthetic change',href:'/transportation',eventKey:title});
+ const admin={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{role:"Employee",permissions:["transportation"],locations:["All Locations"],is_active:true},error:null})})})}),auth:{admin:{getUserById:async()=>({data:{user}})}}};
+ for(const title of ['Your route assignment','Transportation cancelled','Transportation restored'])await server.deliverStoredTransportAlert(admin,user.id,{title,category:'transportation',body:'Synthetic change',href:'/transportation',eventKey:title});
  assert.equal(f.sent.length,3);assert.equal(f.sent[1].payload.title,'Transportation cancelled');
  f.state.preferences.transportation=false;await server.deliverStoredTransportAlert(admin,user.id,{title:'Disabled'});assert.equal(f.sent.length,3);
 });
@@ -69,8 +73,8 @@ test('stored route and cancellation notices use background Web Push for register
 test('confirmed custody reaches registered Web and native phones with the same child, driver, place and actual time',async()=>{
  const user={id:'driver',app_metadata:{native:[{deviceToken:'mock'}],tcs_push_subscriptions:[{endpoint:'https://push.example.test/mock',keys:{p256dh:'mock',auth:'mock'}}]}};
  const f={state:{user,preferences:{enabled:true,transportation:true}},sent:[],native:[]};globalThis.deliveryFixture=f;
- const admin={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{is_active:true,organization_id:'org'},error:null})})})}),auth:{admin:{getUserById:async()=>({data:{user}})}}};
- const note={title:'Synthetic Rider picked up',body:'Jan 7, 1:15 PM · Assigned Driver · Gray van. Picked up at School Two. Heading to South.',href:'/transportation?view=all#transportation-status',eventKey:'transport-custody:test'};
+ const admin={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{role:'Employee',permissions:['transportation'],locations:['All Locations'],is_active:true,organization_id:'org'},error:null})})})}),auth:{admin:{getUserById:async()=>({data:{user}})}}};
+ const note={category:'transportation',title:'Synthetic Rider picked up',body:'Jan 7, 1:15 PM · Assigned Driver · Gray van. Picked up at School Two. Heading to South.',href:'/transportation?view=all#transportation-status',eventKey:'transport-custody:test'};
  await server.deliverStoredTransportAlert(admin,user.id,note,'another-org');assert.equal(f.native.length,0);assert.equal(f.sent.length,0);
  await server.deliverStoredTransportAlert(admin,user.id,note,'org');
  assert.deepEqual(f.native[0],{title:note.title,body:note.body,href:note.href,tag:note.eventKey});assert.deepEqual(f.sent[0].payload,f.native[0]);
@@ -92,4 +96,19 @@ test('a custody save schedules server delivery only after the signed-in write co
  await f.after.pop()();assert.deepEqual(calls[1],[auth.admin,'org']);
  auth.userClient.rpc=async()=>({error:{message:'Trip changed'},data:null});assert.equal((await post()).status,409);assert.equal(f.after.length,0);
  auth.profile.permissions=[];assert.equal((await post()).status,403);assert.equal(f.after.length,0);
+});
+
+test('leadership pickup and drop-off push with the Hub closed even if optional Hub alerts are muted',async()=>{
+ const user={id:'leader',app_metadata:{native:[{deviceToken:'mock'}],tcs_push_subscriptions:[{endpoint:'https://push.example.test/mock',keys:{p256dh:'mock',auth:'mock'}}]}};
+ const f={state:{user,preferences:{enabled:false,transportation:false,quietHoursEnabled:true}},sent:[],native:[]};globalThis.deliveryFixture=f;
+ let role='Location Licensee',lane=false,active=true,org='org';
+ const admin={rpc:async(_name,args)=>({data:lane&&args.p_org===org&&args.p_user===user.id,error:null}),from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{role,organization_id:org,is_active:active,locations:['Other'],permissions:[]},error:null})})})}),auth:{admin:{getUserById:async()=>({data:{user}})}}};
+ const note={title:'Sample rider',category:'transportation',body:'Confirmed at 2:35 PM',href:'/notifications',location:'North',requiredTransportConfirmation:true,transportOrganizationId:org};
+ const deliver=kind=>server.deliverStoredTransportAlert(admin,user.id,{...note,eventKey:'transport-custody:route:'+kind+':1900000000.00'},'org');
+ for(const kind of ['pickup','handoff'])await deliver(kind);
+ await deliver('arrival');assert.equal(f.native.length,2);assert.equal(f.sent.length,2);
+ role='Owner / Admin';await deliver('pickup');assert.equal(f.native.length,3);
+ role='Employee';lane=true;await deliver('pickup');assert.equal(f.native.length,4);
+ lane=false;await deliver('pickup');active=false;role='Owner / Admin';await deliver('handoff');
+ active=true;org='other-org';await deliver('handoff');assert.equal(f.native.length,4);
 });

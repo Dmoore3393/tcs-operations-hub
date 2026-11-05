@@ -4,7 +4,7 @@ import test from 'node:test';
 import ts from 'typescript';
 const url=source=>'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText).toString('base64');
 const teamUrl=url(await readFile('src/lib/team-access.ts','utf8')),locationUrl=url(await readFile('src/lib/location-config.ts','utf8')),notificationUrl=url(await readFile('src/lib/notifications.ts','utf8'));
-const accessUrl=url((await readFile('src/lib/notification-access.ts','utf8')).replace('"@/lib/team-access"',JSON.stringify(teamUrl)).replace('"@/lib/location-config"',JSON.stringify(locationUrl)));
+const accessUrl=url((await readFile('src/lib/notification-access.ts','utf8')).replace('"@/lib/team-access"',JSON.stringify(teamUrl)).replace('"@/lib/location-config"',JSON.stringify(locationUrl)).replace('"@/lib/notifications"',JSON.stringify(notificationUrl)));
 const {canReceiveHubNotification:allowed,visibleHubNotifications:visible}=await import(accessUrl);
 const employee={role:'Employee',locations:['Halcom'],permissions:['children_basic','daily_care','schedules','health_safety']},licensee={role:'Location Licensee',locations:['Halcom'],permissions:[]},owner={role:'Owner / Admin',locations:['All Locations'],permissions:[]};
 const item=patch=>({id:'synthetic',category:'system',severity:'attention',title:'Synthetic file notice',body:'Synthetic',href:'/child-file-audits',location:'Halcom',createdAt:'2026-11-01T12:00:00Z',readAt:'',eventKey:'child-file-audit:synthetic:reviewed',...patch});
@@ -43,9 +43,19 @@ test('both oversight and All Staff broadcasts filter file recipients before inbo
 const routeSource=(await readFile('src/app/api/notifications/route.ts','utf8'))
  .replace(/import \{ after \} from "next\/server";/,'const after=fn=>fn();')
  .replace(/import \{ flushTransportCustodyPushes \}[^;]+;/,'const flushTransportCustodyPushes=async()=>{};')
- .replace(/import \{flushTransportAssignmentNotices\}[^;]+;/,'const flushTransportAssignmentNotices=async()=>{};').replace('"@/lib/notifications"',JSON.stringify(notificationUrl)).replace('"@/lib/notification-access"',JSON.stringify(accessUrl)).replace(/import \{ dispatchHubNotification, loadNotificationState, saveNotificationState \}[^;]+;/,'const dispatchHubNotification=async()=>({});const loadNotificationState=async()=>globalThis.notificationState;const saveNotificationState=async()=>{};').replace(/import \{ requireStaff, staffErrorResponse \}[^;]+;/,'const requireStaff=async()=>globalThis.notificationAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
+ .replace(/import \{flushTransportAssignmentNotices\}[^;]+;/,'const flushTransportAssignmentNotices=async()=>{};').replace('"@/lib/notifications"',JSON.stringify(notificationUrl)).replace('"@/lib/notification-access"',JSON.stringify(accessUrl)).replace(/import \{ dispatchHubNotification, isTransportAlertLeader, loadNotificationState, saveNotificationState \}[^;]+;/,'const isTransportAlertLeader=async()=>false;const dispatchHubNotification=async()=>({});const loadNotificationState=async()=>globalThis.notificationState;const saveNotificationState=async()=>{};').replace(/import \{ requireStaff, staffErrorResponse \}[^;]+;/,'const requireStaff=async()=>globalThis.notificationAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
 const api=await import(url(routeSource));
 test('notification API and badge counts exclude inaccessible and archived setup alerts',async()=>{
  globalThis.notificationAuth={admin:{},user:{id:'synthetic'},profile:employee};globalThis.notificationState={user:{id:'synthetic'},preferences:{},inbox:[item(),item({id:'shared',href:'/communications',eventKey:'manual:shared'}),item({id:'setup',eventKey:'child-file-audit:none:synthetic:week'})]};let payload=await(await api.GET(new Request('https://hub.test/api/notifications'))).json();assert.equal(payload.unreadCount,1);assert.deepEqual(payload.notifications.map(item=>item.id),['shared']);
  payload=await(await api.PATCH(new Request('https://hub.test/api/notifications',{method:'PATCH',body:JSON.stringify({markAllRead:true})}))).json();assert.equal(payload.unreadCount,0);assert.equal(payload.notifications.length,1);
+});
+
+test('required movement alerts cross sites only for active leaders in the same organization',()=>{
+ const notice=item({category:'transportation',eventKey:'transport-custody:route:handoff:1900000000.00',requiredTransportConfirmation:true,transportOrganizationId:'one',href:'/transportation?view=all',location:'South'});
+ const profile={...licensee,organization_id:'one',transportAlertLeader:true};
+ assert.equal(allowed(profile,notice),true);assert.equal(allowed({...profile,locations:[]},notice),true);
+ assert.equal(allowed({...profile,is_active:false},notice),false);assert.equal(allowed({...profile,transportAlertLeader:false},notice),false);
+ assert.equal(allowed({...owner,organization_id:'different',transportAlertLeader:true},notice),false);
+ assert.equal(allowed(profile,{...notice,eventKey:'manual:forged'}),false);assert.equal(allowed(profile,{...notice,href:'/settings'}),false);
+ assert.equal(allowed(profile,{...notice,href:'https://outside.example/transportation'}),false);
 });

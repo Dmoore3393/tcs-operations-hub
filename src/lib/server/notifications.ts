@@ -6,12 +6,13 @@ import {
   categoryForEvent,
   defaultNotificationPreferences,
   notificationTemplate,
+  isRequiredTransportConfirmation,
   type HubNotification,
   type HubNotificationContext,
   type HubNotificationEventType,
   type HubNotificationPreferences,
 } from "@/lib/notifications";
-import { isLicenseeAccessRole, isOwnerAccessRole } from "@/lib/team-access";
+import { isEmployeeAccessRole, isLicenseeAccessRole, isOwnerAccessRole } from "@/lib/team-access";
 import { normalizeLocation } from "@/lib/location-config";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
@@ -478,15 +479,33 @@ export async function deliverStoredTimesheetAlert(admin: SupabaseClient, userId:
   if (state.preferences.enabled && !quietHoursActive(state.preferences)) await deliverPushChannels({admin,user:state.user,payload:{title:notification.title,body:notification.body,href:notification.href,tag:notification.eventKey}});
 }
 
-/** Assignment inbox entries are committed by the database before attempting phone push. */
-export async function deliverStoredTransportAlert(admin:SupabaseClient,userId:string,notification:HubNotification,organizationId?:string){
- const {data:profile,error}=await admin.from('staff_access').select('role,permissions,locations,is_active,organization_id').eq('user_id',userId).maybeSingle();
- if(error)throw new Error(error.message);
- if(!profile?.is_active || (organizationId && profile.organization_id !== organizationId))return;
- const scoped=notification.href==="/notifications" ? profile : await withStaffBackupLocations(admin,profile);
- if(!canReceiveHubNotification(scoped,notification))return;
- const state=await loadNotificationState(admin,userId);
- if (!state.preferences.enabled || !state.preferences.transportation || quietHoursActive(state.preferences)) return;
- const delivery=await deliverPushChannels({admin,user:state.user,staffTransport:true,payload:{title:notification.title,body:notification.body,href:notification.href,tag:notification.eventKey}});
- if(delivery.retry)throw new Error("Transportation push provider temporarily unavailable.");
+/** Technical access roles and the organization's linked childcare leadership lanes can qualify. */
+export async function isTransportAlertLeader(admin: SupabaseClient, profile: { role: string; organization_id: string }, userId: string) {
+  if (isOwnerAccessRole(profile.role) || isLicenseeAccessRole(profile.role)) return true;
+  if (!isEmployeeAccessRole(profile.role)) return false;
+  const { data, error } = await admin.rpc("is_transport_alert_leader", { p_org: profile.organization_id, p_user: userId });
+  if (error) throw new Error(error.message);
+  return data === true;
+}
+
+/** Only confirmed leadership pickups and final handoffs bypass optional Hub notification settings. */
+export async function deliverStoredTransportAlert(admin: SupabaseClient, userId: string, notification: HubNotification, organizationId?: string) {
+  const { data: profile, error } = await admin.from("staff_access").select("role,permissions,locations,is_active,organization_id").eq("user_id", userId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!profile?.is_active || (organizationId && profile.organization_id !== organizationId)) return;
+
+  const required = isRequiredTransportConfirmation(notification);
+  if (required) {
+    const transportAlertLeader = await isTransportAlertLeader(admin, profile, userId);
+    if (!canReceiveHubNotification({ ...profile, transportAlertLeader }, notification)) return;
+  } else {
+    const scoped = notification.href === "/notifications" ? profile : await withStaffBackupLocations(admin, profile);
+    if (!canReceiveHubNotification(scoped, notification)) return;
+  }
+  const state = await loadNotificationState(admin, userId);
+  if (!required && (!state.preferences.enabled || !state.preferences.transportation || quietHoursActive(state.preferences))) return;
+  const delivery = await deliverPushChannels({ admin, user: state.user, staffTransport: true, payload: {
+    title: notification.title, body: notification.body, href: notification.href, tag: notification.eventKey,
+  } });
+  if (delivery.retry) throw new Error("Transportation push provider temporarily unavailable.");
 }

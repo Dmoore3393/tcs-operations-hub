@@ -1,17 +1,25 @@
 import {employeeCanAccessRoute,isOwnerAccessRole,isLicenseeAccessRole,isEmployeeAccessRole} from "@/lib/team-access";
 import {normalizeLocation} from "@/lib/location-config";
-import type {HubNotification} from "@/lib/notifications";
-type Profile={role:string;permissions?:string[];locations?:string[];is_active?:boolean};
+import {isRequiredTransportConfirmation, type HubNotification} from "@/lib/notifications";
+type Profile={role:string;permissions?:string[];locations?:string[];is_active?:boolean;organization_id?:string;transportAlertLeader?:boolean};
 export function isSetupFileReminder(item:Pick<HubNotification,'eventKey'>){return (item.eventKey||'').startsWith('child-file-audit:none:');}
 const ownerOnly=new Set(['/staff-schedules','/settings','/team-access','/locations','/audit-log','/app-readiness','/marketing','/executive-dashboard','/payroll-ops','/account-deletion-requests']);
 function locationKey(value:string){const normalized=normalizeLocation(value);return normalized==='All Locations'?value.trim().toLowerCase():normalized;}
 /** Apply current trusted access before exposing an inbox item or sending a push. */
-export function canReceiveHubNotification(profile:Profile,item:Pick<HubNotification,'category'|'href'|'location'|'eventKey'|'title'>){
+export function canReceiveHubNotification(profile:Profile,item:Pick<HubNotification,'category'|'href'|'location'|'eventKey'|'title'|'transportOrganizationId'|'requiredTransportConfirmation'>){
  if(profile.is_active===false||isSetupFileReminder(item))return false;
- if(isOwnerAccessRole(profile.role))return true;
+ if(item.transportOrganizationId && item.transportOrganizationId!==profile.organization_id)return false;
+ const required=isRequiredTransportConfirmation(item);
+ if(!required && isOwnerAccessRole(profile.role))return true;
+ let path:string;
+ try {
+  const url=new URL(item.href||'/notifications','https://hub.invalid');
+  if(url.origin!=='https://hub.invalid')return false;
+  path=url.pathname.replace(/\/+$/,'')||'/';
+ } catch { return false; }
+ if(required)return profile.transportAlertLeader===true && (path==='/transportation'||path==='/notifications');
  const assigned=profile.locations||[];
  if(item.location&&item.location!=='All Locations'&&!assigned.includes('All Locations')&&!assigned.some(value=>locationKey(value)===locationKey(item.location)))return false;
- let path:string;try{const url=new URL(item.href||'/notifications','https://hub.invalid');if(url.origin!=='https://hub.invalid')return false;path=url.pathname.replace(/\/+$/,'')||'/';}catch{return false;}
  if(isLicenseeAccessRole(profile.role))return ![...ownerOnly].some(root=>path===root||path.startsWith(root+'/'));
  if(!isEmployeeAccessRole(profile.role))return false;
  const permissions=profile.permissions||[];
