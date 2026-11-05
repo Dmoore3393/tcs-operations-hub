@@ -122,3 +122,12 @@ test('identical phone deliveries display once while distinct event IDs with the 
  vm.runInNewContext(worker,workerContext());
  await push('one');await push('two');assert.deepEqual(shown,['one','two']);
 });
+
+test('same-stop assignment bursts ring once, changed routes and child handoffs ring separately',async()=>{
+ const handlers={},shown=[];
+ vm.runInNewContext(worker,{self:{addEventListener:(k,v)=>handlers[k]=v,registration:{showNotification:async(t,o)=>shown.push(o.tag)}}});
+ async function push(tag,body){let done;handlers.push({data:{json:()=>({tag,title:'Route',body,href:'/transportation'})},waitUntil:p=>done=p});await done;}
+ await push('transport-assignment:a','Stop A');await push('transport-assignment:b','Stop A');
+ await push('transport-assignment:c','Stop B');await push('transport-custody:d','Stop A');await push('transport-custody:e','Stop A');
+ assert.deepEqual(shown,['transport-assignment:a','transport-assignment:c','transport-custody:d','transport-custody:e']);
+});
