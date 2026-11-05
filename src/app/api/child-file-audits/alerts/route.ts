@@ -1,5 +1,6 @@
 import {
   auditSummary,
+  latestFileAudit,
   type ChildFileAudit,
   type ChildFileAuditItem,
   type ChildFileAuditItemStatus,
@@ -106,19 +107,7 @@ function latestAudit(record: DbRow) {
   const audits = Array.isArray(record.fileAudits)
     ? record.fileAudits.map(safeAudit).filter((audit): audit is ChildFileAudit => Boolean(audit))
     : [];
-  return [...audits].sort((a, b) =>
-    (b.auditDate || b.updatedAt || "").localeCompare(a.auditDate || a.updatedAt || ""),
-  )[0] ?? null;
-}
-
-function documentIdsWithExpiration(audit: ChildFileAudit, predicate: (days: number) => boolean, today: string) {
-  return audit.items
-    .map((item) => {
-      if (!item.expirationDate) return null;
-      const days = dayDistance(today, item.expirationDate);
-      return days !== null && predicate(days) ? item.documentId : null;
-    })
-    .filter((value): value is number => typeof value === "number");
+  return latestFileAudit(audits);
 }
 
 function dueBucket(days: number) {
@@ -142,10 +131,10 @@ function buildAlert(row: DbRow, today: string) {
   // An imported child or untouched audit template is setup work, not missing paperwork.
   if (!audit || !audit.items.some(item=>item.status==='On File'||item.status==='Missing'||item.status==='N/A')) return null;
 
-  const summary = auditSummary(audit);
+  const summary = auditSummary(audit, today);
   const dueDays = audit.nextAuditDue ? dayDistance(today, audit.nextAuditDue) : null;
-  const expiredIds = documentIdsWithExpiration(audit, (days) => days < 0, today);
-  const expiringIds = documentIdsWithExpiration(audit, (days) => days >= 0 && days <= 30, today);
+  const expiredIds = summary.expired.map(item => item.documentId).sort((a, b) => a - b);
+  const expiringIds = summary.expiringSoon.map(item => item.documentId).sort((a, b) => a - b);
   const missingIds = summary.missingRequired.map((item) => item.documentId).sort((a, b) => a - b);
 
   const reasons: string[] = [];

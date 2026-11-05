@@ -1,5 +1,5 @@
 import { dateToDayName, timeToMinutes, type ChildScheduleRecord } from "@/lib/child-schedules";
-import { auditSummary } from "@/lib/child-file-audits";
+import { currentAuditProfile, auditSummary } from "@/lib/child-file-audits";
 import { emergencyCardReadiness } from "@/lib/emergency-cards";
 import { defaultImmunizationProgram, immunizationStatus, normalizeImmunizationRecord } from "@/lib/immunization-tracker";
 import type { ChildRecord } from "@/lib/children";
@@ -395,7 +395,7 @@ export function buildSmartAlerts(input: OperationsIntelligenceInput) {
     locationChildren.forEach((child) => {
       const audits = Array.isArray(child.fileAudits) ? child.fileAudits : [];
       const latest = [...audits].sort((a, b) => (b.auditDate || b.updatedAt || "").localeCompare(a.auditDate || a.updatedAt || ""))[0];
-      if (!latest || !auditSummary(latest).complete || child.licensingStatus !== "Complete" || child.missingDocuments.length > 0) fileAttention += 1;
+      if (!latest || !auditSummary(latest).complete || currentAuditProfile(child).licensingStatus !== "Complete") fileAttention += 1;
       if (!emergencyCardReadiness(child).ready) emergencyAttention += 1;
       const record = normalizeImmunizationRecord(child.immunizationRecord, defaultImmunizationProgram(child.ageGroup, child.location));
       const status = immunizationStatus(child.dateOfBirth, record);

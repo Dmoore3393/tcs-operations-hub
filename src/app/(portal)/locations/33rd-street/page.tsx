@@ -1,5 +1,7 @@
 "use client";
 
+import { currentAuditProfile } from "@/lib/child-file-audits";
+
 import Link from "next/link";
 import {
   Bell,
@@ -105,7 +107,7 @@ export default function CornejoFamilyChildcareHomePage() {
   const presentChildren = cornejoChildren.filter((child) => child.attendanceToday === "Present");
   const absentChildren = cornejoChildren.filter((child) => child.attendanceToday === "Absent");
   const pendingChildren = cornejoChildren.filter((child) => child.enrollmentStatus === "Pending");
-  const missingDocs = cornejoChildren.filter((child) => child.licensingStatus === "Missing Documents");
+  const missingDocs = cornejoChildren.filter((child) => currentAuditProfile(child).licensingStatus === "Missing Documents");
 
   const cornejoEmployees = useMemo(
     () => employees.filter((employee) => normalizeLocation(employee.location) === "33rd Street" || employee.location.toLowerCase().includes("cornejo") || employee.location.toLowerCase().includes("all sites")),

@@ -107,8 +107,9 @@ test('an in-transit child cannot have their trip or school redirected',async()=>
 });
 
 const config=url(await readFile('src/lib/location-config.ts','utf8'));
+const auditUrl=url(await readFile('src/lib/child-file-audits.ts','utf8'));
 let source=await readFile('src/app/api/children/route.ts','utf8');
-source=source.replace(/import \{ flushTransportAssignmentNotices \} from .*?;/,'const flushTransportAssignmentNotices=async()=>{};').replace(/import \{ safeFamilyAccess \} from .*?;/,'const safeFamilyAccess=v=>Array.isArray(v)?v:[];').replace('"@/lib/location-config"',JSON.stringify(config)).replace(/import \{ requireStaff, staffErrorResponse \} from .*?;/,'const requireStaff=async()=>globalThis.transportChildTestAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
+source=source.replace('"@/lib/child-file-audits"',JSON.stringify(auditUrl)).replace(/import \{ flushTransportAssignmentNotices \} from .*?;/,'const flushTransportAssignmentNotices=async()=>{};').replace(/import \{ safeFamilyAccess \} from .*?;/,'const safeFamilyAccess=v=>Array.isArray(v)?v:[];').replace('"@/lib/location-config"',JSON.stringify(config)).replace(/import \{ requireStaff, staffErrorResponse \} from .*?;/,'const requireStaff=async()=>globalThis.transportChildTestAuth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
 const childApi=await import(url(source));
 test('child API reconstructs an imported child absent from raw JSON and returns the school with a stable key',async()=>{
  const rows=[{legacy_id:'brightwheel:synthetic-a',first_name:'Synthetic',last_name:'Imported',enrollment_status:'Active',school_name:'Synthetic School',record_data:{location:'Halcom'}}];

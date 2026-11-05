@@ -1,5 +1,7 @@
 "use client";
 
+import { currentAuditProfile } from "@/lib/child-file-audits";
+
 import Link from "next/link";
 import {
   Bell,
@@ -113,7 +115,7 @@ export default function MooreFamilyChildcareHomePage() {
   );
   const presentChildren = mooreChildren.filter((child) => child.attendanceToday === "Present");
   const pendingChildren = mooreChildren.filter((child) => child.enrollmentStatus === "Pending");
-  const documentAttention = mooreChildren.filter((child) => child.licensingStatus === "Missing Documents");
+  const documentAttention = mooreChildren.filter((child) => currentAuditProfile(child).licensingStatus === "Missing Documents");
 
   const mooreEmployees = useMemo(
     () => employees.filter((employee) => normalizeLocation(employee.location) === "Halcom" || employee.location.toLowerCase().includes("all sites") || employee.location.toLowerCase().includes("halcom")),

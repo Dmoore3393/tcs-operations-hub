@@ -6,9 +6,9 @@ import { useHubLocation } from "@/components/providers/LocationProvider";
 import {
   auditItemFor,
   documentsForTemplate,
+  latestFileAudit,
   templateForChildLocation,
   type ChildFileAudit,
-  type ChildFileAuditDocument,
 } from "@/lib/child-file-audits";
 import type { ChildRecord } from "@/lib/children";
 import {
@@ -28,19 +28,12 @@ function childName(child: ChildRecord) {
   return `${child.firstName} ${child.lastName}`.trim();
 }
 
-function latestAudit(child: ChildRecord): ChildFileAudit | null {
-  const audits = Array.isArray(child.fileAudits) ? child.fileAudits : [];
-  return [...audits].sort((a, b) =>
-    (b.auditDate || b.updatedAt || "").localeCompare(a.auditDate || a.updatedAt || ""),
-  )[0] ?? null;
-}
-
 function matchesLocation(value: string, selected: string) {
   if (selected === "All Locations") return true;
   return value.toLowerCase().includes(selected.toLowerCase()) || selected.toLowerCase().includes(value.toLowerCase());
 }
 
-function applicableDocuments(child: ChildRecord) {
+function applicableDocuments(child: ChildRecord, audit: ChildFileAudit | null) {
   const template = templateForChildLocation(child.location);
   const base = documentsForTemplate(template);
   const transport = child.transportation && child.transportation !== "No transportation";
@@ -48,6 +41,9 @@ function applicableDocuments(child: ChildRecord) {
   const medical = !/^none reported$/i.test(child.allergies || "") || !/^no current medical notes$/i.test(child.medicalNotes || "");
 
   return base.filter((document) => {
+    const status = audit && auditItemFor(audit, document.id).status;
+    if (status === "N/A") return false;
+    if (status === "On File" || status === "Missing") return true;
     if (document.requirement === "Required" || document.requirement === "For Internal Use") return true;
     const name = document.name.toLowerCase();
     if (name.includes("transport")) return Boolean(transport);
@@ -59,6 +55,7 @@ function applicableDocuments(child: ChildRecord) {
 
 export default function EnrollmentReadinessPage() {
   const { session } = useAuth();
+  const token = session?.access_token;
   const { location } = useHubLocation();
   const [children, setChildren] = useState<ChildRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,11 +63,11 @@ export default function EnrollmentReadinessPage() {
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
-    if (!session?.access_token) return;
+    if (!token) return;
     setLoading(true);
     try {
       const response = await fetch("/api/children", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       });
       const payload = await response.json() as { children?: ChildRecord[]; error?: string };
@@ -82,9 +79,12 @@ export default function EnrollmentReadinessPage() {
     } finally {
       setLoading(false);
     }
-  }, [session?.access_token]);
+  }, [token]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -93,8 +93,9 @@ export default function EnrollmentReadinessPage() {
       .filter((child) => matchesLocation(child.location, location))
       .filter((child) => !query || `${childName(child)} ${child.primaryGuardian} ${child.location}`.toLowerCase().includes(query))
       .map((child) => {
-        const audit = latestAudit(child);
-        const packet = applicableDocuments(child);
+        const template = templateForChildLocation(child.location);
+        const audit = latestFileAudit(child.fileAudits?.filter(item => (item.template ?? "In-Home") === template));
+        const packet = applicableDocuments(child, audit);
         const complete = audit ? packet.filter((doc) => auditItemFor(audit, doc.id).status === "On File") : [];
         const missing = audit ? packet.filter((doc) => auditItemFor(audit, doc.id).status !== "On File") : packet;
         return { child, audit, packet, complete, missing };
@@ -125,7 +126,7 @@ export default function EnrollmentReadinessPage() {
 
     {loading ? <div className="flex min-h-72 items-center justify-center gap-2 rounded-3xl border border-slate-200 bg-white text-sm font-bold text-slate-500"><LoaderCircle className="h-5 w-5 animate-spin" /> Building enrollment packets…</div> :
       <section className="grid gap-4 xl:grid-cols-2">
-        {rows.map(({ child, audit, packet, missing }) => <article key={child.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        {rows.map(({ child, audit, packet, complete, missing }) => <article key={child.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div><p className="text-base font-black uppercase tracking-wider text-slate-600">{templateForChildLocation(child.location)} • {child.location}</p><h2 className="mt-1 text-xl font-black text-slate-950">{childName(child)}</h2><p className="mt-1 text-xs font-semibold text-slate-500">{child.ageGroup} • {child.transportation && child.transportation !== "No transportation" ? "Transportation" : "No transportation"}</p></div>
             <span className={`rounded-full px-2.5 py-1 text-base font-black ${missing.length ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800"}`}>{missing.length ? `${missing.length} needed` : "Packet Ready"}</span>
@@ -133,7 +134,7 @@ export default function EnrollmentReadinessPage() {
 
           <div className="mt-4 grid grid-cols-3 gap-2">
             <Info label="Expected Packet" value={String(packet.length)} />
-            <Info label="On File" value={String(packet.length - missing.length)} />
+            <Info label="On File" value={String(complete.length)} />
             <Info label="Missing / Review" value={String(missing.length)} />
           </div>
 

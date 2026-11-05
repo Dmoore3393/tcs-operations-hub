@@ -1,5 +1,5 @@
 import { locationDisplayName } from "@/lib/location-config";
-import { auditSummary, type ChildFileAudit } from "@/lib/child-file-audits";
+import { auditProfileDocuments, auditSummary, latestFileAudit, type ChildFileAudit } from "@/lib/child-file-audits";
 import { familyAccessSummary } from "@/lib/family-access";
 import { defaultImmunizationProgram, immunizationStatus, normalizeImmunizationRecord } from "@/lib/immunization-tracker";
 import { parentErrorResponse, requireParent } from "@/lib/server/require-parent";
@@ -58,11 +58,8 @@ async function signedMenuImageUrl(admin: Awaited<ReturnType<typeof requireParent
   return result.error ? "" : result.data.signedUrl;
 }
 
-function latestAudit(record: DbRow): ChildFileAudit | null {
-  const audits = Array.isArray(record.fileAudits) ? record.fileAudits as ChildFileAudit[] : [];
-  return [...audits].sort((a, b) =>
-    (b.auditDate || b.updatedAt || "").localeCompare(a.auditDate || a.updatedAt || ""),
-  )[0] ?? null;
+function latestAudit(record: DbRow) {
+  return latestFileAudit(Array.isArray(record.fileAudits) ? record.fileAudits as ChildFileAudit[] : []);
 }
 
 export async function GET(request: Request) {
@@ -455,7 +452,8 @@ export async function GET(request: Request) {
         pickupPerson: permissions.viewAttendance ? text(record.pickupPerson) : "",
         pickupPinConfigured: permissions.managePickup ? Boolean(text(record.pickupPinDigest)) : false,
         pickupPinUpdatedAt: permissions.managePickup ? text(record.pickupPinUpdatedAt) : "",
-        missingDocuments: permissions.viewDocuments ? strings(record.missingDocuments) : [],
+        missingDocuments: permissions.viewDocuments
+          ? auditProfileDocuments(audit, strings(record.missingDocuments), text(record.licensingStatus)).missingDocuments : [],
         medicalConsentStatus: permissions.viewMedical ? text(record.medicalConsentStatus) : "Private",
         nextAuditDue: permissions.viewDocuments ? audit?.nextAuditDue || "" : "",
         fileAuditComplete: permissions.viewDocuments ? Boolean(auditState?.complete) : false,
