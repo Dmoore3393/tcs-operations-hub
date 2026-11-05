@@ -1,4 +1,11 @@
 import type {TransportationRoute} from './hub-data';
+const pacificClock = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" });
+
+export function transportTimeLabel(value?: string) {
+  const stamp = Date.parse(value || "");
+  return Number.isFinite(stamp) ? pacificClock.format(stamp) : "";
+}
+
 export type TripPeriod='Morning'|'Afternoon';
 export type TripRoute=TransportationRoute&{routeName?:string;dropoffLocation?:string;pickupArea?:string};
 /** Legacy records are afternoon pickups. Morning schools are external destinations. */

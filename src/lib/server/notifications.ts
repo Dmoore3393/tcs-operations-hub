@@ -67,15 +67,21 @@ async function deliverPushChannels(args: {
   admin: SupabaseClient;
   user: User;
   payload: { title: string; body: string; href: string; tag: string };
+  staffTransport?: boolean;
 }) {
   const webSubscriptions = parsePushSubscriptions(args.user);
   const activeWeb: StoredPushSubscription[] = [];
+  let sent = 0;
+  let retryable = false;
 
   for (const subscription of webSubscriptions) {
     try {
       const result = await sendWebPush(subscription, args.payload);
+      if (result.ok) sent++;
+      else if (!result.stale) retryable = true;
       if (!result.stale) activeWeb.push(subscription);
     } catch {
+      retryable = true;
       activeWeb.push(subscription);
     }
   }
@@ -94,9 +100,12 @@ async function deliverPushChannels(args: {
 
   for (const device of nativeDevices) {
     try {
-      const result = await sendApplePush(device, { ...args.payload, title: "The Hub", body: "A TCS update is ready. Open The Hub to view it." });
+      const result = await sendApplePush(device, args.staffTransport ? args.payload : { ...args.payload, title: "The Hub", body: "A TCS update is ready. Open The Hub to view it." });
+      if (result.ok) sent++;
+      else if (!result.stale) retryable = true;
       if (!result.stale) activeNative.push(device);
     } catch {
+      retryable = true;
       activeNative.push(device);
     }
   }
@@ -109,6 +118,7 @@ async function deliverPushChannels(args: {
   }
 
   return {
+    retry: sent === 0 && retryable,
     webRegistered: webSubscriptions.length,
     nativeRegistered: nativeDevices.length,
   };
@@ -469,12 +479,14 @@ export async function deliverStoredTimesheetAlert(admin: SupabaseClient, userId:
 }
 
 /** Assignment inbox entries are committed by the database before attempting phone push. */
-export async function deliverStoredTransportAlert(admin:SupabaseClient,userId:string,notification:HubNotification){
+export async function deliverStoredTransportAlert(admin:SupabaseClient,userId:string,notification:HubNotification,organizationId?:string){
  const {data:profile,error}=await admin.from('staff_access').select('role,permissions,locations,is_active,organization_id').eq('user_id',userId).maybeSingle();
  if(error)throw new Error(error.message);
- if(!profile?.is_active)return;
- const scoped=await withStaffBackupLocations(admin,profile);
+ if(!profile?.is_active || (organizationId && profile.organization_id !== organizationId))return;
+ const scoped=notification.href==="/notifications" ? profile : await withStaffBackupLocations(admin,profile);
  if(!canReceiveHubNotification(scoped,notification))return;
  const state=await loadNotificationState(admin,userId);
- if(state.preferences.enabled&&state.preferences.transportation&&!quietHoursActive(state.preferences))await deliverPushChannels({admin,user:state.user,payload:{title:notification.title,body:notification.body,href:notification.href,tag:notification.eventKey}});
+ if (!state.preferences.enabled || !state.preferences.transportation || quietHoursActive(state.preferences)) return;
+ const delivery=await deliverPushChannels({admin,user:state.user,staffTransport:true,payload:{title:notification.title,body:notification.body,href:notification.href,tag:notification.eventKey}});
+ if(delivery.retry)throw new Error("Transportation push provider temporarily unavailable.");
 }

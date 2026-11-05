@@ -57,10 +57,11 @@ async function compile(path,deps){
 async function screen(initial=rows){
  let cursor=0,routeRows=structuredClone(initial);const state=[],patches=[],changes=[];
  const dayStops=overrides.filter(stop=>initial.some(route=>route.id===stop.snapshot.id));
- const react={...React,useState(initial){const i=cursor++;if(!(i in state))state[i]=typeof initial==='function'?initial():initial;return[state[i],value=>state[i]=typeof value==='function'?value(state[i]):value]},useRef(initial){const i=cursor++;if(!(i in state))state[i]={current:initial};return state[i]},useMemo:fn=>fn(),useEffect(){}};
+ const react={...React,useState(initial){const i=cursor++;if(!(i in state))state[i]=typeof initial==='function'?initial():initial;return[state[i],value=>state[i]=typeof value==='function'?value(state[i]):value]},useRef(initial){const i=cursor++;if(!(i in state))state[i]={current:initial};return state[i]},useMemo:fn=>fn(),useCallback:fn=>fn,useEffect(){}};
  const Groups=await compile('src/components/transportation/SchoolStopGroups.tsx',{'@/lib/school-pickup-stops':stops});
  const Callouts=await compile('src/components/transportation/TransportCallouts.tsx',{'@/lib/transport-trips':trips,'@/lib/transportation-day':daily});
- const deps={react,'next/link':{default:({children,...props})=>React.createElement('a',props,children)},
+ const team=await compile('src/components/transportation/TransportTeamStatus.tsx',{'@/lib/transport-driver-view':driver,'@/lib/transport-trips':trips,'@/lib/transportation-day':daily});
+ const deps={react,'next/navigation':{useSearchParams:()=>new URLSearchParams()},'@/components/transportation/TransportTeamStatus':{default:team},'next/link':{default:({children,...props})=>React.createElement('a',props,children)},
   '@/components/layout/MainLayout':{default:({children})=>React.createElement('main',null,children)},
   '@/components/providers/AuthProvider':{useAuth:()=>({profile:{lane_profile_id:'mine',full_name:'Synthetic Driver',permissions:['transportation']},session:{access_token:'synthetic'},canManageSystem:false,isLocationLicensee:true})},
   '@/components/providers/LocationProvider':{useHubLocation(){throw Error('The driver route must not depend on the global location filter')}},
@@ -114,6 +115,24 @@ test('pickup, arrival and handoff update only the selected child across location
  assert.ok(page.rows.filter(row=>row.id!==2).every(row=>!row.runStatus));
  assert.equal(page.patches.length,3);
 });
+test('team status distinguishes a scheduled stop, on board, arrival awaiting handoff and a finished handoff',async()=>{
+ const at='2030-01-07T21:15:00Z',later='2030-01-07T21:32:00Z';
+ const page=await screen([
+  {...rows[0],runDate:day,runStatus:'Picked Up',pickedUpAt:at},
+  {...rows[1],runDate:day,runStatus:'Arrived',pickedUpAt:at,arrivedAt:later},
+  {...rows[2],runDate:day,runStatus:'Dropped Off',pickedUpAt:at,droppedOffAt:'2030-01-07T21:39:00Z'},
+  {...rows[3],runDate:'2029-12-31',runStatus:'Arrived',arrivedAt:later},
+ ]);
+ page.click('All Routes');
+ const board=page.render().nodes.find(node=>node.props.id==='transportation-status');
+ const html=require('react-dom/server').renderToStaticMarkup(board);
+ const full=require('react-dom/server').renderToStaticMarkup(page.render().value);
+ assert.match(full,/Picked up 1:15 PM by staff/);
+ assert.match(full,/Handoff completed 1:39 PM by staff/);
+ if(process.env.TRANSPORT_PREVIEW_DIR)await writeFile(process.env.TRANSPORT_PREVIEW_DIR+'/status.html',require('react-dom/server').renderToStaticMarkup(page.render().value));
+ for(const phrase of ['On board','Awaiting handoff','Handed off','1:15 PM','1:39 PM','Last confirmed at Division','No stop confirmed today']) assert.ok(html.includes(phrase),phrase);
+});
+
 test('an empty personal route never falls back to another driver’s children',async()=>{
  const page=await screen([rows[3]]),view=page.render();assert.match(view.text,/No trips assigned to you/);assert.doesNotMatch(view.text,/Other Driver Child/);
  page.click('Browse all routes');assert.match(page.render().text,/Other Driver Child/);

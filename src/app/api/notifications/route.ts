@@ -1,3 +1,5 @@
+import { after } from "next/server";
+import { flushTransportCustodyPushes } from "@/lib/server/transport-custody-push";
 import {flushTransportAssignmentNotices} from "@/lib/server/transport-assignment-notifications";
 import { type HubNotificationContext, type HubNotificationEventType, type HubNotificationPreferences } from "@/lib/notifications";
 import {visibleHubNotifications} from "@/lib/notification-access";
@@ -43,6 +45,10 @@ export async function GET(request: Request) {
   try {
     const c = await requireStaff(request);
     const {admin,user,profile}=c;
+    after(async () => {
+      try { await flushTransportCustodyPushes(admin, profile.organization_id); }
+      catch { console.error("Pending transportation pushes will retry."); }
+    });
     try{await flushTransportAssignmentNotices(c);}catch(error){console.error('Assignment notices remain queued',error instanceof Error?error.message:'dispatch failed');}
     const state = await loadNotificationState(admin, user.id);
     return Response.json({
@@ -117,6 +123,10 @@ export async function POST(request: Request) {
       throw new Response("This notification is outside the staff member's assigned location.", { status: 403 });
     }
 
+    // Older apps sent a separate generic arrival before the stop was saved.
+    if (eventType === "transportation_update" && typeof body.eventKey === "string" && body.eventKey.startsWith("transport-arrived:")) {
+      return Response.json({ delivered: 0 });
+    }
     const result = await dispatchHubNotification({
       admin,
       senderUserId: user.id,

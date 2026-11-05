@@ -2,7 +2,7 @@
 import ChoiceSelect from "@/components/forms/ChoiceSelect";
 import StaffNameSelect from "@/components/forms/StaffNameSelect";
 import {weekdayChoices, pickupAreaChoices} from "@/lib/form-options";
-import {transportTripPeriod,transportPickup,transportDestination,transportRouteGroup} from "@/lib/transport-trips";
+import {transportTimeLabel as timestampLabel,transportTripPeriod,transportPickup,transportDestination,transportRouteGroup} from "@/lib/transport-trips";
 
 import Link from "next/link";
 import {canViewMaintenance} from "@/lib/maintenance-access";
@@ -43,6 +43,7 @@ import {
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { sendHubNotificationEvent } from "@/lib/notification-client";
 import { localIsoDate } from "@/lib/date-utils";
+import { locationOptionLabel, type LocationKey } from "@/lib/location-config";
 import {
   AlertTriangle,
   Bus,
@@ -151,19 +152,15 @@ function routeRunStatus(route: LiveTransportationRoute, today: string): RunStatu
   return route.runDate === today ? (route.runStatus === "Dropped Off" ? "Checked In" : route.runStatus ?? "Waiting") : "Waiting";
 }
 
-function timestampLabel(value?: string) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-}
-
-type Tab = "Children & Schools" | "Daily Planner" | "Today" | "Routes" | "Schools" | "Vehicles";
+type Tab = "Children & Schools" | "Daily Planner" | "Stop review" | "Routes" | "Schools" | "Vehicles";
 type ReadinessState = Record<string, Record<string, boolean>>;
 
 export default function TransportationPage() {
   const { canManageSystem, isLocationLicensee, profile, session } = useAuth();
-  const { location: activeLocation, availableLocations } = useHubLocation();
+  const { availableLocations, location: hubLocation } = useHubLocation();
+  const [siteFilter, setSiteFilter] = useState<LocationKey>("All Locations");
+  const planningLocation = availableLocations.includes(siteFilter) ? siteFilter : "All Locations";
+  const defaultTripLocation = planningLocation === "All Locations" ? hubLocation : planningLocation;
   const [routes, setRoutes, routesReady, routeLoad] = usePersistentState<LiveTransportationRoute[]>("tcs-routes", starterRoutes as LiveTransportationRoute[]);
   const childRoster=useTransportChildren();
   const routeChildren=childRoster.children;
@@ -195,11 +192,11 @@ export default function TransportationPage() {
   const canManageRoutes = canManageSystem || isLocationLicensee;
   const availableVehicles = useMemo(() => vehicles.filter((vehicle) => vehicle.status !== "Out of Service"), [vehicles]);
   const locationRoutes = useMemo(
-    () => routes.filter((route) => route.status !== "Not Riding" && (activeLocation === "All Locations" || transportCareLocation(route.location) === activeLocation)),
-    [activeLocation, routes],
+    () => routes.filter((route) => route.status !== "Not Riding" && (planningLocation === "All Locations" || transportCareLocation(route.location) === planningLocation)),
+    [planningLocation, routes],
   );
-  const todayRoutes = useMemo(() => dispatch.activeRoutes.filter(route=>activeLocation==="All Locations"||transportCareLocation(route.location)===activeLocation), [dispatch.activeRoutes,activeLocation]);
-  const todayCallouts=useMemo(()=>dispatch.callouts.filter(stop=>activeLocation==='All Locations'||transportCareLocation(stop.snapshot.location)===activeLocation),[dispatch.callouts,activeLocation]);
+  const todayRoutes = useMemo(() => dispatch.activeRoutes.filter(route=>planningLocation==="All Locations"||transportCareLocation(route.location)===planningLocation), [dispatch.activeRoutes,planningLocation]);
+  const todayCallouts=useMemo(()=>dispatch.callouts.filter(stop=>planningLocation==='All Locations'||transportCareLocation(stop.snapshot.location)===planningLocation),[dispatch.callouts,planningLocation]);
   const routeKeys=useMemo(()=>[...new Set([...todayRoutes,...todayCallouts.map(stop=>stop.snapshot)].map(routeGroupKey))],[todayRoutes,todayCallouts]);
   const effectiveRouteKey = routeKeys.includes(selectedRouteKey) ? selectedRouteKey : (routeKeys[0] ?? "");
   const selectedTodayRoutes = useMemo(
@@ -250,7 +247,7 @@ export default function TransportationPage() {
 
   function openRoute(route?: TransportationRoute) {
     setRouteError("");
-    setEditingRoute(route ? { ...route } : { ...blankRoute, id: Date.now(), location: activeLocation === "All Locations" ? "Halcom" : activeLocation, vehicle: availableVehicles[0]?.name ?? "", stopOrder: Math.max(0, ...locationRoutes.map((item) => item.stopOrder ?? 0)) + 1, dropoffLocation: activeLocation === "All Locations" ? "Halcom" : activeLocation });
+    setEditingRoute(route ? { ...route } : { ...blankRoute, id: Date.now(), location: defaultTripLocation === "All Locations" ? "Halcom" : defaultTripLocation, vehicle: availableVehicles[0]?.name ?? "", stopOrder: Math.max(0, ...locationRoutes.map((item) => item.stopOrder ?? 0)) + 1, dropoffLocation: defaultTripLocation === "All Locations" ? "Halcom" : defaultTripLocation });
   }
 
   async function saveSchoolTrip(rows: (SchoolStopRoute & {expectedChildSchool?:string})[], saveSchools: boolean) {
@@ -294,6 +291,7 @@ export default function TransportationPage() {
         eventType: "transportation_update",
         location: "All Locations",
         eventKey: `transport-school:${saved.id}:${Date.now()}`,
+        context: { school: saved.school, reason: `School renamed from ${originalSchoolName} to ${saved.school}.` },
       });
     }
     setEditingSchool(null);
@@ -321,6 +319,7 @@ export default function TransportationPage() {
         eventType: "transportation_update",
         location: saved.assignedLocation === "All Sites" ? "All Locations" : saved.assignedLocation,
         eventKey: `transport-vehicle:${saved.id}:${saved.status}:${Date.now()}`,
+        context: { vehicle: saved.name, reason: `${saved.name} · ${saved.status} · ${saved.assignedLocation || "All locations"}.` },
       });
     }
     setReadinessVehicleId(saved.id);
@@ -340,7 +339,8 @@ export default function TransportationPage() {
 
   function coverRouteToday() {
     if (!effectiveRouteKey) return;
-    setRoutes((current) => current.map((route) => routeGroupKey(route) === effectiveRouteKey
+    const stopIds = new Set([...selectedTodayRoutes, ...selectedCallouts.map(stop => stop.snapshot)].map(route => route.id));
+    setRoutes((current) => current.map((route) => stopIds.has(route.id)
       ? { ...route, coveringDriver: actor, coveringDate: today }
       : route));
   }
@@ -353,9 +353,9 @@ export default function TransportationPage() {
       void sendHubNotificationEvent({
         accessToken: session?.access_token,
         eventType: "transportation_handoff_attention",
-        location: selectedTodayRoutes[0]?.location || activeLocation,
+        location: selectedTodayRoutes[0]?.location || planningLocation,
         eventKey: `transport-handoff:${effectiveRouteKey}:${today}:${Date.now()}`,
-        context: { childName: names, destination: selectedTodayRoutes[0]?.dropoffLocation || selectedTodayRoutes[0]?.location || "destination", driver: selectedDriver, vehicle: selectedVehicle, reason: `${selectedOnboard} child${selectedOnboard === 1 ? " remains" : "ren remain"} in transit during route reconciliation.` },
+        context: { childName: names, destination: selectedTodayRoutes[0]?.dropoffLocation || selectedTodayRoutes[0]?.location || "destination", driver: selectedDriver, vehicle: selectedVehicle, reason: `${selectedDriver || "Route driver"} · ${selectedVehicle || "Vehicle unrecorded"}. Handoff still pending for ${names}.` },
       });
       return;
     }
@@ -363,7 +363,7 @@ export default function TransportationPage() {
       setRouteMessage(`${selectedWaiting} scheduled child${selectedWaiting === 1 ? " has" : "ren have"} not been picked up yet. Review absences or route changes before closing the route.`);
       return;
     }
-    setRouteMessage("Route reconciled: every picked-up child is checked into a destination location.");
+    setRouteMessage("Every child who was picked up has a recorded handoff.");
   }
 
   function resetToday(route: LiveTransportationRoute) {
@@ -397,7 +397,7 @@ export default function TransportationPage() {
                 <TcsKidsScene variant="transport" />
               </div>
             </div>
-            <div className="relative z-10 text-center lg:text-left"><p className="text-xs font-black uppercase tracking-[0.24em] text-[#1769d2]">TCS Operations Hub • School Shuttle</p><h1 className="mt-2 text-4xl font-black tracking-tight text-[#102a56] sm:text-6xl">The School Shuttle</h1><p className="mt-2 text-lg font-black text-[#1769d2]">Safe and Reliable Transportation</p><p className="mx-auto mt-4 max-w-3xl text-sm font-semibold leading-7 text-slate-600 lg:mx-0">Every child follows one custody chain: school pickup → in transit → checked into the destination location. Pickup and exception alerts go to Danielle and Jen; destination staff only receive the arrival notice for their location.</p><div className="mt-5 flex flex-wrap justify-center gap-2 lg:justify-start"><span className="rounded-full bg-white px-4 py-2 text-xs font-black text-[#123f7d] shadow-sm">✅ Required pickup tap</span><span className="rounded-full bg-white px-4 py-2 text-xs font-black text-[#123f7d] shadow-sm">🚌 In-transit custody</span><span className="rounded-full bg-white px-4 py-2 text-xs font-black text-[#123f7d] shadow-sm">📍 Required location check-in</span></div></div>
+            <div className="relative z-10 text-center lg:text-left"><p className="text-xs font-black uppercase tracking-[0.24em] text-[#1769d2]">TCS Operations Hub • School Shuttle</p><h1 className="mt-2 text-4xl font-black tracking-tight text-[#102a56] sm:text-6xl">The School Shuttle</h1><p className="mt-2 text-lg font-black text-[#1769d2]">Safe and Reliable Transportation</p><p className="mx-auto mt-4 max-w-3xl text-sm font-semibold leading-7 text-slate-600 lg:mx-0">Every child follows one custody chain: school pickup → in transit → checked into the destination location. Transportation staff and the child’s care team can see confirmed pickups, arrivals, and handoffs.</p><div className="mt-5 flex flex-wrap justify-center gap-2 lg:justify-start"><span className="rounded-full bg-white px-4 py-2 text-xs font-black text-[#123f7d] shadow-sm">✅ Required pickup tap</span><span className="rounded-full bg-white px-4 py-2 text-xs font-black text-[#123f7d] shadow-sm">🚌 In-transit custody</span><span className="rounded-full bg-white px-4 py-2 text-xs font-black text-[#123f7d] shadow-sm">📍 Required location check-in</span></div></div>
           </div>
         </section>
 
@@ -409,29 +409,41 @@ export default function TransportationPage() {
           <StatCard label="Checked In" value={checkedInCount} icon={<CheckCircle2 className="h-5 w-5" />} tone="emerald" />
         </section>
 
-        <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
-          {(["Daily Planner", "Children & Schools", "Today", "Routes", "Schools", "Vehicles"] as const).map((item) => (
-            <button key={item} onClick={() => setTab(item)} className={`rounded-xl px-4 py-2.5 text-sm font-black ${tab === item ? "bg-[#1769d2] text-white" : "text-slate-600 hover:bg-slate-50"}`}>
-              {item === "Today" ? "My Route Today" : item}
+        <nav aria-label="Transportation setup" className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+          <Link href="/transportation" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-bold text-white">
+            <Navigation aria-hidden="true" className="h-4 w-4" /> My Route
+          </Link>
+          {(["Daily Planner", "Children & Schools", "Routes", "Stop review", "Schools", "Vehicles"] as const).map((item) => (
+            <button type="button" key={item} aria-pressed={tab === item} onClick={() => setTab(item)} className={`min-h-11 rounded-xl px-4 py-2.5 text-sm font-black ${tab === item ? "bg-[#1769d2] text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+              {item}
             </button>
           ))}
-        </div>
+        </nav>
+        {tab !== "Schools" && tab !== "Vehicles" && (
+          <label className="flex flex-wrap items-center gap-3 text-base font-bold text-slate-800">
+            Care location
+            <select className={`${inputClass} min-h-11 w-auto`} value={planningLocation} onChange={event => setSiteFilter(event.target.value as LocationKey)}>
+              <option value="All Locations">All locations</option>
+              {availableLocations.filter(site => site !== "All Locations").map(site => <option key={site} value={site}>{locationOptionLabel(site)}</option>)}
+            </select>
+          </label>
+        )}
 
         {(childRoster.error||routeLoad.error)&&<p role="alert" className="rounded-xl bg-red-50 p-4 text-red-900">{childRoster.error||routeLoad.error}<button className="ml-3 min-h-11 font-bold underline" onClick={()=>{void childRoster.refresh();routeLoad.retry();}}>Try again</button></p>}
         {routeMessage&&<p role="status" className="rounded-xl bg-emerald-50 p-4 text-emerald-950">{routeMessage}</p>}
-        {tab === "Children & Schools" && (childRoster.ready?<ChildSchoolRoster focusChildId={focusChild} onClearFocus={()=>setFocusChild("")} roster={routeChildren} schools={schoolOptions} routes={routes} location={activeLocation} canManage={canManageRoutes} onSaved={async()=>{routeLoad.retry();await childRoster.refresh();}} onAddTrip={child=>{setTripPeriod("Afternoon");setTripChild(child);setEditingSchoolStop([]);}}/>:<p role="status">Loading children…</p>)}
-        {tab === "Daily Planner" && <><div className="flex flex-wrap gap-3"><button className="min-h-11 rounded-xl border border-emerald-700 bg-white px-4 font-bold text-emerald-900" onClick={()=>setTab("Children & Schools")}>Children & Schools</button>{canManageRoutes&&<button disabled={!childRoster.ready||!routesReady} className="min-h-11 rounded-xl bg-emerald-800 px-4 font-bold text-white" onClick={()=>{setTripPeriod("Afternoon");setTripChild(undefined);setEditingSchoolStop([]);}}>Add Morning / Afternoon Trip</button>}</div><DailyTransportPlanner roster={routeChildren} routes={routes} location={activeLocation} schools={schoolOptions} vehicles={vehicles} locations={availableLocations}/></>}
-        {tab === "Today" && (
+        {tab === "Children & Schools" && (childRoster.ready?<ChildSchoolRoster focusChildId={focusChild} onClearFocus={()=>setFocusChild("")} roster={routeChildren} schools={schoolOptions} routes={routes} location={planningLocation} canManage={canManageRoutes} onSaved={async()=>{routeLoad.retry();await childRoster.refresh();}} onAddTrip={child=>{setTripPeriod("Afternoon");setTripChild(child);setEditingSchoolStop([]);}}/>:<p role="status">Loading children…</p>)}
+        {tab === "Daily Planner" && <><div className="flex flex-wrap gap-3"><button className="min-h-11 rounded-xl border border-emerald-700 bg-white px-4 font-bold text-emerald-900" onClick={()=>setTab("Children & Schools")}>Children & Schools</button>{canManageRoutes&&<button disabled={!childRoster.ready||!routesReady} className="min-h-11 rounded-xl bg-emerald-800 px-4 font-bold text-white" onClick={()=>{setTripPeriod("Afternoon");setTripChild(undefined);setEditingSchoolStop([]);}}>Add Morning / Afternoon Trip</button>}</div><DailyTransportPlanner roster={routeChildren} routes={routes} location={planningLocation} schools={schoolOptions} vehicles={vehicles} locations={availableLocations}/></>}
+        {tab === "Stop review" && (
           <div className="space-y-5">
             {(dispatch.error||dispatch.actionError)&&<p role="alert" className="rounded-xl bg-red-50 p-4 text-base text-red-950">{dispatch.error||dispatch.actionError}<button className="ml-3 min-h-11 underline" onClick={()=>void dispatch.refresh()}>Try again</button></p>}
             <section className="rounded-3xl border border-[#d8e8fb] bg-white p-5 shadow-sm sm:p-6">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-[#1769d2]">Driver mode</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">My Route Today</h2><p className="mt-1 text-sm font-semibold text-slate-500">Choose the route you are running. Confirm every child individually at pickup and again when the child is checked into the destination.</p></div>{effectiveRouteKey && <button onClick={coverRouteToday} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#ffc72c] px-5 py-3 text-sm font-black text-[#102a56] shadow-sm"><UserCheck className="h-4 w-4" /> I’m Covering This Route Today</button>}</div>
-              <div className="mt-5 flex flex-wrap gap-2">{routeKeys.map((key) => <button key={key} onClick={() => { setSelectedRouteKey(key); setRouteMessage(""); }} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${effectiveRouteKey === key ? "border-[#1769d2] bg-[#eef6ff] text-[#102a56]" : "border-slate-200 bg-white text-slate-600 hover:border-blue-200"}`}>{key}</button>)}{!routeKeys.length && <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">No active route records are scheduled for today at the selected Hub location.</p>}</div>
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-[#1769d2]">Transportation setup</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">Today’s stops</h2><p className="mt-1 text-sm font-semibold text-slate-500">Choose a stop to review call-outs, coverage, and handoffs.</p></div>{effectiveRouteKey && <button onClick={coverRouteToday} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#ffc72c] px-5 py-3 text-sm font-black text-[#102a56] shadow-sm"><UserCheck className="h-4 w-4" /> I’m covering this stop today</button>}</div>
+              <div className="mt-5 flex flex-wrap gap-2">{routeKeys.map((key) => <button key={key} onClick={() => { setSelectedRouteKey(key); setRouteMessage(""); }} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${effectiveRouteKey === key ? "border-[#1769d2] bg-[#eef6ff] text-[#102a56]" : "border-slate-200 bg-white text-slate-600 hover:border-blue-200"}`}>{key}</button>)}{!routeKeys.length && <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">No stops match this location filter today.</p>}</div>
             </section>
 
             {effectiveRouteKey && <>
               <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5"><MiniSummary label="Route" value={effectiveRouteKey} /><MiniSummary label="Driver Today" value={selectedDriver} /><MiniSummary label="Vehicle" value={selectedVehicle} /><MiniSummary label="In Transit" value={String(selectedOnboard)} /><MiniSummary label="Checked In" value={`${selectedCheckedIn}/${selectedTodayRoutes.length}`} /></section>
-              <section className="rounded-3xl border border-blue-100 bg-[#f7fbff] p-5 shadow-sm sm:p-6"><div className="flex items-start gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#1769d2] text-white"><Navigation className="h-5 w-5" /></div><div><h3 className="text-lg font-black text-[#102a56]">Required custody steps</h3><p className="mt-1 text-sm font-semibold leading-6 text-slate-600">1. Tap <strong>PICKED UP</strong> only when the child is physically with you. 2. The child stays <strong>IN TRANSIT</strong> while riding. 3. At the destination, tap <strong>CHECK INTO LOCATION</strong>. 4. Reconcile the route before you finish. Site staff are notified only when the child arrives; missing-arrival review stays with Danielle and Jen.</p></div></div></section>
+              <section className="rounded-3xl border border-blue-100 bg-[#f7fbff] p-5 shadow-sm sm:p-6"><div className="flex items-start gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#1769d2] text-white"><Navigation className="h-5 w-5" /></div><div><h3 className="text-lg font-black text-[#102a56]">Required custody steps</h3><p className="mt-1 text-sm font-semibold leading-6 text-slate-600">1. Tap <strong>PICKED UP</strong> only when the child is physically with you. 2. The child stays <strong>IN TRANSIT</strong> while riding. 3. At the destination, tap <strong>CHECK INTO LOCATION</strong>. 4. Reconcile the route before you finish. The team receives each confirmed update. Leadership reviews missing handoffs.</p></div></div></section>
 
               <TransportCallouts stops={selectedCallouts} date={today} canRestore={dispatch.canCallOut} saving={dispatch.saving} onRestore={route=>{setSelectedRouteKey(routeGroupKey(route));void dispatch.change(route,"restore");}}/>
               <SchoolStopGroups routes={selectedTodayRoutes}>{(route) => {

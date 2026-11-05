@@ -3044,5 +3044,18 @@
   "No routes are assigned for today at this location.": "No hay rutas asignadas para hoy en esta ubicación.",
   "Choose Out sick or No transportation.": "Elija Ausente por enfermedad o Sin transporte.",
   "No pickups scheduled in this view.": "No hay recogidas programadas en esta vista.",
-  "Assigned Routes": "Rutas asignadas"
+  "Assigned Routes": "Rutas asignadas",
+  "My Route": "Mi ruta",
+  "All Routes": "Todas las rutas",
+  "Stop review": "Revisar paradas",
+  "Where drivers and children are": "Dónde están los conductores y los niños",
+  "Updated when staff confirm a pickup, arrival, or handoff. Times are Pacific.": "Se actualiza cuando el personal confirma una recogida, llegada o entrega. Las horas corresponden al horario del Pacífico.",
+  "No stop confirmed today": "Aún no se ha confirmado ninguna parada hoy",
+  "On board": "A bordo",
+  "Awaiting handoff": "Pendiente de entrega",
+  "Handed off": "Entregado",
+  "Arrived at destination": "Llegó al destino",
+  "Handoff complete": "Entrega completada",
+  "Arrived and awaiting handoff": "Ya llegaron y están pendientes de entrega",
+  "See each driver’s last confirmed stop and each child’s pickup and handoff across locations.": "Vea la última parada confirmada de cada conductor y la recogida y entrega de cada niño en todas las sedes."
 }

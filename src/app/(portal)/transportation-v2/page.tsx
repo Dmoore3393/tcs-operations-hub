@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import TransportTeamStatus from "@/components/transportation/TransportTeamStatus";
 import { transportUsesBrightwheel, transportHandoffPatch } from "@/lib/transport-care-handoff";
 import { transportChildKey } from "@/lib/transport-child-schools";
-import {transportTripPeriod,transportPickup,transportDestination,transportRouteGroup,transportCoverageGroup,transportEmergencyHref} from "@/lib/transport-trips";
+import {transportTimeLabel as timeLabel,transportTripPeriod,transportPickup,transportDestination,transportRouteGroup,transportCoverageGroup,transportEmergencyHref} from "@/lib/transport-trips";
 import {isMyTransportRoute,transportDriverChoices,transportDriverFor} from "@/lib/transport-driver-view";
 import MyAssignedRoutes from "@/components/transportation/MyAssignedRoutes";
 import TransportCallouts from "@/components/transportation/TransportCallouts";
@@ -16,7 +18,6 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { localIsoDate } from "@/lib/date-utils";
 import { emergencyCardReadiness } from "@/lib/emergency-cards";
-import { sendHubNotificationEvent } from "@/lib/notification-client";
 import { type ChildRecord } from "@/lib/children";
 import { starterCareLogs, type CareLogEntry } from "@/lib/employee-care";
 import {
@@ -47,7 +48,7 @@ import {
   UserCheck,
   WifiOff,
 } from "lucide-react";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type RunStatus = "Waiting" | "Picked Up" | "Arrived" | "Checked In" | "Dropped Off";
 type LiveRoute = TransportationRoute & {
@@ -82,13 +83,6 @@ function statusFor(route: LiveRoute, today: string): RunStatus {
   return route.runStatus ?? "Waiting";
 }
 
-function timeLabel(value?: string) {
-  if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-}
-
-
 function destinationLocation(value?: string): Exclude<LocationKey, "All Locations"> | null {
   const text = (value || "").toLowerCase();
   if (text.includes("halcom") || text.includes("moore family")) return "Halcom";
@@ -103,6 +97,17 @@ function destinationLocation(value?: string): Exclude<LocationKey, "All Location
 function isLeadership(name: string, email: string) {
   const identity = `${name} ${email}`.toLowerCase();
   return identity.includes("danielle") || identity.includes("jennifer") || identity.includes("jen thomason");
+}
+
+function TransportAlertTarget({ showTeam }: { showTeam: () => void }) {
+  const params = useSearchParams();
+  useEffect(() => {
+    if (params.get("view") !== "all") return;
+    showTeam();
+    const frame = window.requestAnimationFrame(() => document.getElementById("transportation-status")?.scrollIntoView());
+    return () => window.cancelAnimationFrame(frame);
+  }, [params, showTeam]);
+  return null;
 }
 
 export default function TransportationV2Page() {
@@ -212,6 +217,11 @@ export default function TransportationV2Page() {
   }, [isOnline, replayingOffline, routesHydrated, setRoutes, offlineRetry]);
 
   const [trip,setTrip]=useState('All trips');
+  const showTeamFromAlert = useCallback(() => {
+    setSelectedDriver("");
+    setTrip("All trips");
+    setView("all");
+  }, []);
   const todayRoutes = useMemo(
     () => dispatch.activeRoutes.filter(route => (trip==='All trips'||transportTripPeriod(route)===trip)&&(view==='all'||isMyTransportRoute(route,profile,today,dispatch.drivers))),
     [dispatch.activeRoutes,dispatch.drivers,profile,today,trip,view],
@@ -244,7 +254,7 @@ export default function TransportationV2Page() {
 
   const locationArrivals = visibleRoutes.filter((route) => {
     const status = statusFor(route, today);
-    return status === "Arrived" && (transportTripPeriod(route)==='Morning'?null:destinationLocation(route.dropoffLocation)) !== null;
+    return status === "Arrived" && (transportTripPeriod(route)==='Morning'?null:destinationLocation(transportDestination(route))) !== null;
   });
   const leadershipExceptions = routes.filter((route) => {
     if (route.runDate !== today) return false;
@@ -334,13 +344,7 @@ export default function TransportationV2Page() {
   function markArrived(route: LiveRoute) {
     const now = new Date().toISOString();
     updateRoute(route, { runDate: today, runStatus: "Arrived", arrivedAt: now, arrivedBy: actor });
-    const destination = (transportTripPeriod(route)==='Morning'?null:destinationLocation(route.dropoffLocation));
-    void sendHubNotificationEvent({
-      accessToken: session?.access_token,
-      eventType: "transportation_update",
-      location: destination || route.location || "All Locations",
-      eventKey: `transport-arrived:${route.id}:${today}`,
-    });
+
   }
 
   function confirmCareHandoff(route: LiveRoute) {
@@ -420,15 +424,17 @@ export default function TransportationV2Page() {
       <div className="mx-auto max-w-[1580px] space-y-6 pb-12">
         <section className="rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><span className="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-100 text-emerald-900" aria-hidden="true"><Bus className="h-8 w-8 pointer-events-none"/></span><div><h1 className="text-2xl font-black text-emerald-950">Transportation</h1><p className="text-base text-slate-700">Morning school drop-offs and afternoon pickups</p></div></div>{canManageTransportation&&<Link href="/transportation-setup" className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-emerald-800 px-5 py-3 text-base font-bold text-white"><Pencil className="h-5 w-5" aria-hidden="true"/>Routes & call-outs</Link>}</div><p className="mt-3 text-base text-slate-700">My Route brings your school stops and children from every location together. Confirm each child at pickup, arrival and handoff.</p></section>
 
+        <Suspense fallback={null}><TransportAlertTarget showTeam={showTeamFromAlert}/></Suspense>
         {transportUsesBrightwheel && <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-base text-amber-950"><h2 className="font-black">Care attendance stays in Brightwheel</h2><p>Record each school pickup and destination handoff here. Complete childcare check-ins and check-outs in Brightwheel until families move to The Hub.</p></section>}
         <section className="rounded-2xl border border-emerald-200 bg-white p-4">
           <div className="flex flex-wrap gap-3" role="group" aria-label="Route view">
             <button type="button" aria-pressed={view==='mine'} onClick={()=>setView('mine')} className={`min-h-12 rounded-xl px-5 py-3 text-base font-bold ${view==='mine'?'bg-emerald-800 text-white':'border border-emerald-300 text-emerald-950'}`}>My Route</button>
             <button type="button" aria-pressed={view==='all'} onClick={()=>setView('all')} className={`min-h-12 rounded-xl px-5 py-3 text-base font-bold ${view==='all'?'bg-emerald-800 text-white':'border border-emerald-300 text-emerald-950'}`}>All Routes</button>
           </div>
-          <p className="mt-3 text-base text-slate-700">{view==='mine'?`${actor} · Your entire route across all locations. No location switching needed.`:'Browse every accessible driver’s route across locations. Return to My Route when running your own pickups.'}</p>
+          <p className="mt-3 text-base text-slate-700">{view==='mine'?`${actor} · Your entire route across all locations. No location switching needed.`:'See each driver’s last confirmed stop and each child’s pickup and handoff across locations.'}</p>
         </section>
         <section className="flex flex-wrap gap-3 rounded-2xl border border-emerald-200 bg-white p-4" aria-label="Transportation sessions">{['All trips','Morning','Afternoon'].map(session=><button key={session} type="button" aria-pressed={trip===session} onClick={()=>setTrip(session)} className={`min-h-12 rounded-xl px-5 py-3 text-base font-bold ${trip===session?'bg-emerald-800 text-white':'border border-emerald-300 bg-white text-emerald-950'}`}>{session==='Morning'?'Morning · School drop-offs':session==='Afternoon'?'Afternoon · School pickups':'All trips'}</button>)}</section>
+        {view === "all" && dispatch.ready && routesHydrated && <TransportTeamStatus routes={visibleRoutes} callouts={visibleCallouts} date={today} staff={dispatch.drivers} />}
         {dispatch.ready && routesHydrated && !routeState.error && !assignedRoutes.length && <section className="rounded-2xl border border-emerald-200 bg-white p-5 text-base"><h2 className="text-xl font-black text-emerald-950">{view==='mine'?'No trips assigned to you in this view':'No trips scheduled in this view'}</h2><p className="mt-2">{view==='mine'?'Your assignments will appear here across all locations. You can still browse All Routes, or choose All trips to include both morning and afternoon.':'Choose All trips, or add a school trip using an existing child profile.'}</p>{view==='mine'&&<button type="button" onClick={()=>setView('all')} className="mt-3 min-h-11 rounded-xl border border-emerald-300 px-4 font-bold text-emerald-950">Browse all routes</button>}{canManageTransportation && <Link href="/transportation-setup?tab=children" className="mt-3 ml-3 inline-flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 font-bold text-white">Children & Schools</Link>}</section>}
         {(dispatch.error||dispatch.actionError)&&<section role="alert" className="rounded-xl bg-red-50 p-4 text-base text-red-950">{dispatch.error||dispatch.actionError}<button className="ml-3 min-h-11 underline" onClick={()=>void dispatch.refresh()}>Try again</button></section>}
         {!dispatch.ready&&!dispatch.error&&<p role="status" className="text-base">Checking today’s route changes and call-outs…</p>}
@@ -455,7 +461,12 @@ export default function TransportationV2Page() {
 
         {view==='all' && leader && leadershipExceptions.length > 0 && <section className="rounded-3xl border border-amber-300 bg-amber-50 p-5 shadow-sm"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-6 w-6 text-amber-700" /><div><p className="text-xs font-black uppercase tracking-[.16em] text-amber-700">Danielle + Jen only</p><h2 className="mt-1 text-xl font-black text-amber-950">Transportation handoffs to review</h2><p className="mt-1 text-sm font-semibold text-amber-900">These children were picked up but have not completed the destination handoff yet. This is intentionally leadership-only so field trips and off-site care can be checked without alarming site staff.</p></div></div><div className="mt-4 grid gap-3 md:grid-cols-2">{leadershipExceptions.map((route) => <div key={route.id} className="rounded-2xl bg-white p-4 ring-1 ring-amber-200"><p className="font-black text-slate-950"><span translate="no" className="contents">{route.child}</span></p><p className="mt-1 text-sm font-bold text-amber-800">{statusFor(route, today)} • {routeKey(route)}</p><p className="mt-1 text-xs font-semibold text-slate-500">Expected: {route.dropoffLocation || "destination not entered"}</p></div>)}</div></section>}
 
-        {locationArrivals.length > 0 && <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm"><div className="flex items-start gap-3"><BellRing className="mt-0.5 h-6 w-6 text-[#1769d2]" /><div><p className="text-xs font-black uppercase tracking-[.16em] text-[#1769d2]">Location arrival notice</p><h2 className="mt-1 text-xl font-black text-[#102a56]">A transported child has arrived</h2><p className="mt-1 text-sm font-semibold text-slate-600">Program directors and authorized staff only need the arrival notice. Missing-drop-off alerts stay with Danielle and Jen.</p></div></div></section>}
+        {view === "mine" && locationArrivals.length > 0 && <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+          <div className="flex items-start gap-3"><BellRing className="mt-0.5 h-5 w-5 text-[#1769d2]" /><h2 className="text-xl font-black text-[#102a56]">Arrived and awaiting handoff</h2></div>
+          <ul className="mt-2 space-y-2">{locationArrivals.map(route => <li key={route.id} className="text-sm text-slate-800">
+            <strong translate="no">{route.child}</strong> · {transportDestination(route)}{route.arrivedAt && ` · ${timeLabel(route.arrivedAt)}`}
+          </li>)}</ul>
+        </section>}
 
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#1769d2]">{view==='mine'?'My Route Today':'All Routes Today'}</p><h2 className="mt-1 text-2xl font-black text-[#102a56]">{view==='mine'?'Your complete route':'Browse driver routes'}</h2><p className="mt-1 text-base text-slate-600">All locations · {stopCount} school {stopCount===1?'stop':'stops'} · {visibleRoutes.length} scheduled {visibleRoutes.length===1?'trip':'trips'}{visibleCallouts.length?` · ${visibleCallouts.length} called out`:''}</p></div>{visibleRoutes.length>0&&<Link href={transportEmergencyHref(visibleRoutes,routes)} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#9f2f35] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#7e2228]"><HeartPulse className="h-4 w-4" /> EMERGENCY MEDICAL CARDS</Link>}</div>
