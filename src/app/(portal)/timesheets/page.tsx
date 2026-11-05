@@ -101,6 +101,7 @@ type RecordItem = SubmissionRecord & AssignmentRecord & {
   completedAt: string;
   scanQualityChecked: boolean;
   scannedBy: string;
+  submittedOn?: string;
   scannedAt: string;
   sentToJenniferAt: string;
   department: string;
@@ -492,15 +493,15 @@ function RecordModal({ record, actor, routes, saving, error, locations, onClose,
         <div className="tscc-tuition">Tuition is charged regardless of attendance.</div><div className="tscc-stage-actions" style={{marginTop:9}}><label className="tscc-check"><input type="checkbox" checked={certificateVerified} onChange={(event) => setCertificateVerified(event.target.checked)} disabled={!actor.canFillOut || saving}/><span>Child certificate reviewed and correct program/rates verified</span></label><label className="tscc-check"><input type="checkbox" checked={tuitionAck} onChange={(event) => setTuitionAck(event.target.checked)} disabled={!actor.canFillOut || saving}/><span>Tuition policy applied regardless of attendance</span></label><button className="tscc-btn primary" disabled={!actor.canFillOut || saving || Boolean(record.completedAt) || !certificateVerified || !tuitionAck || (ownerWorkflow ? !record.directReviewAt : !record.handoffAt)} onClick={() => void onAction({ action:"fillOut", id:record.id, certificateVerified, tuitionPolicyAcknowledged:tuitionAck }, `${record.childName} timesheet marked filled out from the certificate.`)}>Mark Timesheet Filled Out</button>{record.completedAt && <span className="tscc-chip green">{record.completedBy} • {formatStamp(record.completedAt)}</span>}</div>
       </StageCard>
 
-      <StageCard number={5} title={`${processor} Records Scanning Done Elsewhere`} helper="Use the submission batch below the pipeline. Each service month, location, and program is sent separately." done={step > 4} current={step === 4} icon={<ScanLine size={16}/>}>
+      <StageCard number={5} title={`${processor} Records Scanning Done Elsewhere`} helper="Use the submission batch below the pipeline. Each service month, location, and program is sent separately." done={Boolean(record.scannedAt)} current={step === 4} icon={<ScanLine size={16}/>}>
         <p>Scan the forms using your usual scanner, then mark them scanned here. Send the agency email outside The Hub and record it here. No upload is required.</p>{record.scannedAt && <span className="tscc-chip blue">{record.scannedBy} • {formatStamp(record.scannedAt)}</span>}
       </StageCard>
-      <StageCard number={6} title={`${processor} Submits to the Agency`} helper={tehachapi ? "Jennifer submits the Tehachapi packet to its verified email and records the actual recipient and sent date here." : "Danielle submits each location/program packet to its verified email and records the actual recipient and sent date here. Jen reviews afterward."} done={Boolean(record.emailedAt && (record.emailEvidenceDocumentId || record.submissionRecordedExternally))} current={record.stage === "Jennifer Email"} icon={<Mail size={16}/>}>
-        <div className="tscc-note">{route?.department || "Department not configured"}<br/><span translate="no" className="contents">{route?.email || "Email not configured"}</span></div>{record.emailedAt && <span className="tscc-chip green">{record.emailedBy} • {formatStamp(record.emailedAt)}</span>}
+      <StageCard number={6} title={`${processor} Submits to the Agency`} helper={ownerWorkflow ? "Open the location and program batch and choose the date submitted. You can add the recipient email later." : "Record the actual sent email for this packet."} done={Boolean(record.emailedAt && (record.emailEvidenceDocumentId || record.submissionRecordedExternally))} current={record.stage === "Jennifer Email"} icon={<Mail size={16}/>}>
+        <div className="tscc-note">{route?.department || "Department not configured"}<br/><span translate="no" className="contents">{record.departmentEmail || route?.email || "Recipient email is optional"}</span></div>{record.emailedAt && <span className="tscc-chip green">{record.emailedBy} • {record.submittedOn || formatStamp(record.emailedAt)}</span>}
       </StageCard>
 
       {ownerWorkflow && !tehachapi && <StageCard number={7} title="Jen’s Final Review" helper="Jen checks the actual submitted packet, recipient, attachments and service month in the submission batch controls." done={Boolean(record.jenReviewedAt)} current={record.stage === "Licensee Verification"} icon={<ClipboardCheck size={16}/>}><p>{record.jenReviewedAt ? `Reviewed ${formatStamp(record.jenReviewedAt)}` : "Waiting for Jen’s review after Danielle submits."}</p></StageCard>}
-      {record.stage === "Complete" && <div className="tscc-stage-card done" style={{textAlign:"center"}}><CheckCircle2 size={28} style={{margin:"0 auto",color:"#2f7652"}}/><h3 style={{justifyContent:"center",marginTop:7}}>Timesheet Complete</h3><p>{tehachapi ? "Tehachapi receipt, signature/date checks, completed form, scan and actual submission proof are recorded." : "Received, signed, dated, filled out, scanned and submitted by Danielle; Jen has reviewed the completed submission."}</p></div>}
+      {record.stage === "Complete" && <div className="tscc-stage-card done" style={{textAlign:"center"}}><CheckCircle2 size={28} style={{margin:"0 auto",color:"#2f7652"}}/><h3 style={{justifyContent:"center",marginTop:7}}>Timesheet Complete</h3><p>{tehachapi ? "Jennifer recorded the Tehachapi submission." : "The submission has been reviewed by Jen."}</p></div>}
     </div>
   </div></div>;
 }

@@ -30,6 +30,7 @@ export function hasTimesheetSubmission(record:TimesheetData){return Boolean(text
 export function timesheetStage(record: TimesheetData) {
   if (record.submissionIssue && typeof record.submissionIssue === "object") return "Correction Required";
   if (record.submissionControlVersion === 3) {
+    if (record.submittedOn && hasTimesheetSubmission(record)) return (record.workflowOwner === "Jennifer" && record.workflowReviewer === "") || text(record.jenReviewedAt) ? "Complete" : "Licensee Verification";
     if (!text(record.directReceivedAt) || !signedTimesheet(record) || !text(record.directDatesAt)) return "Location Sign-Off";
     if (!text(record.completedAt)) return "Danielle Fill Out";
     if (!hasTimesheetScan(record)) return "Scan & Send to Jennifer";
@@ -70,7 +71,7 @@ export function pacificToday(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
 export function batchOverdue(records: TimesheetData[], today = pacificToday()) {
-  return records.some(record => validSubmissionDate(record.submissionDueDate) && text(record.submissionDueDate) < today && timesheetStage(record) !== "Complete");
+  return records.some(record => validSubmissionDate(record.submissionDueDate) && text(record.submissionDueDate) < today && !hasTimesheetSubmission(record) && timesheetStage(record) !== "Complete");
 }
 export function batchFingerprint(rows: Array<{ id: unknown; record_data: unknown }>, routeRevision: string) {
   return JSON.stringify([routeRevision, rows.map(row => {

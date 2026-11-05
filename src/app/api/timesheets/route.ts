@@ -192,6 +192,7 @@ export async function GET(request: Request) {
         departmentEmail: asText(record.departmentEmail),
         attachmentConfirmed: asBool(record.attachmentConfirmed),
         emailedBy: asText(record.emailedBy),
+        submittedOn: asText(record.submittedOn),
         emailedAt,
         notes: asText(record.notes),
         updatedAt: asText(row.updated_at),

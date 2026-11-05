@@ -7,7 +7,7 @@ type Row = Record<string, unknown>;
 const text = (value: unknown) => typeof value === "string" ? value.trim() : "";
 const object = (value: unknown): Row => value && typeof value === "object" && !Array.isArray(value) ? value as Row : {};
 function fail(error: string, status = 400): never { throw Response.json({ error }, { status }); }
-export const BATCH_ACTIONS = ["scanBatch", "approveBatch", "emailBatch", "verifyBatch", "receiptBatch", "flagBatch", "reopenBatch", "setDeadline"];
+export const BATCH_ACTIONS = ["logSubmissionDate", "editSubmissionEmail", "scanBatch", "approveBatch", "emailBatch", "verifyBatch", "receiptBatch", "flagBatch", "reopenBatch", "setDeadline"];
 
 export async function controlledTimesheetBatch({ admin, organizationId, userId, actor, locations, routes, body }: {
   admin: SupabaseClient; organizationId: string; userId: string;
@@ -35,6 +35,17 @@ export async function controlledTimesheetBatch({ admin, organizationId, userId, 
   if (["approveBatch", "verifyBatch"].includes(action) && !(currentWorkflow ? (action === "verifyBatch" ? jen && !tehachapi : processor) : isCollector)) fail("Jennifer must review the submitted packet after Danielle finishes it.", 403);
   if (["setDeadline", "reopenBatch", "receiptBatch"].includes(action) && !manager) fail("Danielle or Jennifer must complete this step.", 403);
 
+  if (action === "logSubmissionDate" || action === "editSubmissionEmail") {
+    if (!currentWorkflow || !processor) fail("Only the assigned processor can record this submission.",403);
+    const emailOnly = action === "editSubmissionEmail";
+    if (!emailOnly && !validSubmissionDate(body.submittedOn)) fail("Choose the date the packet was submitted.");
+    const email = text(body.actualRecipient);
+    if (email && !/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(email)) fail("Enter a valid email or leave it blank.");
+    const saved = await admin.rpc("log_timesheet_submission",{p_org:organizationId,p_actor:userId,p_site:location.id,p_period:period,p_type:type,
+      p_expected:body.expectedRows,p_date:emailOnly ? null : body.submittedOn,p_email:email || null,p_email_only:emailOnly});
+    if (saved.error) fail(saved.error.message,409);
+    return Response.json({ok:true,recorded:saved.data});
+  }
   const result = await admin.from("timesheets").select("*").eq("organization_id", organizationId).eq("location_id", location.id).eq("service_period", period);
   if (result.error) throw result.error;
   const rows = (result.data as Row[] ?? []).filter(row => timesheetType(object(row.record_data).timesheetType ?? object(row.record_data).fundingSource ?? row.funding_source) === type);
@@ -120,7 +131,7 @@ export async function controlledTimesheetBatch({ admin, organizationId, userId, 
     if (!hasIssue) fail("Flag the issue before reopening this batch.");
     const reason = text(body.reason);
     if (reason.length < 10 || reason.length > 2000) fail("Record how the issue will be corrected (10–2,000 characters).");
-    patch = { scanRecordedExternally:false,submissionRecordedExternally:false,receiptRecordedExternally:false,scanRecordedByUserId:"",jenReviewedAt:"",jenReviewedBy:"",jenReviewedByUserId:"",submissionIssue: null, lastCorrection: { reason, at: now, by: actor.name }, scanDocumentId: "", scanQualityChecked: false, scannedAt: "", sentToJenniferAt: "", scanBatchId: "", licenseeApprovedAt: "", licenseeApprovalFingerprint: "", approvedRouteRevision: "", emailEvidenceDocumentId: "", emailedAt: "", emailedByJenniferAt: "", emailBatchId: "", attachmentConfirmed: false, licenseeVerifiedAt: "", receiptDocumentId: "", agencyReceiptAt: "", agencyReceiptReference: "" };
+    patch = { submittedOn:"", scanRecordedExternally:false,submissionRecordedExternally:false,receiptRecordedExternally:false,scanRecordedByUserId:"",jenReviewedAt:"",jenReviewedBy:"",jenReviewedByUserId:"",submissionIssue: null, lastCorrection: { reason, at: now, by: actor.name }, scanDocumentId: "", scanQualityChecked: false, scannedAt: "", sentToJenniferAt: "", scanBatchId: "", licenseeApprovedAt: "", licenseeApprovalFingerprint: "", approvedRouteRevision: "", emailEvidenceDocumentId: "", emailedAt: "", emailedByJenniferAt: "", emailBatchId: "", attachmentConfirmed: false, licenseeVerifiedAt: "", receiptDocumentId: "", agencyReceiptAt: "", agencyReceiptReference: "" };
   } else fail("Unknown batch action.");
 
   const updates = rows.map(row => {
