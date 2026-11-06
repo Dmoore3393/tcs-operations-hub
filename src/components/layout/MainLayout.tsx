@@ -415,7 +415,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         {mainLocation&&<aside className="mx-3 mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-base text-emerald-950 sm:mx-5 lg:mx-8"><p><strong>Main location: {locationOptionLabel(mainLocation)}</strong> — your priority.{location!==mainLocation?` You’re helping at ${locationOptionLabel(location)}.`:" Switch locations above when providing backup."}</p>{location!==mainLocation&&<button type="button" className="min-h-11 rounded-xl border border-emerald-700 bg-white px-4 py-2 font-bold" onClick={()=>setLocation(mainLocation)}>Return to main location</button>}</aside>}
-        <main className="px-3 pb-28 pt-3 sm:px-5 sm:pt-5 lg:p-8">{children}<div className="mt-8"><LegalFooter /></div></main>
+        <main className="hub-page-content px-3 pb-28 pt-3 sm:px-5 sm:pt-5 lg:p-8">{children}<div className="mt-8"><LegalFooter /></div></main>
       </div>
       <AppSetupPrompt />
       <MobileQuickActions />

@@ -480,3 +480,15 @@ label:has(input[type="checkbox"]), label:has(input[type="radio"]) {
 
 /* The signed-in staff menu has its own account-backed language preference. */
 body:has([data-staff-shell]) .public-language-bar { display: none; }
+
+/* Reserve the entire mobile dock, including the iPhone home-indicator area.
+   The extra space also clears the raised center shortcut. */
+@media (max-width: 1023px) {
+  html {
+    scroll-padding-bottom: calc(var(--hub-mobile-nav-height, calc(5rem + env(safe-area-inset-bottom))) + 2rem);
+  }
+
+  .hub-page-content {
+    padding-bottom: calc(var(--hub-mobile-nav-height, calc(5rem + env(safe-area-inset-bottom))) + 2rem);
+  }
+}

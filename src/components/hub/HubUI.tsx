@@ -2,7 +2,8 @@
 
 import { X } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export const inputClass = "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-600 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100";
 export const selectClass = inputClass;
@@ -103,17 +104,22 @@ export function SecondaryButton({ children, onClick, type = "button", disabled =
 }
 
 export function Modal({ title, description, onClose, children, footer }: { title: string; description?: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={onClose}>
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+  // Escape animated cards' stacking contexts so forms stay above navigation.
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label={title} className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={onClose}>
       <div className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-t-[30px] bg-white shadow-2xl sm:max-h-[92vh] sm:rounded-3xl" onMouseDown={(event) => event.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-200 bg-white px-5 py-4 sm:px-6 sm:py-5">
           <div><h2 className="text-xl font-black text-slate-950">{title}</h2>{description && <p className="mt-1 text-sm text-slate-500">{description}</p>}</div>
           <button onClick={onClose} className="rounded-xl p-2 text-slate-500 hover:bg-slate-100" aria-label="Close"><X className="h-5 w-5" /></button>
         </div>
-        <div className="p-5 sm:p-6">{children}</div>
+        <div className="px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-6">{children}</div>
         {footer && <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-white px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:gap-3 sm:px-6">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

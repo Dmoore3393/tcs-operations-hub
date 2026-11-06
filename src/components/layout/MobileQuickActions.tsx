@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useHubPathname } from "@/hooks/useHubPathname";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type ToolItem = {
   href: string;
@@ -101,6 +101,24 @@ const toolGroups: Array<{ title: string; items: ToolItem[] }> = [
 ];
 
 export default function MobileQuickActions() {
+  const navigationRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const navigation = navigationRef.current;
+    if (!navigation) return;
+    // Measure the safe-area padding and wrapped labels as well as the icons.
+    const measure = () => document.documentElement.style.setProperty(
+      "--hub-mobile-nav-height", `${navigation.getBoundingClientRect().height}px`,
+    );
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(navigation);
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty("--hub-mobile-nav-height");
+    };
+  }, []);
+
   const { profile } = useAuth();
   const { location, theme } = useHubLocation();
   const pathname = useHubPathname();
@@ -182,7 +200,8 @@ export default function MobileQuickActions() {
       )}
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-[80] border-t border-slate-200/80 bg-white/95 pb-[max(.45rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-10px_35px_rgba(15,23,42,.13)] backdrop-blur-xl lg:hidden"
+        ref={navigationRef}
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/95 pb-[max(.45rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-10px_35px_rgba(15,23,42,.13)] backdrop-blur-xl lg:hidden"
         aria-label="Primary app navigation"
       >
         <div className="mx-auto grid max-w-lg grid-cols-5 px-2">
