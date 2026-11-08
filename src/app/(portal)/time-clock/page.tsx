@@ -6,13 +6,11 @@ import { useHubLocation } from "@/components/providers/LocationProvider";
 import { locationFromSlug } from "@/lib/location-config";
 import { staffClockStation, stationAccessAllowed, stationClockAction, stationFromQuery } from "@/lib/staff-clock-stations";
 import {
-  Coffee,
   History,
   KeyRound,
   LoaderCircle,
   LogIn,
   LogOut,
-  Play,
   ScanLine,
   ShieldCheck,
   TimerReset,
@@ -472,7 +470,8 @@ function TimeClockScreen() {
           </section>
         )}
 
-        <section className="rounded-3xl border border-violet-200 bg-white p-5 shadow-sm">
+        <details key={payload?.myClockAccess.pinConfigured ? "pin-ready" : "pin-required"} open={!payload?.myClockAccess.pinConfigured} className="rounded-3xl border border-violet-200 bg-white p-5 shadow-sm">
+          <summary className="cursor-pointer text-sm font-black text-violet-900">{payload?.myClockAccess.pinConfigured ? "Clock PIN ready · Change PIN" : "Set up your clock PIN"}</summary>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="flex items-center gap-2">
@@ -480,7 +479,7 @@ function TimeClockScreen() {
                 <h2 className="font-black text-slate-950">My Staff Clock PIN</h2>
               </div>
               <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-600">
-                This PIN belongs only to your signed-in staff account. The Hub never lets one employee choose another employee and clock them in with a PIN.
+                Use your own PIN to confirm clocking in and out.
               </p>
             </div>
             <span className={`w-fit rounded-full px-3 py-1.5 text-base font-black ${payload?.myClockAccess.pinConfigured ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"}`}>
@@ -508,9 +507,9 @@ function TimeClockScreen() {
           </div>
 
           <p className="mt-3 text-base font-semibold leading-4 text-slate-500">
-            Your actual PIN is not displayed or stored as readable text. If you forget it, an Owner/Admin can reset it and you create a new one.
+            Forgot your PIN? Ask an Owner/Admin to reset it, then create a new one.
           </p>
-        </section>
+        </details>
 
         <section className="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -535,7 +534,7 @@ function TimeClockScreen() {
                 <ScanLine className="h-5 w-5" /> Scan to Clock Out
               </button>
             ) : (
-              <div className="rounded-xl bg-amber-100 px-4 py-3 text-xs font-black text-amber-900">End your break before clocking out.</div>
+              <button disabled={saving} onClick={() => void act("break_end", "Active Shift")} className="rounded-xl bg-amber-100 px-4 py-3 text-sm font-black text-amber-900">Close previously recorded break</button>
             )}
           </div>
 
@@ -633,33 +632,6 @@ function TimeClockScreen() {
             </div>
           </section>
         )}
-
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="font-black text-slate-950">Break controls</h2>
-              <p className="mt-1 text-xs font-semibold text-slate-500">
-                Breaks stay attached to your active shift and do not require scanning the QR again.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                disabled={saving || state !== "Working"}
-                onClick={() => void act("break_start", "Active Shift")}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-3 text-sm font-black text-white disabled:bg-slate-300"
-              >
-                <Coffee className="h-5 w-5" /> Start Break
-              </button>
-              <button
-                disabled={saving || state !== "On Break"}
-                onClick={() => void act("break_end", "Active Shift")}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3 text-sm font-black text-white disabled:bg-slate-300"
-              >
-                <Play className="h-5 w-5" /> End Break
-              </button>
-            </div>
-          </div>
-        </section>
 
         {isSystemOwner && payload && (
           <section className="rounded-3xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white p-5 shadow-sm">

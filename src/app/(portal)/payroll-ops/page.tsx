@@ -246,7 +246,7 @@ export default function PayrollOpsPage() {
       <Metric icon={<TimerReset className="h-5 w-5" />} label="OT Hours" value={hours(overtimeCurrent)} tone={overtimeCurrent ? "amber" : "green"} />
     </section>
 
-    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-xs font-semibold leading-5 text-blue-950"><ShieldCheck className="mr-1 inline h-4 w-4" />Scheduled hours now come from the live Staffing Command Center, while actual hours come from immutable clock events. Transportation, breaks, admin, training, and other recorded off-floor duties are shown as verification context—not deducted from paid time. The Hub still does not store or invent wage rates.</div>
+    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-xs font-semibold leading-5 text-blue-950"><ShieldCheck className="mr-1 inline h-4 w-4" />Scheduled hours now come from the live Staffing Command Center, while actual hours come from immutable clock events. Transportation, admin, training, and other recorded off-floor duties are shown as verification context—not deducted from paid time. The Hub still does not store or invent wage rates.</div>
 
     <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
       {loading ? <div className="flex min-h-64 items-center justify-center gap-2 text-sm font-bold text-slate-500"><LoaderCircle className="h-5 w-5 animate-spin" /> Calculating payroll hours…</div> :

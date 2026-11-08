@@ -144,16 +144,16 @@ export default function MobileQuickActions() {
       {open && (
         <div className="fixed inset-0 z-[90] bg-slate-950/45 backdrop-blur-sm lg:hidden" onClick={() => setOpen(false)}>
           <section
-            className="absolute inset-x-0 bottom-0 max-h-[86dvh] overflow-hidden rounded-t-[32px] border-t border-white/70 bg-[#f7f8f5] shadow-[0_-20px_60px_rgba(15,23,42,.28)]"
+            className="absolute inset-x-0 bottom-0 flex max-h-[86dvh] flex-col overflow-hidden rounded-t-[32px] border-t border-white/70 bg-[#f7f8f5] shadow-[0_-20px_60px_rgba(15,23,42,.28)]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mx-auto mt-2 h-1.5 w-12 rounded-full bg-slate-300" />
-            <div className="sticky top-0 z-10 border-b border-slate-200/80 bg-[#f7f8f5]/95 px-5 pb-4 pt-3 backdrop-blur">
+            <div className="mx-auto mt-2 h-1.5 w-12 shrink-0 rounded-full bg-slate-300" />
+            <div className="shrink-0 border-b border-slate-200/80 bg-[#f7f8f5]/95 px-5 pb-4 pt-3 backdrop-blur">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-base font-black uppercase tracking-[0.18em]" style={{ color: theme.primary }}>The Hub • {locationOptionLabel(location)}</p>
                   <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">All your tools</h2>
-                  <p className="mt-1 text-base text-slate-700">Open a section or search for what you need.</p>
+                  <p className="mt-1 text-base text-slate-700">Search or choose a section.</p>
                 </div>
                 <button type="button" onClick={() => setOpen(false)} className="grid h-10 w-10 place-items-center rounded-2xl bg-white text-slate-700 shadow-sm" aria-label="Close tools"><X className="h-5 w-5" /></button>
               </div>
@@ -169,7 +169,7 @@ export default function MobileQuickActions() {
               </label>
             </div>
 
-            <div className="max-h-[calc(86dvh-138px)] overflow-y-auto px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
               {groups.map((group) => (
                 <details key={group.title} open={toolSectionOpen(group,pathname,search)} className="mb-3 rounded-2xl border border-slate-200 bg-white p-3">
                   <summary className="min-h-11 cursor-pointer py-3 text-lg font-black text-slate-950">{group.title}</summary>
