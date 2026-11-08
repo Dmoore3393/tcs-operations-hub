@@ -141,6 +141,9 @@ async function reportScreen() {
       } };
     } } },
   };
+  const helperContext = { exports: {}, require: key => deps[key] };
+  vm.runInNewContext(ts.transpileModule(await readFile("src/lib/shift-report-type.ts", "utf8"), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,helperContext);
+  deps["@/lib/shift-report-type"] = helperContext.exports;
   deps["./ChoiceSelect"] = { default: await component("src/components/forms/ChoiceSelect.tsx", deps) };
   deps["@/components/forms/StaffNameSelect"] = { default: await component("src/components/forms/StaffNameSelect.tsx", deps) };
   const Page = await component("src/app/(portal)/shift-reports/page.tsx", deps);
