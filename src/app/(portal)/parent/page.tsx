@@ -1,4 +1,5 @@
 "use client";
+import AccountPhoto from "@/components/account/AccountPhoto";
 
 import { unregisterCurrentNativeDevice } from "@/lib/push-client";
 import NativeAlertsButton from "@/components/native/NativeAlertsButton";
@@ -640,7 +641,7 @@ export default function ParentPortalPage() {
               <BriefcaseBusiness className="h-4 w-4" /> Staff Hub
             </button>
           )}
-          <button onClick={() => router.push("/account")} className="rounded-xl bg-white/10 px-3 py-2 text-xs font-black">Account & Privacy</button><button onClick={() => void signOut()} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs font-black"><LogOut className="h-4 w-4" /> Sign Out</button>
+          <button onClick={() => router.push("/account")} aria-label="Account & Profile" className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs font-black"><AccountPhoto token={session?.access_token} name={session?.user.user_metadata?.full_name || "Family"}/><span className="hidden sm:inline">Account & Profile</span></button><button onClick={() => void signOut()} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs font-black"><LogOut className="h-4 w-4" /> Sign Out</button>
         </div>
       </div>
     </header>
@@ -684,7 +685,7 @@ export default function ParentPortalPage() {
               {uploadingProfilePhoto ? "Uploading…" : profilePhoto ? "Change Photo" : "Add Profile Photo"}
               <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={uploadingProfilePhoto} onChange={(event) => { const next = event.target.files?.[0] ?? null; void uploadProfilePhoto(next); event.currentTarget.value = ""; }} />
             </label>}
-            <p className="mt-2 text-center text-base font-semibold leading-4 text-slate-600">Family profile photo • private to your secure TCS account</p>
+            <p className="mt-2 text-center text-base font-semibold leading-4 text-slate-600">Child profile photo • private to your secure TCS account</p>
           </div>
           <div>
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
