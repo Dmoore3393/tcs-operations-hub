@@ -134,7 +134,7 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Operations Dashboard", subtitle: "Today across Thomason Childcare Solutions" },
   "/executive-dashboard": { title: "Executive Operations Dashboard", subtitle: "Company-wide enrollment, capacity, funding, compliance, tours, and operating risk" },
   "/employee-lounge": { title: "Employee Lounge", subtitle: "Connect, celebrate, recharge, and find your team tools" },
-  "/time-clock": { title: "Time Clock", subtitle: "Immutable clock-in, breaks, clock-out, and manager visibility" },
+  "/time-clock": { title: "Time Clock", subtitle: "Clock in, clock out, and review your time" },
   "/time-off": { title: "Time Off & Availability", subtitle: "Requests, blocked dates, approvals, and attendance accountability rules" },
   "/my-schedule": { title: "My Schedule", subtitle: "Published shifts, location assignments, and schedule acknowledgement" },
   "/employee-bulletin": { title: "Employee Bulletin Board", subtitle: "Announcements, reminders, policy updates, training, recognition, and pinned notes" },
