@@ -1,5 +1,6 @@
 "use client";
 
+import { changeReportType } from "@/lib/shift-report-type";
 import MainLayout from "@/components/layout/MainLayout";
 import StaffNameSelect from "@/components/forms/StaffNameSelect";
 import { DemoNotice, PageIntro, PrimaryButton, SecondaryButton, SectionCard, StatCard, StatusBadge, inputClass } from "@/components/hub/HubUI";
@@ -83,8 +84,8 @@ export default function ShiftReportsPage() {
   function changeType(type: ShiftReportType) {
     if (type === form.type) return;
     formRequestId.current = null;
-    setMessage(null);
-    setForm(createForm(type, form.location));
+    setMessage({text: `Changed to ${type}. Your notes are kept. Check the ${type.toLowerCase()} operations checklist before saving.`});
+    setForm(current => changeReportType(current, type));
   }
 
   function changeLocation(location: Exclude<LocationKey, "All Locations">) {
@@ -129,6 +130,20 @@ export default function ShiftReportsPage() {
     if (status === "Submitted" && form.pickupInformation.trim()) handoffState.retry();
     setMessage({ text: status === "Submitted" ? `${form.type} report submitted for the incoming team.` : "Draft saved." });
     setForm(createForm(form.type, form.location));
+  }
+
+  async function correctReportType(report: ShiftReport) {
+    if(requestInFlight.current || !supabase) return;
+    requestInFlight.current=true;setBusy(true);setMessage(null);
+    const type=report.type==='Opening'?'Closing':'Opening';
+    try {
+      const {data}=await supabase.auth.getSession();
+      if(!data.session)throw new Error('Sign in again to change this report.');
+      const response=await withRequestTimeout(signal=>fetch('/api/shift-reports/type',{method:'PATCH',signal,headers:{Authorization:`Bearer ${data.session!.access_token}`,'Content-Type':'application/json'},body:JSON.stringify({id:report.id,type,expectedType:report.type})}));
+      const result=await response.json();if(!response.ok)throw new Error(result.error||'Could not change report type.');
+      reportState.retry();setMessage({text:`Changed to ${type}. Notes and the original checklist are preserved.`});
+    } catch(error){setMessage({text:error instanceof Error?error.message:'Could not change report type.',error:true});}
+    finally{requestInFlight.current=false;setBusy(false);}
   }
 
   async function reviewReport(id: string) {
@@ -222,6 +237,7 @@ export default function ShiftReportsPage() {
     {tab === "Report History" && <SectionCard title="Internal Report History" description="Directors and licensees can review submitted reports and leave the original staff entry unchanged.">
       <div className="space-y-4">{locationReports.map((report) => <article key={report.id} className="rounded-2xl border border-slate-200 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-lg font-black text-slate-950">{report.type} Report • {report.location}</h3><StatusBadge tone={report.status === "Reviewed" ? "green" : report.status === "Submitted" ? "amber" : "slate"}>{report.status}</StatusBadge></div><p className="mt-1 text-sm font-semibold text-slate-500">{report.date} • {report.shiftWindow} • <span>Completed by</span> <span translate="no">{report.completedBy} ({report.initials})</span></p></div>{report.status === "Submitted" && <div className="flex gap-2"><input className="w-24 rounded-xl border border-slate-300 px-3 py-2 text-center text-sm font-black uppercase" placeholder="DM" value={reviewInitials[report.id] ?? ""} onChange={(event) => setReviewInitials({ ...reviewInitials, [report.id]: event.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4) })} /><button onClick={() => void reviewReport(report.id)} disabled={busy || (reviewInitials[report.id] ?? "").length < 2} className="tcs-primary-button rounded-xl px-3 py-2 text-xs font-black disabled:opacity-40">Review</button></div>}</div>
+        {report.status !== 'Reviewed' && <button type="button" disabled={busy} onClick={()=>void correctReportType(report)} className="mt-4 min-h-11 rounded-xl border border-emerald-700 px-4 py-2 font-bold text-emerald-800 disabled:opacity-40">Change to {report.type === 'Opening' ? 'Closing' : 'Opening'}</button>}
         <div className="mt-4 grid gap-3 md:grid-cols-2"><Summary title="Positive Behaviors" value={report.positiveBehaviors} /><Summary title="Baby Updates" value={report.babyUpdates} /><Summary title="Misbehaviors / Concerns" value={report.misbehaviors} /><Summary title="Boo-Boos" value={report.booBoos} /><Summary title="Parent Communication" value={report.parentCommunication} /><Summary title="Information for Pickup" value={report.pickupInformation} emphasized /><Summary title="Operations Notes" value={report.operationsNotes} /></div>
         {report.status === "Reviewed" && <p className="mt-4 text-xs font-black text-emerald-800">Reviewed by {report.reviewerInitials} • original report preserved</p>}
       </article>)}{!locationReports.length && <div className="rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">No reports saved for this location yet.</div>}</div>
