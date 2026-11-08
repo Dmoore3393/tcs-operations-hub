@@ -251,7 +251,7 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
       supabase.from("staff_shifts").select("id,location_id,user_id,staff_name,shift_date,start_time,end_time,status,position_label,notes").gte("shift_date", weekStart).lte("shift_date", weekEnd).order("shift_date").order("start_time"),
       supabase.from("staff_activity_intervals").select("id,location_id,shift_id,user_id,staff_name,activity_date,start_time,end_time,activity_type,counts_toward_floor,reason,source_key").gte("activity_date", weekStart).lte("activity_date", weekEnd).order("activity_date").order("start_time"),
       supabase.from("staffing_rules").select("id,location_id,rule_name,age_group,children_per_staff,minimum_staff,maximum_group_size,effective_from,effective_to,source_type,source_note,is_active").eq("is_active", true).order("effective_from", { ascending: false }),
-      supabase.from("staff_access").select("user_id,full_name,role,locations").eq("is_active", true).order("full_name"),
+      hubRequest<{staff:StaffOption[]}>("/api/staff-scheduling/roster",accessToken).then(data=>({data:data.staff,error:null})).catch(error=>({data:[] as StaffOption[],error:{message:error instanceof Error?error.message:"Could not load the scheduling staff list."}})),
       supabase.from("schedule_publications").select("id,location_id,week_of,status,revision,published_at,published_by,notes,needs_republish").eq("week_of", weekStart).order("updated_at", { ascending: false }),
       supabase.from("time_off_requests").select("id,staff_user_id,location_id,request_scope,start_date,end_date,all_day,start_time,end_time,status").eq("status", "Approved").lte("start_date", weekEnd).gte("end_date", weekStart),
       hubRequest<{lanes:StaffLaneProfile[]}>("/api/staff-lanes",accessToken).then(data=>({data:data.lanes,error:null})).catch(error=>({data:[] as StaffLaneProfile[],error:{message:error instanceof Error?error.message:"Could not load staff directory."}})),
@@ -300,8 +300,7 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
     const staffRows = staffResult.error ? [] : (staffResult.data ?? []) as StaffOption[];
     setStaffDirectory(rosterResult.data);
     setUnlinkedStaff(rosterResult.data.filter(lane=>!lane.staff_user_id && !staffRows.some(person=>person.full_name.trim().toLowerCase()===lane.full_name.trim().toLowerCase())));
-    if (staffRows.length) setStaff(staffRows);
-    else if (profile) setStaff([{ user_id: profile.user_id, full_name: profile.full_name, role: profile.role, locations: profile.locations }]);
+    setStaff(staffRows);
     setLoading(false);
   }, [profile, accessToken, weekEnd, weekStart,staffOnly,isSystemOwner]);
 
