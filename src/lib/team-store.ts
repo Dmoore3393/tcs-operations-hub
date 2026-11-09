@@ -73,6 +73,10 @@ export type TeamTraining = {
   lessonContent?: string;
   includeLeadership?: boolean;
   durationMinutes?: number;
+  allStaff?: boolean;
+  contentAssetId?: string;
+  certificateAssetId?: string;
+  certificateName?: string;
 };
 
 export type TeamTrainingCompletion = {
