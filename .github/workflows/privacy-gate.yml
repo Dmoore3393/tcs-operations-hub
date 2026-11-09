@@ -33,7 +33,7 @@ jobs:
       - name: Verify per-home KidKare submissions and private claim evidence
         run: node --test scripts/test-kidkare-submissions.mjs
       - name: Verify scheduler roster privacy and colleague shift assignment
-        run: node --test scripts/test-staff-scheduling-roster.mjs
+        run: node --test scripts/test-staff-scheduling-roster.mjs scripts/test-team-schedules.mjs
       - name: Verify private training uploads, video playback, and completion certificates
         run: node --test scripts/test-training-media.mjs
       - name: Verify account deletion, bounded loading, native API access, and family alert authorization
