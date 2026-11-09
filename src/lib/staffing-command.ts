@@ -1,7 +1,7 @@
 import type { ChildRecord } from "@/lib/children";
 import type { ChildScheduleRecord } from "@/lib/child-schedules";
 import { dateToDayName, timeToMinutes } from "@/lib/child-schedules";
-import { normalizeLocation, type LocationKey } from "@/lib/location-config";
+import { MAINTENANCE_SITE_TYPE, normalizeLocation, type LocationKey } from "@/lib/location-config";
 
 export type StaffingLocation = {
   id: string;
@@ -142,6 +142,7 @@ export function buildCoverageWindows(args: {
   timeOff?: ApprovedTimeOffRow[];
 }) {
   const { date, location, schedules, shifts, activities, rules, timeOff = [] } = args;
+  if (location.program_type === MAINTENANCE_SITE_TYPE) return [] as CoverageWindow[];
   const locationKey = locationKeyForDbLocation(location);
   if (!locationKey) return [] as CoverageWindow[];
   const day = dateToDayName(date);

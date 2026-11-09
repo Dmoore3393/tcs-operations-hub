@@ -36,6 +36,7 @@ function query(rows, error = null) {
   const builder = {
     select(value) { columns = value.split(","); return builder; },
     eq(key, value) { values = values.filter(row => row[key] === value); return builder; },
+    or() { values = values.filter(row => row.is_active || row.program_type === "Maintenance Site"); return builder; },
     order(key) { values.sort((a, b) => String(a[key]).localeCompare(String(b[key]))); return builder; },
     then(resolve, reject) { return Promise.resolve({ data: columns ? values.map(row => Object.fromEntries(columns.map(key => [key, row[key]]))) : values, error }).then(resolve, reject); },
   };

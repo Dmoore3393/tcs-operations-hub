@@ -5,7 +5,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import StaffContactEditor from "@/components/StaffContactEditor";
 import { PageIntro, PrimaryButton, SectionCard, StatCard, StatusBadge, inputClass } from "@/components/hub/HubUI";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { careLocations } from "@/lib/location-config";
+import { careLocations, workLocations, locationOptionLabel } from "@/lib/location-config";
 import type { StaffLaneProfile } from "@/lib/staff-lanes";
 import {
   toggleEmployeePermission,
@@ -305,9 +305,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function LocationSelector({ role, locations, onToggle }: { role: AccessRole; locations: string[]; onToggle: (location: string) => void }) {
-  return <div className="mt-5"><p className="mb-2 text-sm font-black text-slate-700">Main location / staff locations</p><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{careLocations.map((location) => {
+  return <div className="mt-5"><p className="mb-2 text-sm font-black text-slate-700">Main location / staff locations</p><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{(role === "Location Licensee" ? careLocations : workLocations).map((location) => {
     const checked = role === "Owner / Admin" || locations.includes("All Locations") || locations.includes(location);
-    return <label key={location} className={`flex items-center gap-3 rounded-xl border px-3 py-3 ${checked ? "border-emerald-300 bg-emerald-50" : "border-slate-200"}`}><input type={role === "Location Licensee" ? "radio" : "checkbox"} name={role === "Location Licensee" ? "licensee-location" : undefined} checked={checked} disabled={role === "Owner / Admin"} onChange={() => onToggle(location)} /><span className="text-sm font-black text-slate-700">{location}</span></label>;
+    return <label key={location} className={`flex items-center gap-3 rounded-xl border px-3 py-3 ${checked ? "border-emerald-300 bg-emerald-50" : "border-slate-200"}`}><input type={role === "Location Licensee" ? "radio" : "checkbox"} name={role === "Location Licensee" ? "licensee-location" : undefined} checked={checked} disabled={role === "Owner / Admin"} onChange={() => onToggle(location)} /><span className="text-sm font-black text-slate-700">{locationOptionLabel(location)}</span></label>;
   })}</div>{role === "Owner / Admin" && <p className="mt-2 text-xs font-semibold text-slate-500">Owner/Admin accounts automatically receive all locations.</p>}</div>;
 }
 

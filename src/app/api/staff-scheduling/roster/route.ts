@@ -1,4 +1,4 @@
-import { normalizeLocation } from "@/lib/location-config";
+import { WORK_LOCATION_FILTER, normalizeLocation } from "@/lib/location-config";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 
 export const runtime = "nodejs";
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
       auth.admin.from("staff_location_assignments")
         .select("user_id,location_id").eq("organization_id", organizationId),
       auth.admin.from("locations")
-        .select("id,name").eq("organization_id", organizationId).eq("is_active", true).order("name"),
+        .select("id,name").eq("organization_id", organizationId).or(WORK_LOCATION_FILTER).order("name"),
     ]);
 
     const error = staffResult.error || assignmentsResult.error || locationsResult.error;

@@ -1,4 +1,4 @@
-import { careLocations } from "@/lib/location-config";
+import { careLocations, workLocations } from "@/lib/location-config";
 import {
   ACCESS_ROLES,
   canonicalAccessRole,
@@ -24,7 +24,8 @@ type UpdateBody = {
 function normalizeLocations(role: AccessRole, values: string[] | undefined) {
   if (role === "Owner / Admin") return ["All Locations"];
 
-  const unique = [...new Set((values ?? []).filter((location) => careLocations.includes(location as (typeof careLocations)[number])))];
+  const choices = role === "Location Licensee" ? careLocations : workLocations;
+  const unique = [...new Set((values ?? []).filter((location) => choices.includes(location as (typeof choices)[number])))];
   if (role === "Location Licensee") {
     if (unique.length !== 1) throw new Error("Choose exactly one main location for the licensee; backup access is included.");
     return unique;

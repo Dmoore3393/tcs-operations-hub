@@ -71,6 +71,7 @@ function setup(overrides = {}) {
         reads.push([table, structuredClone(filters)]);
         if (options.failTable === table) return { data: null, error: new Error("Database unavailable") };
         const found = (rows[table] ?? []).filter((row) => filters.every(([kind, key, value]) => {
+          if (kind === "worksite") return row.is_active || row.program_type === "Maintenance Site";
           if (kind === "not-null") return row[key] != null;
           if (kind === "ilike") return String(row[key]).toLowerCase() === String(value).toLowerCase();
           return row[key] === value;
@@ -84,6 +85,7 @@ function setup(overrides = {}) {
       const query = {
         select() { return query; },
         order() { return query; },
+        or(value) { assert.equal(value, "is_active.eq.true,program_type.eq.Maintenance Site"); filters.push(["worksite"]); return query; },
         update(value) { patch = value; return query; },
         eq(key, value) { filters.push(["eq", key, value]); return query; },
         ilike(key, value) { filters.push(["ilike", key, value]); return query; },
