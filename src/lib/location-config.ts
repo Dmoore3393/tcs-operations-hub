@@ -5,7 +5,12 @@ export type LocationKey =
   | "Division"
   | "33rd Street"
   | "Tehachapi"
-  | "42nd Street";
+  | "42nd Street"
+  | "Newgrove";
+
+export const MAINTENANCE_SITE_TYPE = "Maintenance Site";
+// Inactive maintenance worksites are schedulable without opening childcare enrollment.
+export const WORK_LOCATION_FILTER = `is_active.eq.true,program_type.eq.${MAINTENANCE_SITE_TYPE}`;
 
 export const TEHACHAPI_LOCATION_NAME = "Thomason Family Childcare • D Street, Tehachapi";
 export const TEHACHAPI_LOCATION_LABEL = "D Street (Tehachapi)";
@@ -20,6 +25,7 @@ export function locationDisplayName(value: string) {
 }
 
 export function locationOptionLabel(value: LocationKey) {
+  if (value === "Newgrove") return "Newgrove (Not open yet)";
   return value === "21st Street" ? "21st Street (Closed)" : value === "Tehachapi" ? TEHACHAPI_LOCATION_LABEL : value;
 }
 
@@ -58,10 +64,12 @@ export const locationThemes: Record<LocationKey, {
   "33rd Street": { label: "33rd Street", fullName: "Cornejo Family Childcare • 33rd Street", primary: "#ca8a04", primaryDark: "#713f12", primaryLight: "#fde047", primarySoft: "#fef9c3", ink: "#422006", textOnPrimary: "#111827", accent: "#111827", capacity: 14, programType: "Family Childcare" },
   Tehachapi: { label: TEHACHAPI_LOCATION_LABEL, fullName: TEHACHAPI_LOCATION_NAME, primary: "#155b3b", primaryDark: "#0d442e", primaryLight: "#9fbd8b", primarySoft: "#f4f3e7", ink: "#133c2b", textOnPrimary: "#ffffff", accent: "#d6a23d", capacity: 14, programType: "Family Childcare" },
   "42nd Street": { label: "Lara Family Childcare", fullName: "Lara Family Childcare • 42nd Street", primary: "#0b3153", primaryDark: "#06233c", primaryLight: "#6b8f71", primarySoft: "#f7f0e3", ink: "#0b3153", textOnPrimary: "#ffffff", accent: "#d89a23", capacity: 14, programType: "Family Childcare" },
+  Newgrove: { label: "Newgrove (Not open yet)", fullName: "Newgrove • Not open yet — Maintenance only", primary: "#475569", primaryDark: "#1e293b", primaryLight: "#cbd5e1", primarySoft: "#f1f5f9", ink: "#0f172a", textOnPrimary: "#ffffff", accent: "#f59e0b", capacity: 0, programType: MAINTENANCE_SITE_TYPE },
 };
 
 export const selectableLocations = Object.keys(locationThemes) as LocationKey[];
-export const careLocations = selectableLocations.filter((item): item is Exclude<LocationKey, "All Locations"> => item !== "All Locations");
+export const workLocations = selectableLocations.filter((item): item is Exclude<LocationKey, "All Locations"> => item !== "All Locations");
+export const careLocations = workLocations.filter(item => locationThemes[item].programType !== MAINTENANCE_SITE_TYPE);
 
 function hours(open: string, close: string): DailyHours {
   return { closed: false, open, close };
@@ -71,6 +79,7 @@ function closed(): DailyHours {
 }
 
 export const starterLocationHours: LocationHoursRecord[] = [
+  { location: "Newgrove", days: { Monday: closed(), Tuesday: closed(), Wednesday: closed(), Thursday: closed(), Friday: closed(), Saturday: closed(), Sunday: closed() } },
   { location: "Halcom", days: { Monday: hours("06:00", "23:00"), Tuesday: hours("06:00", "23:00"), Wednesday: hours("06:00", "23:00"), Thursday: hours("06:00", "23:00"), Friday: hours("06:00", "18:00"), Saturday: hours("06:00", "23:00"), Sunday: hours("06:00", "23:00") } },
   { location: "21st Street", days: { Monday: closed(), Tuesday: closed(), Wednesday: closed(), Thursday: closed(), Friday: closed(), Saturday: closed(), Sunday: closed() } },
   { location: "Division", days: { Monday: hours("06:00", "19:00"), Tuesday: hours("06:00", "19:00"), Wednesday: hours("06:00", "19:00"), Thursday: hours("06:00", "19:00"), Friday: hours("06:00", "19:00"), Saturday: closed(), Sunday: closed() } },
@@ -81,6 +90,7 @@ export const starterLocationHours: LocationHoursRecord[] = [
 
 export function normalizeLocation(value: string): LocationKey {
   const lower = value.toLowerCase();
+  if (/new\s*grove/.test(lower)) return "Newgrove";
   if (lower.includes("halcom")) return "Halcom";
   if (lower.includes("21st") || lower.includes("cathers")) return "21st Street";
   if (lower.includes("division") || lower.includes("school age center") || lower.includes("astor")) return "Division";
@@ -97,7 +107,7 @@ export function locationSlug(value: Exclude<LocationKey, "All Locations">) {
 
 export function locationFromSlug(value: string): Exclude<LocationKey, "All Locations"> | null {
   const normalized = value.trim().toLowerCase();
-  const match = careLocations.find((location) => locationSlug(location) === normalized);
+  const match = workLocations.find((location) => locationSlug(location) === normalized);
   return match ?? null;
 }
 

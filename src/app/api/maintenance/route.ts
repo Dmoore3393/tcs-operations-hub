@@ -2,7 +2,7 @@ import {maintenanceRestSummary} from "@/lib/maintenance-rest";
 import {requireStaff,staffErrorResponse} from "@/lib/server/require-staff";
 import {canCreateMaintenance,canManageMaintenance,canViewMaintenance} from "@/lib/maintenance-access";
 import {tcsLocationSlug} from "@/lib/server/location-slug";
-import {normalizeLocation} from "@/lib/location-config";
+import {WORK_LOCATION_FILTER,normalizeLocation} from "@/lib/location-config";
 import type {MaintenanceTicket} from "@/lib/maintenance";
 import {vehicleServiceTypes} from "@/lib/maintenance";
 export const runtime="nodejs";
@@ -11,7 +11,7 @@ const text=(value:unknown)=>typeof value==='string'?value.trim():'';
 async function context(request:Request){
  const auth=await requireStaff(request);
  if(!canViewMaintenance(auth.profile))throw new Response('Maintenance access is required.',{status:403});
- const sites=await auth.admin.from('locations').select('id,name,full_name,slug').eq('organization_id',auth.profile.organization_id).eq('is_active',true);
+ const sites=await auth.admin.from('locations').select('id,name,full_name,slug').eq('organization_id',auth.profile.organization_id).or(WORK_LOCATION_FILTER);
  if(sites.error)throw sites.error;
  let allowed=(sites.data||[]) as Row[];
  if(!auth.isOwner){const assignments=await auth.admin.from('staff_location_assignments').select('location_id').eq('organization_id',auth.profile.organization_id).eq('user_id',auth.user.id);if(assignments.error)throw assignments.error;allowed=allowed.filter(site=>(assignments.data||[]).some(row=>row.location_id===site.id));}

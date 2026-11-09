@@ -1,4 +1,5 @@
 "use client";
+import {WORK_LOCATION_FILTER} from "@/lib/location-config";
 
 import MainLayout from "@/components/layout/MainLayout";
 import { PrimaryButton, SecondaryButton, SectionCard, StatCard } from "@/components/hub/HubUI";
@@ -102,7 +103,7 @@ export default function MySchedulePage() {
     if (!supabase || !profile?.user_id) return;
     setLoading(true);
     const [locationResult, publicationResult] = await Promise.all([
-      supabase.from("locations").select("id,slug,name,full_name,capacity,program_type").eq("is_active", true).order("name"),
+      supabase.from("locations").select("id,slug,name,full_name,capacity,program_type").or(WORK_LOCATION_FILTER).order("name"),
       supabase
         .from("schedule_publications")
         .select("id,location_id,week_of,status,revision,published_at,published_by,notes,needs_republish")

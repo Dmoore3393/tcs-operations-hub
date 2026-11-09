@@ -1,7 +1,7 @@
 import { issueStaffSetupLink, activateStaffSetupLink, revokeStaffSetupLink } from "@/lib/server/staff-setup-links";
 import {recommendedStaffInviteRole} from "@/lib/staff-invite-access";
 import {authEmailLimitResponse} from "@/lib/auth-email-errors";
-import { careLocations } from "@/lib/location-config";
+import { careLocations, workLocations } from "@/lib/location-config";
 import {
   ACCESS_ROLES,
   sanitizeEmployeePermissions,
@@ -22,7 +22,8 @@ type InviteBody = {
 
 function locationsForRole(role: AccessRole, values: string[] | undefined) {
   if (role === "Owner / Admin") return ["All Locations"];
-  const unique = [...new Set((values ?? []).filter((location) => careLocations.includes(location as (typeof careLocations)[number])))];
+  const choices = role === "Location Licensee" ? careLocations : workLocations;
+  const unique = [...new Set((values ?? []).filter((location) => choices.includes(location as (typeof choices)[number])))];
   if (role === "Location Licensee" && unique.length !== 1) throw new Error("Choose exactly one location for the Licensee.");
   if (role === "Employee" && unique.length < 1) throw new Error("Choose at least one location for the Employee.");
   return unique;

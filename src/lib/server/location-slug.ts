@@ -3,6 +3,7 @@ import { isTehachapiLocation } from "@/lib/location-config";
 
 export function tcsLocationSlug(value: string) {
   const lower = value.toLowerCase();
+  if (/new\s*grove/.test(lower)) return "newgrove";
   if (lower.includes("halcom") || lower.includes("moore family")) return "halcom";
   if (lower.includes("21st") || lower.includes("cathers")) return "21st-street";
   if (lower.includes("division") || lower.includes("school age center") || lower.includes("astor")) return "division";

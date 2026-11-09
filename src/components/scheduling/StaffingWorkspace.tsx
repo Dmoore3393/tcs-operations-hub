@@ -17,7 +17,7 @@ import { useDatedCarePlan } from "@/hooks/useDatedCarePlan";
 import { effectiveScheduleRecords } from "@/lib/weekly-care-planner";
 import { compactTime, starterChildSchedules, type ChildScheduleRecord } from "@/lib/child-schedules";
 import { localIsoDate } from "@/lib/date-utils";
-import { normalizeLocation } from "@/lib/location-config";
+import { MAINTENANCE_SITE_TYPE, WORK_LOCATION_FILTER, normalizeLocation } from "@/lib/location-config";
 import { sendHubNotificationEvent } from "@/lib/notification-client";
 import {
   buildCoverageWindows,
@@ -247,7 +247,7 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
     if (!supabase || !accessToken || (staffOnly && !isSystemOwner)) return;
     setLoading(true);
     const [locationResult, shiftResult, activityResult, ruleResult, staffResult, publicationResult, timeOffResult, rosterResult] = await Promise.all([
-      supabase.from("locations").select("id,slug,name,full_name,capacity,program_type").eq("is_active", true).order("name"),
+      supabase.from("locations").select("id,slug,name,full_name,capacity,program_type").or(WORK_LOCATION_FILTER).order("name"),
       supabase.from("staff_shifts").select("id,location_id,user_id,staff_name,shift_date,start_time,end_time,status,position_label,notes").gte("shift_date", weekStart).lte("shift_date", weekEnd).order("shift_date").order("start_time"),
       supabase.from("staff_activity_intervals").select("id,location_id,shift_id,user_id,staff_name,activity_date,start_time,end_time,activity_type,counts_toward_floor,reason,source_key").gte("activity_date", weekStart).lte("activity_date", weekEnd).order("activity_date").order("start_time"),
       supabase.from("staffing_rules").select("id,location_id,rule_name,age_group,children_per_staff,minimum_staff,maximum_group_size,effective_from,effective_to,source_type,source_note,is_active").eq("is_active", true).order("effective_from", { ascending: false }),
@@ -701,6 +701,7 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
     {!staffOnly && nextWeekReviewDue && <section className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 shadow-sm sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-black">Friday 6 PM family schedule deadline has passed.</p><p className="mt-1 text-xs font-semibold leading-5">Next week is ready for staffing review. Check child demand, transportation windows, coverage rules, and unresolved gaps before the week begins.</p></div><button onClick={() => { setSelectedDate(nextWeekStart); setView("Week"); }} className="whitespace-nowrap rounded-xl bg-amber-900 px-4 py-2.5 text-xs font-black text-white">Review Next Week</button></section>}
 
     {loading ? <div className="flex min-h-72 items-center justify-center gap-3 rounded-3xl border border-slate-200 bg-white text-sm font-black text-slate-500"><LoaderCircle className="h-5 w-5 animate-spin" /> Loading live staffing data…</div> : <>
+      {selectedLocation?.program_type === MAINTENANCE_SITE_TYPE && <div role="status" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-base text-amber-950"><strong>{selectedLocation.name}: not open for childcare.</strong> This location is available for maintenance work schedules. Maintenance shifts do not count toward childcare floor coverage.</div>}
       {selectedLocation && <SectionCard
         title={`Publish Staff Schedule • ${selectedLocation.name}`}
         description={`Week of ${shortDate(weekStart)} • Publishing includes all departments for this location and week, makes linked employee shifts visible in My Schedule, and starts a new acknowledgement revision.`}
