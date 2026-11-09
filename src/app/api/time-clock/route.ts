@@ -5,7 +5,7 @@ import { staffClockPinConfigured, verifyStaffClockPin } from "@/lib/server/staff
 
 type DbRow = Record<string, unknown>;
 type ClockEventType = "clock_in" | "clock_out" | "break_start" | "break_end";
-type ClockSource = "Location QR" | "Maintenance Manual" | "Admin Override" | "Active Shift" | "Legacy";
+type ClockSource = "Location QR" | "Maintenance Manual" | "Flexible Manual" | "Admin Override" | "Active Shift" | "Legacy";
 type AttendanceSettingsRow = {
   late_tracking_enabled: boolean;
   late_grace_minutes: number | null;
@@ -15,6 +15,7 @@ type AttendanceSettingsRow = {
   early_clock_in_window_minutes: number;
   late_clock_out_window_minutes: number;
   flag_scheduled_hours_overage: boolean;
+  flexible_clock_user_ids: string[];
 };
 
 function object(value: unknown): DbRow {
@@ -38,7 +39,7 @@ function eventFromMetadata(metadata: unknown): ClockEventType | "" {
 }
 function sourceFromMetadata(metadata: unknown): ClockSource {
   const value = text(object(metadata).clockSource);
-  if (["Location QR", "Maintenance Manual", "Admin Override", "Active Shift"].includes(value)) return value as ClockSource;
+  if (["Location QR", "Maintenance Manual", "Flexible Manual", "Admin Override", "Active Shift"].includes(value)) return value as ClockSource;
   return "Legacy";
 }
 function effectiveStaffUserId(row: DbRow) {
@@ -206,7 +207,7 @@ export async function GET(request: Request) {
         .select("id,slug,name,full_name")
         .eq("organization_id", profile.organization_id),
       admin.from("staff_attendance_settings")
-        .select("enforce_schedule_clocking,early_clock_in_window_minutes,late_clock_out_window_minutes,flag_scheduled_hours_overage")
+        .select("enforce_schedule_clocking,early_clock_in_window_minutes,late_clock_out_window_minutes,flag_scheduled_hours_overage,flexible_clock_user_ids")
         .eq("organization_id", profile.organization_id)
         .maybeSingle(),
       admin.from("staff_shifts")
@@ -289,6 +290,7 @@ export async function GET(request: Request) {
           : "",
         isMaintenance: isMaintenanceLane(myLane),
         manualAllowed: isMaintenanceLane(myLane),
+        flexibleAllowed: isOwner && (settingsResult.data?.flexible_clock_user_ids ?? []).includes(user.id),
       },
       adminClockStaff: isOwner
         ? staffRows
@@ -306,11 +308,11 @@ export async function GET(request: Request) {
             })
             .sort((a, b) => a.fullName.localeCompare(b.fullName))
         : [],
-      clockPolicy: settingsResult.data ?? {
-        enforce_schedule_clocking: true,
-        early_clock_in_window_minutes: 4,
-        late_clock_out_window_minutes: 4,
-        flag_scheduled_hours_overage: true,
+      clockPolicy: {
+        enforce_schedule_clocking: settingsResult.data?.enforce_schedule_clocking ?? true,
+        early_clock_in_window_minutes: settingsResult.data?.early_clock_in_window_minutes ?? 4,
+        late_clock_out_window_minutes: settingsResult.data?.late_clock_out_window_minutes ?? 4,
+        flag_scheduled_hours_overage: settingsResult.data?.flag_scheduled_hours_overage ?? true,
       },
       myPublishedShifts: (shiftResult.data ?? []).map((shift) => {
         const location = locationMap.get(String(shift.location_id)) as DbRow | undefined;
@@ -328,7 +330,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { admin, userClient, user, profile, isOwner } = await requireStaff(request);
+    const { admin, user, profile, isOwner } = await requireStaff(request);
     const body = object(await request.json().catch(() => ({})));
     const event = text(body.event) as ClockEventType;
     const requestedSource = text(body.source);
@@ -360,12 +362,31 @@ export async function POST(request: Request) {
     }
     const targetProfile = targetProfileResult.data;
 
-    const laneResult = await admin
-      .from("staff_lane_profiles")
-      .select("staff_user_id,full_name,lane_group,job_title,department,is_active")
-      .eq("organization_id", profile.organization_id)
-      .eq("is_active", true);
+    const [laneResult, settingsResult] = await Promise.all([
+      admin.from("staff_lane_profiles")
+        .select("staff_user_id,full_name,lane_group,job_title,department,is_active")
+        .eq("organization_id", profile.organization_id)
+        .eq("is_active", true),
+      admin.from("staff_attendance_settings")
+        .select("late_tracking_enabled,late_grace_minutes,early_departure_tracking_enabled,early_departure_grace_minutes,enforce_schedule_clocking,early_clock_in_window_minutes,late_clock_out_window_minutes,flag_scheduled_hours_overage,flexible_clock_user_ids")
+        .eq("organization_id", profile.organization_id)
+        .maybeSingle(),
+    ]);
     if (laneResult.error) throw laneResult.error;
+    if (settingsResult.error) throw settingsResult.error;
+    const settings = (settingsResult.data ?? {
+      late_tracking_enabled: false,
+      late_grace_minutes: null,
+      early_departure_tracking_enabled: false,
+      early_departure_grace_minutes: null,
+      enforce_schedule_clocking: true,
+      early_clock_in_window_minutes: 4,
+      late_clock_out_window_minutes: 4,
+      flag_scheduled_hours_overage: true,
+      flexible_clock_user_ids: [],
+    }) as AttendanceSettingsRow;
+    // Server-managed access for specific active owners; request metadata cannot grant it.
+    const flexibleAllowed = !adminOverride && isOwner && (settings.flexible_clock_user_ids ?? []).includes(user.id);
     const laneRows = (laneResult.data ?? []) as unknown as DbRow[];
     const targetLane = laneRows.find((row) => text(row.staff_user_id) === targetUserId)
       ?? laneRows.find((row) => text(row.full_name).toLowerCase() === text(targetProfile.full_name).toLowerCase());
@@ -394,6 +415,8 @@ export async function POST(request: Request) {
         clockSource = "Location QR";
       } else if (requestedSource === "Maintenance Manual" && targetIsMaintenance) {
         clockSource = "Maintenance Manual";
+      } else if (requestedSource === "Flexible Manual" && flexibleAllowed) {
+        clockSource = "Flexible Manual";
       } else {
         throw new Response(
           targetIsMaintenance
@@ -455,7 +478,7 @@ export async function POST(request: Request) {
     let locationLabel = "";
     const requestedLocationText = text(body.location);
 
-    if (event === "break_start" || event === "break_end") {
+    if (event === "break_start" || event === "break_end" || (event === "clock_out" && clockSource === "Flexible Manual")) {
       if (!lastRow || !["clock_in", "break_end", "break_start"].includes(last)) {
         throw new Response("An active shift is required before managing a break.", { status: 409 });
       }
@@ -465,6 +488,8 @@ export async function POST(request: Request) {
         || (location
           ? normalizeLocation(`${text(location.slug)} ${text(location.name)} ${text(location.full_name)}`)
           : "Maintenance / Offsite");
+    } else if (requestedLocationText === "Administration / Offsite" && clockSource === "Flexible Manual") {
+      locationLabel = "Administration / Offsite";
     } else if (
       requestedLocationText === "Maintenance / Offsite"
       && (clockSource === "Maintenance Manual" || (clockSource === "Admin Override" && targetIsMaintenance))
@@ -487,11 +512,7 @@ export async function POST(request: Request) {
       locationLabel = requested;
     }
 
-    const [settingsResult, shiftsResult, exceptionsResult] = await Promise.all([
-      admin.from("staff_attendance_settings")
-        .select("late_tracking_enabled,late_grace_minutes,early_departure_tracking_enabled,early_departure_grace_minutes,enforce_schedule_clocking,early_clock_in_window_minutes,late_clock_out_window_minutes,flag_scheduled_hours_overage")
-        .eq("organization_id", profile.organization_id)
-        .maybeSingle(),
+    const [shiftsResult, exceptionsResult] = await Promise.all([
       location
         ? admin.from("staff_shifts")
             .select("id,start_time,end_time,status")
@@ -512,20 +533,9 @@ export async function POST(request: Request) {
             .eq("status", "Approved")
         : Promise.resolve({ data: [], error: null }),
     ]);
-    if (settingsResult.error) throw settingsResult.error;
     if (shiftsResult.error) throw shiftsResult.error;
     if (exceptionsResult.error) throw exceptionsResult.error;
 
-    const settings = (settingsResult.data ?? {
-      late_tracking_enabled: false,
-      late_grace_minutes: null,
-      early_departure_tracking_enabled: false,
-      early_departure_grace_minutes: null,
-      enforce_schedule_clocking: true,
-      early_clock_in_window_minutes: 4,
-      late_clock_out_window_minutes: 4,
-      flag_scheduled_hours_overage: true,
-    }) as AttendanceSettingsRow;
     const shifts = (shiftsResult.data ?? []) as unknown as DbRow[];
     const exceptions = (exceptionsResult.data ?? []) as unknown as DbRow[];
     const earlyWindow = Math.max(0, Number(settings.early_clock_in_window_minutes ?? 4));
@@ -537,7 +547,7 @@ export async function POST(request: Request) {
     const approvedStart = exceptions.some((row) => exceptionCovers(row, nowMinutes, relevantShiftId, "start"));
     const approvedEnd = exceptions.some((row) => exceptionCovers(row, nowMinutes, relevantShiftId, "end"));
     const approvedAny = exceptions.some((row) => exceptionCovers(row, nowMinutes, relevantShiftId, "any"));
-    const bypassSchedule = clockSource === "Maintenance Manual" || clockSource === "Admin Override";
+    const bypassSchedule = flexibleAllowed || clockSource === "Maintenance Manual" || clockSource === "Admin Override";
 
     if (event === "clock_in" && enforceSchedule && !bypassSchedule && !isOwner) {
       if (!relevantShift) {
@@ -572,19 +582,25 @@ export async function POST(request: Request) {
       performedByUserId: user.id,
       performedByName: profile.full_name,
       adminOverride,
+      flexibleClocking: flexibleAllowed,
     };
 
-    const { error: auditError } = await userClient.rpc("record_audit_event", {
-      p_action: "CREATE",
-      p_table_name: "time_clock",
-      p_row_id: null,
-      p_location_id: location ? text(location.id) : null,
-      p_metadata: metadata,
+    // The manual audit RPC accepts REVIEW/EXPORT only. Record a validated clock
+    // action here, with tenant, actor and actual time supplied by this server.
+    const { error: auditError } = await admin.from("audit_log").insert({
+      organization_id: profile.organization_id,
+      actor_user_id: user.id,
+      action: "CREATE",
+      table_name: "time_clock",
+      row_id: null,
+      location_id: location ? text(location.id) : null,
+      metadata,
+      occurred_at: occurredAt.toISOString(),
     });
-    if (auditError) throw auditError;
+    if (auditError) throw new Error("Could not save the clock action. Refresh your time clock and try again.");
 
     let needsLeadershipReview = false;
-    const shouldRunPerformanceChecks = clockSource === "Location QR" && targetUserId === user.id;
+    const shouldRunPerformanceChecks = clockSource === "Location QR" && targetUserId === user.id && !flexibleAllowed;
 
     if (shouldRunPerformanceChecks && (event === "clock_in" || event === "clock_out") && relevantShift && location) {
       const shiftStart = minutesFromTime(text(relevantShift.start_time));
