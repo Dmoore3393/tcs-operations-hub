@@ -175,7 +175,7 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/staff-performance": { title: "Staff Performance Command Center", subtitle: "Recognition, accountability, coaching, trends, and leadership follow-up" },
   "/employee-checkins": { title: "Employee 30/60/90 Check-Ins", subtitle: "Structured onboarding conversations, support, goals, and employee acknowledgment" },
   "/team-access": { title: "Team Access", subtitle: "Email invitations, staff roles, locations, and employee permissions" },
-  "/staff-schedules": { title: "Staff Schedules", subtitle: "Jennifer’s weekly staff planner, shift assignments and schedule publishing" },
+  "/staff-schedules": { title: "Staff Schedules", subtitle: "Weekly team schedules, locations and shift assignments" },
   "/scheduling": { title: "Staffing Command Center", subtitle: "Live child demand, floor coverage, transportation adjustments, and staffing gaps" },
   "/transportation": { title: "Transportation", subtitle: "Routes, schools, drivers, and vehicle readiness" },
   "/transportation-setup": { title: "Transportation Setup", subtitle: "Daily dispatch, call-outs, recurring routes, schools and vehicles" },

@@ -19,3 +19,13 @@ test('weekly scheduler edits only the selected location and day and opens a new 
  buttons.filter(node=>node.props['aria-label']?.startsWith('Add staff shift'))[5].props.onClick();assert.equal(added,'2026-11-07');
  assert.ok(flatten(Planner({...props,saving:true})).filter(node=>node.type==='button').every(node=>node.props.disabled));
 });
+
+test('licensee team view shows weekend times and notes without editing controls',()=>{
+ const dates=['2026-11-14','2026-11-15'];
+ const row={id:'weekend',location_id:'home',staff_name:'Weekend Staff',shift_date:dates[1],start_time:'12:00:00',end_time:'18:30:00',status:'Published',position_label:'Floor',notes:'Published weekend instructions'};
+ const nodes=flatten(Planner({dates,location:{id:'home',name:'Synthetic Home'},shifts:[row],readOnly:true}));
+ assert.equal(nodes.filter(node=>node.type==='button').length,0);
+ assert.ok(nodes.some(node=>node.props?.['aria-label']?.startsWith('Shift for Weekend Staff')));
+ assert.ok(nodes.some(node=>node.props?.children==='Published weekend instructions'));
+ assert.ok(nodes.some(node=>node.type==='summary'&&node.props.children==='Shift notes'));
+});

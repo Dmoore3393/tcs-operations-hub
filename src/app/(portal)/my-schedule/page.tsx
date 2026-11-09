@@ -1,14 +1,15 @@
 "use client";
 import {WORK_LOCATION_FILTER} from "@/lib/location-config";
+import Link from "next/link";
 
 import MainLayout from "@/components/layout/MainLayout";
 import { PrimaryButton, SecondaryButton, SectionCard, StatCard } from "@/components/hub/HubUI";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { localIsoDate } from "@/lib/date-utils";
+import { pacificScheduleDate, nextPublishedScheduleWeek, scheduleDatePlus as datePlus, scheduleMonday as mondayFor } from "@/lib/team-schedule";
 import { locationKeyForDbLocation, type StaffingLocation } from "@/lib/staffing-command";
 import { supabase } from "@/lib/supabase/client";
 import { CalendarCheck2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, LoaderCircle, MapPin, ShieldCheck } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type SchedulePublication = {
   id: string;
@@ -47,19 +48,6 @@ type ScheduleAcknowledgement = {
   notes: string | null;
 };
 
-function datePlus(date: string, days: number) {
-  const parsed = new Date(`${date}T12:00:00`);
-  parsed.setDate(parsed.getDate() + days);
-  return localIsoDate(parsed);
-}
-
-function mondayFor(date: string) {
-  const parsed = new Date(`${date}T12:00:00`);
-  const day = parsed.getDay();
-  parsed.setDate(parsed.getDate() - (day === 0 ? 6 : day - 1));
-  return localIsoDate(parsed);
-}
-
 function displayDate(date: string, includeYear = false) {
   return new Intl.DateTimeFormat("en-US", {
     weekday: "short",
@@ -84,8 +72,11 @@ function publishedLabel(value: string | null) {
 }
 
 export default function MySchedulePage() {
-  const { profile } = useAuth();
-  const [anchorDate, setAnchorDate] = useState(() => localIsoDate());
+  const { profile, isLocationLicensee } = useAuth();
+  const userId = profile?.user_id;
+  const [anchorDate, setAnchorDate] = useState(() => pacificScheduleDate());
+  const chooseInitialWeek = useRef(true);
+  const loadNumber = useRef(0);
   const [locations, setLocations] = useState<StaffingLocation[]>([]);
   const [snapshots, setSnapshots] = useState<PublishedShiftSnapshot[]>([]);
   const [publications, setPublications] = useState<SchedulePublication[]>([]);
@@ -100,17 +91,21 @@ export default function MySchedulePage() {
   const weekEnd = weekDates[6];
 
   const load = useCallback(async () => {
-    if (!supabase || !profile?.user_id) return;
+    if (!supabase || !userId) return;
+    const requestNumber = ++loadNumber.current;
+    const lookAhead = chooseInitialWeek.current ? 14 : 0;
     setLoading(true);
     const [locationResult, publicationResult] = await Promise.all([
       supabase.from("locations").select("id,slug,name,full_name,capacity,program_type").or(WORK_LOCATION_FILTER).order("name"),
       supabase
         .from("schedule_publications")
         .select("id,location_id,week_of,status,revision,published_at,published_by,notes,needs_republish")
-        .eq("week_of", weekStart)
+        .gte("week_of", weekStart)
+        .lte("week_of", datePlus(weekStart, lookAhead))
         .eq("status", "Published"),
     ]);
 
+    if (requestNumber !== loadNumber.current) return;
     const failure = locationResult.error || publicationResult.error;
     if (failure) {
       setError(failure.message);
@@ -127,18 +122,19 @@ export default function MySchedulePage() {
         supabase
           .from("staff_schedule_acknowledgements")
           .select("id,publication_id,location_id,user_id,revision,acknowledged_at,notes")
-          .eq("user_id", profile.user_id)
+          .eq("user_id", userId)
           .in("publication_id", publicationIds),
         supabase
           .from("staff_schedule_publication_shifts")
           .select("id,publication_id,location_id,source_shift_id,user_id,staff_name,shift_date,start_time,end_time,position_label,notes,revision")
-          .eq("user_id", profile.user_id)
+          .eq("user_id", userId)
           .in("publication_id", publicationIds)
           .gte("shift_date", weekStart)
-          .lte("shift_date", weekEnd)
+          .lte("shift_date", datePlus(weekEnd, lookAhead))
           .order("shift_date")
           .order("start_time"),
       ]);
+      if (requestNumber !== loadNumber.current) return;
       if (acknowledgementResult.error || snapshotResult.error) {
         setError(acknowledgementResult.error?.message || snapshotResult.error?.message || "Could not load your published schedule.");
         setLoading(false);
@@ -150,16 +146,28 @@ export default function MySchedulePage() {
 
     const publicationMap = new Map(nextPublications.map((item) => [item.id, item]));
     const currentSnapshots = snapshotRows.filter((item) => publicationMap.get(item.publication_id)?.revision === item.revision);
+    if (chooseInitialWeek.current) {
+      const nextWeek = nextPublishedScheduleWeek(currentSnapshots, pacificScheduleDate());
+      if (nextWeek) {
+        chooseInitialWeek.current = false;
+        if (nextWeek !== weekStart) {
+          setAnchorDate(nextWeek);
+          setMessage(`Showing your next published schedule: ${displayDate(nextWeek)} – ${displayDate(datePlus(nextWeek, 6))}.`);
+          return;
+        }
+      }
+    }
 
     setLocations((locationResult.data ?? []) as StaffingLocation[]);
-    setSnapshots(currentSnapshots);
-    setPublications(nextPublications);
+    setSnapshots(currentSnapshots.filter(item => item.shift_date >= weekStart && item.shift_date <= weekEnd));
+    setPublications(nextPublications.filter(item => item.week_of === weekStart));
     setAcknowledgements(acknowledgementRows);
     setError("");
     setLoading(false);
-  }, [profile?.user_id, weekEnd, weekStart]);
+  }, [userId, weekEnd, weekStart]);
 
-  useEffect(() => { void load(); }, [load]);
+  const invalidateLoad = useCallback(() => { ++loadNumber.current; }, []);
+  useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => { window.clearTimeout(timer); invalidateLoad(); }; }, [load, invalidateLoad]);
 
   useEffect(() => {
     if (!supabase || !profile?.user_id) return;
@@ -209,11 +217,22 @@ export default function MySchedulePage() {
     setSavingId("");
   }
 
-  function moveWeek(days: number) {
-    setAnchorDate(datePlus(weekStart, days));
+  function chooseWeek(date: string) {
+    chooseInitialWeek.current = false;
+    ++loadNumber.current;
+    setSnapshots([]);
+    setPublications([]);
+    setAcknowledgements([]);
+    setMessage("");
+    setLoading(true);
+    setAnchorDate(date);
   }
 
-  const today = localIsoDate();
+  function moveWeek(days: number) {
+    chooseWeek(datePlus(weekStart, days));
+  }
+
+  const today = pacificScheduleDate();
 
   return <MainLayout><div className="mx-auto max-w-[1450px] space-y-6 pb-12">
     <section className="overflow-hidden rounded-[32px] bg-gradient-to-br from-[#102a56] via-[#1769d2] to-[#155b3b] p-6 text-white shadow-xl sm:p-8">
@@ -223,10 +242,13 @@ export default function MySchedulePage() {
           <h1 className="mt-4 text-3xl font-black sm:text-5xl">My Schedule</h1>
           <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-white/80">Only published shifts assigned to your staff account appear here. When a schedule is republished, you will be asked to acknowledge the new revision.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => moveWeek(-7)} className="grid h-11 w-11 place-items-center rounded-xl bg-white/10 hover:bg-white/20" aria-label="Previous week"><ChevronLeft className="h-5 w-5" /></button>
           <div className="min-w-52 rounded-xl bg-white/10 px-4 py-2.5 text-center text-sm font-black">{displayDate(weekStart)} – {displayDate(weekEnd, true)}</div>
           <button onClick={() => moveWeek(7)} className="grid h-11 w-11 place-items-center rounded-xl bg-white/10 hover:bg-white/20" aria-label="Next week"><ChevronRight className="h-5 w-5" /></button>
+          <button disabled={weekStart === mondayFor(today)} onClick={() => chooseWeek(mondayFor(today))} className="min-h-11 rounded-xl bg-white/10 px-4 font-bold disabled:opacity-50">This week</button>
+          <button disabled={loading} onClick={() => void load()} className="min-h-11 rounded-xl bg-white/10 px-4 font-bold disabled:opacity-50">Refresh</button>
+          {isLocationLicensee && <Link href="/staff-schedules" className="inline-flex min-h-11 items-center rounded-xl bg-white px-4 font-bold text-blue-950">View team schedule</Link>}
         </div>
       </div>
     </section>
