@@ -115,7 +115,8 @@ assert(staffTimeClockScanner.includes("It does not use or claim GPS verification
 assert(staffTimeClock.includes("My Staff Clock PIN") && staffTimeClock.includes("Maintenance Manual Clock"), "Time Clock must keep personal PIN setup and the maintenance-only manual exception");
 assert(staffTimeClock.includes("Owner/Admin Staff Clock Override") && staffTimeClock.includes("Reset Staff PIN"), "Owner/Admin Time Clock override and PIN reset controls are missing");
 assert(staffTimeClockRoute.includes("Regular staff must scan the TCS location QR to clock in or out."), "Regular staff clock-in/out must require the location QR");
-assert(staffTimeClockRoute.includes('requestedSource === "Maintenance Manual" && targetIsMaintenance'), "Manual staff clocking must stay restricted to Maintenance");
+assert(staffTimeClockRoute.includes('requestedSource === "Maintenance Manual" && targetIsMaintenance'), "Maintenance manual clocking must stay restricted to Maintenance");
+assert(staffTimeClock.includes("FlexibleClockPanel") && staffTimeClockRoute.includes('requestedSource === "Flexible Manual" && flexibleAllowed'), "Flexible clocking must use server-authorized personal access");
 assert(staffTimeClockRoute.includes("Only an Owner/Admin can clock another staff member in or out."), "Only Owner/Admin may clock another staff member");
 assert(staffTimeClockRoute.includes("verifyStaffClockPin"), "Staff clock-in/out must verify the signed-in employee PIN");
 assert(staffClockPinRoute.includes('action === "admin_reset"') && staffClockPinRoute.includes("Only an Owner/Admin"), "Only Owner/Admin may reset another staff clock PIN");

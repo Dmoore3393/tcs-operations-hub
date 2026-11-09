@@ -1,6 +1,7 @@
 "use client";
 
 import MainLayout from "@/components/layout/MainLayout";
+import FlexibleClockPanel from "@/components/time-clock/FlexibleClockPanel";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { locationFromSlug } from "@/lib/location-config";
@@ -21,7 +22,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 type ClockEventType = "clock_in" | "clock_out" | "break_start" | "break_end";
-type ClockSource = "Location QR" | "Maintenance Manual" | "Admin Override" | "Active Shift" | "Legacy";
+type ClockSource = "Location QR" | "Maintenance Manual" | "Flexible Manual" | "Admin Override" | "Active Shift" | "Legacy";
 
 type ClockEvent = {
   id: string;
@@ -53,6 +54,7 @@ type Payload = {
     pinUpdatedAt: string;
     isMaintenance: boolean;
     manualAllowed: boolean;
+    flexibleAllowed: boolean;
   };
   adminClockStaff: AdminClockStaff[];
   clockPolicy: {
@@ -175,6 +177,7 @@ function TimeClockScreen() {
   const [newClockPin, setNewClockPin] = useState("");
 
   const [maintenanceLocation, setMaintenanceLocation] = useState<string>(firstLocation);
+  const [flexibleLocation, setFlexibleLocation] = useState<string>(firstLocation);
   const [adminTargetUserId, setAdminTargetUserId] = useState("");
   const [adminLocation, setAdminLocation] = useState<string>(firstLocation);
   const [adminPin, setAdminPin] = useState("");
@@ -433,7 +436,9 @@ function TimeClockScreen() {
               <p className="text-xs font-black uppercase tracking-[.18em] text-emerald-200">Staff time & attendance</p>
               <h1 className="mt-2 text-3xl font-black sm:text-4xl">The Hub Time Clock</h1>
               <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-emerald-50/80">
-                Regular staff clock in and out with the posted TCS location QR plus their personal staff PIN. Maintenance may use the protected manual option when work happens away from a posted QR.
+                {payload?.myClockAccess.flexibleAllowed
+                  ? "Your account has flexible clocking. Record your work here with your personal PIN, whether or not your hours are scheduled."
+                  : "Regular staff clock in and out with the posted TCS location QR plus their personal staff PIN. Maintenance may use the protected manual option when work happens away from a posted QR."}
               </p>
             </div>
             <div className="rounded-2xl bg-white/10 p-4">
@@ -447,7 +452,21 @@ function TimeClockScreen() {
         {notice && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-900">{notice}</div>}
         {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-900">{error}</div>}
 
-        {payload && (
+        {payload?.myClockAccess.flexibleAllowed && (
+          <FlexibleClockPanel
+            locations={availableLocations}
+            location={state !== "Off Clock" && latestMine?.location ? latestMine.location : flexibleLocation}
+            onLocationChange={setFlexibleLocation}
+            pin={clockPin}
+            onPinChange={setClockPin}
+            pinConfigured={payload.myClockAccess.pinConfigured}
+            state={state}
+            busy={saving || loading}
+            onClock={(event) => void act(event, "Flexible Manual", { location: flexibleLocation, pin: clockPin })}
+          />
+        )}
+
+        {payload && !payload.myClockAccess.flexibleAllowed && (
           <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
             <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
               <div>
@@ -579,7 +598,7 @@ function TimeClockScreen() {
           )}
         </section>
 
-        {payload?.myClockAccess.manualAllowed && (
+        {payload?.myClockAccess.manualAllowed && !payload.myClockAccess.flexibleAllowed && (
           <section className="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
             <div className="flex items-start gap-3">
               <Wrench className="mt-0.5 h-5 w-5 flex-none text-amber-800" />
