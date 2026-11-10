@@ -102,7 +102,6 @@ export function useDatedCarePlan(start: string, end: string, enabled = true) {
     };
     const channel = supabase.channel(`dated-care-${scope}-${instance}`);
     for (const table of [
-      "locations",
       "children",
       "child_schedule_overrides",
       "care_calendar_closures",
