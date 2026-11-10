@@ -26,8 +26,38 @@ for(const name of ['package.json','tsconfig.json','postcss.config.mjs'])await cp
 await symlink(join(repoRoot,'node_modules'),join(work,'node_modules'),'dir');
 // API handlers stay in Vercel. Only the client screens are statically exported.
 await writeFile(join(work,'next.config.mjs'),'export default { output: "export", trailingSlash: true, images: { unoptimized: true } };\n');
+// A packaged static app has no incoming HTTP cookies. Apply this only to the
+// export copy; the website keeps its request-based language selection. The
+// client language switch and signed-in staff preference still work in the app.
+const layoutPath=join(work,'src/app/layout.tsx');
+let nativeLayout=await readFile(layoutPath,'utf8');
+const cookieImport='import {cookies} from "next/headers";';
+const cookieLanguage='const language=(await cookies()).get("tcs_language")?.value==="es"?"es":"en";';
+if(!nativeLayout.includes(cookieImport)||!nativeLayout.includes(cookieLanguage))throw Error('Review the root language layout before preparing the native export.');
+nativeLayout=nativeLayout.replace(cookieImport,'').replace(cookieLanguage,'const language="en" as const;');
+await writeFile(layoutPath,nativeLayout);
 // Match the existing /transportation rewrite without requiring a server rewrite.
 await writeFile(join(work,'src/app/(portal)/transportation/page.tsx'),'export { default } from "../transportation-v2/page";\n');
+// Preserve date/location deep links without request-time server searchParams.
+for(const [page,component] of [['child-schedules','WeeklyCarePlanner'],['ratios','DailyRatioPlan']]){
+ const path=join(work,`src/app/(portal)/${page}/page.tsx`);
+ const original=await readFile(path,'utf8');
+ if(!original.includes('plannerPageSelection(await searchParams)')||!original.includes(`@/components/scheduling/${component}`))throw Error(`Review ${page} before preparing its native route.`);
+ await writeFile(path,`"use client";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import Planner from "@/components/scheduling/${component}";
+import { plannerPageSelection } from "@/lib/weekly-care-planner";
+function SelectedPlanner() {
+ const query=useSearchParams();
+ const selection=plannerPageSelection(Object.fromEntries(query.entries()));
+ return <Planner {...selection} />;
+}
+export default function Page() {
+ return <Suspense fallback={<p role="status">Loading planner…</p>}><SelectedPlanner /></Suspense>;
+}
+`);
+}
 await writeFile(join(work,'.env.production'),Object.entries(publicEnvironment).map(([key,value])=>`${key}=${value}`).join('\n')+'\n');
 const inheritedEnvironment=Object.fromEntries(Object.entries(process.env).filter(([key])=>!(/^(SUPABASE_|APPLE_|OPENAI_API_KEY$|VERCEL_TOKEN$)/.test(key))));
 const env={...inheritedEnvironment,...publicEnvironment,NEXT_TELEMETRY_DISABLED:'1'};

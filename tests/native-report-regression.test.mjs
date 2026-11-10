@@ -10,16 +10,16 @@ import { createContext, SourceTextModule, SyntheticModule } from 'node:vm';
 async function loadHelper(path, globals, dependencies) {
   const source = await readFile(new URL(path, import.meta.url), 'utf8');
   const context = createContext({ URL, Request, Response, ...globals });
-  const module = new SourceTextModule(stripTypeScriptTypes(source), { context });
-  await module.link(specifier => {
+  const loadedModule = new SourceTextModule(stripTypeScriptTypes(source), { context });
+  await loadedModule.link(specifier => {
     assert.ok(Object.hasOwn(dependencies, specifier), `Unexpected dependency: ${specifier}`);
     const values = dependencies[specifier];
     return new SyntheticModule(Object.keys(values), function () {
       for (const [name, value] of Object.entries(values)) this.setExport(name, value);
     }, { context });
   });
-  await module.evaluate();
-  return module.namespace;
+  await loadedModule.evaluate();
+  return loadedModule.namespace;
 }
 
 async function nativeFixture({ native = true, href = 'capacitor://localhost/shift-reports/', server = false, failure } = {}) {
