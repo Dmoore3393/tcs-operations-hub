@@ -1,3 +1,8 @@
+CURRENT STATUS — NOVEMBER 10, 2026
+Version 1.0.1 (6) was built, signed, uploaded and submitted to App Review. Apple confirmed "1 Item Submitted". Manual release is retained. See appstore-delivery-20261110.txt for the actual checks, artifacts and remaining device-verification limits.
+
+The original preparation plan below is retained as history, not current release status.
+
 THE HUB BY TCS — iOS 1.0.1 RELEASE CANDIDATE
 Prepared: November 9, 2026 (Pacific)
 Status: SOURCE PREPARATION ONLY. NOT BUILT, SIGNED, UPLOADED OR SUBMITTED.

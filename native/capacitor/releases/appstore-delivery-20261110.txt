@@ -1,0 +1,30 @@
+THE HUB BY TCS — iOS 1.0.1 / BUILD 6
+November 10, 2026 (Pacific)
+
+Source archived: a64e198cd7c5a1be43c07724dc22d3d0276de6b5
+Existing app: 6817598608
+Existing bundle: com.thomasonchildcaresolutions.thehub
+
+COMPLETED
+- Re-ran 21 isolated report and transportation tests; all passed. These cover report author selection, idempotent saving, report-type corrections, preserved notes, rejected/stale corrections, native API routing and custody notifications.
+- Reviewed the existing successful native simulator result: three login/public-page tests, no failures. No claim of signed-in physical-device testing is made.
+- Xcode produced TheHub-1.0.1-build6-20261110-Release.xcarchive with ARCHIVE SUCCEEDED.
+- Verified bundled screens include the current shift-report RPC and correction endpoint, driver/city transport styling, individual arrival controls and emergency readiness, child schedules and ratios.
+- Exported the App Store distribution package successfully. Code signature verification passed. Apple Distribution signing uses the existing team; production APNs is enabled and get-task-allow is false.
+- Apple upload succeeded at 15:43 Pacific. The upload log reports Uploaded package is processing, Upload succeeded, Uploaded TheHub, EXPORT SUCCEEDED.
+- Created the 1.0.1 App Store version, entered release notes and selected processed build 6. Manual release remains selected. App identity, pricing and distribution method were not changed.
+
+FINAL REVIEW STATUS
+SUBMITTED TO APP REVIEW. Apple displayed "1 Item Submitted" after the final Submit for Review action. Verified November 10, 2026 at 03:57 PM Pacific. The submission contains only iOS App 1.0.1 (6). Manual release remains selected. This is not approval or public release.
+
+No real childcare reports, schedules, custody events, staff roles or authentication permissions were modified for this verification.
+Physical-device signed-in report submission/correction and camera/Face ID/push checks have not been claimed complete. The uploaded package contains the fixes, but installed 1.0 apps remain unchanged until the update is approved, released and installed.
+
+Artifacts (not committed):
+native/capacitor/artifacts/resumed-report-transport-tests.log
+native/capacitor/artifacts/release-archive-20261110.log
+native/capacitor/artifacts/release-export-20261110.log
+native/capacitor/artifacts/apple-upload-20261110.log
+native/capacitor/artifacts/AppStore-1.0.1-build6-20261110/The Hub.ipa
+
+IPA SHA256: 3a892fa61dbb386727e2a824272bd07cfe1f5b1f1c81cfa09a0b6592b6e24f7f
