@@ -1,0 +1,41 @@
+TCS HUB — SCHEDULE SYNC FIX / NOVEMBER 10, 2026
+
+STATUS
+Implemented and saved on release/ios-1.0.1-20261109, under draft PR 134.
+Tested code commit: 7c386b8bc8ede18ccccf516100404a425028829d.
+Not merged to main, not installed on a real iPhone, not uploaded or submitted to Apple during this work.
+
+WHAT CHANGED
+- The native export now explicitly adapts Child Schedules to WeeklyCarePlanner and Ratios to DailyRatioPlan, the same dated planner components used by the website. It resolves date/location links on the device and keys the planner by the selected date/location. It does not freeze the schedule date at package-build time or substitute the older recurring-only grid.
+- The export copy alone removes request-time language-cookie access. The website's source layout, client language switch and staff language synchronization are retained. Unexpected layout/route shapes stop the export for review.
+- The shared dated-plan reader reloads on foreground visibility, focus, page restoration, network return and realtime subscription recovery. Visible online readers also refresh every 30 seconds as a missed-event fallback.
+- All five reads share the existing 12-second timeout/abort signal. Offline or failed reads return an error with ready=false, not an apparently current regular-hours fallback.
+- Older requests cannot overwrite newer requests or another account/week, and unmounted/disabled readers do not expose old data.
+- One-day overrides remain separate from usual weekly hours. No live schedule data, account permissions or security policies were changed.
+
+LIVE CONFIGURATION CHECK (READ ONLY)
+Confirmed row-level security is enabled for locations, children, child_schedules, child_schedule_overrides, care_calendar_closures and child_schedule_school_notes.
+The four dated-reader event tables are already in supabase_realtime. Locations is not published; the reader therefore does not subscribe to it and refreshes that metadata through normal reads/polling instead. No publication changes were made.
+
+VERIFICATION ACTUALLY PERFORMED
+Command: node --test tests/schedule-sync-regression.test.mjs
+Node: 22.16.0
+Result: 24 tests passed, 0 failed, 0 skipped.
+The tests execute the actual hook, existing planner resolver and timeout source using synthetic React/browser/Supabase dependencies and in-memory records. They cover two modeled readers seeing shared date edits, No Care, split locations, closure effects on ratio inputs, foreground/network/realtime recovery, polling, burst coalescing, errors/timeouts, stale reads, week changes, organization/date filters, sign-out, cleanup, disabled readers, and native route transformations.
+These are isolated tests, NOT a live website-to-installed-iPhone test, NOT a production write test and NOT an RLS integration test.
+Both native build-helper files passed node --check. TypeScript transpilation checks passed in the harness; a complete project typecheck/native export was not run in this container.
+All four tested files were matched byte-for-byte to their committed GitHub blob hashes:
+  src/hooks/useDatedCarePlan.ts — c42f153d949c54986ece83433b01b695cb204953
+  native/capacitor/scripts/prepare-web.mjs — 0799a912e1b022a63154713b8f2c85f20ddbd22a
+  native/capacitor/scripts/native-route-source.mjs — 36ef5de9807b48ab4e49b12b537ed2c737694eee
+  tests/schedule-sync-regression.test.mjs — abddf7ba008341e50926637152e2454379c2e765
+
+REMAINING NATIVE RELEASE WORK
+The authorized Mac reported Offline. Its existing worktree is /Users/daniellemoore/Desktop/tcs-hub-ios-1.0.1. Preserve it and inspect git status/diff before fetching/reconciling this branch. Do not reset it.
+The worktree already has uncommitted version 1.0.1/build 6 metadata, native export adaptations and test-fixture fixes from the previous session. The committed helper-based exporter supersedes the equivalent inline layout/planner transformations in that local file; reconcile them rather than applying both or discarding unrelated local work.
+Retrieve the actual result of the previously launched Xcode/UI and full regression tests before rerunning. Rebuild and resync the latest source; the prior successfully exported bundle predates this hook fix and must not be uploaded as the corrected version.
+Verify the chosen date/location, a test-only dated change, reopening/reconnecting, No Care and closure/ratio behavior on the packaged iPhone build. Use isolated fixtures or an approved test account, not real childcare records. Keep the prior report and transportation release gates.
+Then inspect signing/version/build availability, archive, validate, upload and submit under the existing Apple app record. Preserve app identity, distribution method and manual-release choice. No statement in this file means Apple submission or release is complete.
+
+OPERATING DISTINCTION
+This is a one-time reader/package compatibility repair. Routine schedule edits are shared data changes, not new application releases. Until the repaired native version is actually verified and distributed, use the website's saved dated schedule rather than a conflicting old app screen.

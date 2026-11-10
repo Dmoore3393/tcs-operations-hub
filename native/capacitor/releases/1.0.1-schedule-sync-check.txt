@@ -1,0 +1,35 @@
+iOS 1.0.1 — WEBSITE / APP CHILD-SCHEDULE CONSISTENCY
+Investigation: November 10, 2026
+Status: Source mismatch identified; the specific child/date reported by the user has not yet been identified or reproduced on the installed app. No production schedule records were modified.
+
+EXPECTED BEHAVIOR
+A saved care-hours change is operational data, not an app release. Website and native app must show the same effective schedule for the same authorized user, child, care location and date. Routine edits must not require a new App Store build.
+
+SOURCE EVIDENCE
+- In historical source 60921f6, src/app/(portal)/child-schedules/page.tsx reads tcs-child-schedules-v2 and renders a recurring weekday grid. It does not read child_schedule_overrides or the dated care planner.
+- Current WeeklyCarePlanner reads both regular schedules and useDatedCarePlan. The latter reads child_schedule_overrides, care_calendar_closures and child_schedule_school_notes for a selected date range, scoped to the authenticated organization.
+- ChildPlanEditor saves selected dates via /api/child-schedule-planner and then reloads the dated plan.
+- The release/ios-1.0.1-20261109 branch already contains the dated planner and reader. Inclusion in source is not proof the installed binary contains them or that device synchronization passes.
+- A limited read-only live database check confirms date-specific override records exist. It does not identify the user's reported edit; do not infer the child from recent rows or copy private records into this public repository.
+
+LIKELY FAILURE MODE
+A previous native screen can remain connected to the shared database while reading only recurring weekly hours. A date-specific website edit will then be absent from that older screen. Confirm the installed version and affected record before treating this as the sole cause; wrong date/site, save errors, access scope and stale refresh remain other possibilities.
+
+REQUIRED RELEASE TEST
+Use isolated synthetic records, not live childcare scheduling or custody records:
+1. Website saves a dated pickup-time change. Confirm persisted response and database row.
+2. Native app, same authorized role/site/date, shows that override rather than the usual weekly hours.
+3. Repeat in reverse: native edit appears on the website without an app update.
+4. Reopen and resume the app; verify edits made while backgrounded refresh correctly. Test an interrupted realtime connection and explicit reload.
+5. A one-day change must not alter later weeks. Check morning/afternoon split blocks, multiple sites, No Care, Awaiting schedule and closures.
+6. Retain authorization boundaries and conflict detection. Wrong organization or unauthorized location must not become visible.
+7. Verify the dated planner and correct route are actually present in the packaged assets; do not rely only on main-branch deployment success.
+8. Report sync failures clearly. Do not show an unconfirmed save as successful.
+
+DO NOT
+- Rewrite recurring child_schedules to force an older screen to resemble one selected week's overrides.
+- Duplicate records, change dates, loosen permissions, or mark children present/picked up during this investigation.
+- Claim this is fixed in App Store 1.0 or uploaded merely because source or a web deployment was updated.
+
+RELEASE STATUS
+Keep PR 134 in draft. The Mac has further local build/export changes that must be preserved and reconciled with this branch when reachable. Simulator results, full release checks, signing, upload and Apple submission remain unverified. This note changes no live database data and introduces no native runtime behavior.
