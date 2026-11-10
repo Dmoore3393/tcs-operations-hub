@@ -1,6 +1,8 @@
 import { Capacitor } from "@capacitor/core";
 
-const API_ORIGIN = "https://tcs-operations-hub.vercel.app";
+// Use the public production domain. Deployment aliases can require Vercel SSO;
+// the Hub's bearer-token authentication and authorization still apply here.
+const API_ORIGIN = "https://thetcshub.com";
 
 /** The packaged iPhone UI uses the existing authenticated Vercel API.
  * Bearer headers and form bodies are preserved. No private server key is bundled.
