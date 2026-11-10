@@ -80,12 +80,13 @@ function reader(db=database()) {
     async removeChannel(channel){channel.removed=true;},
   };
   const {withRequestTimeout}=compile(timeoutSource,{},globals);
-  const {useDatedCarePlan}=compile(hookSource,{
+  // Explicit runner alias: hooks execute against the synthetic dispatcher above.
+  const {useDatedCarePlan: runDatedCarePlanFixture}=compile(hookSource,{
     react,'@/lib/supabase/client':{supabase:client},'@/lib/weekly-care-planner':model,
     '@/components/providers/AuthProvider':{useAuth:()=>({profile})},'@/lib/request-timeout':{withRequestTimeout},
   },globals);
   const settle=()=>new Promise(setImmediate);
-  function render(){cursor=0;const value=useDatedCarePlan(...args);while(effects.length)effects.shift()();return value;}
+  function render(){cursor=0;const value=runDatedCarePlanFixture(...args);while(effects.length)effects.shift()();return value;}
   async function tick(ms){const end=now+ms;let safety=0;while(true){const due=[...timers.entries()].filter(([,timer])=>timer.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!due)break;assert.ok(++safety<500);const [id,timer]=due;now=timer.at;if(timer.interval)timer.at+=timer.interval;else timers.delete(id);timer.fn();await settle();}now=end;await settle();return render();}
   render();
   return {db,calls,channels,window,document,render,tick,settle,held,
