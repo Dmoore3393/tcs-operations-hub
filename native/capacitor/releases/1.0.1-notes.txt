@@ -1,0 +1,64 @@
+CURRENT STATUS — NOVEMBER 10, 2026
+Version 1.0.1 (6) was built, signed, uploaded and submitted to App Review. Apple confirmed "1 Item Submitted". Manual release is retained. See appstore-delivery-20261110.txt for the actual checks, artifacts and remaining device-verification limits.
+
+The original preparation plan below is retained as history, not current release status.
+
+THE HUB BY TCS — iOS 1.0.1 RELEASE CANDIDATE
+Prepared: November 9, 2026 (Pacific)
+Status: SOURCE PREPARATION ONLY. NOT BUILT, SIGNED, UPLOADED OR SUBMITTED.
+
+App Store record: 6817598608
+Bundle: com.thomasonchildcaresolutions.thehub
+Signing team: 6Y2923TFK5
+Candidate version/build: 1.0.1 (6)
+Verify this build number is unused in App Store Connect before packaging for upload.
+Base source: 40655ecf8e8222b7978b429002ed5065ed38cba3
+Branch: release/ios-1.0.1-20261109
+
+SCOPE
+Rebuild all packaged screens from the current Hub source. This includes the driver/city transportation layout, child names with pickup times and school headings, and November-only Thanksgiving styling. Keep individual pickup, arrival and destination handoff controls; emergency-record readiness and permitted transition verification; My Route/All Routes; call-outs; and date-specific plans.
+Do not alter live schedules, contacts, custody records or authentication permissions as part of release testing. Do not change app identity, listing distribution method, pricing or manual-release choice. Do not replace the packaged app with a remote website wrapper.
+
+PREPARATION COMPLETED
+- Release branch includes the current transport UI source.
+- Added guarded metadata preparation for native app version 1.0.1, candidate build 6. It updates only app Debug/Release version settings and the Capacitor user agent, not test-target settings or credentials.
+- Tested 10 preparation assertions on synthetic fixtures: version/build updates, preserved test-target settings, repeatability, and rejection of unexpected identity/version/configuration.
+- JavaScript syntax and shell syntax checks passed locally.
+- Build helper adds an explicit Xcode UI-test mode, version-aware unique archive paths, production custom-domain CORS preflight, and archive bundle/version checks.
+- Source inspection confirms individual custody controls and emergency checks are still present. This is not an end-to-end native test.
+
+BLOCKER
+The authorized Mac was offline to Desktop Commander during preparation. Xcode compilation, simulator/device testing, signing and Apple submission have not been performed. No alternate App Store Connect/build plugin was found in the available search results.
+
+RESUME ON THE AUTHORIZED MAC
+1. Check local git status; preserve existing work and never reset or overwrite local edits. Fetch and review the release branch. Confirm source contains the base commit and there are no unexpected native changes.
+2. Confirm the latest App Store build number and that 1.0.1/build 6 is available. If not, update the candidate carefully before applying it.
+3. In repository root: npm ci, then npm run validate. Do not bypass a failing gate.
+4. In native/capacitor:
+   node scripts/prepare-release-1.0.1.mjs --self-test
+   node scripts/prepare-release-1.0.1.mjs --check
+   node scripts/prepare-release-1.0.1.mjs --apply
+   Review the resulting two-file metadata diff and commit that reviewed diff to this branch.
+5. Run bash scripts/build-ios.sh test for the existing Xcode UI-test suite. Inspect the xcresult and record its actual outcome. The suite is not a substitute for signed-in transportation checks.
+6. Run bash scripts/build-ios.sh simulator. Use isolated fixtures or an explicitly approved non-production account to check: correct driver/city layout and trip date; November/December theme boundary; morning and afternoon routes; each child remains separate; emergency readiness prevents inappropriate pickup; allowed external emergency review; pickup to arrival to handoff; call-out/restore and permissions; offline queue; staff schedules and app navigation. Never test real custody transitions on enrolled children.
+7. Verify physical-device sign-in, camera, Face ID, and push permissions without sending test alerts to real families or staff. Review the existing iOS release checklist and privacy manifest against the packaged changes.
+8. After the release gates pass, run bash scripts/build-ios.sh archive. Inspect the actual archive's Info.plist, signature, entitlements and generated assets. Confirm version 1.0.1/build 6 and the expected current transportation screen are packaged.
+9. Validate and upload this archive using the existing signed-in Xcode Organizer/App Store Connect workflow. Wait for Apple's processing and verify the build appears under the existing app record. Do not ask for or expose Apple passwords, signing keys or server secrets.
+10. Create the 1.0.1 version under the existing app, attach the verified build, review inherited metadata/screenshots/privacy details, and submit for review. Retain manual release and the existing distribution method. Record the submission status returned by Apple rather than assuming upload equals submission or approval.
+
+RELEASE GATES STILL PENDING
+Root validation: NOT RUN for this release candidate.
+Native static export / Capacitor sync: NOT RUN.
+Xcode UI tests: NOT RUN.
+Signed-in transportation behavior: NOT TESTED.
+Physical-device tests: NOT RUN.
+Signed archive / upload validation: NOT RUN.
+Apple upload / review submission: NOT DONE.
+
+DRAFT WHAT'S NEW — USE ONLY AFTER VALIDATION
+A refreshed transportation schedule makes routes easier to follow by driver, city, school and pickup time. November schedules include a Thanksgiving theme. Individual pickup, arrival and handoff confirmations and emergency-information checks remain part of the transportation workflow. This update brings the latest Hub screens into the iPhone app.
+
+REFERENCE
+Apple: https://developer.apple.com/help/app-store-connect/update-your-app/create-a-new-version
+Apple: https://developer.apple.com/help/app-store-connect/manage-builds/upload-builds
+Capacitor: https://capacitorjs.com/docs/getting-started
