@@ -23,7 +23,7 @@ if(!existsSync(join(repoRoot,'node_modules/next')))throw Error('Run npm ci in th
 await rm(work,{recursive:true,force:true});await mkdir(work,{recursive:true});
 await cp(join(repoRoot,'src'),join(work,'src'),{recursive:true,filter:(path)=>path!==join(repoRoot,'src/app/api')&&path!==join(repoRoot,'src/proxy.ts')});
 await cp(join(repoRoot,'public'),join(work,'public'),{recursive:true});
-for(const name of ['package.json','tsconfig.json','postcss.config.mjs'])await cp(joinRootSafe(repoRoot,name),join(work,name));
+for(const name of ['package.json','tsconfig.json','postcss.config.mjs'])await cp(join(repoRoot,name),join(work,name));
 await symlink(join(repoRoot,'node_modules'),join(work,'node_modules'),'dir');
 // API handlers stay in Vercel. Only the client screens are statically exported.
 await writeFile(join(work,'next.config.mjs'),'export default { output: "export", trailingSlash: true, images: { unoptimized: true } };\n');
@@ -45,4 +45,3 @@ if(status!==0)process.exit(status);
 await rm(output,{recursive:true,force:true});await cp(join(work,'out'),output,{recursive:true});
 await cp(join(nativeRoot,'www/index.html'),join(output,'offline.html'));
 console.log('Prepared bundled iPhone screens. Authenticated API calls remain on the existing Vercel application.');
-function joinRootSafe(root, name) { return join(root, name); }
