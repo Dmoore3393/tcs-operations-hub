@@ -1,0 +1,38 @@
+iOS 1.0.1 — REPORT SUBMISSION AND CORRECTION FOLLOW-UP
+Supplement to 1.0.1-notes.txt. Keep PR 134 in draft until all native release gates pass.
+
+USER-REPORTED SYMPTOM
+A location licensee cannot correct or submit opening/closing reports after installing the released iPhone app. No screenshot, exact error, or device reproduction was available during this investigation. Do not describe this as resolved on the installed app.
+
+EVIDENCE
+- Read-only account/permission checks found the affected profile active with report-writing permission for its assigned location. No account permissions were changed. A permission-helper result is not a full signed-in end-to-end test.
+- Source history shows the staff selection/signing fix in commit 877da71c5468aaba521758720b6913b40c8c998e (November 4 Pacific), and the report-type correction UI in 8cfb499fb763d296aa9bed836b7f034f559a4132 (November 8). Both are included in this release branch. The previously documented submitted iOS build predates these changes; the installed binary has not been inspected in this investigation.
+- The earlier report screen uses asynchronous collection synchronization and displays a submitted message without awaiting persistence. The current source uses create_shift_report_with_staff, awaits its response, preserves the form on failure, and reloads report history after success. Do not re-enable broad collection writes or relax row-level security to accommodate the old screen.
+- The native API adapter still targeted https://tcs-operations-hub.vercel.app. Project inspection confirmed Vercel Authentication is enabled for all_except_custom_domains. The established production domain thetcshub.com belongs to the same project. Requests to the hosting alias can encounter deployment authentication instead of the application API. This is an identified configuration problem, not proof that it caused every reported submission failure.
+
+CHANGE SAVED TO THIS RELEASE BRANCH
+src/lib/native-api.ts now sends the existing same-origin native /api/ requests to https://thetcshub.com. Existing path scoping, bearer headers, bodies, and caller authorization are unchanged. No deployment protections are disabled and no bypass credentials are embedded. Direct Supabase calls are unchanged.
+
+LOCAL AUTOMATED CHECKS
+Run from repository root with Node >=22.13:
+node --experimental-vm-modules --test tests/native-report-regression.test.mjs
+
+15 isolated tests passed on Node 22.16.0 against the helper source with synthetic browser and Capacitor dependencies. The test harness made no network requests, authenticated staff sessions, or database writes.
+Restoring only the prior API origin reproduces 3 failed destination assertions; all 15 pass with the corrected origin.
+Tests cover native report-correction routing, request method/body/header/signal preservation, unchanged Supabase/external/web traffic, local asset isolation, repeated initialization, error propagation, and preservation of notes/staff/date/location when switching report type.
+These checks are NOT tests of live server connectivity, report submission RPC behavior, UI button visibility, or the installed iPhone app.
+
+MANDATORY ADDITIONAL RELEASE GATES — STILL PENDING
+1. Build/sync the packaged screens from the reviewed release commit, not the original submitted assets.
+2. Test using isolated report fixtures and a location-licensee role. Do not log in as a real employee or alter real childcare records for tests.
+3. Staff picker loads; selected staff ID/name and initials remain attached to the report.
+4. A new Opening and a new Closing report each save successfully, survive reload, and appear exactly once in Report History with the correct location, type and status. Rapid taps and retry after an interrupted response must not duplicate records.
+5. A failed or timed-out submission leaves all typed notes available and does not display false success. Restore network service and verify the intended saved result.
+6. Correct Opening to Closing and Closing to Opening for Draft/Submitted fixtures; preserve notes and checklist audit history. Reviewed reports must remain locked. Retain stale-version conflict protection.
+7. Verify a licensee can act only within existing authorized location scope. Confirm signed-out, inactive, unauthorized employee, and parent access are rejected.
+8. On a physical iPhone, verify the production custom-domain CORS preflight and signed-in API calls without Vercel bypass cookies or share tokens. Check both the current staff-picker path and report-type PATCH path.
+9. Separately resolve draft-to-submitted workflow behavior if testing shows saved drafts cannot be reopened or submitted. Do not claim that this follow-up implements full report editing or draft resubmission.
+10. Preserve any real unsaved report notes before leaving the old app. Compare Report History before resubmitting through the website to avoid duplicates.
+
+STATUS
+Changes and isolated tests are saved on the 1.0.1 release branch only. No production database, report content, permissions or live website changes were made for this follow-up. Native build, signed-in/device testing, archive, upload and Apple review submission remain pending the authorized Mac connection and existing release gates.
