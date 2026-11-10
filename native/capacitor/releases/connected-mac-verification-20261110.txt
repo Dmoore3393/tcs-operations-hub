@@ -1,0 +1,34 @@
+TCS HUB iOS 1.0.1 — CONNECTED MAC VERIFICATION
+Date: November 10, 2026 (Pacific)
+Tested source: 9927643f7c1e292be61c595f321453b59373733b
+Release branch: release/ios-1.0.1-20261109 (draft PR 134; not merged to main)
+Candidate native identity: version 1.0.1 / build 6, existing bundle and signing team unchanged.
+
+RECOVERED WORK
+The Mac connection responded. The prior Xcode log ended BUILD INTERRUPTED, not a successful test run. Preserved the seven prior local changes in commit 1673339 before reconciling the newer schedule-sync branch. Merge 572bfd3 retained the reviewed helper-based exporter and all schedule-sync changes, plus the native version metadata and test-fixture corrections. No local work was discarded.
+
+VERIFIED IN THIS SESSION
+- 39 isolated schedule-sync/report regression tests passed (24 schedule + 15 native/report helper tests).
+- 67 isolated report, transportation, staff-schedule, language and API regression tests passed.
+- Security-source and app-structure verification scripts passed. These are static checks, not a live penetration test.
+- ESLint passed for the changed schedule hook, native API helper, new regression tests and native build helpers. Corrected the synthetic test runner name without disabling any lint rule.
+- npm run sync successfully exported the latest source and copied it into the Capacitor Xcode app. Both the Next.js compile and its TypeScript stage completed.
+- Packaged assets include child-schedules, ratios, shift-reports and transportation pages. Compiled assets include dated overrides, foreground refresh, the canonical production API, the new report RPC and the existing individual transportation/emergency controls. These presence checks alone are not behavior tests.
+- Xcode compiled the app and ran the existing three PublicReviewPagesTests on iPhone 18 Pro Simulator (iOS 27). All 3 passed, 0 failures; Xcode returned TEST SUCCEEDED.
+- Native checks cover staff/parent login-form rendering and signed-out Privacy/Terms/Support rendering, with content JavaScript enabled and disabled. They do NOT authenticate a real account or exercise signed-in schedule/report writes.
+- Result bundle: native/capacitor/artifacts/TheHub-1.0.1-build6-20261110-100529.xcresult.
+- Logs: current-sync-report-tests.log, current-operation-tests.log, current-native-export.log, current-xcode-tests.log under native/capacitor/artifacts.
+
+THEME DISCUSSION — NO THEME IMPLEMENTATION CHANGE
+The user is reconsidering holiday-by-holiday updates. No seasonal system was added and no existing holiday design was removed during this session. SchoolStopGroups remains November-only Thanksgiving styling, with standard styling on December dates. A future, explicitly approved theme system could bundle a year-round preset library with automatic date selection and a Classic/off choice. Do not claim that this larger library or its settings exist already. Keep theme work separate from urgent data/report fixes and document all shipped behavior for App Review.
+
+STILL NOT VERIFIED / NOT DONE
+- Signed-in website-to-packaged-iPhone schedule edits and report submission/correction need native end-to-end testing using isolated fixtures or a designated test account. Never use real childcare custody/report changes as tests.
+- Physical-device camera, Face ID, push, resume and connectivity checks remain outstanding.
+- Repository-wide npm run validate previously reported pre-existing lint findings outside the release edits; it has not been claimed clean. Release-scope lint and native TypeScript compile passing do not erase that baseline.
+- Candidate build 6 still needs its availability checked in App Store Connect. A simulator build is not a signed distribution archive.
+- No new distribution archive was produced, no Apple upload/submission was performed and nothing was released to customers in this session. The live website main branch was not changed.
+- No live schedule, report, permission, or childcare record was edited by these tests.
+
+NEXT RELEASE BOUNDARY
+Continue from the preserved Mac worktree. Keep the draft PR open until the remaining relevant tests and release gates are satisfied. Then verify signing, candidate build number, archive contents and existing App Store identity before validation/upload/submission. Preserve the existing distribution method and manual-release selection.
