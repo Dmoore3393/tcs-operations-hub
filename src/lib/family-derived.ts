@@ -66,11 +66,16 @@ export function deriveFamiliesFromChildren(children: ChildRecord[]): FamilyRecor
   }).sort((a, b) => a.familyName.localeCompare(b.familyName));
 }
 
+/** Resolve the displayed family by its original stable group identity, not edited contacts. */
 export function familyChildren(children: ChildRecord[], family: FamilyRecord) {
-  return children.filter((child) => {
-    if (child.familyId && child.familyId === family.id) return true;
-    const phone = digits(child.phone);
-    if (phone && phone === digits(family.phone)) return true;
-    return Boolean(child.primaryGuardian.trim()) && child.primaryGuardian.trim().toLowerCase() === family.primaryGuardian.trim().toLowerCase();
+  const groups = new Map<string, ChildRecord[]>();
+  for (const child of children) {
+    const key = familyKeyForChild(child);
+    groups.set(key, [...(groups.get(key) ?? []), child]);
+  }
+  return [...groups.entries()].flatMap(([key, group], index) => {
+    const generatedId = Math.abs([...key].reduce((hash, char) => Math.imul(hash ^ char.charCodeAt(0), 16777619), 2166136261)) || index + 1;
+    const id = group[0].familyId ?? generatedId;
+    return id === family.id ? group : [];
   });
 }
