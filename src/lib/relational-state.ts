@@ -1,3 +1,5 @@
+import { sortChildrenByLastName, type ChildSortName } from "@/lib/child-sort";
+
 export type RelationalStateConfig = {
   table: string;
   label: string;
@@ -26,7 +28,8 @@ export function relationalConfigForKey(key: string) {
   return relationalStateConfigs[key] ?? null;
 }
 
-export function sortRelationalRecords<T>(records: T[]): T[] {
+export function sortRelationalRecords<T>(records: T[], collectionKey?: string): T[] {
+  if (collectionKey === "tcs-children-v1") return sortChildrenByLastName(records as (T & ChildSortName)[]);
   return [...records].sort((left, right) => {
     const a = left as Record<string, unknown>;
     const b = right as Record<string, unknown>;

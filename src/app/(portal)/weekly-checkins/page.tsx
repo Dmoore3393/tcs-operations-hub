@@ -1,5 +1,7 @@
 "use client";
 
+import { compareChildrenByLastName } from "@/lib/child-sort";
+
 import { CelebrationBits, FunDoodles, GatorGuide } from "@/components/brand/HubJoy";
 import { TcsKidsScene } from "@/components/brand/TcsKidsScene";
 import MainLayout from "@/components/layout/MainLayout";
@@ -96,7 +98,7 @@ export default function WeeklyCheckinsPage() {
   const children = useMemo(() => (data?.children ?? [])
     .filter((child) => !locationId || child.locationId === locationId)
     .filter((child) => !search || childName(child).toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => childName(a).localeCompare(childName(b))), [data, locationId, search]);
+    .sort(compareChildrenByLastName), [data, locationId, search]);
 
   const selectedChild = data?.children.find((child) => child.id === selectedChildId) ?? null;
   const existing = data?.checkins.find((entry) => entry.childId === selectedChildId) ?? null;

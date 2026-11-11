@@ -1,5 +1,7 @@
 "use client";
 
+import { compareChildrenByLastName } from "@/lib/child-sort";
+
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
@@ -110,7 +112,7 @@ export default function AttendancePage() {
         return location === "All Locations" || currentLocation.toLowerCase().includes(location.toLowerCase()) || location.toLowerCase().includes(currentLocation.toLowerCase());
       })
       .filter((child) => !query || `${childName(child)} ${child.primaryGuardian} ${child.location}`.toLowerCase().includes(query))
-      .sort((a, b) => childName(a).localeCompare(childName(b)));
+      .sort(compareChildrenByLastName);
   }, [children, location, search]);
 
   const counts = useMemo(() => {

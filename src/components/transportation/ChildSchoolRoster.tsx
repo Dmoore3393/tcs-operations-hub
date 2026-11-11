@@ -1,5 +1,7 @@
 "use client";
 
+import { compareChildrenByLastName } from "@/lib/child-sort";
+
 import Link from "next/link";
 import { transportPickup, transportDestination, transportTripPeriod } from "@/lib/transport-trips";
 import { useState } from "react";
@@ -24,7 +26,7 @@ export default function ChildSchoolRoster({ roster, schools, routes, location, c
   const [editing, setEditing] = useState<{ child: ChildRecord; school: string; expectedSchool: string } | null>(null);
   const rows = roster.filter(child => child.enrollmentStatus === "Active" && (focusChildId ? transportChildKey(child) === focusChildId : location === "All Locations" || transportCareLocation(child.location) === transportCareLocation(location)))
     .filter(child => Boolean(focusChildId) || view === "all" || (view === "excluded" ? child.noTransportationNeeded === true : child.noTransportationNeeded !== true))
-    .filter(child => `${child.firstName} ${child.lastName} ${childSchool(child)} ${child.location}`.toLowerCase().includes(search.toLowerCase()));
+    .filter(child => `${child.firstName} ${child.lastName} ${childSchool(child)} ${child.location}`.toLowerCase().includes(search.toLowerCase())).sort(compareChildrenByLastName);
   async function saveSchool() {
     if (!editing || !session?.access_token || saving) return;
     setSaving(true); setError(""); setNotice("");

@@ -1,5 +1,7 @@
 "use client";
 
+import { compareChildrenByLastName } from "@/lib/child-sort";
+
 import MainLayout from "@/components/layout/MainLayout";
 import { recordAuditEvent } from "@/lib/audit";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -159,7 +161,7 @@ export default function EmergencyCardsPage() {
     const matchesLocation = locationFilter === "All Locations" || locationKey(child.location) === locationFilter;
     const matchesRoute = !routeChildSet || routeChildSet.has(normalizedPersonName(name));
     return matchesSearch && matchesLocation && matchesRoute;
-  }).sort((a, b) => childDisplayName(a).localeCompare(childDisplayName(b))), [children, locationFilter, routeChildSet, search]);
+  }).sort(compareChildrenByLastName), [children, locationFilter, routeChildSet, search]);
 
   const readyCount = filtered.filter((child) => emergencyCardReadiness(child).ready).length;
   const needsAttentionCount = filtered.length - readyCount;

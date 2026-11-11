@@ -9,6 +9,7 @@ const url=source=>'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(
 const config=url(await readFile('src/lib/location-config.ts','utf8'));
 const helpers=await import(url((await readFile('src/lib/transport-child-schools.ts','utf8')).replace('"./location-config"',JSON.stringify(config))));
 const trips=await import(url(await readFile('src/lib/transport-trips.ts','utf8')));
+const childSort=await import(url(await readFile('src/lib/child-sort.ts','utf8')));
 const child=(id,ageGroup,grade='',school='')=>({id,legacyId:`synthetic-${id}`,firstName:`Synthetic${id}`,lastName:'Child',ageGroup,dateOfBirth:'',location:'Halcom',enrollmentStatus:'Active',schoolAgeSupport:{grade,schoolName:school}});
 test('infants, toddlers and preschoolers without school information are not missing-school cases',()=>{
  for(const group of ['Infant','Toddler','Preschool'])assert.equal(helpers.schoolProfileApplies(child(1,group)),false);
@@ -23,7 +24,7 @@ test('TK or an actual school qualifies independently of care age group or a miss
  assert.equal(helpers.schoolProfileApplies(child(1,'School Age')),true);
 });
 async function component(path,extra={}) {
- const deps={'next/link':{default:({children,...props})=>React.createElement('a',props,children)},'@/lib/transport-child-schools':helpers,'@/lib/transport-trips':trips,'@/hooks/usePersistentState':{usePersistentState:()=>[[],()=>{},true,{retry(){}}]},'@/lib/hub-data':{starterRoutes:[]},'@/components/providers/AuthProvider':{useAuth:()=>({session:null})},'@/components/hub/HubUI':{inputClass:''},'@/lib/hub-request':{hubRequest(){throw Error('Rendering must not save a child')}} ,...extra};
+ const deps={'@/lib/child-sort':childSort,'next/link':{default:({children,...props})=>React.createElement('a',props,children)},'@/lib/transport-child-schools':helpers,'@/lib/transport-trips':trips,'@/hooks/usePersistentState':{usePersistentState:()=>[[],()=>{},true,{retry(){}}]},'@/lib/hub-data':{starterRoutes:[]},'@/components/providers/AuthProvider':{useAuth:()=>({session:null})},'@/components/hub/HubUI':{inputClass:''},'@/lib/hub-request':{hubRequest(){throw Error('Rendering must not save a child')}} ,...extra};
  const context={exports:{},require:name=>deps[name]||require(name)};
  vm.runInNewContext(ts.transpileModule(await readFile(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,context);
  return context.exports.default;

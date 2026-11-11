@@ -1,5 +1,7 @@
 "use client";
 
+import { sortChildrenByLastName } from "@/lib/child-sort";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import type { ChildRecord } from "@/lib/children";
@@ -19,7 +21,7 @@ export function useTransportChildren() {
     try {
       const result = await hubRequest<{ children: ChildRecord[] }>("/api/children", token);
       if (current !== generation.current.value) return;
-      setChildren(result.children);
+      setChildren(sortChildrenByLastName(result.children));
       setReady(true);
       setError("");
     } catch (reason) {
