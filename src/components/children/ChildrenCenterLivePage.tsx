@@ -1,5 +1,7 @@
 "use client";
 
+import { compareChildrenByLastName } from "@/lib/child-sort";
+
 import ChildEditorModal from "@/components/children/ChildEditorModal";
 import ChildTransportSummary from "@/components/transportation/ChildTransportSummary";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -282,7 +284,7 @@ export default function ChildrenCenterLivePage() {
     (siteFilter === "All Locations" || keyFor(child.location) === siteFilter) &&
     (ageFilter === "All Children" || child.ageGroup === ageFilter) &&
     (payFilter === "All Pay Sources" || child.subsidy === payFilter)
-  ).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+  ).sort(compareChildrenByLastName);
 
   const birthdayMonth = birthdayMonthNow();
   // The current roster is already authorized by /api/children and narrowed by the view filters.
@@ -466,6 +468,7 @@ export default function ChildrenCenterLivePage() {
     <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_330px]">
       <div className="space-y-3">
         <section className="woodland-filter rounded-2xl p-3">
+          <p className="mb-3 text-sm font-semibold text-slate-600" data-child-sort="last-name">Sorted by last name, then first name (A–Z).</p>
           <div className="flex flex-wrap gap-2"><Pill active={ageFilter === "All Children"} onClick={() => setAgeFilter("All Children")}>All Children ({live.length})</Pill>{["Infant", "Toddler", "Preschool", "School Age"].map((age) => <Pill key={age} active={ageFilter === age} onClick={() => setAgeFilter(age)}>{age} ({live.filter((child) => child.ageGroup === age).length})</Pill>)}</div>
           <div className="mt-3 grid gap-2 md:grid-cols-[1fr_180px_180px]"><label className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search child, family, or pay source…" className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#a9b49e]" /></label><select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold"><option>All Locations</option>{siteRows.map((site) => <option key={site.key}>{site.key}</option>)}</select><select value={payFilter} onChange={(event) => setPayFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold"><option>All Pay Sources</option>{paySources.map((source) => <option key={source}>{source}</option>)}</select></div>
         </section>

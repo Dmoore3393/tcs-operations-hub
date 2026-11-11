@@ -1,5 +1,7 @@
 "use client";
 
+import { compareChildrenByLastName } from "@/lib/child-sort";
+
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
@@ -181,7 +183,7 @@ export default function ChildFileAuditsPage() {
           siteFilter.toLowerCase().includes(child.location.toLowerCase());
         return matchesSearch && matchesSite && child.enrollmentStatus !== "Archived";
       })
-      .sort((a, b) => displayName(a).localeCompare(displayName(b)));
+      .sort(compareChildrenByLastName);
   }, [auditChildren, search, siteFilter]);
 
   const stats = useMemo(() => {

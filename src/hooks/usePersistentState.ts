@@ -92,7 +92,7 @@ function relationalValue<T>(key: string, rows: RelationalRow[] | null | undefine
   const records = key === "tcs-child-schedules-v2"
     ? mergeScheduleFragments(safeRows)
     : safeRows.map((row) => row.record_data).filter((record) => record != null);
-  return sortRelationalRecords(records) as T;
+  return sortRelationalRecords(records, key) as T;
 }
 
 export function usePersistentState<T>(key: string, initialValue: T) {

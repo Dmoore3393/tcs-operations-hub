@@ -1,4 +1,6 @@
 "use client";
+
+import { compareChildrenByLastName } from "@/lib/child-sort";
 import ChoiceSelect from "@/components/forms/ChoiceSelect";
 import SchoolNameSelect from "@/components/forms/SchoolNameSelect";
 import {gradeChoices} from "@/lib/form-options";
@@ -99,7 +101,7 @@ export default function SchoolAgeSupportPage() {
       .filter((child) => child.enrollmentStatus !== "Archived" && schoolProfileApplies(child))
       .filter((child) => matchesLocation(child.location, location))
       .filter((child) => !query || `${childName(child)} ${child.primaryGuardian} ${child.schoolAgeSupport?.schoolName || ""}`.toLowerCase().includes(query))
-      .sort((a, b) => childName(a).localeCompare(childName(b)));
+      .sort(compareChildrenByLastName);
   }, [children, location, search]);
 
   const attention = schoolAgeChildren.filter((child) => {

@@ -1,4 +1,6 @@
 "use client";
+
+import { compareChildrenByLastName } from "@/lib/child-sort";
 import {translateForDevice} from "@/lib/i18n/translate";
 
 import NativePhotoButton from "@/components/native/NativePhotoButton";
@@ -69,7 +71,7 @@ export default function ChildPhotosPage() {
   const filteredChildren = useMemo(() => children
     .filter((child) => child.enrollmentStatus !== "Archived")
     .filter((child) => !search || `${child.firstName} ${child.lastName} ${child.location}`.toLowerCase().includes(search.toLowerCase()))
-    .sort((a,b) => childName(a).localeCompare(childName(b))), [children, search]);
+    .sort(compareChildrenByLastName), [children, search]);
 
   const profile = media.find((item) => item.kind === "Profile") ?? null;
   const dailyPhotos = media.filter((item) => item.kind === "Daily Photo");
