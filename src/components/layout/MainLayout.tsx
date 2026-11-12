@@ -1,4 +1,7 @@
 "use client";
+import {hubNavigation as navItems} from "@/lib/hub-navigation";
+import VersionSyncStatus from "@/components/status/VersionSyncStatus";
+import {requestHubTransition} from "@/lib/unsaved-transitions";
 import AccountPhoto from "@/components/account/AccountPhoto";
 import {StaffLanguageSwitch} from "@/components/i18n/StaffLanguage";
 
@@ -8,128 +11,17 @@ import LegalFooter from "@/components/LegalFooter";
 import { GatorGuide } from "@/components/brand/HubJoy";
 import Link from "next/link";
 import { useHubPathname } from "@/hooks/useHubPathname";
-import {
-  BarChart3,
-  Bot,
-  BookOpen,
-  BriefcaseBusiness,
-  Building2,
-  Bus,
-  BadgeDollarSign,
-  CalendarClock,
-  CalendarDays,
-  CalendarOff,
-  Camera,
-  ChevronDown,
-  DoorOpen,
-  ClipboardCheck,
-  Cloud,
-  CloudAlert,
-  CloudCheck,
-  Coffee,
-  FileText,
-  HeartPulse,
-  Hammer,
-  Lock,
-  Utensils,
-  FolderOpen,
-  Home,
-  Info,
-  LoaderCircle,
-  LogOut,
-  Megaphone,
-  MessageCircleHeart,
-  Newspaper,
-  Pin,
-  PackageCheck,
-  Printer,
-  Settings,
-  Search,
-  ScrollText,
-  ShieldCheck,
-  Sparkles,
-  Store,
-  Syringe,
-  Trophy,
-  TrendingUp,
-  Users,
-  UserRound,
-} from "lucide-react";
+import { ChevronDown, Cloud, CloudAlert, CloudCheck, Lock, Info, LoaderCircle, LogOut, Settings, Search, Store, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { locationOptionLabel, type LocationKey } from "@/lib/location-config";
 import { useHubLocation } from "@/components/providers/LocationProvider";
 import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
-import { HUB_SYNC_EVENT, type HubSyncDetail } from "@/lib/sync-events";
+import { HUB_SYNC_EVENT, setSyncEvidenceOwner, type HubSyncDetail } from "@/lib/sync-events";
 import MobileQuickActions from "@/components/layout/MobileQuickActions";
 import NotificationBell from "@/components/notifications/NotificationBell";
 import AppSetupPrompt from "@/components/pwa/AppSetupPrompt";
 
-const navItems = [
-  { label: "Dashboard", href: "/", icon: Home },
-  { label: "Executive Dashboard", href: "/executive-dashboard", icon: BarChart3 },
-  { label: "Employee Lounge", href: "/employee-lounge", icon: Coffee },
-  { label: "Time Clock", href: "/time-clock", icon: CalendarClock },
-  { label: "Time Off & Availability", href: "/time-off", icon: CalendarOff },
-  { label: "My Schedule", href: "/my-schedule", icon: CalendarDays },
-  { label: "Staff Schedules", href: "/staff-schedules", icon: CalendarDays },
-  { label: "Communications", href: "/communications", icon: MessageCircleHeart },
-  { label: "Employee Bulletin Board", href: "/employee-bulletin", icon: Pin },
-  { label: "Notifications", href: "/notifications", icon: HeartPulse },
-  { label: "Families", href: "/families", icon: Users },
-  { label: "Family Access & Privacy", href: "/family-access", icon: Lock },
-  { label: "Family Communications", href: "/family-communications", icon: Megaphone },
-  { label: "Family Matters", href: "/family-matters", icon: MessageCircleHeart },
-  { label: "Monthly Newsletters", href: "/newsletters", icon: Newspaper },
-  { label: "Children", href: "/children", icon: UserRound },
-  { label: "Child Photos", href: "/child-photos", icon: Camera },
-  { label: "Weekly Child Check-Ins", href: "/weekly-checkins", icon: Sparkles },
-  { label: "Check-In / Out", href: "/attendance", icon: DoorOpen },
-  { label: "Child File Audits", href: "/child-file-audits", icon: ClipboardCheck },
-  { label: "Enrollment Readiness", href: "/enrollment-readiness", icon: Sparkles },
-  { label: "Immunization Tracker", href: "/immunization-tracker", icon: Syringe },
-  { label: "School Age Support", href: "/school-age-support", icon: BookOpen },
-  { label: "Student Store", href: "/student-store", icon: Store },
-  { label: "Team Store", href: "/team-store", icon: Store },
-  { label: "Training Center", href: "/training-center", icon: BookOpen },
-  { label: "Child Schedules", href: "/child-schedules", icon: CalendarClock },
-  { label: "Family Care Calendar", href: "/family-care-calendar", icon: CalendarDays },
-  { label: "Daily Care", href: "/daily-care", icon: Utensils },
-  { label: "Meals & Menus", href: "/meals", icon: Utensils },
-  { label: "KidKare", href: "/kidkare", icon: ShieldCheck },
-  { label: "CACFP Command Center", href: "/cacfp-command-center", icon: Utensils },
-  { label: "Timesheets", href: "/timesheets", icon: FileText },
-  { label: "Payroll Hours", href: "/payroll-ops", icon: CalendarClock },
-  { label: "Opening / Closing", href: "/shift-reports", icon: FileText },
-  { label: "Health & Safety", href: "/health-safety", icon: HeartPulse },
-  { label: "Emergency Cards", href: "/emergency-cards", icon: HeartPulse },
-  { label: "Employees", href: "/employees", icon: BriefcaseBusiness },
-  { label: "New-Hire Onboarding", href: "/staff-onboarding", icon: ClipboardCheck },
-  { label: "Organization & Lanes", href: "/organization", icon: Users },
-  { label: "Staff Performance", href: "/staff-performance", icon: Trophy },
-  { label: "30/60/90 Check-Ins", href: "/employee-checkins", icon: ClipboardCheck },
-  { label: "Team Access", href: "/team-access", icon: Lock },
-  { label: "Staffing Command Center", href: "/scheduling", icon: CalendarDays },
-  { label: "Transportation", href: "/transportation", icon: Bus },
-  { label: "Transportation Fees", href: "/transportation-fees", icon: Bus },
-  { label: "Billing & Subsidy", href: "/billing-command-center", icon: BadgeDollarSign },
-  { label: "Ratios", href: "/ratios", icon: ShieldCheck },
-  { label: "Work Plans", href: "/work-plans", icon: ClipboardCheck },
-  { label: "Compliance Center", href: "/compliance", icon: ShieldCheck },
-  { label: "Licensing Inspection Mode", href: "/inspection-mode", icon: ClipboardCheck },
-  { label: "Maintenance Department", href: "/maintenance", icon: Hammer },
-  { label: "Files", href: "/files", icon: FolderOpen },
-  { label: "Digital Forms", href: "/digital-forms", icon: FileText },
-  { label: "Tour Board", href: "/enrollment-pipeline", icon: Users },
-  { label: "Enrollment Forecast", href: "/enrollment-forecast", icon: TrendingUp },
-  { label: "Reports", href: "/reports", icon: BarChart3 },
-  { label: "Marketing", href: "/marketing", icon: Megaphone },
-  { label: "Printable Studio", href: "/print-studio", icon: Printer },
-  { label: "AI Director", href: "/ai-director", icon: Bot },
-  { label: "Locations", href: "/locations", icon: Building2 },
-  { label: "Audit Log", href: "/audit-log", icon: ScrollText },
-  { label: "App Readiness", href: "/app-readiness", icon: PackageCheck },
-  { label: "Settings", href: "/settings", icon: Settings },
-];
+
 
 const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Operations Dashboard", subtitle: "Today across Thomason Childcare Solutions" },
@@ -234,6 +126,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const [hasParentPortalAccess, setHasParentPortalAccess] = useState(false);
   const { location, setLocation, availableLocations, locationLocked, mainLocation, theme } = useHubLocation();
   const { profile, user, session, signOut } = useAuth();
+  useEffect(()=>{setSyncEvidenceOwner(profile?.user_id||"");},[profile?.user_id]);
   const meta = useMemo(() => pageMeta[pathname] ?? pageMeta["/"], [pathname]);
   const visibleNavItems = useMemo(() => navItems.filter((item) => canAccessRoute(profile, item.href)), [profile]);
   useEffect(() => {
@@ -258,8 +151,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     if (!session?.access_token) {
-      setHasParentPortalAccess(false);
-      return;
+      const timer=window.setTimeout(()=>setHasParentPortalAccess(false),0);
+      return()=>window.clearTimeout(timer);
     }
 
     let active = true;
@@ -361,7 +254,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               <div className="relative flex items-center gap-2">
                 <NotificationBell />
                 <button onClick={() => setShowUserMenu((current) => !current)} className="grid h-10 w-10 place-items-center rounded-[14px] text-xs font-black shadow-sm" style={{ background: theme.primarySoft, color: theme.ink }} aria-label="Open user menu"><AccountPhoto token={session?.access_token} name={profile?.full_name || "Staff"}/></button>
-                {showUserMenu && <div className="absolute right-0 top-12 z-50 w-[min(19rem,calc(100vw-2rem))] rounded-[24px] border border-slate-200 bg-white p-4 text-sm shadow-2xl"><p className="font-black text-slate-950"><span translate="no" className="contents">{profile?.full_name || "TCS Staff"}</span></p><p className="mt-1 truncate text-xs text-slate-500"><span translate="no" className="contents">{profile?.email || user?.email}</span></p>{profile?.job_title && <p className="mt-3 text-sm font-black text-emerald-800">{profile.job_title}</p>}{profile?.secondary_title && <p className="mt-1 text-xs font-bold text-amber-700">{profile.secondary_title}</p>}<div className="mt-2 flex flex-wrap gap-2">{profile?.lane_level && <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-base font-black uppercase tracking-wider text-emerald-800">Level {profile.lane_level}</span>}<span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-base font-black uppercase tracking-wider text-slate-700">Hub access: {profile?.role}</span></div><StaffLanguageSwitch/>{hasParentPortalAccess && <Link href="/parent" className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 font-black text-white"><Users className="h-4 w-4" /> Switch to Parent Portal</Link>}<button onClick={() => { window.localStorage.removeItem("tcs-hub-app-setup-v1"); window.location.reload(); }} className={`${hasParentPortalAccess ? "mt-2" : "mt-4"} flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700`}><Settings className="h-4 w-4" /> App Setup</button><Link href="/account" className="mt-2 flex w-full items-center justify-center rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700">Account & Profile</Link><button onClick={() => void signOut()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button></div>}
+                {showUserMenu && <div className="absolute right-0 top-12 z-50 w-[min(19rem,calc(100vw-2rem))] rounded-[24px] border border-slate-200 bg-white p-4 text-sm shadow-2xl"><p className="font-black text-slate-950"><span translate="no" className="contents">{profile?.full_name || "TCS Staff"}</span></p><p className="mt-1 truncate text-xs text-slate-500"><span translate="no" className="contents">{profile?.email || user?.email}</span></p>{profile?.job_title && <p className="mt-3 text-sm font-black text-emerald-800">{profile.job_title}</p>}{profile?.secondary_title && <p className="mt-1 text-xs font-bold text-amber-700">{profile.secondary_title}</p>}<div className="mt-2 flex flex-wrap gap-2">{profile?.lane_level && <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-base font-black uppercase tracking-wider text-emerald-800">Level {profile.lane_level}</span>}<span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-base font-black uppercase tracking-wider text-slate-700">Hub access: {profile?.role}</span></div><StaffLanguageSwitch/>{hasParentPortalAccess && <Link href="/parent" className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 font-black text-white"><Users className="h-4 w-4" /> Switch to Parent Portal</Link>}<button onClick={() => { window.localStorage.removeItem("tcs-hub-app-setup-v1"); window.location.reload(); }} className={`${hasParentPortalAccess ? "mt-2" : "mt-4"} flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700`}><Settings className="h-4 w-4" /> App Setup</button><Link href="/account" className="mt-2 flex w-full items-center justify-center rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700">Account & Profile</Link><button onClick={() => requestHubTransition(()=>void signOut())} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button></div>}
               </div>
             </div>
 
@@ -403,7 +296,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               </div>
               <button onClick={() => setShowUserMenu((current) => !current)} className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-black" style={{ background: theme.primarySoft, color: theme.ink }} aria-label="Open user menu"><AccountPhoto token={session?.access_token} name={profile?.full_name || "Staff"}/></button>
               {showLocationHelp && <div className="absolute right-12 top-14 z-40 w-80 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600 shadow-xl"><p className="font-black text-slate-950">Active location selector</p><p className="mt-1">It changes the Hub’s colors and tells location-aware pages which site you are working on. {locationLocked ? "Your usual location stays recorded. Choose another open TCS location when providing backup; your role permissions stay the same." : "Choose All Locations for company-wide information."}</p></div>}
-              {showUserMenu && <div className="absolute right-0 top-14 z-40 w-72 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-xl"><p className="font-black text-slate-950"><span translate="no" className="contents">{profile?.full_name || "TCS Staff"}</span></p><p className="mt-1 truncate text-xs text-slate-500"><span translate="no" className="contents">{profile?.email || user?.email}</span></p>{profile?.job_title && <p className="mt-3 text-sm font-black text-emerald-800">{profile.job_title}</p>}{profile?.secondary_title && <p className="mt-1 text-xs font-bold text-amber-700">{profile.secondary_title}</p>}<div className="mt-2 flex flex-wrap gap-2">{profile?.lane_level && <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-base font-black uppercase tracking-wider text-emerald-800">Level {profile.lane_level}</span>}<span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-base font-black uppercase tracking-wider text-slate-700">Hub access: {profile?.role}</span></div><StaffLanguageSwitch/>{hasParentPortalAccess && <Link href="/parent" className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 font-black text-white"><Users className="h-4 w-4" /> Switch to Parent Portal</Link>}<button onClick={() => { window.localStorage.removeItem("tcs-hub-app-setup-v1"); window.location.reload(); }} className={`${hasParentPortalAccess ? "mt-2" : "mt-4"} flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700`}><Settings className="h-4 w-4" /> App Setup</button><Link href="/account" className="mt-2 flex w-full items-center justify-center rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700">Account & Profile</Link><button onClick={() => void signOut()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button></div>}
+              {showUserMenu && <div className="absolute right-0 top-14 z-40 w-72 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-xl"><p className="font-black text-slate-950"><span translate="no" className="contents">{profile?.full_name || "TCS Staff"}</span></p><p className="mt-1 truncate text-xs text-slate-500"><span translate="no" className="contents">{profile?.email || user?.email}</span></p>{profile?.job_title && <p className="mt-3 text-sm font-black text-emerald-800">{profile.job_title}</p>}{profile?.secondary_title && <p className="mt-1 text-xs font-bold text-amber-700">{profile.secondary_title}</p>}<div className="mt-2 flex flex-wrap gap-2">{profile?.lane_level && <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-base font-black uppercase tracking-wider text-emerald-800">Level {profile.lane_level}</span>}<span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-base font-black uppercase tracking-wider text-slate-700">Hub access: {profile?.role}</span></div><StaffLanguageSwitch/>{hasParentPortalAccess && <Link href="/parent" className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 font-black text-white"><Users className="h-4 w-4" /> Switch to Parent Portal</Link>}<button onClick={() => { window.localStorage.removeItem("tcs-hub-app-setup-v1"); window.location.reload(); }} className={`${hasParentPortalAccess ? "mt-2" : "mt-4"} flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700`}><Settings className="h-4 w-4" /> App Setup</button><Link href="/account" className="mt-2 flex w-full items-center justify-center rounded-xl border border-slate-200 px-4 py-2.5 font-black text-slate-700">Account & Profile</Link><button onClick={() => requestHubTransition(()=>void signOut())} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 font-black text-white"><LogOut className="h-4 w-4" /> Sign Out</button></div>}
             </div>
           </div>
         </header>
@@ -416,7 +309,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         {mainLocation&&<aside className="mx-3 mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-base text-emerald-950 sm:mx-5 lg:mx-8"><p><strong>Main location: {locationOptionLabel(mainLocation)}</strong> — your priority.{location!==mainLocation?` You’re helping at ${locationOptionLabel(location)}.`:" Switch locations above when providing backup."}</p>{location!==mainLocation&&<button type="button" className="min-h-11 rounded-xl border border-emerald-700 bg-white px-4 py-2 font-bold" onClick={()=>setLocation(mainLocation)}>Return to main location</button>}</aside>}
-        <main className="hub-page-content px-3 pb-28 pt-3 sm:px-5 sm:pt-5 lg:p-8">{children}<div className="mt-8"><LegalFooter /></div></main>
+        <main className="hub-page-content px-3 pb-28 pt-3 sm:px-5 sm:pt-5 lg:p-8">{children}<div className="mt-8"><div className="mb-3 print:hidden"><VersionSyncStatus /></div><LegalFooter /></div></main>
       </div>
       <AppSetupPrompt />
       <MobileQuickActions />

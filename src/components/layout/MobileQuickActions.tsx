@@ -1,104 +1,14 @@
 "use client";
 
+import {hubNavigation} from "@/lib/hub-navigation";
 import {groupHubTools,toolSectionOpen} from "@/lib/hub-tool-groups";
 import { canAccessRoute, useAuth } from "@/components/providers/AuthProvider";
 import { locationOptionLabel } from "@/lib/location-config";
 import { useHubLocation } from "@/components/providers/LocationProvider";
-import {
-  BadgeDollarSign,
-  Bell,
-  BookOpen,
-  Bot,
-  BriefcaseBusiness,
-  Bus,
-  CalendarClock,
-  CalendarDays,
-  CalendarOff,
-  ClipboardCheck,
-  Coffee,
-  FileText,
-  FolderOpen,
-  HeartPulse,
-  Home,
-  Lock,
-  Menu,
-  Search,
-  Settings,
-  ShieldCheck,
-  Store,
-  Trophy,
-  UserRound,
-  Users,
-  Utensils,
-  X,
-} from "lucide-react";
+import { Bell, CalendarClock, CalendarDays, Home, Menu, Search, X } from "lucide-react";
 import Link from "next/link";
 import { useHubPathname } from "@/hooks/useHubPathname";
 import { useEffect, useMemo, useRef, useState } from "react";
-
-type ToolItem = {
-  href: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-};
-
-const toolGroups: Array<{ title: string; items: ToolItem[] }> = [
-  {
-    title: "My Work",
-    items: [
-      { href: "/communications", label: "Communications", icon: Bell },
-      { href: "/family-communications", label: "Family Messages", icon: Users },
-      { href: "/employee-lounge", label: "Employee Lounge", icon: Coffee },
-      { href: "/time-off", label: "Time Off", icon: CalendarOff },
-      { href: "/employee-bulletin", label: "Bulletin Board", icon: Bell },
-      { href: "/training-center", label: "Training Center", icon: BookOpen },
-      { href: "/team-store", label: "Team Store", icon: Store },
-      { href: "/organization", label: "TCS Lanes", icon: Users },
-    ],
-  },
-  {
-    title: "Children & Care",
-    items: [
-      { href: "/children", label: "Children", icon: UserRound },
-      { href: "/attendance", label: "Check-In / Out", icon: ClipboardCheck },
-      { href: "/daily-care", label: "Daily Care", icon: ClipboardCheck },
-      { href: "/meals", label: "Meals & Menus", icon: Utensils },
-      { href: "/kidkare", label: "KidKare", icon: ShieldCheck },
-      { href: "/health-safety", label: "Health & Safety", icon: HeartPulse },
-      { href: "/emergency-cards", label: "Emergency Cards", icon: HeartPulse },
-      { href: "/child-schedules", label: "Child Schedules", icon: CalendarClock },
-      { href: "/school-age-support", label: "School Age Support", icon: BookOpen },
-    ],
-  },
-  {
-    title: "Operations",
-    items: [
-      { href: "/transportation-v2", label: "Transportation", icon: Bus },
-      { href: "/scheduling", label: "Staffing", icon: CalendarDays },
-      { href: "/ratios", label: "Ratios", icon: ShieldCheck },
-      { href: "/work-plans", label: "Work Plans", icon: ClipboardCheck },
-      { href: "/shift-reports", label: "Opening / Closing", icon: FileText },
-      { href: "/files", label: "Files", icon: FolderOpen },
-      { href: "/digital-forms", label: "Digital Forms", icon: FileText },
-      { href: "/compliance", label: "Compliance", icon: ShieldCheck },
-      { href: "/ai-director", label: "TCS AI", icon: Bot },
-    ],
-  },
-  {
-    title: "Leadership & Admin",
-    items: [
-      { href: "/employees", label: "Employees", icon: BriefcaseBusiness },
-      { href: "/staff-onboarding", label: "New-Hire Onboarding", icon: ClipboardCheck },
-      { href: "/staff-performance", label: "Staff Performance", icon: Trophy },
-      { href: "/team-access", label: "Team Access", icon: Lock },
-      { href: "/timesheets", label: "Timesheets", icon: FileText },
-      { href: "/payroll-ops", label: "Payroll Hours", icon: CalendarClock },
-      { href: "/billing-command-center", label: "Billing & Subsidy", icon: BadgeDollarSign },
-      { href: "/transportation-fees", label: "Transportation Fees", icon: Bus },
-      { href: "/settings", label: "Settings", icon: Settings },
-    ],
-  },
-];
 
 export default function MobileQuickActions() {
   const navigationRef = useRef<HTMLElement>(null);
@@ -125,7 +35,7 @@ export default function MobileQuickActions() {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  const groups=useMemo(()=>groupHubTools(toolGroups.flatMap(group=>group.items).filter(item=>canAccessRoute(profile,item.href)),search),[profile,search]);
+  const groups=useMemo(()=>groupHubTools(hubNavigation.filter(item=>canAccessRoute(profile,item.href)),search),[profile,search]);
 
   const bottomItems = [
     { href: "/", label: "Home", icon: Home },

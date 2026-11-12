@@ -12,18 +12,19 @@ async function context(request: Request) {
 export async function GET(request: Request) {
  try {
   const c=await context(request), db=c.userClient, org=c.profile.organization_id;
-  const [sites,files,children,staff]=await Promise.all([
+  const [sites,files,children,staff,memberships]=await Promise.all([
    db.from("locations").select("id,name,full_name,slug,program_type,is_active").eq("organization_id",org).order("name"),
    db.from("location_person_files").select("*").eq("organization_id",org).order("person_name"),
-   db.from("children").select("id,first_name,last_name,legacy_id,enrollment_status").eq("organization_id",org).order("last_name").order("first_name"),
+   db.from("children").select("id,first_name,last_name,legacy_id,enrollment_status,location_id").eq("organization_id",org).order("last_name").order("first_name"),
    db.from("staff_lane_profiles").select("id,full_name,is_active").eq("organization_id",org).order("full_name"),
+   db.from("child_location_memberships").select("child_id,location_id,from_primary,from_schedule,from_kidkare").eq("organization_id",org),
   ]);
-  for(const result of [sites,files,children,staff])if(result.error)throw result.error;
+  for(const result of [sites,files,children,staff,memberships])if(result.error)throw result.error;
   const locations=(await Promise.all((sites.data||[]).filter(site=>!/maintenance/i.test(site.program_type||"")).map(async site=>{
    const access=await db.rpc("can_access_location",{p_location_id:site.id});if(access.error)throw access.error;
    return access.data?{...site,template:templateForChildLocation(`${site.name} ${site.full_name}`)}:null;
   }))).filter(Boolean);
-  return json({locations,files:files.data||[],children:children.data||[],staff:staff.data||[]});
+  return json({locations,files:files.data||[],children:children.data||[],staff:staff.data||[],memberships:memberships.data||[]});
  }catch(e){return staffErrorResponse(e);}
 }
 export async function POST(request: Request) {
