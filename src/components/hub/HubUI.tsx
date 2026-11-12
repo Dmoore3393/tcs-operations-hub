@@ -132,3 +132,7 @@ export function Modal({ title, description, onClose, children, footer, dirty, pr
     document.body,
   );
 }
+
+export function DemoNotice() {
+  return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-950"><strong>Secure owner & licensee pilot:</strong> Changes save to the shared TCS database. Danielle controls system settings; licensees use operational tools for their assigned location. Parent Portal access is active only for verified adults and permissions assigned by TCS.</div>;
+}

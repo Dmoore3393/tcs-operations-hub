@@ -1,4 +1,5 @@
 "use client";
+import {useUnsavedChanges} from "@/components/forms/UnsavedChanges";
 
 import { changeReportType } from "@/lib/shift-report-type";
 import MainLayout from "@/components/layout/MainLayout";
@@ -62,8 +63,10 @@ export default function ShiftReportsPage() {
     return () => window.removeEventListener("hashchange", selectTab);
   }, []);
   const [form, setForm] = useState<ReportForm>(() => createForm("Opening", selectedLocation));
+  const [cleanForm,setCleanForm] = useState(()=>JSON.stringify(form));
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const leaveGuard=useUnsavedChanges(JSON.stringify(form)!==cleanForm,{busy,discard:()=>{const blank=createForm(form.type,form.location);setCleanForm(JSON.stringify(blank));setForm(blank);},save:()=>saveReport("Draft"),saveLabel:"Save draft and leave"});
   const requestInFlight = useRef(false);
   const formRequestId = useRef<string | null>(null);
   const [reviewInitials, setReviewInitials] = useState<Record<string, string>>({});
@@ -116,20 +119,23 @@ export default function ShiftReportsPage() {
     }
   }
 
-  async function saveReport(status: "Draft" | "Submitted") {
+  async function saveReport(status: "Draft" | "Submitted"):Promise<boolean> {
     if (!form.completedByStaffId || !form.completedBy.trim() || form.initials.trim().length < 2) {
       setMessage({ text: "Choose a staff member and enter their initials before saving.", error: true });
-      return;
+      return false;
     }
     formRequestId.current ??= crypto.randomUUID();
     if (!await writeReportAction("create_shift_report_with_staff", {
       p_request_id: formRequestId.current, p_report: { ...form, status },
-    })) return;
+    })) return false;
     formRequestId.current = null;
     reportState.retry();
     if (status === "Submitted" && form.pickupInformation.trim()) handoffState.retry();
     setMessage({ text: status === "Submitted" ? `${form.type} report submitted for the incoming team.` : "Draft saved." });
-    setForm(createForm(form.type, form.location));
+    const blank=createForm(form.type, form.location);
+    setCleanForm(JSON.stringify(blank));
+    setForm(blank);
+    return true;
   }
 
   async function correctReportType(report: ShiftReport) {
@@ -174,7 +180,7 @@ export default function ShiftReportsPage() {
   const checklistItems = Object.keys(form.checklist);
   const checklistComplete = Object.values(form.checklist).filter(Boolean).length;
 
-  return <MainLayout><div className="mx-auto max-w-[1450px] space-y-6">
+  return <MainLayout>{leaveGuard.dialog}<div className="mx-auto max-w-[1450px] space-y-6">
     <PageIntro eyebrow="Private team communication" title="Opening & Closing Reports" description="Use the same general update format your team already follows. These reports are internal staff records and will never appear in a family portal or family-facing feed." actions={<div className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800"><Lock className="h-4 w-4" /> Never Shared With Families</div>} />
     <DemoNotice />
 

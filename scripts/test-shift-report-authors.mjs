@@ -119,7 +119,7 @@ async function reportScreen() {
   const empty = () => null, childrenOnly = ({ children }) => children;
   const { jsx } = require("react/jsx-runtime");
   const button = props => jsx("button", props);
-  const deps = { react, "lucide-react": new Proxy({}, { get: () => empty }),
+  const deps = { react, "@/components/forms/UnsavedChanges":{useUnsavedChanges:()=>({dialog:null,request:action=>action()})}, "lucide-react": new Proxy({}, { get: () => empty }),
     "@/components/layout/MainLayout": { default: childrenOnly },
     "@/components/hub/HubUI": { SectionCard: childrenOnly, StatCard: empty, DemoNotice: empty, PageIntro: empty,
       StatusBadge: childrenOnly, PrimaryButton: button, SecondaryButton: button, inputClass: "input" },
@@ -192,5 +192,5 @@ test("both daily forms offer real directory choices before notes, require the se
   ui.reports.push({ ...ui.reports[0], id: "legacy", completedBy: "Former Employee", completedByStaffId: undefined });
   ui.click("Report History");
   const authors = ui.nodes().filter(node => node.type === "span" && node.props.translate === "no");
-  assert.deepEqual(authors.map(node => node.props.children.join("")).sort(), ["Former Employee (AS)", "Synthetic Staff (AS)", "Synthetic Staff (SS)"]);
+  assert.deepEqual(Array.from(authors).map(node => node.props.children.join("")).sort(), ["Former Employee (AS)", "Synthetic Staff (AS)", "Synthetic Staff (SS)"]);
 });
