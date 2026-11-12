@@ -3,6 +3,7 @@
 import { compareChildrenByLastName } from "@/lib/child-sort";
 
 import ChildEditorModal from "@/components/children/ChildEditorModal";
+import { childFamilyFields, newChildFamilyId, type ChildFamilyMode } from "@/lib/child-family";
 import ChildTransportSummary from "@/components/transportation/ChildTransportSummary";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { starterSchools, type SchoolRecord } from "@/lib/hub-data";
@@ -148,7 +149,7 @@ export default function ChildrenCenterLivePage() {
   const [editing, setEditing] = useState<ChildRecord | null>(null);
   const [selected, setSelected] = useState<ChildRecord | null>(null);
   const [form, setForm] = useState<ChildFormState>({ ...emptyForm });
-  const [familyMode, setFamilyMode] = useState<"existing" | "new">("new");
+  const [familyMode, setFamilyMode] = useState<ChildFamilyMode>("new");
   const [selectedFamilyId, setSelectedFamilyId] = useState<number | "">("");
   const tourHandoffProcessed = useRef(false);
   const editQueryProcessed = useRef(false);
@@ -205,7 +206,7 @@ export default function ChildrenCenterLivePage() {
     const timer = window.setTimeout(() => {
       editQueryProcessed.current = true;
       if (editChildId && canManage) {
-        setEditing(child); setForm(toForm(child)); setFamilyMode("new"); setSelectedFamilyId(""); setSelected(null);
+        setEditing(child); setForm(toForm(child)); setFamilyMode("keep"); setSelectedFamilyId(""); setSelected(null);
       } else setSelected(child);
       window.history.replaceState({}, "", window.location.pathname);
     }, 0);
@@ -301,7 +302,7 @@ export default function ChildrenCenterLivePage() {
   function openAdd() {
     setEditing({} as ChildRecord);
     setForm({ ...emptyForm });
-    setFamilyMode(families.length ? "existing" : "new");
+    setFamilyMode("new");
     setSelectedFamilyId("");
     setError("");
   }
@@ -309,9 +310,8 @@ export default function ChildrenCenterLivePage() {
   function openEdit(child: ChildRecord) {
     setEditing(child);
     setForm(toForm(child));
-    const family = families.find((item) => child.familyId ? item.id === child.familyId : item.primaryGuardian.toLowerCase() === child.primaryGuardian.toLowerCase());
-    setFamilyMode(family ? "existing" : "new");
-    setSelectedFamilyId(family?.id ?? "");
+    setFamilyMode("keep");
+    setSelectedFamilyId("");
     setSelected(null);
   }
 
@@ -323,11 +323,7 @@ export default function ChildrenCenterLivePage() {
     setForm((current) => ({
       ...current,
       familyName: family.familyName,
-      primaryGuardian: family.primaryGuardian,
-      secondaryGuardian: family.secondaryGuardian,
-      phone: family.phone,
-      guardianEmail: family.email,
-      subsidy: family.subsidy,
+      // A family link must not copy another child's parent, phone, email or funding.
     }));
   }
 
@@ -341,6 +337,14 @@ export default function ChildrenCenterLivePage() {
     const missingDocuments = form.licensingStatus === "Missing Documents" ? form.missingDocuments.split(",").map((item) => item.trim()).filter(Boolean) : [];
     const ageProfile = deriveChildAgeProfile(form.dateOfBirth);
     if (form.dateOfBirth && !ageProfile) return setError("Correct the date of birth or leave it blank.");
+    let familyFields: ReturnType<typeof childFamilyFields>;
+    try {
+      familyFields = childFamilyFields(form, familyMode, editing, family, () => newChildFamilyId([
+        ...families.map((item) => item.id), ...children.flatMap((item) => item.familyId ? [item.familyId] : []),
+      ]));
+    } catch (caught) {
+      return setError(caught instanceof Error ? caught.message : "Could not prepare this child's family details.");
+    }
     const child: ChildRecord = {
       id: editing?.id || Date.now(),
       legacyId: editing?.legacyId,
@@ -354,15 +358,7 @@ export default function ChildrenCenterLivePage() {
       location: form.location,
       fundingLocation: form.fundingLocation,
       classroom: ageProfile?.classroom || "Not assigned",
-      primaryGuardian: family?.primaryGuardian ?? form.primaryGuardian.trim(),
-      secondaryGuardian: (family?.secondaryGuardian ?? form.secondaryGuardian.trim()) || undefined,
-      secondaryGuardianPhone: form.secondaryGuardianPhone.trim() || undefined,
-      secondaryGuardianEmail: form.secondaryGuardianEmail.trim() || undefined,
-      phone: family?.phone ?? form.phone.trim(),
-      familyId: family?.id ?? editing?.familyId ?? Date.now() + 1,
-      familyName: family?.familyName ?? (form.familyName.trim() || `${form.lastName.trim()} Family`),
-      guardianEmail: (family?.email ?? form.guardianEmail.trim()) || undefined,
-      subsidy: family?.subsidy ?? form.subsidy,
+      ...familyFields,
       weeklySchedule: form.weeklySchedule.trim() || "Schedule not entered",
       transportation: form.transportation.trim() || "No transportation",
       noTransportationNeeded: form.noTransportationNeeded === true,
@@ -500,7 +496,7 @@ export default function ChildrenCenterLivePage() {
       <span className="woodland-animal right" aria-hidden="true">🦌</span>
     </section>
 
-    {editing && <ChildEditorModal schools={schoolOptions} activeLocations={locations.map(location => location.fullName || location.name)} error={error} title={editing.id ? `Edit ${nameOf(editing)}` : "Add Child"} form={form} setForm={setForm} families={families} familyMode={familyMode} setFamilyMode={setFamilyMode} selectedFamilyId={selectedFamilyId} chooseFamily={chooseFamily} saving={saving} onClose={() => setEditing(null)} onSubmit={saveChild} />}
+    {editing && <ChildEditorModal existingChild={Boolean(editing.id)} schools={schoolOptions} activeLocations={locations.map(location => location.fullName || location.name)} error={error} title={editing.id ? `Edit ${nameOf(editing)}` : "Add Child"} form={form} setForm={setForm} families={families} familyMode={familyMode} setFamilyMode={setFamilyMode} selectedFamilyId={selectedFamilyId} chooseFamily={chooseFamily} saving={saving} onClose={() => setEditing(null)} onSubmit={saveChild} />}
     {selected && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4">
       <button className="absolute inset-0" onClick={() => setSelected(null)} aria-label="Close" />
       <section className="relative z-10 max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-[#fffdf9] p-6 shadow-2xl">

@@ -4,6 +4,7 @@ import {gradeChoices, relationshipChoices} from "@/lib/form-options";
 
 import { locationDisplayName } from "@/lib/location-config";
 
+import type { ChildFamilyMode } from "@/lib/child-family";
 import type { FamilyRecord, SchoolRecord } from "@/lib/hub-data";
 import {
   deriveChildAgeProfile,
@@ -39,8 +40,9 @@ type Props = {
   form: ChildFormState;
   setForm: (form: ChildFormState) => void;
   families: FamilyRecord[];
-  familyMode: "existing" | "new";
-  setFamilyMode: (mode: "existing" | "new") => void;
+  existingChild?: boolean;
+  familyMode: ChildFamilyMode;
+  setFamilyMode: (mode: ChildFamilyMode) => void;
   selectedFamilyId: number | "";
   chooseFamily: (value: string) => void;
   saving: boolean;
@@ -49,6 +51,7 @@ type Props = {
 };
 
 export default function ChildEditorModal({
+  existingChild = false,
   schools = [],
   activeLocations = locations,
   error = "",
@@ -64,7 +67,8 @@ export default function ChildEditorModal({
   onClose,
   onSubmit,
 }: Props) {
-  const lockFamily = familyMode === "existing" && selectedFamilyId !== "";
+  // Shared family membership must not lock this child's parent/contact fields.
+  const lockFamily = saving;
 
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -137,17 +141,19 @@ export default function ChildEditorModal({
                   </Grid>
                 </SectionCard>
 
-                <SectionCard icon={<UsersRound className="h-5 w-5" />} title="Parent / Family" subtitle="Link siblings to one family account or create a new family">
-                  {families.length > 0 && <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#ddd1b8] bg-[#f7f2e7] p-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm font-semibold text-[#5b6653]">Choose whether this child belongs to an existing family.</p>
-                    <div className="flex shrink-0 rounded-xl bg-white p-1 text-xs font-black shadow-sm">
-                      <button type="button" onClick={() => setFamilyMode("existing")} className={`rounded-lg px-3 py-2 ${familyMode === "existing" ? "bg-[#355b3a] text-white" : "text-slate-500"}`}>Existing Family</button>
-                      <button type="button" onClick={() => setFamilyMode("new")} className={`rounded-lg px-3 py-2 ${familyMode === "new" ? "bg-[#355b3a] text-white" : "text-slate-500"}`}>Create New Family</button>
+                <SectionCard icon={<UsersRound className="h-5 w-5" />} title="Parent / Family" subtitle="Parents and contacts belong to this child, even when siblings share only one parent">
+                  {(existingChild || families.length > 0) && <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#ddd1b8] bg-[#f7f2e7] p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm font-semibold text-[#5b6653]">Keep the current link, choose a family, or create a separate family. Parents remain specific to this child.</p>
+                    <div className="flex flex-wrap gap-1 rounded-xl bg-white p-1 text-xs font-black shadow-sm">
+                      {existingChild && <button type="button" disabled={saving} onClick={() => setFamilyMode("keep")} className={`rounded-lg px-3 py-2 ${familyMode === "keep" ? "bg-[#355b3a] text-white" : "text-slate-500"}`}>Keep Current Family</button>}
+                      <button type="button" disabled={saving} onClick={() => setFamilyMode("existing")} className={`rounded-lg px-3 py-2 ${familyMode === "existing" ? "bg-[#355b3a] text-white" : "text-slate-500"}`}>Existing Family</button>
+                      <button type="button" disabled={saving} onClick={() => setFamilyMode("new")} className={`rounded-lg px-3 py-2 ${familyMode === "new" ? "bg-[#355b3a] text-white" : "text-slate-500"}`}>Create Separate Family</button>
                     </div>
                   </div>}
 
-                  {familyMode === "existing" && families.length > 0 && <div className="mb-4"><Field label="Choose family"><select className={inputClass} value={selectedFamilyId} onChange={(e) => chooseFamily(e.target.value)}><option value="">Select parent/family…</option>{families.map((family) => <option key={family.id} value={family.id}>{family.familyName} • {family.primaryGuardian}</option>)}</select></Field></div>}
+                  {familyMode === "existing" && families.length > 0 && <div className="mb-4"><Field label="Choose family"><select className={inputClass} value={selectedFamilyId} onChange={(e) => chooseFamily(e.target.value)}><option value="">Select parent/family…</option>{families.map((family) => <option key={family.id} value={family.id}>{family.familyName} • {family.children.join(", ")}</option>)}</select></Field></div>}
 
+                  <p className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-base text-amber-950">Save changes only to this child’s parents and contacts. Linking a family does not copy a sibling’s parents. Review Parent Portal access and authorized pickup contacts separately after correcting a parent.</p>
                   <Grid>
                     <Field label="Family name"><input className={inputClass} disabled={lockFamily} value={form.familyName} onChange={(e) => setForm({ ...form, familyName: e.target.value })} /></Field>
                     <Field label="Primary guardian"><input required className={inputClass} disabled={lockFamily} value={form.primaryGuardian} onChange={(e) => setForm({ ...form, primaryGuardian: e.target.value })} /></Field>
