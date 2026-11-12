@@ -7,11 +7,12 @@ import { normalizeLocation } from "@/lib/location-config";
 import { localIsoDate } from "@/lib/date-utils";
 import { withRequestTimeout } from "@/lib/request-timeout";
 import { fileItemStatuses, locationFileSummary, type LocationFileItem, type LocationPersonFile } from "@/lib/location-person-files";
+import { resolveLocationFileChild, locationFilePrimaryButton } from "@/lib/location-file-child-links";
 import { staffTemplateSource } from "@/lib/staff-file-templates";
 
 type Site = { id:string; name:string; full_name:string; is_active:boolean; template:"In-Home"|"School Age Center" };
 type Person = {id:string; name:string; inactive:boolean};
-type Data = {locations:Site[];files:LocationPersonFile[];children:Array<{id:string;first_name:string;last_name:string;enrollment_status:string;legacy_id?:string;location_id?:string}>;staff:Array<{id:string;full_name:string;is_active:boolean}>};
+type Data = {locations:Site[];files:LocationPersonFile[];children:Array<{id:string;first_name:string;last_name:string;enrollment_status:string;legacy_id?:string;ui_id?:string;location_id?:string}>;staff:Array<{id:string;full_name:string;is_active:boolean}>};
 type VaultDoc = {id:string;document_type:string;original_filename:string;created_at:string;status:string};
 const button="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2 font-bold text-slate-900 disabled:opacity-50";
 async function checkedResponse(response:Response) {
@@ -57,9 +58,9 @@ function LocationFilesContent({childAudits}: {childAudits:boolean}) {
  },[data,linkLoaded,activeLocation,childAudits]);
  useEffect(()=>{
   if(!data||!requestedChild||!chosenSite)return;
-  const child=data.children.find(p=>p.id===requestedChild||p.legacy_id===requestedChild);
+  const child=resolveLocationFileChild(data.children,requestedChild);
   const timer=window.setTimeout(()=>{
-   if(!child){setError("The requested child is not available to your account. Choose a child from the list.");setRequestedChild("");return;}
+   if(!child){setKind("Child");setPersonId("");setConfirmed(false);setError("This saved link could not be matched safely. Choose the child from the list below to continue.");setAdding(true);setRequestedChild("");return;}
    const existing=data.files.find(f=>f.location_id===chosenSite.id&&f.child_id===child.id);
    setKind("Child");setPersonId(child.id);setConfirmed(false);setError("");
    if(existing)setEditing(existing);else setAdding(true);
@@ -87,7 +88,7 @@ function LocationFilesContent({childAudits}: {childAudits:boolean}) {
    {!childAudits&&<label className="block font-bold">File type<select className={`${inputClass} mt-1 block min-h-11`} value={kind} onChange={e=>{setKind(e.target.value as "Child"|"Staff");setPersonId("");}}><option>Child</option><option>Staff</option></select></label>}
    <label className="block font-bold">Search<input className={`${inputClass} mt-1 block min-h-11`} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Name" /></label>
    <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={showArchived} onChange={e=>setShowArchived(e.target.checked)}/>Include archived files</label>
-   <button className={`${button} border-emerald-800 bg-emerald-800 text-white`} disabled={!data||!chosenSite?.is_active||loading} onClick={()=>{setPersonId("");setConfirmed(false);setError("");setNotice("");setAdding(true);}}>{childAudits?`Start / open ${chosenSite?.name||"location"} child audit`:`Add ${kind.toLowerCase()} file here`}</button>
+   <button className={locationFilePrimaryButton} disabled={!data||!chosenSite?.is_active||loading} onClick={()=>{setPersonId("");setConfirmed(false);setError("");setNotice("");setAdding(true);}}>{childAudits?`Start / open ${chosenSite?.name||"location"} child audit`:`Add ${kind.toLowerCase()} file here`}</button>
   </div>
   {chosenSite&&<p className="text-sm text-slate-700"><strong>{chosenSite.name}</strong> · {chosenSite.template} checklist · Only files explicitly added here appear below.</p>}
   {loading&&!data?<p role="status">Loading location files…</p>:<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{files.map(file=>{const summary=locationFileSummary(file,localIsoDate());return <article key={file.id} className="rounded-2xl border border-slate-200 bg-white p-4"><h3 className="text-lg font-black" translate="no">{file.person_name}</h3><p className="mt-1 text-sm">{file.archived?"Archived — retained":summary.complete?"Checklist complete":"Needs review"} · {file.template}</p><p className="mt-2 text-sm text-slate-700">{summary.missing} missing · {summary.unchecked} not checked · {summary.expired} expired</p><button className={`${button} mt-3`} onClick={()=>{setError("");setNotice("");setEditing(file);}}>Open {chosenSite?.name} {childAudits?"audit":"file"}</button></article>})}</div>}
@@ -95,7 +96,7 @@ function LocationFilesContent({childAudits}: {childAudits:boolean}) {
   {data&&chosenSite&&!files.length&&<p className="rounded-xl bg-white p-4 text-slate-700">No {kind.toLowerCase()} files have been started at {chosenSite.name} in this view. Use the button above to choose any child available to your account, including a child whose main location is elsewhere. Only create a file for a location the person uses. Earlier audits and uploads have not been moved or deleted.</p>}
   {adding&&chosenSite&&<Modal title={`${childAudits?"Start / open child audit":`Add ${kind.toLowerCase()} file`} · ${chosenSite.name}`} onClose={()=>{if(!busy)setAdding(false);}}>
    <form className="space-y-4" onSubmit={create}><label className="block font-bold">{kind} — all accessible locations <select required disabled={busy} className={inputClass} value={personId} onChange={e=>setPersonId(e.target.value)}><option value="">Choose a person…</option>{people.map(p=><option key={p.id} value={p.id}>{p.name}{p.inactive?" (inactive)":""}</option>)}</select></label>
-    <p><strong>Audit location: {chosenSite.name}</strong> · {chosenSite.template} checklist. Children from other primary locations are included in the list. Saving here will not change their main location or their other files.</p>
+    <p><strong>Audit location: {chosenSite.name}</strong> · {chosenSite.template} checklist. {kind === "Child" ? "Children" : "Staff members"} from other primary locations are included in the list. Saving here will not change their main location or their other files.</p>
     <label className="flex items-start gap-3"><input type="checkbox" required disabled={busy} checked={confirmed} onChange={e=>setConfirmed(e.target.checked)} className="mt-1 h-5 w-5"/><span>I confirm this person needs a file at <strong>{chosenSite.name}</strong>.</span></label>
     {error&&<p role="alert" className="rounded-xl bg-red-50 p-3 text-red-900">{error}</p>}<button className={button} disabled={busy}>{busy?"Opening…":childAudits?`Open ${chosenSite.name} audit`:`Create / open ${chosenSite.name} file`}</button>
    </form>
@@ -120,7 +121,7 @@ function LocationFileEditor({file,site,token,onClose,onSaved}:{file:LocationPers
  const dirty=JSON.stringify(draft)!==JSON.stringify(file)||Boolean(extra.trim())||Boolean(attachment);
  useEffect(()=>{if(!dirty)return;const warn=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue="";};window.addEventListener("beforeunload",warn);return()=>window.removeEventListener("beforeunload",warn);},[dirty]);
  const close=()=>{if(!flight.current&&(!dirty||window.confirm(`Discard unsaved changes to the ${site?.name||"location"} file?`)))onClose();};
- return <Modal title={`${file.person_name} · ${site?.name||"Location file"}`} description={`${file.child_id?"Child":"Staff"} file · ${file.template}. Changes apply only here.`} onClose={close} footer={<><button className={button} disabled={busy} onClick={close}>Cancel</button><button className={`${button} border-emerald-800 bg-emerald-800 text-white`} form="save-location-file" type="submit" disabled={busy}>{busy?"Saving…":`Save ${site?.name||"this location"} file audit`}</button></>}>
+ return <Modal title={`${file.person_name} · ${site?.name||"Location file"}`} description={`${file.child_id?"Child":"Staff"} file · ${file.template}. Changes apply only here.`} onClose={close} footer={<><button className={button} disabled={busy} onClick={close}>Cancel</button><button className={locationFilePrimaryButton} form="save-location-file" type="submit" disabled={busy}>{busy?"Saving…":`Save ${site?.name||"this location"} file audit`}</button></>}>
   {error&&<p role="alert" className="mb-4 rounded-xl border border-red-300 bg-red-50 p-3 font-bold text-red-900">{error}</p>}{notice&&<p role="status" className="mb-4 rounded-xl bg-emerald-50 p-3 text-emerald-950">{notice}</p>}
   <p className="mb-4 text-sm text-slate-700">{file.staff_lane_id?staffTemplateSource(file.template):"Child checklist uses the separate in-home / center templates, including LIC 9150 where applicable and Extended Hours Care. N/A requires a reason and is excluded from missing and expiration alerts. Older audit entries remain in their original records."}</p>
   <form id="save-location-file" onSubmit={save}><fieldset disabled={busy} className="min-w-0 space-y-4">
