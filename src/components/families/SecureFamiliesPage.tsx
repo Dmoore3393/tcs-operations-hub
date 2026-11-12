@@ -1,5 +1,7 @@
 "use client";
 import ChoiceSelect from "@/components/forms/ChoiceSelect";
+import FamilyChildContacts from "@/components/families/FamilyChildContacts";
+import { familyContactsDiffer, assertFamilyContactEditScope } from "@/lib/child-family";
 import { Modal } from "@/components/hub/HubUI";
 import { applyFamilyEdits, familyChildIdentity } from "@/lib/family-edit";
 import { withRequestTimeout } from "@/lib/request-timeout";
@@ -108,6 +110,7 @@ export default function SecureFamiliesPage() {
     let confirmed = 0;
     const members = [...editSnapshot.members];
     try {
+      assertFamilyContactEditScope(members, editSnapshot.family, editing);
       for (let index = 0; index < members.length; index += 1) {
         const child = members[index];
         const updated = applyFamilyEdits(child, editSnapshot.family, editing);
@@ -143,29 +146,30 @@ export default function SecureFamiliesPage() {
 
     <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"><div className="grid gap-3 lg:grid-cols-[1fr_240px]"><label className="relative"><Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600"/><input className={`${inputClass} pl-10`} placeholder="Search family, guardian, child, phone, or email" value={search} onChange={(e) => setSearch(e.target.value)}/></label><select className={inputClass} value={status} onChange={(e) => setStatus(e.target.value)}><option>All Statuses</option><option>Active</option><option>Enrollment Pending</option><option>Inactive</option></select></div></section>
 
-    {loading ? <div className="flex min-h-60 items-center justify-center gap-3 rounded-3xl border border-slate-200 bg-white text-slate-600"><LoaderCircle className="h-6 w-6 animate-spin"/> Loading secured family records…</div> : filtered.length === 0 ? <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center"><Users className="mx-auto h-10 w-10 text-emerald-700"/><h2 className="mt-3 text-xl font-black">No families match this view</h2><p className="mt-2 text-sm text-slate-500">Families appear automatically as live child records are added.</p></div> : <section className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">{filtered.map((family) => <article key={family.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-wider text-emerald-700">{family.subsidy}</p><h2 className="mt-1 text-xl font-black">{family.familyName}</h2></div><span className="rounded-full bg-slate-100 px-2.5 py-1 text-base font-black uppercase tracking-wider">{family.status}</span></div><div className="mt-4 rounded-2xl bg-slate-50 p-4"><p className="text-base font-black uppercase tracking-wider text-slate-600">Children</p><p className="mt-1 text-sm font-bold text-slate-800">{family.children.join(", ")}</p></div><div className="mt-4 space-y-2 text-sm"><p className="font-black">{family.primaryGuardian}{family.secondaryGuardian ? ` & ${family.secondaryGuardian}` : ""}</p><p className="flex items-center gap-2 text-slate-600"><Phone className="h-4 w-4"/><span translate="no" className="contents">{family.phone || "No phone entered"}</span></p><p className="flex items-center gap-2 truncate text-slate-600"><Mail className="h-4 w-4"/><span translate="no" className="contents">{family.email || "No email entered"}</span></p><p className="text-slate-600"><strong>Location:</strong> {family.location}</p></div><div className="mt-5 flex gap-2"><button onClick={() => setSelected(family)} className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white">Open</button>{canManage && <button onClick={() => openEditor(family)} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-black">Edit Family</button>}</div></article>)}</section>}
+    {loading ? <div className="flex min-h-60 items-center justify-center gap-3 rounded-3xl border border-slate-200 bg-white text-slate-600"><LoaderCircle className="h-6 w-6 animate-spin"/> Loading secured family records…</div> : filtered.length === 0 ? <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center"><Users className="mx-auto h-10 w-10 text-emerald-700"/><h2 className="mt-3 text-xl font-black">No families match this view</h2><p className="mt-2 text-sm text-slate-500">Families appear automatically as live child records are added.</p></div> : <section className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">{filtered.map((family) => <article key={family.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-wider text-emerald-700">{family.subsidy}</p><h2 className="mt-1 text-xl font-black">{family.familyName}</h2></div><span className="rounded-full bg-slate-100 px-2.5 py-1 text-base font-black uppercase tracking-wider">{family.status}</span></div><div className="mt-4 rounded-2xl bg-slate-50 p-4"><p className="text-base font-black uppercase tracking-wider text-slate-600">Children</p><p className="mt-1 text-sm font-bold text-slate-800">{family.children.join(", ")}</p></div><div className="mt-4 space-y-2 text-sm">{familyContactsDiffer(familyChildren(children, family)) ? <p className="font-black text-amber-900">Different parent contacts — review each child below</p> : <><p className="font-black">{family.primaryGuardian}{family.secondaryGuardian ? ` & ${family.secondaryGuardian}` : ""}</p><p className="flex items-center gap-2 text-slate-600"><Phone className="h-4 w-4"/><span translate="no" className="contents">{family.phone || "No phone entered"}</span></p><p className="flex items-center gap-2 truncate text-slate-600"><Mail className="h-4 w-4"/><span translate="no" className="contents">{family.email || "No email entered"}</span></p></>}<p className="text-slate-600"><strong>Location:</strong> {family.location}</p></div><FamilyChildContacts members={familyChildren(children, family)} canEdit={canManage} /><div className="mt-5 flex gap-2"><button onClick={() => setSelected(family)} className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white">Open</button>{canManage && <button onClick={() => openEditor(family)} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-black">Edit Family</button>}</div></article>)}</section>}
 
-    {selected && <FamilyModal family={selected} onClose={() => setSelected(null)} />}
-    {editing && <EditModal family={editing} setFamily={setEditing} saving={saving} error={error} onClose={closeEditor} onSubmit={saveFamily}/>}
+    {selected && <FamilyModal family={selected} members={familyChildren(children, selected)} canEdit={canManage} onClose={() => setSelected(null)} />}
+    {editing && <EditModal members={editSnapshot?.members ?? []} family={editing} setFamily={setEditing} saving={saving} error={error} onClose={closeEditor} onSubmit={saveFamily}/>}
   </div></MainLayout>;
 }
 
 function Stat({ label, value }: { label: string; value: number }) { return <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800"><Database className="h-5 w-5"/></div><div><p className="text-xs font-black uppercase tracking-wider text-slate-600">{label}</p><p className="text-2xl font-black">{value}</p></div></div></div>; }
 
-function FamilyModal({ family, onClose }: { family: FamilyRecord; onClose: () => void }) {
+function FamilyModal({ family, members, canEdit, onClose }: { family: FamilyRecord; members: ChildRecord[]; canEdit: boolean; onClose: () => void }) {
   return <Modal title={family.familyName} description="Family account" onClose={onClose}>
-    <div className="grid gap-3 sm:grid-cols-2"><Detail label="Primary guardian" value={family.primaryGuardian}/><Detail label="Secondary guardian" value={family.secondaryGuardian || "None listed"}/><Detail label="Phone" value={family.phone || "Not entered"}/><Detail label="Email" value={family.email || "Not entered"}/><Detail label="Funding" value={family.subsidy}/><Detail label="Transportation" value={family.transportation}/><div className="sm:col-span-2"><Detail label="Children" value={family.children.join(", ")}/></div></div>
+    <FamilyChildContacts members={members} canEdit={canEdit} />
+    <p className="mt-4 text-sm text-slate-700">Family grouping does not grant Parent Portal or pickup access. Review those permissions separately.</p>
   </Modal>;
 }
 
-function EditModal({ family, setFamily, saving, error, onClose, onSubmit }: { family: FamilyRecord; setFamily: (family: FamilyRecord | null) => void; saving: boolean; error: string; onClose: () => void; onSubmit: (event: FormEvent) => void }) {
+function EditModal({ members, family, setFamily, saving, error, onClose, onSubmit }: { members: ChildRecord[]; family: FamilyRecord; setFamily: (family: FamilyRecord | null) => void; saving: boolean; error: string; onClose: () => void; onSubmit: (event: FormEvent) => void }) {
   const errorRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => { if (error && !saving) errorRef.current?.focus(); }, [error, saving]);
   return <Modal title={`Edit ${family.familyName}`} description="Contact edits apply to the linked children. Funding, transportation and enrollment change only when you edit those fields." onClose={onClose} footer={<>
     <button type="button" disabled={saving} onClick={onClose} className="min-h-11 rounded-xl border border-slate-300 px-4 py-2.5 text-base font-bold">Cancel</button>
     <button type="submit" form="family-edit-form" disabled={saving} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-700 px-5 py-2.5 text-base font-black text-white disabled:opacity-50">{saving && <LoaderCircle className="h-4 w-4 animate-spin"/>}{saving ? "Saving…" : "Save Family"}</button>
   </>}>
-    <form id="family-edit-form" onSubmit={onSubmit} aria-busy={saving}>
+    <FamilyChildContacts members={members} canEdit={!saving} /><p className="my-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-950">Changes in the shared form below apply to every linked child. Use the child-specific links above when parents differ.</p><form id="family-edit-form" onSubmit={onSubmit} aria-busy={saving}>
       {error && <p ref={errorRef} tabIndex={-1} role="alert" className="mb-4 rounded-xl border border-red-300 bg-red-50 p-4 text-base font-bold text-red-950">{error}</p>}
       <fieldset disabled={saving} className="grid min-w-0 gap-4 sm:grid-cols-2 [&_input]:min-h-11 [&_input]:text-base [&_select]:min-h-11 [&_select]:text-base">
         <Field label="Family name"><input required className={inputClass} value={family.familyName} onChange={e => setFamily({ ...family, familyName: e.target.value })}/></Field>
@@ -182,4 +186,3 @@ function EditModal({ family, setFamily, saving, error, onClose, onSubmit }: { fa
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label><span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">{label}</span>{children}</label>; }
-function Detail({ label, value }: { label: string; value: string }) { return <div className="rounded-xl bg-slate-50 p-3"><p className="text-base font-black uppercase tracking-wider text-slate-600">{label}</p><p className="mt-1 whitespace-pre-wrap text-sm font-bold text-slate-800">{value}</p></div>; }
