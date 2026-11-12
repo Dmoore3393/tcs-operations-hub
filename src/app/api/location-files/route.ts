@@ -1,3 +1,4 @@
+import { childScreenLinkId } from "@/lib/location-file-child-links";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 import { initialLocationItems, validateLocationFileEdit, type LocationPersonFile } from "@/lib/location-person-files";
 import { templateForChildLocation } from "@/lib/child-file-audits";
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
   const [sites,files,children,staff]=await Promise.all([
    db.from("locations").select("id,name,full_name,slug,program_type,is_active").eq("organization_id",org).order("name"),
    db.from("location_person_files").select("*").eq("organization_id",org).order("person_name"),
-   db.from("children").select("id,first_name,last_name,legacy_id,enrollment_status").eq("organization_id",org).order("last_name").order("first_name"),
+   db.from("children").select("id,first_name,last_name,legacy_id,enrollment_status,ui_record_id:record_data->id").eq("organization_id",org).order("last_name").order("first_name"),
    db.from("staff_lane_profiles").select("id,full_name,is_active").eq("organization_id",org).order("full_name"),
   ]);
   for(const result of [sites,files,children,staff])if(result.error)throw result.error;
@@ -23,7 +24,7 @@ export async function GET(request: Request) {
    const access=await db.rpc("can_access_location",{p_location_id:site.id});if(access.error)throw access.error;
    return access.data?{...site,template:templateForChildLocation(`${site.name} ${site.full_name}`)}:null;
   }))).filter(Boolean);
-  return json({locations,files:files.data||[],children:children.data||[],staff:staff.data||[]});
+  return json({locations,files:files.data||[],children:(children.data||[]).map(({ui_record_id,...child})=>({...child,ui_id:childScreenLinkId(child.legacy_id||"",ui_record_id)})),staff:staff.data||[]});
  }catch(e){return staffErrorResponse(e);}
 }
 export async function POST(request: Request) {
