@@ -126,7 +126,7 @@ assert(enrollmentForecastPage.includes("([30, 60, 90] as ForecastHorizon[])") &&
 assert(enrollmentForecastPage.includes("Pipeline Demand") && enrollmentForecastPage.includes("Projected Openings"), "Enrollment Forecast must separate prospect demand from confirmed projected openings");
 assert(enrollmentForecastModel.includes("plannedLastDay") && enrollmentForecastModel.includes("preferredStartDate"), "Enrollment Forecast must use planned exits and Tour Board preferred starts");
 assert(childrenModel.includes("plannedStartDate") && childrenModel.includes("plannedLastDay"), "Child records must preserve planned enrollment dates for forecasting");
-assert(mainLayout.includes('href: "/enrollment-forecast"'), "Enrollment Forecast must remain reachable from Hub navigation");
+assert(source("src/lib/hub-navigation.ts").includes('href: "/enrollment-forecast"') && mainLayout.includes("hubNavigation") && source("src/components/layout/MobileQuickActions.tsx").includes("hubNavigation"), "Enrollment Forecast must remain reachable from Hub navigation");
 assert(iosProject.includes("ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon"), "Native iOS project must compile the official AppIcon asset");
 assert(iosProject.includes("DEVELOPMENT_TEAM: 6Y2923TFK5"), "Native iOS signing must stay connected to Apple Team 6Y2923TFK5");
 assert(iosProject.includes("TheHub/Resources"), "Native iOS project must bundle the official Hub resource folder");

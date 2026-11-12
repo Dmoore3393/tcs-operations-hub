@@ -1,5 +1,6 @@
 "use client";
 
+import { requestHubTransition } from "@/lib/unsaved-transitions";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { careLocations, locationThemes, normalizeLocation, selectableLocations, type LocationKey } from "@/lib/location-config";
 import { migrateActiveLocation } from "@/lib/storage-migrations";
@@ -54,12 +55,14 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
 
   const setLocation = useCallback((next: LocationKey) => {
     if (!availableLocations.includes(next)) return;
+    requestHubTransition(()=>{
     setLocationState(next);
     try {
       (isLocationRestricted?window.sessionStorage:window.localStorage).setItem(storageKey, next);
     } catch {
       // The selector still works for the current session.
     }
+    });
   }, [availableLocations,isLocationRestricted,storageKey]);
 
   const value = useMemo(() => ({

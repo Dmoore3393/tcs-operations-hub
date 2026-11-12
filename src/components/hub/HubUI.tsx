@@ -1,8 +1,9 @@
 "use client";
 
+import { useUnsavedChanges } from "@/components/forms/UnsavedChanges";
 import { X } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 export const inputClass = "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-600 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100";
@@ -103,22 +104,31 @@ export function SecondaryButton({ children, onClick, type = "button", disabled =
   return <motion.button whileTap={{ scale: disabled ? 1 : 0.97 }} type={type} onClick={onClick} disabled={disabled} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">{children}</motion.button>;
 }
 
-export function Modal({ title, description, onClose, children, footer }: { title: string; description?: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
+export function Modal({ title, description, onClose, children, footer, dirty, protectChanges = true, onSaveBeforeClose, saveLabel }: { title: string; description?: string; onClose: () => void; children: ReactNode; footer?: ReactNode; dirty?: boolean; protectChanges?: boolean; onSaveBeforeClose?: () => Promise<boolean>; saveLabel?: string }) {
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const [changed, setChanged] = useState(false);
+  const guard = useUnsavedChanges(protectChanges && (dirty ?? changed), {save:onSaveBeforeClose,saveLabel,discard:()=>{setChanged(false);}});
+  const replayDismiss = useRef(false);
+  useEffect(() => {const timer=window.setTimeout(()=>setMounted(true),0);return()=>window.clearTimeout(timer);}, []);
   if (!mounted) return null;
   // Escape animated cards' stacking contexts so forms stay above navigation.
   return createPortal(
-    <div role="dialog" aria-modal="true" aria-label={title} className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={onClose}>
+    <><div role="dialog" aria-modal="true" aria-label={title} className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClickCapture={event=>{
+      if(!protectChanges||replayDismiss.current||!(dirty??changed))return;
+      const button=event.target instanceof Element?event.target.closest<HTMLButtonElement>("button"):null;
+      if(!button||button.type==="submit"||!(/^(cancel|close|cancelar|cerrar)$/i.test(button.textContent?.trim()||"")||button.dataset.modalDismiss==="true"))return;
+      event.preventDefault();event.stopPropagation();
+      guard.request(()=>{replayDismiss.current=true;button.click();replayDismiss.current=false;});
+    }} onChangeCapture={()=>setChanged(true)} onMouseDown={()=>guard.request(onClose)}>
       <div className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-t-[30px] bg-white shadow-2xl sm:max-h-[92vh] sm:rounded-3xl" onMouseDown={(event) => event.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-200 bg-white px-5 py-4 sm:px-6 sm:py-5">
           <div><h2 className="text-xl font-black text-slate-950">{title}</h2>{description && <p className="mt-1 text-sm text-slate-500">{description}</p>}</div>
-          <button onClick={onClose} className="rounded-xl p-2 text-slate-500 hover:bg-slate-100" aria-label="Close"><X className="h-5 w-5" /></button>
+          <button type="button" onClick={()=>guard.request(onClose)} className="rounded-xl p-2 text-slate-500 hover:bg-slate-100" aria-label="Close"><X className="h-5 w-5" /></button>
         </div>
         <div className="px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-6">{children}</div>
         {footer && <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-white px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:gap-3 sm:px-6">{footer}</div>}
       </div>
-    </div>,
+    </div>{guard.dialog}</>,
     document.body,
   );
 }

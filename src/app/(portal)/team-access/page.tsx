@@ -1,4 +1,5 @@
 "use client";
+import StaffInviteStatus from "@/components/employees/StaffInviteStatus";
 import {useEmailCooldown} from "@/hooks/useEmailCooldown";
 
 import MainLayout from "@/components/layout/MainLayout";
@@ -151,7 +152,7 @@ export default function TeamAccessPage() {
       const invitation = payload.invitation as { user_id?: string; full_name?: string } | undefined;
       setInvite(blankInvite);
       await loadAccounts(invitation?.user_id);
-      flash(`Invitation sent to ${invitation?.full_name ?? "the new staff member"}.`);
+      flash(`Invitation email requested for ${invitation?.full_name ?? "the new staff member"}. Inbox delivery is not confirmed.`);
     } catch (inviteError) {
       setError(inviteError instanceof Error ? inviteError.message : "The invitation could not be sent.");
     } finally {
@@ -197,7 +198,7 @@ export default function TeamAccessPage() {
         body: JSON.stringify({ user_id: account.user_id }),
       });
       await loadAccounts(account.user_id);
-      flash(`A new ${payload.sentAs === "password setup" ? "account setup" : "invitation"} email was sent to ${account.email}.${payload.validForHours ? " The setup link is valid for 48 hours." : ""}`);
+      flash(`A new ${payload.sentAs === "password setup" ? "account setup" : "invitation"} email request was accepted for ${account.email}. Inbox delivery is not confirmed.${payload.validForHours ? " The setup link is valid for 48 hours." : ""}`);
     } catch (resendError) {
       setError(resendError instanceof Error ? resendError.message : "The setup email could not be sent.");
     } finally {
@@ -257,6 +258,7 @@ export default function TeamAccessPage() {
       </SectionCard>
 
       {editing && <div className="space-y-6">
+        <StaffInviteStatus key={editing.user_id} userId={editing.user_id} />
         <SectionCard title="Contact Details & Birthday" description="Review the details provided at setup. Add or correct a birthday here whenever it is available.">
           <StaffContactEditor key={editing.user_id} userId={editing.user_id} email={editing.email} contact={editing.contact} onChange={(contact) => setEditing({ ...editing, contact })} onSaved={() => loadAccounts(editing.user_id)} />
         </SectionCard>
