@@ -67,7 +67,8 @@ export const childFileAuditDocuments: ChildFileAuditDocument[] = [
   { id: 44, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Family child care home", name: "LIC 9212 – Family Child Care Consumer Awareness Information", requirement: "Required" },
   { id: 41, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Family child care home", name: "LIC 9150 – Parent Notification of Additional Children in Care", requirement: "If Applicable", appliesWhen: "When a small home plans to care for more than 6 children or a large home for more than 12." },
   { id: 6, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Family child care home", name: "LIC 995E – Caregiver Background Check Process (California Department of Social Services)", requirement: "Required" },
-  { id: 7, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Family child care home", name: "Immunization Record (CAIR)", requirement: "If Applicable", appliesWhen: "For children who are not enrolled in a public or private elementary school." },
+  { id: 45, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "LIC / PUB forms in the program checklist", name: "PUB 515 – Effects of Lead Exposure Brochure", requirement: "Required" },
+  { id: 7, section: 4, sectionTitle: "Medical & Special Care", sectionSubtitle: "Supporting records", name: "Immunization Record (CAIR)", requirement: "If Applicable", appliesWhen: "For children who are not enrolled in a public or private elementary school." },
 
   { id: 8, section: 2, sectionTitle: "Enrollment Documents", sectionSubtitle: "Program enrollment paperwork", name: "Cover Sheet", requirement: "Required" },
   { id: 9, section: 2, sectionTitle: "Enrollment Documents", sectionSubtitle: "Program enrollment paperwork", name: "Family Questionnaire", requirement: "Required" },
@@ -111,13 +112,13 @@ export const childFileAuditDocuments: ChildFileAuditDocument[] = [
 
 
 export const schoolAgeChildFileAuditDocuments: ChildFileAuditDocument[] = [
-  { id: 1, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Required by CDSS", name: "LIC 995 – Child Care Center Notification of Parent’s Rights", requirement: "Required" },
-  { id: 2, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Required by CDSS", name: "LIC 700 – Identification and Emergency Information", requirement: "Required" },
-  { id: 3, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Required by CDSS", name: "LIC 613A – Personal Rights Child Care Centers", requirement: "Required" },
-  { id: 4, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Required by CDSS", name: "LIC 702 – Child’s Preadmission Health History – Parent/Authorized Representative Report", requirement: "Required" },
-  { id: 5, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Required by CDSS", name: "LIC 627 – Consent for Emergency Medical Treatment – Child Care Centers", requirement: "Required" },
-  { id: 6, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Required by CDSS", name: "LIC 995E – Caregiver Background Check Process – California Department of Social Services", requirement: "Required" },
-  { id: 7, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "Required by CDSS", name: "Immunization Record", requirement: "Required" },
+  { id: 1, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "LIC / PUB forms in the program checklist", name: "LIC 995 – Child Care Center Notification of Parent’s Rights", requirement: "Required" },
+  { id: 2, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "LIC / PUB forms in the program checklist", name: "LIC 700 – Identification and Emergency Information", requirement: "Required" },
+  { id: 3, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "LIC / PUB forms in the program checklist", name: "LIC 613A – Personal Rights Child Care Centers", requirement: "Required" },
+  { id: 4, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "LIC / PUB forms in the program checklist", name: "LIC 702 – Child’s Preadmission Health History – Parent/Authorized Representative Report", requirement: "Required" },
+  { id: 5, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "LIC / PUB forms in the program checklist", name: "LIC 627 – Consent for Emergency Medical Treatment – Child Care Centers", requirement: "Required" },
+  { id: 6, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "LIC / PUB forms in the program checklist", name: "LIC 995E – Caregiver Background Check Process – California Department of Social Services", requirement: "Required" },
+  { id: 7, section: 4, sectionTitle: "Request Copies of Required Documents", sectionSubtitle: "Supporting records", name: "Immunization Record", requirement: "Required" },
 
   { id: 8, section: 2, sectionTitle: "Center Program Documents", sectionSubtitle: "Not Licensing", name: "TCS Allergy Form", requirement: "Required" },
   { id: 9, section: 2, sectionTitle: "Center Program Documents", sectionSubtitle: "Not Licensing", name: "TCS Illness Policy", requirement: "Required" },
@@ -131,7 +132,7 @@ export const schoolAgeChildFileAuditDocuments: ChildFileAuditDocument[] = [
   { id: 17, section: 2, sectionTitle: "Center Program Documents", sectionSubtitle: "Not Licensing", name: "Equal Opportunity Statement Acknowledgement Form for TCS", requirement: "Required" },
   { id: 18, section: 2, sectionTitle: "Center Program Documents", sectionSubtitle: "Not Licensing", name: "TCS School-Age Center Agreement", requirement: "Required" },
   { id: 19, section: 2, sectionTitle: "Center Program Documents", sectionSubtitle: "Not Licensing", name: "Acknowledgement Form – Family Handbook", requirement: "Required" },
-  { id: 20, section: 2, sectionTitle: "Center Program Documents", sectionSubtitle: "Not Licensing", name: "PUB 515 – Effects of Lead Exposure Brochure", requirement: "Required" },
+  { id: 20, section: 1, sectionTitle: "Licensing Documents", sectionSubtitle: "LIC / PUB forms in the program checklist", name: "PUB 515 – Effects of Lead Exposure Brochure", requirement: "Required" },
   { ...extendedHoursCare, section: 2, sectionTitle: "Center Program Documents", sectionSubtitle: "Not Licensing" },
 
   { id: 21, section: 3, sectionTitle: "Additional Licensing Documents", sectionSubtitle: "If Applicable", name: "LIC 9212 – Family Child Care Consumer Awareness Information", requirement: "If Applicable" },
