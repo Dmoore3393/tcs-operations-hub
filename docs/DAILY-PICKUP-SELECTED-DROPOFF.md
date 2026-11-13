@@ -17,3 +17,5 @@ Requested by Danielle: stop automatic next-day pickup assignments; review childr
 - Actual React component workflows with a synthetic API passed school ordering, empty tomorrow, independent today/tomorrow decisions, save/reopen, arrived-only grouping, no preselection, required physical confirmation and sending exactly the checked IDs once.
 - TypeScript, changed-file lint, security and app-readiness checks passed. No Safari/device rendering or signed-in production custody write was used in these tests.
 - No real child, schedule, attendance, pickup or drop-off records were created or changed by testing. Deployment and migration verification are recorded separately after release.
+
+Production schema applied as migration 20261113175806. Verified that the daily writer remains server-only, the selected-handoff function is SECURITY INVOKER, and anonymous execution is denied. Existing unrelated security-advisor findings were not altered.
