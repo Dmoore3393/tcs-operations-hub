@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import SelectedDropoffs from "@/components/transportation/SelectedDropoffs";
+import {transportServiceDate} from "@/lib/transportation-day";
 import { useSearchParams } from "next/navigation";
 import TransportTeamStatus from "@/components/transportation/TransportTeamStatus";
 import { transportUsesBrightwheel, transportHandoffPatch } from "@/lib/transport-care-handoff";
@@ -16,7 +18,7 @@ import SchoolStopGroups from "@/components/transportation/SchoolStopGroups";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { localIsoDate } from "@/lib/date-utils";
+
 import { emergencyCardReadiness } from "@/lib/emergency-cards";
 import { type ChildRecord } from "@/lib/children";
 import { starterCareLogs, type CareLogEntry } from "@/lib/employee-care";
@@ -130,7 +132,7 @@ export default function TransportationV2Page() {
   const [transportCoverage, setTransportCoverage] = useState<StaffActivityRow[]>([]);
   const [coverageMessage, setCoverageMessage] = useState("");
   const [externalEmergencyReview, setExternalEmergencyReview] = useState<Record<string, boolean>>({});
-  const today = localIsoDate();
+  const today = transportServiceDate();
   const dispatch=useTransportDay(routes,today);
   const actor = profile?.full_name?.trim() || profile?.email || "TCS Staff";
   const leader = isLeadership(profile?.full_name || "", profile?.email || "");
@@ -279,7 +281,7 @@ export default function TransportationV2Page() {
     const key = transportCoverageGroup(route);
     return dispatch.activeRoutes
       .filter((item) => transportCoverageGroup(item) === key)
-      .every((item) => item.id === route.id || statusFor(item, today) === "Checked In");
+      .every((item) => item.id === route.id || ["Checked In","Dropped Off"].includes(statusFor(item, today)));
   }
 
   async function beginTransportationCoverage(route: LiveRoute) {
@@ -422,7 +424,7 @@ export default function TransportationV2Page() {
   return (
     <MainLayout>
       <div className="mx-auto max-w-[1580px] space-y-6 pb-12">
-        <section className="rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><span className="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-100 text-emerald-900" aria-hidden="true"><Bus className="h-8 w-8 pointer-events-none"/></span><div><h1 className="text-2xl font-black text-emerald-950">Transportation</h1><p className="text-base text-slate-700">Morning school drop-offs and afternoon pickups</p></div></div>{canManageTransportation&&<Link href="/transportation-setup" className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-emerald-800 px-5 py-3 text-base font-bold text-white"><Pencil className="h-5 w-5" aria-hidden="true"/>Routes & call-outs</Link>}</div><p className="mt-3 text-base text-slate-700">My Route brings your school stops and children from every location together. Confirm each child at pickup, arrival and handoff.</p></section>
+        <section className="rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><span className="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-100 text-emerald-900" aria-hidden="true"><Bus className="h-8 w-8 pointer-events-none"/></span><div><h1 className="text-2xl font-black text-emerald-950">Transportation</h1><p className="text-base text-slate-700">Morning school drop-offs and afternoon pickups</p></div></div>{canManageTransportation&&<Link href="/transportation-setup" className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-emerald-800 px-5 py-3 text-base font-bold text-white"><Pencil className="h-5 w-5" aria-hidden="true"/>Daily pickup checklist</Link>}</div><p className="mt-3 text-base text-slate-700">My Route brings your school stops and children from every location together. Confirm each child at pickup, arrival and handoff.</p></section>
 
         <Suspense fallback={null}><TransportAlertTarget showTeam={showTeamFromAlert}/></Suspense>
         {transportUsesBrightwheel && <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-base text-amber-950"><h2 className="font-black">Care attendance stays in Brightwheel</h2><p>Record each school pickup and destination handoff here. Complete childcare check-ins and check-outs in Brightwheel until families move to The Hub.</p></section>}
@@ -433,6 +435,13 @@ export default function TransportationV2Page() {
           </div>
           <p className="mt-3 text-base text-slate-700">{view==='mine'?`${actor} · Your entire route across all locations. No location switching needed.`:'See each driver’s last confirmed stop and each child’s pickup and handoff across locations.'}</p>
         </section>
+        {canManageTransportation&&<p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-base text-amber-950">Daily selections are required. Choose Needs pickup or No pickup and enter the time in the Daily pickup checklist. Tomorrow starts unreviewed; reusable school/driver details do not schedule a pickup.</p>}
+        {transportUsesBrightwheel&&<SelectedDropoffs routes={visibleRoutes} date={today} token={session?.access_token} enabled={isOnline&&routesHydrated&&!routeState.error&&pendingOffline===0&&!replayingOffline&&dispatch.ready} onSaved={selected=>{
+          const selectedIds=new Set(selected.map(route=>route.id));
+          const finished=new Set<string>();
+          for(const chosen of selected){const route=chosen as LiveRoute,key=transportCoverageGroup(route);if(!finished.has(key)&&dispatch.activeRoutes.filter(item=>transportCoverageGroup(item)===key).every(item=>selectedIds.has(item.id)||["Checked In","Dropped Off"].includes(statusFor(item,today)))){finished.add(key);void finishTransportationCoverage(route);}}
+          routeState.retry();void dispatch.refresh();
+        }}/>}
         <section className="flex flex-wrap gap-3 rounded-2xl border border-emerald-200 bg-white p-4" aria-label="Transportation sessions">{['All trips','Morning','Afternoon'].map(session=><button key={session} type="button" aria-pressed={trip===session} onClick={()=>setTrip(session)} className={`min-h-12 rounded-xl px-5 py-3 text-base font-bold ${trip===session?'bg-emerald-800 text-white':'border border-emerald-300 bg-white text-emerald-950'}`}>{session==='Morning'?'Morning · School drop-offs':session==='Afternoon'?'Afternoon · School pickups':'All trips'}</button>)}</section>
         {view === "all" && dispatch.ready && routesHydrated && <TransportTeamStatus routes={visibleRoutes} callouts={visibleCallouts} date={today} staff={dispatch.drivers} />}
         {dispatch.ready && routesHydrated && !routeState.error && !assignedRoutes.length && <section className="rounded-2xl border border-emerald-200 bg-white p-5 text-base"><h2 className="text-xl font-black text-emerald-950">{view==='mine'?'No trips assigned to you in this view':'No trips scheduled in this view'}</h2><p className="mt-2">{view==='mine'?'Your assignments will appear here across all locations. You can still browse All Routes, or choose All trips to include both morning and afternoon.':'Choose All trips, or add a school trip using an existing child profile.'}</p>{view==='mine'&&<button type="button" onClick={()=>setView('all')} className="mt-3 min-h-11 rounded-xl border border-emerald-300 px-4 font-bold text-emerald-950">Browse all routes</button>}{canManageTransportation && <Link href="/transportation-setup?tab=children" className="mt-3 ml-3 inline-flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 font-bold text-white">Children & Schools</Link>}</section>}
@@ -511,7 +520,7 @@ export default function TransportationV2Page() {
         <Suspense fallback={<p>Loading assigned routes…</p>}><MyAssignedRoutes routes={routes}/></Suspense>
         {routeState.error && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-900">{routeState.error} <button className="min-h-11 underline" onClick={routeState.retry}>Try again</button></p>}
         {childRoster.error&&<p role="alert" className="rounded-xl bg-red-50 p-4 text-red-900">{childRoster.error} <button className="min-h-11 underline" onClick={()=>void childRoster.refresh()}>Try again</button></p>}
-        <section className="grid gap-5 xl:grid-cols-3"><Panel title="Recent Pickups" icon={<UserCheck className="h-5 w-5" />}>{visibleRoutes.filter((route) => route.runDate === today && route.pickedUpAt).sort((a, b) => String(b.pickedUpAt).localeCompare(String(a.pickedUpAt))).slice(0, 5).map((route) => <Row key={route.id} top={route.child} bottom={`${timeLabel(route.pickedUpAt)} • ${route.school}`} />)}</Panel><Panel title="Schools" icon={<MapPin className="h-5 w-5" />}>{schools.filter((school) => school.status === "Active").slice(0, 5).map((school) => <Row key={school.id} top={school.school} bottom={`${school.area} • ${school.dismissal || "dismissal not entered"}`} />)}</Panel><Panel title="Transportation Reminders" icon={<ShieldCheck className="h-5 w-5" />}><Row top="One child at a time" bottom="Never bulk-confirm pickups or handoffs." /><Row top="Arrival is not check-in" bottom={transportUsesBrightwheel ? "Record handoff here; complete care attendance in Brightwheel." : "TCS destination handoff requires a separate location check-in."} /><Row top="Field trip exception review" bottom="Missing destination handoffs alert Danielle and Jen only." /></Panel></section>
+        <section className="grid gap-5 xl:grid-cols-3"><Panel title="Recent Pickups" icon={<UserCheck className="h-5 w-5" />}>{visibleRoutes.filter((route) => route.runDate === today && route.pickedUpAt).sort((a, b) => String(b.pickedUpAt).localeCompare(String(a.pickedUpAt))).slice(0, 5).map((route) => <Row key={route.id} top={route.child} bottom={`${timeLabel(route.pickedUpAt)} • ${route.school}`} />)}</Panel><Panel title="Schools" icon={<MapPin className="h-5 w-5" />}>{schools.filter((school) => school.status === "Active").slice(0, 5).map((school) => <Row key={school.id} top={school.school} bottom={`${school.area} • ${school.dismissal || "dismissal not entered"}`} />)}</Panel><Panel title="Transportation Reminders" icon={<ShieldCheck className="h-5 w-5" />}><Row top="Verify every child" bottom="Confirm pickups individually. For group handoff, select only arrived children physically handed to the receiving adult." /><Row top="Arrival is not check-in" bottom={transportUsesBrightwheel ? "Record handoff here; complete care attendance in Brightwheel." : "TCS destination handoff requires a separate location check-in."} /><Row top="Field trip exception review" bottom="Missing destination handoffs alert Danielle and Jen only." /></Panel></section>
       </div>
     </MainLayout>
   );

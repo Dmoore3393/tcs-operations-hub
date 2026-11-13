@@ -16,8 +16,8 @@ export async function GET(request:Request){try{
  }catch(error){return staffErrorResponse(error);}}
 export async function POST(request:Request){try{
  const c=await requireStaff(request);if(!c.isOwner&&!c.isLicensee)return Response.json({error:'Only administration and assigned licensees can call out children.'},{status:403});
- const body=await request.json();if(!validTransportDate(body.date||'')||typeof body.routeId!=='string'||!/^[0-9a-f-]{36}$/i.test(body.routeId)||!['save','callout','restore'].includes(body.action)||!Number.isInteger(body.expectedVersion)||body.expectedVersion<0)return Response.json({error:'Check the date and daily route selection.'},{status:400});
- if(body.action==='save'&&!c.isOwner)return Response.json({error:'Administration assigns daily routes. Licensees can call out or restore their children.'},{status:403});
+ const body=await request.json();if(!validTransportDate(body.date||'')||typeof body.routeId!=='string'||!/^[0-9a-f-]{36}$/i.test(body.routeId)||!['save','skip','callout','restore'].includes(body.action)||!Number.isInteger(body.expectedVersion)||body.expectedVersion<0)return Response.json({error:'Check the date and daily route selection.'},{status:400});
+ if(['save','skip'].includes(body.action)&&!c.isOwner)return Response.json({error:'Administration assigns daily routes. Licensees can call out or restore their children.'},{status:403});
  if(body.action==='callout'&&body.reason!==undefined&&!['sick','no_transportation'].includes(body.reason))return Response.json({error:'Choose Out sick or No transportation.'},{status:400});
  const result=await c.admin.rpc('save_transport_day_stop',{p_org:c.profile.organization_id,p_actor:c.user.id,p_route:body.routeId,p_day:body.date,p_action:body.action,p_plan:body.action==='callout'?{calloutReason:body.reason||'no_transportation'}:body.plan||{},p_expected_version:body.expectedVersion});
  if(result.error){const msg=result.error.message||'Could not update daily transportation.';return Response.json({error:msg},{status:/changed/.test(msg)?409:/assigned|Leadership|administration/.test(msg)?403:400});}
