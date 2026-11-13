@@ -50,18 +50,18 @@ test('whole routes group children across locations, keep drivers distinct, and o
 });
 
 async function compile(path,deps){
- const context={exports:{},require:name=>deps[name]||require(name)};
+ const context={exports:{},require:name=>deps[name]||(name==='@/lib/date-utils'?{localIsoDate:()=>day}:require(name))};
  vm.runInNewContext(ts.transpileModule(await readFile(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,context);
  return context.exports.default;
 }
 async function screen(initial=rows){
  let cursor=0,routeRows=structuredClone(initial);const state=[],patches=[],changes=[];
- const dayStops=overrides.filter(stop=>initial.some(route=>route.id===stop.snapshot.id));
+ const dayStops=initial.map(route=>{const override=overrides.find(stop=>stop.snapshot.id===route.id);return {snapshot:route,service_date:day,is_planned:true,called_out:false,...override,plan_data:{pickup:route.pickup,...override?.plan_data}}});
  const react={...React,useState(initial){const i=cursor++;if(!(i in state))state[i]=typeof initial==='function'?initial():initial;return[state[i],value=>state[i]=typeof value==='function'?value(state[i]):value]},useRef(initial){const i=cursor++;if(!(i in state))state[i]={current:initial};return state[i]},useMemo:fn=>fn(),useCallback:fn=>fn,useEffect(){}};
  const Groups=await compile('src/components/transportation/SchoolStopGroups.tsx',{'@/lib/school-pickup-stops':stops});
  const Callouts=await compile('src/components/transportation/TransportCallouts.tsx',{'@/lib/transport-trips':trips,'@/lib/transportation-day':daily});
  const team=await compile('src/components/transportation/TransportTeamStatus.tsx',{'@/lib/transport-driver-view':driver,'@/lib/transport-trips':trips,'@/lib/transportation-day':daily});
- const deps={react,'next/navigation':{useSearchParams:()=>new URLSearchParams()},'@/components/transportation/TransportTeamStatus':{default:team},'next/link':{default:({children,...props})=>React.createElement('a',props,children)},
+ const deps={'@/components/transportation/SelectedDropoffs':{default:()=>null},'@/lib/transportation-day':{...daily,transportServiceDate:()=>day},'@/lib/transport-child-schools':{transportChildKey:child=>child.legacyId||String(child.id)},react,'next/navigation':{useSearchParams:()=>new URLSearchParams()},'@/components/transportation/TransportTeamStatus':{default:team},'next/link':{default:({children,...props})=>React.createElement('a',props,children)},
   '@/components/layout/MainLayout':{default:({children})=>React.createElement('main',null,children)},
   '@/components/providers/AuthProvider':{useAuth:()=>({profile:{lane_profile_id:'mine',full_name:'Synthetic Driver',permissions:['transportation']},session:{access_token:'synthetic'},canManageSystem:false,isLocationLicensee:true})},
   '@/components/providers/LocationProvider':{useHubLocation(){throw Error('The driver route must not depend on the global location filter')}},

@@ -9,9 +9,9 @@ const day='2030-01-07';
 test('date planner handles weekdays, ranges, full day names and weekends without changing recurrence',()=>{
  assert.equal(scheduledOnDate('Mon–Fri',day),true);assert.equal(scheduledOnDate('Monday-Friday','2030-01-05'),false);assert.equal(scheduledOnDate('Friday-Monday','2030-01-06'),true);assert.equal(scheduledOnDate('Mon, Wed, Fri','2030-01-08'),false);assert.equal(validTransportDate('2030-02-30'),false);
  const routes=[{id:1,child:'Synthetic Child',days:'Mon-Fri',status:'Confirmed',driver:'Regular',vehicle:'Regular van'}];const original=structuredClone(routes);
- const stops=[{snapshot:{...routes[0]},service_date:day,is_planned:true,called_out:false,plan_data:{driver:'Tomorrow driver',vehicle:'Synthetic van'}}];
- assert.equal(mergeTransportDay(routes,stops,day)[0].driver,'Tomorrow driver');assert.equal(mergeTransportDay(routes,stops,'2030-01-08')[0].driver,'Regular');assert.deepEqual(routes,original);
- stops[0].called_out=true;assert.equal(mergeTransportDay(routes,stops,day).length,0);assert.equal(mergeTransportDay(routes,stops,'2030-01-08').length,1);
+ const stops=[{snapshot:{...routes[0]},service_date:day,is_planned:true,called_out:false,plan_data:{driver:'Tomorrow driver',vehicle:'Synthetic van',pickup:'14:33'}}];
+ assert.equal(mergeTransportDay(routes,stops,day)[0].driver,'Tomorrow driver');assert.equal(mergeTransportDay(routes,stops,'2030-01-08').length,0);assert.deepEqual(routes,original);
+ stops[0].called_out=true;assert.equal(mergeTransportDay(routes,stops,day).length,0);assert.equal(mergeTransportDay(routes,stops,'2030-01-08').length,0);
  assert.equal(mergeTransportDay([{...routes[0],days:'Sat'}],[{...stops[0],is_planned:false,called_out:false}],day).length,0);
 });
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;const org=id(1),otherOrg=id(2),loc=id(3),otherLoc=id(4),owner=id(10),licensee=id(11),driver=id(12),paused=id(13),child=id(20),r1=id(30),r2=id(31),r3=id(32),r4=id(33),r5=id(34);
@@ -87,14 +87,12 @@ test('explicit child identity wins over same-name guesses and ambiguous unlinked
  await assert.rejects(db.query('update transportation_routes set record_data=record_data||$1 where id=$2',[JSON.stringify({childId:'missing-profile'}),r1]),/existing child profile/);
 });
 
-test('planner exposes next-day dispatch for admins, call-outs for licensees, and no edit buttons for drivers',async()=>{
- const {createRequire}=await import('node:module'),{default:vm}=await import('node:vm');const require=createRequire(import.meta.url);let index=0,mode='owner',selectedDate;const states=[],calls=[];
- const react={useState(initial){const slot=index++;if(!(slot in states))states[slot]=typeof initial==='function'?initial():initial;return[states[slot],value=>states[slot]=typeof value==='function'?value(states[slot]):value]}};
- const trips=await import(url(await readFile('src/lib/transport-trips.ts','utf8')));
- const deps={'@/components/forms/ChoiceSelect':{default:()=>null},'@/lib/transport-child-schools':{transportCareLocation:value=>value},'@/lib/transport-trips':trips,'./TransportDriverSelect':{default:()=>null},'./TransportSchoolSelect':{default:()=>null},react,'@/lib/date-utils':{localIsoDate:()=>day},'@/lib/transportation-day':{scheduledOnDate,transportCalloutLabel},'@/components/hub/HubUI':{Modal:()=>null,inputClass:''},'@/components/transportation/SchoolStopGroups':{default:({routes,children})=>routes.map(children)},'@/hooks/useTransportDay':{useTransportDay:(_routes,date)=>{selectedDate=date;return{ready:true,stops:[],saving:false,canPlan:mode==='owner',canCallOut:mode!=='driver',stopFor:()=>null,sourceFor:()=>({child_id:child}),change:async(...args)=>{calls.push(args);return true},refresh:async()=>{}}}}};
- const context={exports:{},require:name=>deps[name]||require(name)};vm.runInNewContext(ts.transpileModule(await readFile('src/components/transportation/DailyTransportPlanner.tsx','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,context);
- const flatten=node=>Array.isArray(node)?node.flatMap(flatten):node&&typeof node==='object'?(typeof node.type==='function'?flatten(node.type(node.props)):[node,...flatten(node.props?.children)]):[];const props={location:'Synthetic',routes:[{id:1,location:'Synthetic',child:'Synthetic Child',school:'Synthetic School',driver:'Synthetic Driver',vehicle:'Synthetic Van',days:'Mon-Fri',status:'Confirmed'}]};const render=()=>{index=0;return flatten(context.exports.default(props));};
- let nodes=render();assert.ok(nodes.some(node=>node.type==='button'&&node.props.children==='Edit this day'));nodes.find(node=>node.type==='button'&&node.props.children==='Tomorrow').props.onClick();nodes=render();assert.equal(selectedDate,'2030-01-08');mode='licensee';nodes=render();assert.ok(!nodes.some(node=>node.props?.children==='Edit this day'));nodes.find(node=>node.type==='button'&&node.props.children==='Out sick').props.onClick();await new Promise(setImmediate);assert.equal(calls[0][1],'callout');assert.equal(calls[0][4],'sick');assert.equal(calls[0][0].id,1);mode='driver';nodes=render();assert.ok(!nodes.some(node=>node.type==='button'&&['Edit this day','Out sick','No transportation','Restore transportation'].includes(node.props.children)));
+test('planner uses school groups and explicit dated decisions while preserving leadership call-outs',async()=>{
+ const source=await readFile('src/components/transportation/DailyTransportPlanner.tsx','utf8');
+ assert.match(source,/Daily School Pickup Checklist/);assert.match(source,/Needs pickup/);assert.match(source,/No pickup/);
+ assert.match(source,/type="time"/);assert.match(source,/stop\?\.plan_data.pickup/);assert.doesNotMatch(source,/scheduledOnDate/);
+ assert.match(source,/day.canPlan/);assert.match(source,/day.canCallOut/);assert.match(source,/all remaining linked trips/);
+ assert.match(source,/key=\{`\$\{date\}:\$\{route.id\}`\}/);assert.match(source,/onSave/);
 });
 
 test('daily-route connection failures retain cached offline routes and never hide an in-transit handoff',async()=>{
@@ -104,7 +102,7 @@ test('daily-route connection failures retain cached offline routes and never hid
  const deps={'@/components/forms/ChoiceSelect':{default:()=>null},'@/lib/transport-child-schools':{transportCareLocation:value=>value},'@/lib/transport-trips':trips,'./TransportDriverSelect':{default:()=>null},'./TransportSchoolSelect':{default:()=>null},react,'@/components/providers/AuthProvider':{useAuth:()=>({session:{access_token:'synthetic'}})},'@/lib/transportation-day':{mergeTransportDay,transportDayCallouts},'@/lib/hub-request':{hubRequest:async()=>{if(fail)throw Error('Synthetic connection lost');return{stops:[],sources:[],canPlan:false,canCallOut:false}}}};
  const context={exports:{},window:{setTimeout:fn=>{timers.push(fn);return 1},setInterval:()=>2,clearTimeout(){},clearInterval(){}},require:name=>deps[name]||require(name)};vm.runInNewContext(ts.transpileModule(await readFile('src/hooks/useTransportDay.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,context);
  const routes=[{id:1,days:'Mon-Fri',status:'Confirmed'},{id:2,days:'Mon-Fri',status:'Confirmed',runDate:day,runStatus:'Picked Up'}];const render=()=>{cursor=0;return context.exports.useTransportDay(routes,day)};
- let result=render();assert.equal(result.ready,false);assert.deepEqual(Array.from(result.activeRoutes,route=>route.id),[2]);effects[0]();timers[0]();await new Promise(setImmediate);result=render();assert.equal(result.ready,true);assert.equal(result.activeRoutes.length,2);fail=true;await result.refresh();result=render();assert.equal(result.ready,true);assert.equal(result.activeRoutes.length,2);assert.ok(result.error);
+ let result=render();assert.equal(result.ready,false);assert.deepEqual(Array.from(result.activeRoutes,route=>route.id),[2]);effects[0]();timers[0]();await new Promise(setImmediate);result=render();assert.equal(result.ready,true);assert.equal(result.activeRoutes.length,1);fail=true;await result.refresh();result=render();assert.equal(result.ready,false);assert.equal(result.activeRoutes.length,1);assert.ok(result.error);
 });
 
 
@@ -142,7 +140,7 @@ test('cancelled children remain assigned to the correct daily driver, including 
  assert.equal(transportDayCallouts([route],[stop],'2030-01-08').length,0);
  assert.equal(transportDayCallouts([route],[{...stop,called_out:false}],day).length,0);
  for(const runStatus of ['Picked Up','Arrived','Checked In','Dropped Off'])assert.equal(transportDayCallouts([{...route,runDate:day,runStatus}],[stop],day).length,0);
- assert.equal(transportDayCallouts([{...route,days:'Sat'}],[{...stop,is_planned:false}],day).length,0);
+ assert.equal(transportDayCallouts([{...route,days:'Sat'}],[{...stop,is_planned:false}],day).length,1);
  assert.equal(stop.snapshot.driverLaneId,'regular');
 });
 

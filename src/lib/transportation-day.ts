@@ -1,5 +1,17 @@
 import type {TransportationRoute} from "@/lib/hub-data";
 export type DayRoute=TransportationRoute & {routeName?:string;stopOrder?:number;dropoffLocation?:string;runDate?:string;runStatus?:string};
+// New daily selections are explicit. Historical schedules retain their prior display.
+export const MANUAL_TRANSPORT_FROM = '2026-11-13';
+export function transportServiceDate(now = new Date()) { return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).format(now); }
+export function transportTimeInput(value = '') {
+ const text=value.trim(); if (/^([01]\d|2[0-3]):[0-5]\d$/.test(text)) return text;
+ const match=text.match(/^(0?[1-9]|1[0-2]):([0-5]\d)\s*(AM|PM)$/i);
+ return match ? `${String(Number(match[1])%12+(match[3].toUpperCase()==='PM'?12:0)).padStart(2,'0')}:${match[2]}` : '';
+}
+export function transportPickupChoice(stop?: TransportDayStop): 'pickup'|'no_pickup'|'unreviewed' {
+ if(stop?.called_out)return 'no_pickup';
+ return stop?.is_planned&&transportTimeInput(stop.plan_data.pickup||'')?'pickup':'unreviewed';
+}
 export type TransportCalloutReason='sick'|'no_transportation';
 export type TransportDayStop={route_id:string;service_date:string;snapshot:DayRoute;plan_data:Partial<DayRoute>;is_planned:boolean;called_out:boolean;callout_reason?:TransportCalloutReason|null;version:number;updated_by_name:string;updated_at:string};
 export type TransportDayEntry={routeId:string;route:DayRoute;calledOut:boolean;version:number;by:string;at:string;linkedChild:boolean};
@@ -16,7 +28,12 @@ export function scheduledOnDate(days:string,date:string){
 }
 export function mergeTransportDay<T extends DayRoute>(routes:T[],stops:TransportDayStop[],date:string):T[]{
  const byId=new Map(stops.filter(stop=>stop.service_date===date).map(stop=>[String(stop.snapshot.id),stop]));
- return routes.filter(route=>{const stop=byId.get(String(route.id));const onboard=route.runDate===date&&['Picked Up','Arrived'].includes(route.runStatus||'');return onboard||(!stop?.called_out&&route.status!=="Not Riding"&&(stop?.is_planned||scheduledOnDate(route.days,date)));}).map(route=>({...route,...byId.get(String(route.id))?.plan_data}));
+ return routes.filter(route=>{
+  const stop=byId.get(String(route.id));
+  // Never hide a child already in custody or erase a completed trip when planning changes.
+  const recorded=route.runDate===date&&['Picked Up','Arrived','Checked In','Dropped Off'].includes(route.runStatus||'');
+  return recorded||(!stop?.called_out&&route.status!=="Not Riding"&&(date>=MANUAL_TRANSPORT_FROM?transportPickupChoice(stop)==='pickup':Boolean(stop?.is_planned)||scheduledOnDate(route.days,date)));
+ }).map(route=>({...route,...byId.get(String(route.id))?.plan_data}));
 }
 
 /** Keep day-only absences in the assigned driver's list, with that day's overrides. */
@@ -26,7 +43,7 @@ export function transportDayCallouts(routes:DayRoute[],stops:TransportDayStop[],
   const route=byId.get(String(stop.snapshot.id))||stop.snapshot;
   // A stale/offline call-out must never replace a custody or completed-trip record.
   if(route.runDate===date&&['Picked Up','Arrived','Checked In','Dropped Off'].includes(route.runStatus||''))return [];
-  if(route.status==='Not Riding'||(!stop.is_planned&&!scheduledOnDate(route.days,date)))return [];
+  if(route.status==='Not Riding'||(date<MANUAL_TRANSPORT_FROM&&!stop.is_planned&&!scheduledOnDate(route.days,date)))return [];
   return [{...stop,snapshot:{...route,...stop.plan_data}}];
  });
 }
