@@ -31,4 +31,21 @@ export default function StaffPasswordRecovery(){
   if(problem){setError(problem.message);setStep("verified");return;}
   setPassword("");setConfirm("");await client.auth.signOut({scope:"local"});setStep("done");
  }
- const input="mt-1 min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slat...[truncated]
+ const input="mt-1 min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-950";
+ return <main className="flex min-h-screen items-center justify-center bg-emerald-50 p-4"><section className="w-full max-w-md space-y-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-lg sm:p-9">
+ <p className="text-sm font-black uppercase tracking-wide text-emerald-800">TCS Operations Hub</p>
+ <h1 className="text-2xl font-black text-slate-950">Reset your password</h1>
+ {step==="loading"&&<p role="status">Checking recovery link…</p>}
+ {step==="ready"&&<><p>This is a one-time link for the account holder. Select Verify to start.</p><button className="min-h-12 w-full rounded-xl bg-emerald-800 p-3 font-bold text-white" onClick={()=>void verify()}>Verify my reset link</button></>}
+ {step==="verifying"&&<p role="status">Verifying your link…</p>}
+ {(step==="verified"||step==="saving")&&<form onSubmit={e=>void save(e)} className="space-y-4">
+ <p>Link verified. Set a new password for this account.</p>
+ <label className="block font-semibold">New password<input className={input} autoComplete="new-password" type="password" minLength={10} required disabled={step==="saving"} value={password} onChange={e=>setPassword(e.target.value)}/></label>
+ <label className="block font-semibold">Confirm password<input className={input} autoComplete="new-password" type="password" minLength={10} required disabled={step==="saving"} value={confirm} onChange={e=>setConfirm(e.target.value)}/></label>
+ <button className="min-h-12 w-full rounded-xl bg-emerald-800 p-3 font-bold text-white disabled:opacity-50" disabled={step==="saving"}>{step==="saving"?"Saving…":"Save new password"}</button></form>}
+ {step==="invalid"&&<p className="rounded-xl bg-amber-50 p-3">This link is missing, expired, or already used. Request a new password reset.</p>}
+ {step==="done"&&<p role="status" className="rounded-xl bg-emerald-50 p-3">Password updated. Sign in with your new password.</p>}
+ {error&&<p role="alert" className="rounded-xl bg-red-50 p-3 text-red-900">{error}</p>}
+ <Link className="inline-flex min-h-11 items-center font-bold text-emerald-900 underline" href="/login">Staff sign-in</Link>
+ </section></main>;
+}
