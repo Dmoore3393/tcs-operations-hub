@@ -69,6 +69,8 @@ export default function TeamAccessPage() {
   const [saving, setSaving] = useState(false);
   const [inviting, setInviting] = useState(false);
   const [resendingId, setResendingId] = useState("");
+  const [creatingRecovery,setCreatingRecovery]=useState(false);
+  const [directRecovery,setDirectRecovery]=useState<{userId:string;name:string;link:string}|null>(null);
   const emailCooldown = useEmailCooldown();
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -205,6 +207,17 @@ export default function TeamAccessPage() {
     }
   }
 
+  async function createDirectRecoveryLink(account: TeamAccessAccount) {
+    if(creatingRecovery || !window.confirm("Generate a private, one-time password reset link for " + account.full_name + "? Send it only to this person through a verified private channel."))return;
+    setDirectRecovery(null);setCreatingRecovery(true);setError("");
+    try {
+      const payload=await apiRequest("/api/team-access/password-link",{method:"POST",body:JSON.stringify({user_id:account.user_id})});
+      if(typeof payload.link!=="string")throw new Error("Recovery link was not returned.");
+      setDirectRecovery({userId:account.user_id,name:account.full_name,link:payload.link});
+    } catch(reason){setError(reason instanceof Error?reason.message:"Could not generate reset link.");}
+    finally{setCreatingRecovery(false);}
+  }
+
   const stats = useMemo(() => ({
     active: accounts.filter((account) => account.status === "Active").length,
     pending: accounts.filter((account) => account.status === "Invite Pending").length,
@@ -280,8 +293,15 @@ export default function TeamAccessPage() {
 
           <div className="mt-5 flex flex-wrap gap-3">
             <PrimaryButton onClick={() => void saveAccess()} disabled={saving}>{saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{saving ? "Saving…" : "Save Access"}</PrimaryButton>
+            {editing.status === "Active" && <button type="button" disabled={creatingRecovery || editing.user_id===session?.user.id} onClick={()=>void createDirectRecoveryLink(editing)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-emerald-600 bg-white px-4 py-2.5 text-sm font-black text-emerald-900 disabled:opacity-50"><KeyRound className="h-4 w-4"/>{creatingRecovery?"Generating…":"Create private password reset link"}</button>}
             {editing.status === "Invite Pending" && <button onClick={() => void resendSetup(editing)} disabled={!!resendingId||emailCooldown.remaining>0} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-60">{resendingId === editing.user_id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} {emailCooldown.remaining ? "Wait before requesting another email" : "Send New Setup Link"}</button>}
           </div>
+          {directRecovery?.userId===editing.user_id && <div className="mt-4 space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
+            <p className="font-black text-amber-950">One-time link for {directRecovery.name}</p>
+            <p className="text-sm text-amber-950">Copy and send privately to the intended staff member. Anyone holding the link may reset that account until it expires or is used. Do not share it in group chats.</p>
+            <textarea aria-label="Private password reset link" className="min-h-24 w-full rounded-xl border border-amber-300 bg-white p-3 text-sm text-slate-950" readOnly value={directRecovery.link} onFocus={event=>event.currentTarget.select()} />
+            <button type="button" className="min-h-11 rounded-xl bg-emerald-800 px-4 py-2 font-bold text-white" onClick={()=>{void navigator.clipboard.writeText(directRecovery.link).then(()=>flash("Private link copied. Text it only to the intended person.")).catch(()=>setError("Copy failed. Select the link above and copy it manually."));}}>Copy reset link</button>
+          </div>}
         </SectionCard>
 
         <SectionCard title={`${selectedRole} Access`} description={selectedRole === "Employee" ? "Employee permissions are individually selected above." : "The standard access rules for this role."}>
