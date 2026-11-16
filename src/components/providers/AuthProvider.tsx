@@ -83,7 +83,7 @@ function isParentPortalRoute(pathname: string) {
 }
 
 function isPublicInfoRoute(pathname: string) {
-  return pathname === "/privacy" || pathname === "/terms" || pathname === "/support" || pathname === "/account";
+  return pathname === "/password-recovery" || pathname === "/privacy" || pathname === "/terms" || pathname === "/support" || pathname === "/account";
 }
 
 function isTrainingAdminProfile(profile: StaffAccessProfile | null) {
