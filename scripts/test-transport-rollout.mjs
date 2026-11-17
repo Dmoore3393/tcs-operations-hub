@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import ts from 'typescript';
+const source=await readFile('src/lib/transport-accountability/rollout.ts','utf8');
+const {transportRollout}=await import('data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022}}).outputText).toString('base64'));
+test('absent organization cutover and disabled rollout preserve the existing workflow',()=>{assert.deepEqual(transportRollout(true,null,'2026-11-17',true),{enabled:false,active:false});assert.deepEqual(transportRollout(false,'2026-11-17','2026-11-17',true),{enabled:false,active:false});});
+test('Danielle can prepare tomorrow without switching today’s driver and handoff controls',()=>{const c=transportRollout(true,'2026-11-18','2026-11-17',true);assert.equal(c.enabled,true);assert.equal(c.active,false);assert.equal(c.preparing,true);assert.equal(c.planningDate,'2026-11-18');});
+test('staff retain today’s existing assignments until the selected service date',()=>{const c=transportRollout(true,'2026-11-18','2026-11-17',false);assert.equal(c.enabled,false);assert.equal(c.active,false);});
+test('all authorized staff switch on the service date and the legacy writer guards activate together',()=>{for(const today of ['2026-11-18','2026-11-19']){const c=transportRollout(true,'2026-11-18',today,false);assert.equal(c.enabled,true);assert.equal(c.active,true);assert.equal(c.preparing,false);assert.equal(c.planningDate,today);}});

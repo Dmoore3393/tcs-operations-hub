@@ -15,11 +15,11 @@ A school report that a parent collected a child is a problem, not a confirmed ca
 
 ## Deployment and cutover
 
-This branch is deliberately inactive until the database, background scheduler and staff-role checks are ready. `TCS_TRANSPORT_ACCOUNTABILITY=true` selects the new screens. A dated row in `transport_accountability_rollout` must also exist. Do not activate halfway through an operating day: legacy custody records are retained as history, not automatically relabeled as new-ledger confirmations.
+This branch is deliberately inactive until the database, background scheduler and staff-role checks are ready. `TCS_TRANSPORT_ACCOUNTABILITY=true` selects the new screens. A dated row in `transport_accountability_rollout` must also exist. Danielle can prepare the selected future service date before operational cutover; staff retain the existing workflow until that date. Do not activate halfway through an operating day: legacy custody records are retained as history, not automatically relabeled as new-ledger confirmations.
 
 1. Apply the generated migration `20261117180754_transport_accountability.sql`. It adds server-only tables and private trigger guards; existing operational records are retained.
 2. Deploy this source with the flag off. Verify the existing workflow still opens. Set `TCS_TRANSPORT_PLANNER_EMAIL` to Danielle's active staff-access email (default `youngmoore19@gmail.com`). The account must also have Owner/Admin access.
-3. Configure a reliable per-minute caller for `/api/cron/transportation`, using the existing server-side `CRON_SECRET`. The current Vercel Hobby project must not be given a per-minute Vercel cron declaration. The optional SQL below uses Supabase Cron, pg_net and Vault instead. Do not put the secret in source control, URLs or job text.
+3. Configure a reliable per-minute caller for `/api/cron/transportation`, using the dedicated server-side `TRANSPORT_CRON_SECRET` (with `CRON_SECRET` retained as a fallback). The current Vercel Hobby project must not be given a per-minute Vercel cron declaration. The optional SQL below uses Supabase Cron, pg_net and Vault instead. Do not put the secret in source control, URLs or job text.
 4. Before the first trip on the chosen service date, ensure no legacy route is in custody. Insert the organization, start date and activating administrator into `transport_accountability_rollout`, then enable the server flag and redeploy. For an environment mismatch the workflow gate fails closed.
 5. Danielle opens the plan, configures authorized backup leadership, verifies school calendars and driver account links, reviews every child, and publishes. Missing driver, backup driver, school/dismissal, seating, location, destination, vehicle, route or valid pickup/arrival times blocks trip readiness. Publishing ready rows leaves unresolved children visible.
 6. Verify signed-in Danielle, driver, receiving employee and location-licensee sessions. Test background notifications with all app windows closed. Confirm native push delivery on an actual staff device before treating alerts as verified in production.
@@ -28,7 +28,7 @@ The migration's cutoff guards block legacy daily decisions and custody RPCs, inc
 
 ## Optional Supabase background scheduler
 
-Run through the authorized database administrator after the endpoint is deployed. Store the existing CRON_SECRET in Vault under `tcs_transport_cron_secret` using a secure parameterized administrative operation. No secret value belongs in this file.
+Run through the authorized database administrator after the endpoint is deployed. Store the dedicated TRANSPORT_CRON_SECRET in Vault under `tcs_transport_cron_secret` using a secure parameterized administrative operation. No secret value belongs in this file.
 
 ```sql
 create extension if not exists pg_cron;
@@ -37,7 +37,7 @@ select cron.schedule(
   'tcs-transportation-alerts', '* * * * *',
   $job$
   select net.http_get(
-    url := 'https://tcs-operations-hub.vercel.app/api/cron/transportation',
+    url := 'https://thetcshub.com/api/cron/transportation',
     headers := jsonb_build_object('Authorization', 'Bearer ' ||
       (select decrypted_secret from vault.decrypted_secrets where name='tcs_transport_cron_secret')),
     timeout_milliseconds := 10000

@@ -1,5 +1,6 @@
+import {transportRollout} from '@/lib/transport-accountability/rollout';
 import {requireStaff,staffErrorResponse} from '@/lib/server/require-staff';
-import {loadTransportAccountability,canSeeTrip,actionNotices,flushAccountabilityNotices,accountabilityEnabled,scanAccountabilityAlerts} from '@/lib/server/transport-accountability';
+import {loadTransportAccountability,canSeeTrip,actionNotices,flushAccountabilityNotices,accountabilityEnabled,scanAccountabilityAlerts,isTransportPlanner} from '@/lib/server/transport-accountability';
 import {applyCommand,readiness,exceptions,schoolTime,type Command,type Plan,type Settings} from '@/lib/transport-accountability/model';
 import {transportServiceDate,validTransportDate,transportTimeInput} from '@/lib/transportation-day';
 export const runtime='nodejs';
@@ -21,22 +22,26 @@ function validateSettings(s:Settings){
 export async function GET(request:Request){try{
  const c=await requireStaff(request);if(!accountabilityEnabled())return Response.json({enabled:false},{headers});
  if(!c.isOwner&&!c.isLicensee&&!c.profile.permissions.some(p=>['transportation','children_basic','daily_care','schedules','ratios'].includes(p)))return bad('Transportation or receiving-staff access required',403);
- const rollout=await c.admin.from('transport_accountability_rollout').select('enabled_from').eq('organization_id',c.profile.organization_id).maybeSingle();if(rollout.error||!rollout.data)return bad('Transportation cutover is not configured. Contact administration.',409);
- if(rollout.data.enabled_from>transportServiceDate())return Response.json({enabled:false},{headers});
- if(new URL(request.url).searchParams.get('configuration')==='1')return Response.json({enabled:true},{headers});
- const date=new URL(request.url).searchParams.get('date')||transportServiceDate();if(!validTransportDate(date))return bad('Choose a valid date');
+ const rollout=await c.admin.from('transport_accountability_rollout').select('enabled_from').eq('organization_id',c.profile.organization_id).maybeSingle();if(rollout.error)return bad('Could not verify transportation cutover. Contact administration.',409);if(!rollout.data)return Response.json({enabled:false},{headers});
+ const requestedDate=new URL(request.url).searchParams.get('date')||'';
+ const futureReview=validTransportDate(requestedDate)&&requestedDate>=rollout.data.enabled_from;
+ const configuration=transportRollout(true,rollout.data.enabled_from,transportServiceDate(),isTransportPlanner(c)||futureReview);
+ if(futureReview)configuration.planningDate=requestedDate;
+ if(!isTransportPlanner(c))configuration.preparing=false;
+ if(!configuration.enabled||new URL(request.url).searchParams.get('configuration')==='1')return Response.json(configuration,{headers});
+ const date=new URL(request.url).searchParams.get('date')||transportServiceDate();if(!validTransportDate(date)||date<rollout.data.enabled_from)return bad('Choose a date on or after the new workflow start date');
  const loaded=await loadTransportAccountability(c,date),{day,context}=loaded;
  // Alert scanning is also scheduled; this refresh supplies an additional retry path.
  let alertWarning='';try{await scanAccountabilityAlerts(c.admin,c.profile.organization_id,day,context);}catch{alertWarning='Alert delivery is pending. Contact transportation leadership directly for urgent problems.';}
  const trips=day.trips.filter(t=>canSeeTrip(t,context));
  const events=await c.admin.from('transport_accountability_events').select('id,action,reason,actor_id,created_at,before_data,after_data').eq('organization_id',c.profile.organization_id).eq('service_date',date).order('id',{ascending:false}).limit(100);
  if(events.error)throw new Error(events.error.message);
- return Response.json({enabled:true,day:{...day,trips},version:loaded.version,settingsVersion:loaded.settingsVersion,settings:context.actor.planner?loaded.settings:undefined,actor:context.actor,people:loaded.context.people.filter(p=>context.actor.planner||trips.some(t=>[t.plan.driverId,t.plan.backupDriverId,t.receivedBy].includes(p.id))),locations:loaded.locations.filter(l=>context.actor.planner||context.actor.locationIds.includes(l.id)),serverAt:context.now,updatedAt:loaded.updatedAt,alertWarning,issues:Object.fromEntries(trips.map(t=>[t.key,[...readiness(t,day.trips,context),...exceptions(t,context)]])),history:(events.data||[]).flatMap(e=>{const visible=e.after_data.trips?.filter((t:import('@/lib/transport-accountability/model').Trip)=>canSeeTrip(t,context)&&JSON.stringify(t)!==JSON.stringify(e.before_data.trips?.find((b:import('@/lib/transport-accountability/model').Trip)=>b.key===t.key)))||[];return visible.length||context.actor.planner?[{id:e.id,action:e.action,reason:e.reason,by:context.people.find(p=>p.id===e.actor_id)?.name||'Staff',at:e.created_at,children:visible.map((t:import('@/lib/transport-accountability/model').Trip)=>t.childName)}]:[];})},{headers});
+ return Response.json({enabled:true,operationalFrom:rollout.data.enabled_from,day:{...day,trips},version:loaded.version,settingsVersion:loaded.settingsVersion,settings:context.actor.planner?loaded.settings:undefined,actor:context.actor,people:loaded.context.people.filter(p=>context.actor.planner||trips.some(t=>[t.plan.driverId,t.plan.backupDriverId,t.receivedBy].includes(p.id))),locations:loaded.locations.filter(l=>context.actor.planner||context.actor.locationIds.includes(l.id)),serverAt:context.now,updatedAt:loaded.updatedAt,alertWarning,issues:Object.fromEntries(trips.map(t=>[t.key,[...readiness(t,day.trips,context),...exceptions(t,context)]])),history:(events.data||[]).flatMap(e=>{const visible=e.after_data.trips?.filter((t:import('@/lib/transport-accountability/model').Trip)=>canSeeTrip(t,context)&&JSON.stringify(t)!==JSON.stringify(e.before_data.trips?.find((b:import('@/lib/transport-accountability/model').Trip)=>b.key===t.key)))||[];return visible.length||context.actor.planner?[{id:e.id,action:e.action,reason:e.reason,by:context.people.find(p=>p.id===e.actor_id)?.name||'Staff',at:e.created_at,children:visible.map((t:import('@/lib/transport-accountability/model').Trip)=>t.childName)}]:[];})},{headers});
  }catch(e){return staffErrorResponse(e);}}
 export async function POST(request:Request){try{
  const c=await requireStaff(request);if(!accountabilityEnabled())return bad('Transportation accountability has not been activated',409);
  const body=await request.json();if(!validTransportDate(body.date)||!Number.isInteger(body.version)||body.version<0)return bad('Check the date and version');
- const rollout=await c.admin.from('transport_accountability_rollout').select('enabled_from').eq('organization_id',c.profile.organization_id).maybeSingle();if(rollout.error||!rollout.data||rollout.data.enabled_from>body.date||rollout.data.enabled_from>transportServiceDate())return bad('Transportation ledger is not active for this date',409);
+ const rollout=await c.admin.from('transport_accountability_rollout').select('enabled_from').eq('organization_id',c.profile.organization_id).maybeSingle();if(rollout.error||!rollout.data||rollout.data.enabled_from>body.date)return bad('Transportation ledger is not active for this date',409);
  const loaded=await loadTransportAccountability(c,body.date),{context,day}=loaded;
  if(body.version!==loaded.version)return bad('Transportation changed. Refresh and review before continuing.',409);
  if(body.action==='settings'){

@@ -1,4 +1,4 @@
-import {accountabilityEnabled} from "@/lib/server/transport-accountability";
+import {transportLedgerActive} from "@/lib/server/transport-accountability";
 import { after } from "next/server";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 import { flushTransportAssignmentNotices } from "@/lib/server/transport-assignment-notifications";
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     if (!Array.isArray(body?.changes) || body.changes.length > 500) {
       return Response.json({ error: "Choose valid trip changes." }, { status: 400 });
     }
-    if(accountabilityEnabled()&&body.changes.some((change:{before?:Record<string,unknown>;after?:Record<string,unknown>})=>Object.keys({...change.before,...change.after}).some(key=>/^(run|pickedUp|arrived|checkedIn|droppedOff|covering)/.test(key)&&JSON.stringify(change.before?.[key])!==JSON.stringify(change.after?.[key]))))return Response.json({error:'Use the daily transportation ledger for custody and driver changes.'},{status:409});
+    if(await transportLedgerActive(context)&&body.changes.some((change:{before?:Record<string,unknown>;after?:Record<string,unknown>})=>Object.keys({...change.before,...change.after}).some(key=>/^(run|pickedUp|arrived|checkedIn|droppedOff|covering)/.test(key)&&JSON.stringify(change.before?.[key])!==JSON.stringify(change.after?.[key]))))return Response.json({error:'Use the daily transportation ledger for custody and driver changes.'},{status:409});
     // The original RLS and optimistic concurrency checks run as the signed-in driver.
     const result = await context.userClient.rpc("patch_transport_records", { p_changes: body.changes });
     if (result.error) return Response.json({ error: result.error.message }, { status: /changed|no longer available/i.test(result.error.message) ? 409 : 400 });

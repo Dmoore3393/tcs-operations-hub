@@ -1,16 +1,23 @@
 import 'server-only';
+import {transportRollout} from '../transport-accountability/rollout';
 import {reconcileRoster} from '../transport-accountability/roster';
 import type {SupabaseClient} from '@supabase/supabase-js';
 import type {AuthorizedStaff} from './require-staff';
 import {isOwnerAccessRole,isLicenseeAccessRole} from '../team-access';
 import {defaultSettings,type Day,type Trip,type Settings,type Person,type Context,exceptions} from '../transport-accountability/model';
-import {transportTimeInput} from '../transportation-day';
+import {transportServiceDate,transportTimeInput} from '../transportation-day';
 import type {HubNotification} from '../notifications';
 import {deliverStoredTransportAlert} from './notifications';
 type Child={created_at?:string;id:string;legacy_id:string;location_id:string;first_name:string;last_name:string;age_group:string;enrollment_status:string;school_name:string;record_data:Record<string,unknown>};
 type Location={id:string;name:string};
 export function isTransportPlanner(c:AuthorizedStaff){return c.isOwner&&c.profile.email.toLowerCase()===(process.env.TCS_TRANSPORT_PLANNER_EMAIL||'youngmoore19@gmail.com').toLowerCase();}
 export function accountabilityEnabled(){return process.env.TCS_TRANSPORT_ACCOUNTABILITY==='true';}
+export async function transportLedgerActive(c:AuthorizedStaff){
+ if(!accountabilityEnabled())return false;
+ const result=await c.admin.from('transport_accountability_rollout').select('enabled_from').eq('organization_id',c.profile.organization_id).maybeSingle();
+ if(result.error)throw new Error('Could not verify transportation cutover. Refresh before continuing.');
+ return transportRollout(true,result.data?.enabled_from||null,transportServiceDate(),false).active;
+}
 function check<T extends {error: {message:string}|null}>(r:T){if(r.error)throw new Error(r.error.message);return r;}
 async function collect<T>(page:(from:number,to:number)=>PromiseLike<{data:T[]|null;error:{message:string}|null}>){const data:T[]=[];for(let from=0;;from+=500){const result=check(await page(from,from+499));data.push(...result.data||[]);if((result.data||[]).length<500)return {data,error:null};}}
 export async function loadTransportAccountability(c:AuthorizedStaff,date:string){
@@ -41,13 +48,13 @@ export async function loadTransportAccountability(c:AuthorizedStaff,date:string)
 }
 export function canSeeTrip(t:Trip,c:Context){return c.actor.planner||c.actor.leader&&(c.actor.locationIds.includes(t.locationId)||c.actor.locationIds.includes(t.plan.destinationId))||t.pendingDriverIds.includes(c.actor.id)||t.plan.driverId===c.actor.id||t.plan.backupDriverId===c.actor.id||c.actor.locationIds.includes(t.plan.destinationId);}
 export type Notice={recipient:string;key:string;notification:HubNotification};
-function notice(recipient:string,key:string,title:string,body:string,location:string,now:string,urgent=false):Notice{return {recipient,key,notification:{id:key,category:'transportation',severity:urgent?'urgent':'attention',title,body,href:title==='Child arrived'?'/transportation-arrivals':'/transportation-v2',location,createdAt:now,readAt:'',eventKey:key}};}
+function notice(recipient:string,key:string,title:string,body:string,location:string,now:string,urgent=false):Notice{return {recipient,key,notification:{id:key,category:'transportation',severity:urgent?'urgent':'attention',title,body,href:(title==='Child arrived'?'/transportation-arrivals':'/transportation-v2')+'?routeDate='+key.split(':')[1],location,createdAt:now,readAt:'',eventKey:key}};}
 export function actionNotices(before:Day,after:Day,c:Context,action:string){
  const notices:Notice[]=[];
  for(const t of after.trips){const prev=before.trips.find(x=>x.key===t.key);if(!prev)continue;
   if(t.publishedRevision!==prev.publishedRevision){
    const recipients=new Set([t.plan.driverId,prev.plan.driverId,...c.people.filter(p=>p.locationIds.includes(t.plan.destinationId)||p.locationIds.includes(prev.plan.destinationId)).map(p=>p.id)]);
-   for(const id of recipients)if(id)notices.push(notice(id,`accountability:${c.date}:${t.key}:publish:${t.revision}`,'Transportation plan changed',`${t.childName}, ${t.period}: ${t.decision}; pickup ${t.plan.pickup}; destination ${t.plan.destination}. Review the published plan.`,t.location,c.now));
+   for(const id of recipients)if(id)notices.push(notice(id,`accountability:${c.date}:${t.key}:publish:${t.revision}`,'Transportation plan changed',`${c.date}: ${t.childName}, ${t.period}: ${t.decision}; pickup ${t.plan.pickup}; destination ${t.plan.destination}. Review the published plan.`,t.location,c.now));
   }
   if(t.stage==='arrived'&&prev.stage!=='arrived')for(const p of c.people.filter(p=>p.locationIds.includes(t.plan.destinationId)))notices.push(notice(p.id,`accountability:${c.date}:${t.key}:arrived:${t.revision}`,'Child arrived',`${t.childName} has arrived at ${t.plan.destination}. Physically confirm the child received.`,t.plan.destination,c.now));
   if(t.problem&&t.problem!==prev.problem)for(const p of c.people.filter(p=>p.globalLeader||p.leader&&(p.locationIds.includes(t.locationId)||p.locationIds.includes(t.plan.destinationId))))notices.push(notice(p.id,`accountability:${c.date}:${t.key}:problem:${t.problemAt}`,'Transportation problem—confirm child whereabouts',`${t.childName}: ${t.problem}. Open transportation and confirm the responsible adult and outcome.`,t.location,c.now,true));
