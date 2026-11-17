@@ -1,9 +1,9 @@
 import { staffFileTemplate } from "@/lib/staff-file-templates";
 import { documentsForTemplate, type ChildFileAuditTemplate } from "@/lib/child-file-audits";
 
-export const fileItemStatuses = ["Not Checked", "On File", "Missing", "N/A"] as const;
+export const fileItemStatuses = ["Not Checked", "On File", "Missing", "Awaiting review", "Correction needed", "N/A"] as const;
 export type FileItemStatus = typeof fileItemStatuses[number];
-export type LocationFileItem = { id: string; name: string; section: string; requirement: string; status: FileItemStatus; dateChecked: string; expirationDate: string; note: string };
+export type LocationFileItem = { id: string; name: string; section: string; requirement: string; status: FileItemStatus; dateChecked: string; expirationDate: string; note: string; tracksExpiration?: boolean };
 export type LocationPersonFile = {
  id: string; location_id: string; child_id: string | null; staff_lane_id: string | null; person_name: string;
  template: ChildFileAuditTemplate; items: LocationFileItem[]; notes: string; reviewed_by: string; review_date: string | null;
@@ -30,7 +30,7 @@ export function validateLocationFileEdit(value: unknown, existing: LocationPerso
   if(dateChecked&&!validFileDate(dateChecked)) throw new Error("Use a valid checked date.");
   if(expirationDate&&!validFileDate(expirationDate)) throw new Error("Use a valid expiration date.");
   if(status==="N/A"&&!note) throw new Error("Add a reason for each N/A item.");
-  return{id,name,section:text(row.section,150),requirement:text(row.requirement,500),status,dateChecked,expirationDate,note};
+  return{id,name,...(typeof row.tracksExpiration==="boolean"?{tracksExpiration:row.tracksExpiration}:{}),section:text(row.section,150),requirement:text(row.requirement,500),status,dateChecked,expirationDate,note};
  });
  // Do not silently delete prior evidence. Mark an item N/A with a note instead.
  if(existing.items.some(item=>!ids.has(item.id))) throw new Error("Keep existing checklist items; use N/A with a reason instead of removing them.");
@@ -42,9 +42,9 @@ export function validateLocationFileEdit(value: unknown, existing: LocationPerso
 }
 export function locationFileSummary(file:Pick<LocationPersonFile,"items"|"template_confirmed">,today:string) {
  const applicable=file.items.filter(i=>i.status!=="N/A");
- const missing=applicable.filter(i=>i.status==="Missing").length;
- const unchecked=applicable.filter(i=>i.status==="Not Checked").length;
- const expired=applicable.filter(i=>i.status==="On File"&&i.expirationDate&&i.expirationDate<today).length;
+ const missing=applicable.filter(i=>["Missing","Correction needed"].includes(i.status)).length;
+ const unchecked=applicable.filter(i=>["Not Checked","Awaiting review"].includes(i.status)).length;
+ const expired=applicable.filter(i=>i.status==="On File"&&i.tracksExpiration!==false&&i.expirationDate&&i.expirationDate<today).length;
  const invalidNA=file.items.some(i=>i.status==="N/A"&&!i.note.trim());
  return{missing,unchecked,expired,complete:file.template_confirmed&&file.items.length>0&&!missing&&!unchecked&&!expired&&!invalidNA};
 }

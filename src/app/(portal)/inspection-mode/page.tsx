@@ -1,5 +1,6 @@
 "use client";
 
+import LocationFilesPanel from "@/components/files/LocationFilesPanel";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
@@ -36,7 +37,7 @@ function matchesLocation(value: string, selected: string) {
 }
 
 export default function InspectionModePage() {
-  const { session } = useAuth();
+  const { session,isSystemOwner,isLocationLicensee } = useAuth();
   const { location } = useHubLocation();
   const [files] = usePersistentState<FileRecord[]>("tcs-files", starterFiles);
   const [forms] = usePersistentState<DigitalFormRecord[]>("tcs-digital-forms-v1", starterDigitalForms);
@@ -91,12 +92,13 @@ export default function InspectionModePage() {
   const openFiles = scopedFiles.filter((file) => file.status !== "Complete");
   const openForms = scopedForms.filter((form) => !["Signed", "Archived"].includes(form.status));
 
+  if(isSystemOwner||isLocationLicensee)return <MainLayout><div className="mx-auto max-w-[1500px] space-y-4"><h1 className="text-3xl font-black">Location Licensing Inspection</h1><p>Choose one location. Select only the children and documents needed for this inspection.</p><LocationFilesPanel childAudits inspection/></div></MainLayout>;
   return <MainLayout><div className="mx-auto max-w-[1500px] space-y-6 print:max-w-none print:space-y-4">
     <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-xl print:border-0 print:p-0 print:shadow-none">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[.18em] text-emerald-700">Inspection-ready view</p>
-          <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Licensing Inspection Mode</h1>
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Licensing Inspection Mode</h1><Link href="/files?inspection=1" className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 font-bold text-white">Location LIC 9040 rosters & independent file checklists</Link>
           <p className="mt-3 max-w-4xl text-sm font-semibold leading-6 text-slate-600">A fast, read-only snapshot of the records most likely to need attention during a licensing review. Open the secured source record for full documentation.</p>
         </div>
         <button onClick={() => window.print()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white print:hidden"><Printer className="h-4 w-4" /> Print Inspection Snapshot</button>

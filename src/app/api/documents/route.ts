@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     if (fileId && !/^[0-9a-f-]{36}$/i.test(fileId)) return Response.json({error:"Invalid location file."},{status:400});
     let query = userClient
       .from("document_records")
-      .select("id,location_id,child_id,location_file_id,document_type,original_filename,mime_type,size_bytes,sha256,encryption_algorithm,encryption_version,retention_until,legal_hold,status,uploaded_by,created_at,locations(name,full_name),children(first_name,last_name)")
+      .select("id,location_id,child_id,location_file_id,checklist_item_id,copied_from_document_id,review_status,review_note,reviewed_at,document_type,original_filename,mime_type,size_bytes,sha256,encryption_algorithm,encryption_version,retention_until,legal_hold,status,uploaded_by,created_at,locations(name,full_name),children(first_name,last_name)")
       .order("created_at", { ascending: false });
     if (fileId) query = query.eq("location_file_id", fileId);
     const {data,error} = await query;
@@ -47,6 +47,7 @@ export async function POST(request: Request) {
     const childLegacyId = String(form.get("childLegacyId") ?? "").trim();
     const anchorDateText = String(form.get("anchorDate") ?? "").trim();
     const locationFileId = String(form.get("locationFileId") ?? "").trim();
+    let checklistItemId = String(form.get("checklistItemId") ?? "").trim();
     const kidKareClaim = documentType === KIDKARE_CLAIM_DOCUMENT;
     if (locationFileId && kidKareClaim) return Response.json({ error: "KidKare claims are location operations records, not person files." }, { status: 400 });
     const claimMonth = String(form.get("claimMonth") ?? "");
@@ -110,10 +111,13 @@ export async function POST(request: Request) {
     let linkedFile: { child_id: string | null; staff_lane_id: string | null } | null = null;
     if (locationFileId) {
       if (!/^[0-9a-f-]{36}$/i.test(locationFileId) || childLegacyId) return Response.json({error:"Use the person selected by the location file, not a different child."},{status:400});
-      const link = await userClient.from("location_person_files").select("id,organization_id,location_id,child_id,staff_lane_id,archived")
+      const link = await userClient.from("location_person_files").select("id,organization_id,location_id,child_id,staff_lane_id,archived,items")
         .eq("id", locationFileId).eq("organization_id", profile.organization_id).maybeSingle();
       if (link.error) throw link.error;
       if (!link.data || link.data.archived || link.data.location_id !== location.id) return Response.json({error:"The location file is not active or does not match this location."},{status:403});
+      const matches=link.data.items.filter((item:{id:string;name:string})=>checklistItemId?item.id===checklistItemId:item.name===documentType);
+      if(matches.length!==1)return Response.json({error:"Choose one specific checklist item for this location file."},{status:400});
+      checklistItemId=matches[0].id;
       linkedFile = link.data;
       childId = linkedFile.child_id;
     }
@@ -165,7 +169,7 @@ export async function POST(request: Request) {
         organization_id: profile.organization_id,
         location_id: location.id,
         child_id: childId,
-        ...(linkedFile ? {location_file_id: locationFileId, document_scope: linkedFile.staff_lane_id ? "Staff" : "Child", confidentiality: "Location Leadership"} : {}),
+        ...(linkedFile ? {location_file_id: locationFileId, checklist_item_id:checklistItemId, review_status:"Awaiting review", document_scope: linkedFile.staff_lane_id ? "Staff" : "Child", confidentiality: "Location Leadership"} : {}),
         document_type: documentType,
         original_filename: file.name,
         storage_path: storagePath,
