@@ -27,7 +27,7 @@ export function canReceiveHubNotification(profile:Profile,item:Pick<HubNotificat
  if(item.category==='transportation'&&path==='/notifications'&&(item.eventKey||'').startsWith('transport-custody:')){
   return ['children_basic','daily_care','schedules','ratios'].some(permission=>permissions.includes(permission));
  }
- if(item.category==='transportation')return (permissions.includes('transportation')&&employeeCanAccessRoute(permissions,path))||(['/transportation','/transportation-v2'].includes(path)&&item.title==='Child arrived'&&['children_basic','daily_care','schedules','ratios'].some(permission=>permissions.includes(permission)));
+ if(item.category==='transportation')return (permissions.includes('transportation')&&employeeCanAccessRoute(permissions,path))||(['/transportation','/transportation-v2','/transportation-arrivals'].includes(path)&&item.title==='Child arrived'&&['children_basic','daily_care','schedules','ratios'].some(permission=>permissions.includes(permission)));
  if(path==='/scheduling'&&item.category==='schedule')path='/my-schedule';
  return employeeCanAccessRoute(permissions,path);
 }

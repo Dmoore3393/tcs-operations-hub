@@ -502,7 +502,8 @@ export async function deliverStoredTransportAlert(admin: SupabaseClient, userId:
     if (!canReceiveHubNotification(scoped, notification)) return;
   }
   const state = await loadNotificationState(admin, userId);
-  if (!required && (!state.preferences.enabled || !state.preferences.transportation || quietHoursActive(state.preferences))) return;
+  const urgentAccountability = notification.eventKey.startsWith('accountability:') && notification.severity === 'urgent';
+  if (!required && !urgentAccountability && (!state.preferences.enabled || !state.preferences.transportation || quietHoursActive(state.preferences))) return;
   const delivery = await deliverPushChannels({ admin, user: state.user, staffTransport: true, payload: {
     title: notification.title, body: notification.body, href: notification.href, tag: notification.eventKey,
   } });

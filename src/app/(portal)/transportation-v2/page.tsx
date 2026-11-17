@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import TransportationWorkflowGate from "@/components/transportation/TransportationWorkflowGate";
 import SelectedDropoffs from "@/components/transportation/SelectedDropoffs";
 import {transportServiceDate} from "@/lib/transportation-day";
 import { useSearchParams } from "next/navigation";
@@ -112,7 +113,9 @@ function TransportAlertTarget({ showTeam }: { showTeam: () => void }) {
   return null;
 }
 
-export default function TransportationV2Page() {
+export default function TransportationV2Page() { return <TransportationWorkflowGate initialView="My Route" legacy={<LegacyTransportationV2Page/>}/>; }
+
+function LegacyTransportationV2Page() {
   const { profile, session, canManageSystem, isLocationLicensee } = useAuth();
   const [routes, setRoutes, routesHydrated, routeState] = usePersistentState<LiveRoute[]>("tcs-routes", starterRoutes as LiveRoute[]);
   const [schools] = usePersistentState<SchoolRecord[]>("tcs-schools-v2", starterSchools);

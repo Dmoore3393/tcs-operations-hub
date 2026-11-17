@@ -1,3 +1,4 @@
+import {transportLedgerActive} from '@/lib/server/transport-accountability';
 import {after} from 'next/server';
 import {requireStaff,staffErrorResponse} from '@/lib/server/require-staff';
 import {flushTransportCustodyPushes} from '@/lib/server/transport-custody-push';
@@ -5,6 +6,7 @@ import {transportServiceDate} from '@/lib/transportation-day';
 export const runtime='nodejs';
 export async function POST(request:Request){try{
  const c=await requireStaff(request);
+ if(await transportLedgerActive(c))return Response.json({error:'Receiving staff must confirm each child in the daily transportation ledger.'},{status:409});
  if(!c.isOwner&&!c.isLicensee&&!c.profile.permissions.includes('transportation'))return Response.json({error:'Transportation access required.'},{status:403});
  const body=await request.json();
  if(body.confirmed!==true||body.date!==transportServiceDate()||!Array.isArray(body.stops)||body.stops.length<1||body.stops.length>30||!Array.isArray(body.group)||body.group.length!==5||body.group.some((v:unknown)=>typeof v!=='string'||v.length>1000)||body.stops.some((v:{id?:unknown;arrivedAt?:unknown})=>!v||typeof v.id!=='string'||!v.id||v.id.length>200||typeof v.arrivedAt!=='string'||!Number.isFinite(Date.parse(v.arrivedAt))))return Response.json({error:'Review today’s selected children and confirm their physical handoff.'},{status:400});

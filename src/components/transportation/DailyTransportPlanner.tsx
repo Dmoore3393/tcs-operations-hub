@@ -1,5 +1,6 @@
 "use client";
-import {useState} from 'react';
+import {useState,type ComponentProps} from 'react';
+import TransportationWorkflowGate from './TransportationWorkflowGate';
 import Link from 'next/link';
 import type {ChildRecord} from '@/lib/children';
 import type {SchoolRecord,VehicleRecord} from '@/lib/hub-data';
@@ -11,7 +12,8 @@ import {inputClass} from '@/components/hub/HubUI';
 import TransportDriverSelect from './TransportDriverSelect';
 const primary='min-h-11 rounded-xl bg-emerald-800 px-4 py-2 font-bold text-white disabled:opacity-50';
 const secondary='min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2 font-bold text-slate-900 disabled:opacity-50';
-export default function DailyTransportPlanner({routes,location,roster=[],vehicles=[],locations=[]}:{routes:DayRoute[];location:string;schools?:SchoolRecord[];roster?:ChildRecord[];vehicles?:VehicleRecord[];locations?:string[]}){
+export default function DailyTransportPlanner(props:ComponentProps<typeof LegacyDailyTransportPlanner>){return <TransportationWorkflowGate location={props.location} legacy={<LegacyDailyTransportPlanner {...props}/>}/>;}
+function LegacyDailyTransportPlanner({routes,location,roster=[],vehicles=[],locations=[]}:{routes:DayRoute[];location:string;schools?:SchoolRecord[];roster?:ChildRecord[];vehicles?:VehicleRecord[];locations?:string[]}){
  const [date,setDate]=useState(transportServiceDate),[trip,setTrip]=useState('Afternoon'),[notice,setNotice]=useState('');
  const day=useTransportDay(routes,date),past=date<transportServiceDate();
  const rosterById=new Map(roster.map(child=>[transportChildKey(child),child]));
