@@ -10,6 +10,8 @@ The official CDSS LIC 9040 (10/05) source is `https://www.cdss.ca.gov/cdssweb/en
 
 Uploads/copies start Awaiting review. Authorized reviewers record signatures/date/correctness verification or return a specific correction. Copied bytes are newly encrypted for the receiving location, retaining source provenance. Accepted source documents do not complete the receiving file.
 
+The child-file footer offers **Save audit & assign corrections** with a due date. It saves current edits and links correction tasks in one database transaction, records the authenticated reviewer, and keeps the editor open. A failed assignment rolls back the checklist save. Ordinary saves also keep the file open.
+
 Audits create or reopen one finding per file/item and link an explicitly identified existing work task. Halcom resolves the unique active Latrice account; other locations use configured responsibility. Assigned staff can submit notes for review without gaining access to confidential files. Only assigned leadership can verify and close a corrected finding. New in-app contact, correction and expiration notices use persistent event keys to avoid duplicate delivery.
 
 ## Release validation

@@ -1,6 +1,6 @@
 import { childScreenLinkId } from "@/lib/location-file-child-links";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
-import { initialLocationItems, validateLocationFileEdit, type LocationPersonFile } from "@/lib/location-person-files";
+import { initialLocationItems, validFileDate, validateLocationFileEdit, type LocationPersonFile } from "@/lib/location-person-files";
 import { templateForChildLocation } from "@/lib/child-file-audits";
 export const runtime = "nodejs";
 const uuid = (v: unknown): v is string => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
@@ -53,7 +53,14 @@ export async function PATCH(request: Request) {
   const current=await db.from("location_person_files").select("*").eq("organization_id",c.profile.organization_id).eq("id",body.id).maybeSingle();
   if(current.error)throw current.error;if(!current.data)return json({error:"Location file not found or not accessible."},404);
   if(current.data.updated_at!==body.expectedUpdatedAt)return json({error:"Someone changed this file. Your entries are still in the form; copy them before reopening the latest file."},409);
-  let changes;try{changes=validateLocationFileEdit(body.file,current.data as LocationPersonFile);}catch(e){return json({error:e instanceof Error?e.message:"Invalid checklist."},400);}
+  let changes;try{changes=validateLocationFileEdit(body.assignCorrections===true&&c.isOwner?{...body.file,reviewed_by:c.profile.full_name,review_date:new Intl.DateTimeFormat("en-CA",{timeZone:"America/Los_Angeles"}).format(new Date())}:body.file,current.data as LocationPersonFile);}catch(e){return json({error:e instanceof Error?e.message:"Invalid checklist."},400);}
+  if(body.assignCorrections===true){
+   if(!c.isOwner||!current.data.child_id)return json({error:"Only audit leadership can assign corrections from a child file."},403);
+   if(changes.archived||!validFileDate(body.dueDate))return json({error:"Use an active child file and choose a valid correction due date."},400);
+   const combined=await db.rpc("save_and_assign_location_child_audit",{p_file:body.id,p_expected:body.expectedUpdatedAt,p_changes:changes,p_due:body.dueDate});
+   if(combined.error)return json({error:combined.error.message},/changed|stale/i.test(combined.error.message)?409:400);
+   return json(combined.data);
+  }
   const result=await db.from("location_person_files").update(changes).eq("id",body.id).eq("organization_id",c.profile.organization_id).eq("updated_at",body.expectedUpdatedAt).select("*").maybeSingle();
   if(result.error)throw result.error;if(!result.data)return json({error:"The location file changed before saving. Reopen it; nothing was overwritten."},409);
   return json({file:result.data});
