@@ -29,3 +29,15 @@ test('database enforces location/person isolation, role scope, uniqueness, archi
  await db.query('update location_person_files set archived=true where id=$1',[a.id]);await assert.rejects(doc('60000000-0000-4000-8000-000000000003',siteA,a.id));assert.equal((await db.query('select count(*)::int as n from document_records')).rows[0].n,1);
  await db.close();
 });
+
+
+test('audit issue filters keep missing, review and expiration actions separate without treating N/A as missing',()=>{
+ const item={id:'x',name:'Form',section:'Forms',requirement:'Review',status:'Missing',note:'',dateChecked:'',expirationDate:''};
+ assert.equal(core.matchesLocationFileFilter(item,'missing','2026-11-17'),true);
+ assert.equal(core.matchesLocationFileFilter({...item,status:'Awaiting review'},'unchecked','2026-11-17'),true);
+ assert.equal(core.matchesLocationFileFilter({...item,status:'On File',expirationDate:'2026-11-01'},'expired','2026-11-17'),true);
+ assert.equal(core.matchesLocationFileFilter({...item,status:'On File',tracksExpiration:false,expirationDate:'2026-11-01'},'issues','2026-11-17'),false);
+ assert.equal(core.matchesLocationFileFilter({...item,status:'N/A',note:'Not applicable'},'issues','2026-11-17'),false);
+ assert.equal(core.matchesLocationFileFilter({...item,status:'N/A',note:''},'missing','2026-11-17'),true);
+ const f=folder();assert.equal(core.validateLocationFileEdit({...f,notes:'',follow_up:'',items:f.items.map(i=>({...i,status:'Missing',note:''}))},f).notes,'');
+});

@@ -48,3 +48,12 @@ export function locationFileSummary(file:Pick<LocationPersonFile,"items"|"templa
  const invalidNA=file.items.some(i=>i.status==="N/A"&&!i.note.trim());
  return{missing,unchecked,expired,complete:file.template_confirmed&&file.items.length>0&&!missing&&!unchecked&&!expired&&!invalidNA};
 }
+
+export type LocationFileFilter = "all" | "issues" | "missing" | "unchecked" | "expired";
+export function matchesLocationFileFilter(item:LocationFileItem,filter:LocationFileFilter,today:string){
+ if(filter==="all")return true;
+ const missing=["Missing","Correction needed"].includes(item.status)||(item.status==="N/A"&&!item.note.trim());
+ const unchecked=["Not Checked","Awaiting review"].includes(item.status);
+ const expired=item.status==="On File"&&item.tracksExpiration!==false&&Boolean(item.expirationDate&&item.expirationDate<today);
+ return filter==="issues"?missing||unchecked||expired:filter==="missing"?missing:filter==="unchecked"?unchecked:expired;
+}
