@@ -1,3 +1,4 @@
+import {accountabilityEnabled} from "@/lib/server/transport-accountability";
 import {flushTransportAssignmentNotices} from "@/lib/server/transport-assignment-notifications";
 import {requireStaff,staffErrorResponse} from "@/lib/server/require-staff";
 import {validTransportDate} from "@/lib/transportation-day";
@@ -15,6 +16,7 @@ export async function GET(request:Request){try{
  return Response.json({stops:result.data||[],sources:sources.data||[],drivers:(drivers.data||[]).map(row=>({id:row.id,name:row.full_name})),canPlan:c.isOwner,canCallOut:c.isOwner||c.isLicensee},{headers:{'Cache-Control':'private, no-store','Vary':'Authorization'}});
  }catch(error){return staffErrorResponse(error);}}
 export async function POST(request:Request){try{
+ if(accountabilityEnabled())return Response.json({error:'Use the published daily transportation checklist. Legacy daily selections are read-only after activation.'},{status:409});
  const c=await requireStaff(request);if(!c.isOwner&&!c.isLicensee)return Response.json({error:'Only administration and assigned licensees can call out children.'},{status:403});
  const body=await request.json();if(!validTransportDate(body.date||'')||typeof body.routeId!=='string'||!/^[0-9a-f-]{36}$/i.test(body.routeId)||!['save','skip','callout','restore'].includes(body.action)||!Number.isInteger(body.expectedVersion)||body.expectedVersion<0)return Response.json({error:'Check the date and daily route selection.'},{status:400});
  if(['save','skip'].includes(body.action)&&!c.isOwner)return Response.json({error:'Administration assigns daily routes. Licensees can call out or restore their children.'},{status:403});
