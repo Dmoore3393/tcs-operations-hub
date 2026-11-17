@@ -66,3 +66,18 @@ test('database: atomic versions, durable audit/outbox, notification deduplicatio
  await db.exec('reset role');
  await db.close();
 });
+
+
+test('explicit usual morning decisions retain every child, preserve afternoons, and leave new enrollments unresolved',()=>{
+ const configured={...settings,usualDecisions:{'child-1:Morning':{decision:'needs_transport',reason:'Danielle confirmed',confirmedBy:'planner',confirmedAt:now,effectiveFrom:date},'child-2:Morning':{decision:'no_transport',reason:'Danielle confirmed no morning ride',confirmedBy:'planner',confirmedAt:now,effectiveFrom:date}}};
+ const result=roster.reconcileRoster({trips:[],closedAt:''},[child(1),child(2),child(3)],[],[],people,configured,date,now);
+ assert.equal(result.trips.find(t=>t.key==='child-1:Morning').decision,'needs_transport');
+ assert.equal(result.trips.find(t=>t.key==='child-2:Morning').decision,'no_transport');
+ assert.equal(result.trips.find(t=>t.key==='child-3:Morning').decision,'unresolved');
+ assert.ok(result.trips.filter(t=>t.period==='Afternoon').every(t=>t.decision==='unresolved'));
+ assert.ok(result.trips.every(t=>t.publishedRevision===0));
+ result.trips[0].decision='absent';result.trips[0].revision++;
+ roster.reconcileRoster(result,[child(1),child(2),child(3)],[],[],people,configured,date,now);
+ assert.equal(result.trips[0].decision,'absent');
+ const earlier=roster.reconcileRoster({trips:[],closedAt:''},[child(1)],[],[],people,configured,'2030-01-07',now);assert.equal(earlier.trips[0].decision,'unresolved');
+});

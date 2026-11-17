@@ -14,6 +14,7 @@ function validatePlan(value:unknown):value is Plan{
 }
 function validateSettings(s:Settings){
  if(!s||!Array.isArray(s.schedules)||s.schedules.length>500||!Array.isArray(s.backupLeaderIds)||s.backupLeaderIds.some(x=>typeof x!=='string'))return false;
+ if(s.usualDecisions!==undefined&&(!s.usualDecisions||typeof s.usualDecisions!=='object'||Array.isArray(s.usualDecisions)||Object.keys(s.usualDecisions).length>5000||Object.entries(s.usualDecisions).some(([key,v])=>!/^[-a-f0-9]{36}:(Morning|Afternoon)$/i.test(key)||!v||!['needs_transport','no_transport'].includes(v.decision)||typeof v.reason!=='string'||!v.reason.trim()||v.reason.length>1000||typeof v.confirmedBy!=='string'||typeof v.confirmedAt!=='string'||!Number.isFinite(Date.parse(v.confirmedAt))||!validTransportDate(v.effectiveFrom))))return false;
  for(const n of [s.pickupGraceMinutes,s.handoffGraceMinutes,s.escalationMinutes])if(!Number.isInteger(n)||n<1||n>60)return false;
  if(s.schedules.some(r=>!r||typeof r!=='object'||!['id','school','grade','classroom','childId','regular','minimum'].every(k=>typeof r[k as keyof typeof r]==='string')))return false;
  const identities=s.schedules.map(r=>JSON.stringify([r.school?.trim().toLowerCase(),r.grade,r.classroom,r.childId]));if(new Set(identities).size!==identities.length)return false;
