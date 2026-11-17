@@ -9,7 +9,7 @@ import LegacyFilesPage from "@/components/files/LegacyFilesPage";
 export default function FilesPage() {
  const { isSystemOwner, isLocationLicensee } = useAuth();
  const [legacyRequest, setLegacyRequest] = useState<boolean|null>(null);
- useEffect(()=>{const timer=window.setTimeout(()=>{const params=new URLSearchParams(window.location.search);setLegacyRequest(["child","type","location"].some(key=>params.has(key)));},0);return()=>window.clearTimeout(timer);},[]);
+ useEffect(()=>{const timer=window.setTimeout(()=>{const params=new URLSearchParams(window.location.search);setLegacyRequest(params.get("legacy")==="1"||params.get("type")==="Staff");},0);return()=>window.clearTimeout(timer);},[]);
  if(legacyRequest===null)return <MainLayout><p role="status">Loading files…</p></MainLayout>;
  if(legacyRequest)return <LegacyFilesPage />;
  if (!isSystemOwner && !isLocationLicensee) return <LegacyFilesPage />;

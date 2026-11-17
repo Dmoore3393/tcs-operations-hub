@@ -11,7 +11,7 @@ test('audits and files share one person/location file editor rather than the pri
  assert.doesNotMatch(root,/templateForChildLocation\(child\.location\)|child\.location\.toLowerCase|action:\s*["']save["']/);
  assert.match(root,/isSystemOwner\|\|isLocationLicensee/);
  assert.match(panel,/locationId:chosenSite\.id,personId,type:kind/);
- assert.match(panel,/id:file\.id,expectedUpdatedAt:file\.updated_at,file:draft/);
+ assert.match(panel,/id:file\.id,expectedUpdatedAt:base\.updated_at,file:draft/);
  assert.match(api,/\.from\("location_person_files"\)\.update\(changes\)/);
 });
 test('all-locations mode requires a target; the cross-site child picker is not filtered to primary enrollment',()=>{

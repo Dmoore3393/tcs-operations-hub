@@ -1,4 +1,5 @@
 "use client";
+import LocationCorrectionTasks from "@/components/files/LocationCorrectionTasks";
 import ChoiceSelect from "@/components/forms/ChoiceSelect";
 import StaffNameSelect from "@/components/forms/StaffNameSelect";
 
@@ -107,7 +108,7 @@ export default function WorkPlansPage() {
   function save(event: FormEvent) { event.preventDefault(); if (!editing) return; setTasks((current) => current.some((item) => item.id === editing.id) ? current.map((item) => item.id === editing.id ? editing : item) : [...current, editing]); setEditing(null); }
   function addSuggested() { const suggested: WorkTask = { id: Date.now(), title: "Review next week’s enrollment and capacity", owner: profile?.full_name || "TCS staff", category: "Enrollment", due: "Friday", priority: "High", completed: false, initials: "", location: activeLocation === "All Locations" ? "All Sites" : activeLocation }; setTasks((current) => [...current, suggested]); }
 
-  return <MainLayout><div className="mx-auto max-w-[1500px] space-y-6">
+  return <MainLayout><LocationCorrectionTasks/><div className="mx-auto max-w-[1500px] space-y-6">
     <PageIntro eyebrow="Initials-based accountability" title="Work Plans" description="Staff complete each task by entering their initials. The Hub can also generate a polished printable task sheet with initials lines and employee acknowledgment." actions={<><SecondaryButton onClick={addSuggested}><Sparkles className="h-4 w-4" /> Add Suggested Task</SecondaryButton><PrimaryButton onClick={() => setEditing({ ...blankTask, owner: profile?.full_name || "", id: Date.now(), location: activeLocation === "All Locations" ? "All Sites" : activeLocation })}><Plus className="h-4 w-4" /> Add Task</PrimaryButton></>} />
     <DemoNotice />
     {state.error && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-950">Could not load work plans. {state.error}<button className="ml-3 min-h-11 font-bold underline" onClick={state.retry}>Try again</button></div>}
