@@ -1,7 +1,7 @@
 import {transportRollout} from '@/lib/transport-accountability/rollout';
 import {requireStaff,staffErrorResponse} from '@/lib/server/require-staff';
 import {loadTransportAccountability,canSeeTrip,actionNotices,flushAccountabilityNotices,accountabilityEnabled,scanAccountabilityAlerts,isTransportPlanner} from '@/lib/server/transport-accountability';
-import {applyCommand,readiness,exceptions,schoolTime,type Command,type Plan,type Settings} from '@/lib/transport-accountability/model';
+import {applyCommand,applyPlanningBatch,copyPlanningDetails,readiness,exceptions,schoolTime,type Command,type Plan,type Settings} from '@/lib/transport-accountability/model';
 import {transportServiceDate,validTransportDate,transportTimeInput} from '@/lib/transportation-day';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -59,12 +59,21 @@ export async function POST(request:Request){try{
  if(body.plan&&!validatePlan(body.plan))return bad('Invalid trip details');
  for(const key of ['reason','adult'])if(body[key]!==undefined&&(typeof body[key]!=='string'||body[key].length>1000))return bad('Invalid confirmation details');
  let next;
- if(body.action==='copy'){
+ if(body.action==='batch_save'){
+  if(!context.actor.planner)return bad('Only Danielle can plan routes',403);
+  if(!Array.isArray(body.changes)||!body.changes.length||body.changes.length>200)return bad('Select between 1 and 200 trips');
+  for(const change of body.changes){
+   if(!change||typeof change.key!=='string'||!Number.isInteger(change.revision)||!validatePlan(change.plan))return bad('Check every selected child and route');
+   const target=day.trips.find(t=>t.key===change.key);if(!target)return bad('Selected trip no longer exists');
+   if(change.plan.destinationId&&!loaded.locations.some(l=>l.id===change.plan.destinationId&&l.name===change.plan.destination))return bad('Choose a valid receiving location');
+   if(target.period==='Afternoon'){const school=schoolTime(context.settings,{...target,plan:change.plan},body.date);change.plan.dismissal=school.time;change.plan.scheduleLabel=school.label;}
+  }
+  try{next=applyPlanningBatch(day,body.changes,context,body.reason||'');}catch(e){return bad(e instanceof Error?e.message:'Route could not be saved');}
+ }else if(body.action==='copy'){
   if(!context.actor.planner||!validTransportDate(body.sourceDate)||body.sourceDate>=body.date)return bad('Danielle can copy an earlier plan for review',403);
   if(day.closedAt)return bad('Reopen the day first');
   const previous=await loadTransportAccountability(c,body.sourceDate);
-  next=structuredClone(day);
-  for(const t of next.trips){if(t.revision||t.publishedRevision||t.stage!=='awaiting_pickup')continue;const p=previous.day.trips.find(x=>x.key===t.key);if(!p)continue;t.plan={...p.plan,reason:''};if(t.period==='Afternoon'){const s=schoolTime(context.settings,t,body.date);t.plan.dismissal=s.time;t.plan.scheduleLabel=s.label;}t.decision='unresolved';}
+  try{next=copyPlanningDetails(day,previous.day,context,body.keys);}catch(e){return bad(e instanceof Error?e.message:'Route details could not be copied');}
  }else{
   const cmd=body as Command;
   if(body.action==='save'&&body.plan){

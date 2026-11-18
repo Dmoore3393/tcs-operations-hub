@@ -1,0 +1,13 @@
+# Simple daily transportation planning
+
+The Plan view now uses one compact list, grouped by school, with separate Morning and Afternoon tabs. Unresolved children stay visible. Documented no-ride and absence decisions remain in an expandable list with a visible count. A difference from the configured usual decision is shown without automatically replacing a saved daily override.
+
+Everyday flow: choose a date/period, select children at a school, assign their route together, and publish the ready portion of that period. Driver, backup, vehicle and route name are entered once for a group. Stop times are entered together, while each child retains their destination and seating information. School dismissal is read-only and separate from pickup; an early pickup is flagged. The planner uses 12-hour display times while retaining the existing stored time format.
+
+Detailed child trip controls, history/reconciliation, reusable setup and school calendars remain accessible behind Details / More transportation tools. No-ride rows do not show irrelevant pickup/handoff fields. Operational driver and receiving screens retain individual pickup, arrival, handoff and sweep confirmations. The primary-button class no longer combines a white background with white text.
+
+`batch_save` accepts planning changes only. It validates the planner, selected period, unique trip keys and revisions, location destinations, school-calendar times, published-change reasons and custody locks. It applies existing save commands to an in-memory copy, then commits the entire result with the existing day/settings CAS, audit and notification transaction. An invalid child fails the entire batch; no partial assignment or physical pickup is recorded. Publishing with `keys` affects only that selected set; other unresolved or unpublished children remain present.
+
+Copy fills only pristine route details, retaining current decisions and the latest school/seating fields. It skips published trips, daily manual overrides, children in custody and location transfers. The simple view scopes copy and publishing to its current period. Existing clients can still use the existing unscoped commands.
+
+Validation: transportation model/integration regressions include batch atomicity, AM/PM scope, denied non-planner edits, injected-action rejection, custody locks, changed-plan acknowledgment, period-scoped publication and conservative copying. TypeScript, focused lint and the production build are checked. A synthetic rendered planner was visually inspected at desktop and phone widths; the 390px phone viewport had no horizontal overflow. No real child information was used in the preview. Existing live day decisions, pickup history and usual preferences are not migrated or rewritten.
