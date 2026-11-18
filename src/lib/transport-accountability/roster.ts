@@ -1,5 +1,5 @@
 import {emptyPlan,schoolTime,type Day,type Trip,type Plan,type Person,type Settings} from './model';
-import {transportServiceDate,transportTimeInput} from '../transportation-day';
+import {transportServiceDate,transportTimeInput,validTransportDate} from '../transportation-day';
 import {normalizeLocation} from '../location-config';
 export type RosterChild={created_at?:string;id:string;legacy_id:string;location_id:string;first_name:string;last_name:string;age_group:string;enrollment_status:string;school_name:string;record_data:Record<string,unknown>};
 export type RosterLocation={id:string;name:string};
@@ -10,8 +10,8 @@ export function reconcileRoster(day:Day,children:RosterChild[],routes:{child_id:
   const applicable=child.age_group==='School Age'||data.ageGroup==='School Age'||Boolean(child.school_name||school.schoolName)||/^(tk|k|kindergarten|[1-9]|1[0-2])$/i.test(school.grade||'');
   if(child.enrollment_status!=='Active'||!applicable)continue;
   if(child.created_at&&transportServiceDate(new Date(child.created_at))>date)continue;
-  if(typeof data.plannedStartDate==='string'&&data.plannedStartDate>date)continue;
-  if(typeof data.plannedLastDay==='string'&&data.plannedLastDay<date)continue;
+  if(typeof data.plannedStartDate==='string'&&validTransportDate(data.plannedStartDate)&&data.plannedStartDate>date)continue;
+  if(typeof data.plannedLastDay==='string'&&validTransportDate(data.plannedLastDay)&&data.plannedLastDay<date)continue;
   for(const period of ['Morning','Afternoon'] as const){
    const key=`${child.id}:${period}`,existing=day.trips.find(t=>t.key===key);
    const location=locations.find(l=>l.id===child.location_id)?.name||'Location not recorded';
