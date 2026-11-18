@@ -328,3 +328,8 @@ export function toggleEmployeePermission(permissions:string[],permission:string)
  const other=permission==='maintenance_view'?'maintenance_manage':permission==='maintenance_manage'?'maintenance_view':'';
  return [...permissions.filter(value=>value!==other),permission];
 }
+
+/** Match Transportation's role access when offering active accounts as drivers. */
+export function canAssignTransportationAccount(account:{role:string;permissions?:readonly string[]|null;is_active:boolean}){
+  return account.is_active&&(isOwnerAccessRole(account.role)||isLicenseeAccessRole(account.role)||Boolean(account.permissions?.includes("transportation")));
+}

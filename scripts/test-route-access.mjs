@@ -59,3 +59,13 @@ test('owners and licensees can open staff schedules while employees keep My Sche
  for(const profile of [null,{role:'Employee',full_name:'Synthetic Employee',permissions:['schedules']}])for(const route of ['/staff-schedules','/staff-schedules/'])assert.equal(canAccessRoute(profile,route),false);
  assert.equal(canAccessRoute({role:'Employee',full_name:'Synthetic Employee',permissions:[]},'/my-schedule'),true);
 });
+
+
+test('transportation driver choices include active licensees with inherited access and exclude paused accounts',async()=>{
+ const {canAssignTransportationAccount}=await import(team);
+ for(const role of ['Owner / Admin','Location Licensee'])assert.equal(canAssignTransportationAccount({role,permissions:[],is_active:true}),true);
+ assert.equal(canAssignTransportationAccount({role:'Employee',permissions:['transportation'],is_active:true}),true);
+ assert.equal(canAssignTransportationAccount({role:'Employee',permissions:['meals'],is_active:true}),false);
+ assert.equal(canAssignTransportationAccount({role:'Location Licensee',permissions:[],is_active:false}),false);
+ assert.equal(canAssignTransportationAccount({role:'Employee',permissions:['transportation'],is_active:false}),false);
+});
