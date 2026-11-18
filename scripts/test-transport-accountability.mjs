@@ -130,3 +130,21 @@ test('blank or invalid optional enrollment dates cannot hide enrolled children',
   assert.equal(roster.reconcileRoster({trips:[],closedAt:''},[c],[],[],people,settings,date,now).trips.length,0);
  }
 });
+
+test('backup driver, estimated arrival and backup alert configuration do not block publication',()=>{
+ let d=day();const t=d.trips[1];
+ d=action(d,'save',t,planner,{decision:'needs_transport',plan:{...plan(),backupDriverId:'',arrival:''}});
+ const context=c();context.settings={...settings,backupLeaderIds:[]};
+ assert.deepEqual(m.readiness(d.trips[1],d.trips,context),[]);
+ d=m.applyCommand(d,{action:'publish'},context);
+ assert.equal(d.trips[1].publishedRevision,d.trips[1].revision);
+ d=action(d,'acknowledge',d.trips[1],driver);
+ d=action(d,'pickup',d.trips[1],driver);
+ assert.equal(d.trips[1].stage,'with_driver');
+ const bad={...d.trips[1],plan:{...d.trips[1].plan,arrival:'01:00'}};
+ assert.ok(m.readiness(bad,[bad],context).some(x=>x.includes('Estimated arrival')));
+});
+test('confirmed no-transport decisions do not carry unpublished-plan warnings',()=>{
+ let d=day();d=action(d,'save',d.trips[0],planner,{decision:'no_transport',plan:{...m.emptyPlan(),school:'Test School',reason:'Danielle confirmed no ride'}});
+ assert.ok(!m.exceptions(d.trips[0],c()).includes('Unpublished plan'));
+});

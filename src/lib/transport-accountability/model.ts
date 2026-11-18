@@ -33,17 +33,17 @@ export function readiness(t:Trip,all:Trip[],c:Pick<Context,'settings'|'date'|'pe
  if(t.decision==='unresolved')return ['Transportation decision missing'];
  if(t.decision!=='needs_transport')return t.plan.reason.trim()?[]:['Reason / confirmation source missing'];
  const p=t.plan,issues:string[]=[];
- if(!c.settings.backupLeaderIds.length)issues.push('Backup alert leadership missing');
  if(!p.school.trim())issues.push('School missing');
  if(!p.driverId||!c.people.some(x=>x.id===p.driverId&&x.driver))issues.push('Active driver missing');
- if(!p.backupDriverId||!c.people.some(x=>x.id===p.backupDriverId&&x.driver)||p.backupDriverId===p.driverId)issues.push('Separate backup driver missing');
+ if(p.backupDriverId&&(!c.people.some(x=>x.id===p.backupDriverId&&x.driver)||p.backupDriverId===p.driverId))issues.push('Choose a different active backup driver or leave it blank');
  if(!p.pickupLocation.trim())issues.push('Pickup location missing');
  if(!p.destination.trim())issues.push('Destination missing');
  if(!p.vehicle.trim())issues.push('Vehicle missing');
  if(!p.route.trim())issues.push('Route name missing');
  if(!p.seating.trim())issues.push('Seating information missing');
  const pickup=transportTimeInput(p.pickup),arrival=transportTimeInput(p.arrival);
- if(!pickup||!arrival||arrival<=pickup)issues.push('Valid pickup and later planned arrival required');
+ if(!pickup)issues.push('Pickup time missing');
+ if(p.arrival.trim()&&(!arrival||(pickup&&arrival<=pickup)))issues.push('Estimated arrival must be after pickup, or leave it blank');
  if(t.period==='Afternoon'){
   const s=schoolTime(c.settings,t,c.date);
   if(s.closed)issues.push('School closed: confirm no transportation or review a special trip');
@@ -60,7 +60,7 @@ export function exceptions(t:Trip,c:Pick<Context,'now'|'date'|'settings'>):strin
  if(!t.plan.school.trim())issues.push('School information missing');
  if(t.problem)issues.push('Problem—needs attention: '+t.problem);
  if(t.decision==='unresolved')issues.push('Decision unresolved');
- if(t.revision!==t.publishedRevision)issues.push('Unpublished plan');
+ if(t.decision==='needs_transport'&&t.revision!==t.publishedRevision)issues.push('Unpublished plan');
  if(t.publishedRevision>0&&(t.ackRevision!==t.publishedRevision&&t.plan.driverId||t.pendingDriverIds.length))issues.push('Awaiting driver acknowledgment');
  const pacific=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(c.now));
  const hm=new Intl.DateTimeFormat('en-GB',{timeZone:'America/Los_Angeles',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(c.now));
