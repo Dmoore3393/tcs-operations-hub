@@ -81,3 +81,41 @@ test('explicit usual morning decisions retain every child, preserve afternoons, 
  assert.equal(result.trips[0].decision,'absent');
  const earlier=roster.reconcileRoster({trips:[],closedAt:''},[child(1)],[],[],people,configured,'2030-01-07',now);assert.equal(earlier.trips[0].decision,'unresolved');
 });
+
+
+test('group route assignment is atomic, period-scoped, and never records a physical pickup',()=>{
+ const before=day(3),chosen=before.trips.filter(t=>t.period==='Afternoon');
+ const changes=chosen.map(t=>({key:t.key,revision:t.revision,decision:'needs_transport',plan:plan()}));
+ const after=m.applyPlanningBatch(before,changes,c());
+ assert.equal(before.trips.filter(t=>t.decision==='needs_transport').length,0);
+ assert.equal(after.trips.filter(t=>t.decision==='needs_transport').length,3);
+ assert.ok(after.trips.filter(t=>t.period==='Morning').every(t=>t.decision==='unresolved'));
+ assert.ok(after.trips.every(t=>!t.pickedUpAt&&t.stage==='awaiting_pickup'&&!t.publishedRevision));
+ assert.throws(()=>m.applyPlanningBatch(before,[...changes,{key:before.trips[0].key,revision:0,decision:'no_transport',plan:{...plan(),reason:'Confirmed'}}],c()),/separately/);
+ assert.throws(()=>m.applyPlanningBatch(before,[...changes,{...changes[0]}],c()),/only once/);
+ assert.throws(()=>m.applyPlanningBatch(before,changes.map((x,n)=>n===2?{...x,revision:999}:x),c()),/changed/);
+ assert.throws(()=>m.applyPlanningBatch(before,changes,c(driver)),/Only Danielle/);
+ assert.equal(before.trips.every(t=>t.decision==='unresolved'),true);
+ const injected=m.applyPlanningBatch(before,changes.map(x=>({...x,action:'pickup'})),c());assert.ok(injected.trips.every(t=>!t.pickedUpAt));
+});
+test('publishing one period does not publish the other; custody edits and unexplained published edits remain blocked',()=>{
+ let d=scheduled(2);d=action(d,'pickup',d.trips[1],driver);
+ assert.throws(()=>m.applyPlanningBatch(d,[{key:d.trips[1].key,revision:d.trips[1].revision,decision:'needs_transport',plan:plan()}],c(),'Edit'),/individual trip/);
+ const waiting=d.trips[3];assert.throws(()=>m.applyPlanningBatch(d,[{key:waiting.key,revision:waiting.revision,decision:'no_transport',plan:{...waiting.plan,reason:'Parent confirmed'}}],c()),/why the published/);
+ d=day(1);for(const t of [...d.trips])d=action(d,'save',d.trips.find(x=>x.key===t.key),planner,{decision:'no_transport',plan:{...m.emptyPlan(),reason:'Danielle confirmed'}});
+ const morning=d.trips.find(t=>t.period==='Morning'),afternoon=d.trips.find(t=>t.period==='Afternoon');
+ d=m.applyCommand(d,{action:'publish',keys:[afternoon.key]},c());assert.equal(d.trips.find(t=>t.key===morning.key).publishedRevision,0);assert.ok(d.trips.find(t=>t.key===afternoon.key).publishedRevision>0);
+});
+
+
+test('copying route details retains usual decisions, manual choices, new school data and the other period',()=>{
+ const previous=scheduled(2);let current=day(2);const morning=current.trips[0],afternoon=current.trips[1];
+ const configured={...settings,usualDecisions:{[morning.key]:{decision:'needs_transport',reason:'Confirmed by Danielle',confirmedBy:'planner',confirmedAt:now,effectiveFrom:date}}};
+ morning.decision='needs_transport';morning.revision=1;morning.lastAt=now;morning.plan.reason='Confirmed by Danielle';
+ previous.trips[0].plan={...plan('Morning'),pickup:'07:00'};
+ let copied=m.copyPlanningDetails(current,previous,{...c(),settings:configured},[morning.key]);
+ assert.equal(copied.trips[0].decision,'needs_transport');assert.equal(copied.trips[0].plan.pickup,'07:00');assert.equal(copied.trips[1].plan.driverId,'');
+ current.trips[0].revision=2;current.trips[0].decision='no_transport';copied=m.copyPlanningDetails(current,previous,{...c(),settings:configured},[morning.key]);assert.equal(copied.trips[0].decision,'no_transport');assert.equal(copied.trips[0].plan.pickup,'');
+ afternoon.plan.school='Changed School';afternoon.plan.seating='New verified restraint';copied=m.copyPlanningDetails(current,previous,c(),[afternoon.key]);assert.equal(copied.trips[1].plan.school,'Changed School');assert.equal(copied.trips[1].plan.seating,'New verified restraint');assert.equal(copied.trips[1].decision,'unresolved');
+ previous.trips[1].locationId='old-location';copied=m.copyPlanningDetails(current,previous,c(),[afternoon.key]);assert.equal(copied.trips[1].plan.driverId,'');
+});

@@ -12,7 +12,7 @@ export type Settings={usualDecisions?:Record<string,UsualDecision>;schedules:Sch
 export type Actor={id:string;name:string;planner:boolean;leader:boolean;locationIds:string[]};
 export type Person={id:string;name:string;locationIds:string[];driver:boolean;leader:boolean;globalLeader:boolean;laneId?:string};
 export type Context={date:string;now:string;actor:Actor;people:Person[];settings:Settings};
-export type Command={action:'save'|'publish'|'acknowledge'|'pickup'|'arriving'|'arrive'|'receive'|'adult_handoff'|'problem'|'ack_problem'|'resolve_problem'|'sweep'|'close'|'reopen';key?:string;revision?:number;decision?:Decision;plan?:Plan;reason?:string;adult?:string;confirmed?:boolean};
+export type Command={keys?:string[];action:'save'|'publish'|'acknowledge'|'pickup'|'arriving'|'arrive'|'receive'|'adult_handoff'|'problem'|'ack_problem'|'resolve_problem'|'sweep'|'close'|'reopen';key?:string;revision?:number;decision?:Decision;plan?:Plan;reason?:string;adult?:string;confirmed?:boolean};
 export const defaultSettings:Settings={schedules:[],backupLeaderIds:[],pickupGraceMinutes:5,handoffGraceMinutes:5,escalationMinutes:5};
 export const emptyPlan=():Plan=>({school:'',pickupLocation:'',destination:'',destinationId:'',driverId:'',backupDriverId:'',vehicle:'',pickup:'',arrival:'',dismissal:'',scheduleLabel:'',seating:'',route:'',reason:''});
 export const statusLabels:Record<Stage,string>={awaiting_pickup:'Awaiting pickup',with_driver:'With driver',arriving:'Arriving',arrived:'Arrived—awaiting receiving confirmation',received:'Received'};
@@ -80,8 +80,8 @@ export function applyCommand(original:Day,cmd:Command,c:Context):Day{
  if(cmd.action==='reopen'){requireValue(a.planner&&cmd.reason?.trim(),'Danielle must document why the day is reopened');d.closedAt='';return d;}
  requireValue(!d.closedAt,'Day is closed. Danielle must reopen it with a reason.');
  if(cmd.action==='publish'){
-  requireValue(a.planner,'Only Danielle can publish the plan');let count=0;
-  for(const t of d.trips)if(t.revision!==t.publishedRevision&&!readiness(t,d.trips,c).length){t.publishedRevision=t.revision;t.lastAt=now;count++;}
+  requireValue(a.planner,'Only Danielle can publish the plan');if(cmd.keys)requireValue(Array.isArray(cmd.keys)&&cmd.keys.length>0&&new Set(cmd.keys).size===cmd.keys.length&&cmd.keys.every(key=>d.trips.some(t=>t.key===key)),'Select valid trips to publish');let count=0;
+  for(const t of d.trips)if((!cmd.keys||cmd.keys.includes(t.key))&&t.revision!==t.publishedRevision&&!readiness(t,d.trips,c).length){t.publishedRevision=t.revision;t.lastAt=now;count++;}
   requireValue(count,'No ready changes to publish. Resolve missing information first.');return d;
  }
  if(cmd.action==='close'){
@@ -138,4 +138,39 @@ export function applyCommand(original:Day,cmd:Command,c:Context):Day{
   for(const o of group){o.sweptAt=now;o.lastAt=now;}return d;
  }else throw new Error('Unknown transportation action');
  t.lastAt=now;return d;
+}
+
+export type PlanningChange={key:string;revision:number;decision:Decision;plan:Plan};
+/** Route planning only: a batch cannot confirm physical pickups or cross AM/PM. */
+export function applyPlanningBatch(day:Day,changes:PlanningChange[],context:Context,reason=''){
+ requireValue(context.actor.planner,'Only Danielle can plan transportation');
+ requireValue(Array.isArray(changes)&&changes.length>0&&changes.length<=200,'Select between 1 and 200 trips');
+ requireValue(new Set(changes.map(x=>x.key)).size===changes.length,'Select each trip only once');
+ const periods=new Set(changes.map(x=>day.trips.find(t=>t.key===x.key)?.period));
+ requireValue(periods.size===1&&!periods.has(undefined),'Plan morning and afternoon separately');
+ let next=structuredClone(day);
+ for(const change of changes){
+  const current=next.trips.find(t=>t.key===change.key);
+  requireValue(current&&current.revision===change.revision,'A selected trip changed. Refresh before saving');
+  requireValue(current.stage==='awaiting_pickup','Use the individual trip view for children already picked up');
+  if(current.decision===change.decision&&JSON.stringify(current.plan)===JSON.stringify(change.plan))continue;
+  next=applyCommand(next,{action:'save',key:change.key,revision:change.revision,decision:change.decision,plan:change.plan,reason},context);
+ }
+ return next;
+}
+
+/** Copy only untouched planning details; retain today's identity, decisions, school and custody history. */
+export function copyPlanningDetails(day:Day,previous:Day,context:Context,keys?:string[]){
+ requireValue(context.actor.planner,'Only Danielle can copy route details');requireValue(!day.closedAt,'Reopen the day first');
+ if(keys)requireValue(Array.isArray(keys)&&keys.length>0&&new Set(keys).size===keys.length&&keys.every(key=>day.trips.some(t=>t.key===key))&&new Set(day.trips.filter(t=>keys.includes(t.key)).map(t=>t.period)).size===1,'Select one period to copy');
+ const next=structuredClone(day);
+ for(const t of next.trips){
+  if(keys&&!keys.includes(t.key))continue;
+  const usual=context.settings.usualDecisions?.[t.key],untouchedUsual=t.revision===1&&usual&&t.decision===usual.decision&&t.lastAt===usual.confirmedAt;
+  if((t.revision&&!untouchedUsual)||t.publishedRevision||t.stage!=='awaiting_pickup')continue;
+  const source=previous.trips.find(p=>p.key===t.key);if(!source||source.locationId!==t.locationId)continue;
+  t.plan={...source.plan,school:t.plan.school,seating:t.plan.seating||source.plan.seating,pickupLocation:t.period==='Afternoon'?t.plan.school:(source.plan.pickupLocation||t.plan.pickupLocation),reason:t.plan.reason};
+  if(t.period==='Afternoon'){const schedule=schoolTime(context.settings,t,context.date);t.plan.dismissal=schedule.time;t.plan.scheduleLabel=schedule.label;}
+ }
+ return next;
 }
