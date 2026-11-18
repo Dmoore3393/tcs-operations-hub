@@ -3,7 +3,7 @@ import {transportRollout} from '../transport-accountability/rollout';
 import {reconcileRoster} from '../transport-accountability/roster';
 import type {SupabaseClient} from '@supabase/supabase-js';
 import type {AuthorizedStaff} from './require-staff';
-import {isOwnerAccessRole,isLicenseeAccessRole} from '../team-access';
+import {isOwnerAccessRole,isLicenseeAccessRole,canAssignTransportationAccount} from '../team-access';
 import {defaultSettings,type Day,type Trip,type Settings,type Person,type Context,exceptions} from '../transport-accountability/model';
 import {transportServiceDate,transportTimeInput} from '../transportation-day';
 import type {HubNotification} from '../notifications';
@@ -28,13 +28,13 @@ export async function loadTransportAccountability(c:AuthorizedStaff,date:string)
   collect((from,to)=>c.admin.from('children').select('id,legacy_id,location_id,first_name,last_name,age_group,enrollment_status,school_name,record_data,created_at').eq('organization_id',org).order('id').range(from,to)),
   collect((from,to)=>c.admin.from('transportation_routes').select('child_id,record_data').eq('organization_id',org).order('id').range(from,to)),
   c.admin.from('locations').select('id,name').eq('organization_id',org).eq('is_active',true),
-  collect((from,to)=>c.admin.from('staff_access').select('user_id,full_name,role,permissions,email').eq('organization_id',org).eq('is_active',true).order('user_id').range(from,to)),
+  collect((from,to)=>c.admin.from('staff_access').select('user_id,full_name,role,permissions,email,is_active').eq('organization_id',org).eq('is_active',true).order('user_id').range(from,to)),
   collect((from,to)=>c.admin.from('staff_location_assignments').select('user_id,location_id').eq('organization_id',org).order('user_id').range(from,to)),
   c.admin.from('hub_state').select('state_value').eq('organization_id',org).eq('state_key','tcs-schools-v2').maybeSingle(),
   c.admin.from('staff_lane_profiles').select('id,staff_user_id').eq('organization_id',org).eq('is_active',true),
  ]);
  for(const r of [dayResult,settingResult,childResult,routeResult,locationResult,staffResult,assignmentResult,schoolResult,laneResult])check(r);
- const locations=(locationResult.data||[]) as Location[],assignments=assignmentResult.data||[],people:Person[]=(staffResult.data||[]).map(s=>({id:s.user_id,laneId:laneResult.data?.find(l=>l.staff_user_id===s.user_id)?.id,name:s.full_name,driver:isOwnerAccessRole(s.role)||s.permissions?.includes('transportation'),leader:isOwnerAccessRole(s.role)||isLicenseeAccessRole(s.role),globalLeader:isOwnerAccessRole(s.role),locationIds:assignments.filter(a=>a.user_id===s.user_id).map(a=>a.location_id)}));
+ const locations=(locationResult.data||[]) as Location[],assignments=assignmentResult.data||[],people:Person[]=(staffResult.data||[]).map(s=>({id:s.user_id,laneId:laneResult.data?.find(l=>l.staff_user_id===s.user_id)?.id,name:s.full_name,driver:canAssignTransportationAccount(s),leader:isOwnerAccessRole(s.role)||isLicenseeAccessRole(s.role),globalLeader:isOwnerAccessRole(s.role),locationIds:assignments.filter(a=>a.user_id===s.user_id).map(a=>a.location_id)}));
  const planner=isTransportPlanner(c),actor={id:c.user.id,name:c.profile.full_name,planner,leader:c.isOwner||c.isLicensee,locationIds:c.isOwner?locations.map(l=>l.id):people.find(p=>p.id===c.user.id)?.locationIds||[]};
  const settings:Settings=settingResult.data?.document||structuredClone(defaultSettings);
  // Preserve the existing school directory as the default. Settings add date/grade/classroom overrides.
