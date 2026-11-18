@@ -119,3 +119,14 @@ test('copying route details retains usual decisions, manual choices, new school 
  afternoon.plan.school='Changed School';afternoon.plan.seating='New verified restraint';copied=m.copyPlanningDetails(current,previous,c(),[afternoon.key]);assert.equal(copied.trips[1].plan.school,'Changed School');assert.equal(copied.trips[1].plan.seating,'New verified restraint');assert.equal(copied.trips[1].decision,'unresolved');
  previous.trips[1].locationId='old-location';copied=m.copyPlanningDetails(current,previous,c(),[afternoon.key]);assert.equal(copied.trips[1].plan.driverId,'');
 });
+
+test('blank or invalid optional enrollment dates cannot hide enrolled children',()=>{
+ for(const value of ['',null,'invalid','2030-02-30']){
+  const c=child(1);c.record_data={...c.record_data,plannedLastDay:value};
+  assert.equal(roster.reconcileRoster({trips:[],closedAt:''},[c],[],[],people,settings,date,now).trips.length,2);
+ }
+ for(const data of [{plannedLastDay:'2020-01-01'},{plannedStartDate:'2099-01-01'}]){
+  const c=child(1);c.record_data={...c.record_data,...data};
+  assert.equal(roster.reconcileRoster({trips:[],closedAt:''},[c],[],[],people,settings,date,now).trips.length,0);
+ }
+});
