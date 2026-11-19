@@ -10,10 +10,23 @@ export const runtime='nodejs';export const dynamic='force-dynamic';
 export async function GET(request:Request){try{
  const params=new URL(request.url).searchParams;
  if(params.get('tasks')==='mine'){
-  const c=await requireStaff(request);const r=await c.userClient.from('location_file_findings').select('id,location_id,file_id,item_id,item_name,child_name,legacy_task_id,assigned_user_id,due_date,correction,notes,status,updated_at,locations(name),children(first_name,last_name)').eq('organization_id',c.profile.organization_id).eq('assigned_user_id',c.user.id).order('due_date');databaseError(r.error);return json({tasks:r.data||[]});
+  const c=await requireStaff(request);const r=await c.userClient.from('location_file_findings').select('id,location_id,file_id,item_id,item_name,child_name,staff_lane_id,legacy_task_id,assigned_user_id,due_date,correction,notes,status,updated_at,locations(name),children(first_name,last_name)').eq('organization_id',c.profile.organization_id).eq('assigned_user_id',c.user.id).order('due_date');databaseError(r.error);return json({tasks:r.data||[]});
  }
  const {c,site}=await requireLocationRecords(request,params.get('locationId')||'');const data=await loadLocationRoster(c,site);
  const childId=params.get('childId');let targets:unknown[]=[],sourceDocuments:unknown[]=[];
+ const fileId=params.get('fileId');
+ if(fileId){
+  if(!uuid(fileId))return json({error:'Choose a valid location file'},400);
+  const file=await c.userClient.from('location_person_files').select('*').eq('id',fileId).eq('location_id',site.id).eq('organization_id',c.profile.organization_id).maybeSingle();databaseError(file.error);
+  if(!file.data)return json({error:'Location file not accessible'},404);
+  if(file.data.staff_lane_id){
+   const files=await c.userClient.from('location_person_files').select('id,staff_lane_id,location_id,person_name,archived,items,locations(name)').eq('organization_id',c.profile.organization_id).eq('staff_lane_id',file.data.staff_lane_id);databaseError(files.error);
+   const ids=(files.data||[]).map(f=>f.id);
+   const docs=await c.userClient.from('document_records').select('id,child_id,location_id,document_type,original_filename,location_file_id,checklist_item_id,review_status,review_note,reviewed_at,copied_from_document_id').eq('organization_id',c.profile.organization_id).in('location_file_id',ids).eq('document_scope','Staff').neq('status','Deleted');databaseError(docs.error);
+   return json({...data,files:[...data.files,file.data],documents:(docs.data||[]).filter(d=>d.location_file_id===fileId),copyTargets:files.data||[],sourceDocuments:docs.data||[],templates:[]});
+  }
+ }
+
  if(childId&&data.enrollments.some(e=>e.child_id===childId)){
   const files=await c.userClient.from('location_person_files').select('id,child_id,location_id,person_name,archived,locations(name)').eq('organization_id',c.profile.organization_id).eq('child_id',childId);databaseError(files.error);targets=files.data||[];
   const docs=await c.userClient.from('document_records').select('id,location_id,document_type,original_filename,location_file_id,locations(name)').eq('organization_id',c.profile.organization_id).eq('child_id',childId).neq('status','Deleted');databaseError(docs.error);sourceDocuments=docs.data||[];
@@ -85,10 +98,11 @@ export async function POST(request:Request){try{
  }
  if(body.action==='map_document'){
   if(!uuid(body.documentId)||!uuid(body.fileId)||!text(body.reason))return json({error:'Choose the confirmed child/location file and record the ownership source'},400);
-  const f=await db.from('location_person_files').select('*').eq('id',body.fileId).eq('location_id',site.id).maybeSingle();databaseError(f.error);if(!f.data?.child_id)return json({error:'Choose a child file at this location'},403);
+  const f=await db.from('location_person_files').select('*').eq('id',body.fileId).eq('location_id',site.id).maybeSingle();databaseError(f.error);if(!f.data)return json({error:'Choose a location file'},403);
   const doc=await db.from('document_records').select('child_id,location_file_id').eq('id',body.documentId).eq('location_id',site.id).maybeSingle();databaseError(doc.error);if(!doc.data||doc.data.location_file_id&&doc.data.location_file_id!==f.data.id||doc.data.child_id&&doc.data.child_id!==f.data.child_id)return json({error:'This document belongs to another child/file. Its ownership was not changed.'},409);
+  if(f.data.staff_lane_id&&doc.data.location_file_id!==f.data.id)return json({error:'Confirm staff ownership before attaching this legacy upload'},409);
   if(body.itemId&&!f.data.items.some((i:{id:string})=>i.id===body.itemId))return json({error:'Choose an item in this file'},400);
-  const r=await db.from('document_records').update({child_id:f.data.child_id,location_file_id:f.data.id,document_scope:'Child',confidentiality:'Location Leadership',checklist_item_id:body.itemId||null,review_status:'Awaiting review',review_note:'Ownership confirmed: '+text(body.reason)}).eq('id',body.documentId).select('id').maybeSingle();databaseError(r.error);if(!r.data)return json({error:'Document changed. Refresh.'},409);return json({ok:true});
+  const r=await db.from('document_records').update({child_id:f.data.child_id,location_file_id:f.data.id,document_scope:f.data.staff_lane_id?'Staff':'Child',confidentiality:'Location Leadership',checklist_item_id:body.itemId||null,review_status:'Awaiting review',review_note:'Ownership confirmed: '+text(body.reason)}).eq('id',body.documentId).select('id').maybeSingle();databaseError(r.error);if(!r.data)return json({error:'Document changed. Refresh.'},409);return json({ok:true});
  }
  return json({error:'Unsupported location-record action'},400);
  }catch(e){return staffErrorResponse(e);}}

@@ -55,8 +55,8 @@ export async function PATCH(request: Request) {
   if(current.data.updated_at!==body.expectedUpdatedAt)return json({error:"Someone changed this file. Your entries are still in the form; copy them before reopening the latest file."},409);
   let changes;try{changes=validateLocationFileEdit(body.assignCorrections===true&&c.isOwner?{...body.file,reviewed_by:c.profile.full_name,review_date:new Intl.DateTimeFormat("en-CA",{timeZone:"America/Los_Angeles"}).format(new Date())}:body.file,current.data as LocationPersonFile);}catch(e){return json({error:e instanceof Error?e.message:"Invalid checklist."},400);}
   if(body.assignCorrections===true){
-   if(!c.isOwner||!current.data.child_id)return json({error:"Only audit leadership can assign corrections from a child file."},403);
-   if(changes.archived||!validFileDate(body.dueDate))return json({error:"Use an active child file and choose a valid correction due date."},400);
+   if(!c.isOwner)return json({error:"Only audit leadership can assign corrections from a location file."},403);
+   if(changes.archived||!validFileDate(body.dueDate))return json({error:"Use an active location file and choose a valid correction due date."},400);
    const combined=await db.rpc("save_and_assign_location_child_audit",{p_file:body.id,p_expected:body.expectedUpdatedAt,p_changes:changes,p_due:body.dueDate});
    if(combined.error)return json({error:combined.error.message},/changed|stale/i.test(combined.error.message)?409:400);
    return json(combined.data);

@@ -1,7 +1,7 @@
 import { staffFileTemplate } from "@/lib/staff-file-templates";
 import { documentsForTemplate, type ChildFileAuditTemplate } from "@/lib/child-file-audits";
 
-export const fileItemStatuses = ["Not Checked", "On File", "Missing", "Awaiting review", "Correction needed", "N/A"] as const;
+export const fileItemStatuses = ["Not Checked", "On File", "Missing", "Awaiting review", "Correction needed", "Given to parent", "N/A"] as const;
 export type FileItemStatus = typeof fileItemStatuses[number];
 export type LocationFileItem = { id: string; name: string; section: string; requirement: string; status: FileItemStatus; dateChecked: string; expirationDate: string; note: string; tracksExpiration?: boolean };
 export type LocationPersonFile = {
@@ -9,6 +9,10 @@ export type LocationPersonFile = {
  template: ChildFileAuditTemplate; items: LocationFileItem[]; notes: string; reviewed_by: string; review_date: string | null;
  follow_up: string; template_confirmed: boolean; archived: boolean; updated_at: string;
 };
+/** Delivery-only packet handouts; signed receipt / acknowledgment items remain separate. */
+export function isParentHandout(item:Pick<LocationFileItem,"name">){
+ return !/acknowledg|signature|signed|receipt/i.test(item.name)&&/\bLIC\s*(995E|995F|9212)\b|\bPUB\s*(515|271)\b|^Family Handbook$/i.test(item.name);
+}
 export function initialLocationItems(type: "Child" | "Staff", template: ChildFileAuditTemplate): LocationFileItem[] {
  const rows = type === "Child" ? documentsForTemplate(template).map(d => ({id:`child-${d.id}`,name:d.name,section:d.sectionTitle,requirement:[d.requirement,d.appliesWhen].filter(Boolean).join(" · ")})) : staffFileTemplate(template);
  return rows.map(row=>({...row,status:"Not Checked",dateChecked:"",expirationDate:"",note:""}));
@@ -29,11 +33,11 @@ export function validateLocationFileEdit(value: unknown, existing: LocationPerso
   ids.add(id);const expirationDate=text(row.expirationDate,10),dateChecked=text(row.dateChecked,10),note=text(row.note,1000);
   if(dateChecked&&!validFileDate(dateChecked)) throw new Error("Use a valid checked date.");
   if(expirationDate&&!validFileDate(expirationDate)) throw new Error("Use a valid expiration date.");
-  if(status==="N/A"&&!note) throw new Error("Add a reason for each N/A item.");
+  if(status==="Given to parent"&&(!existing.child_id||!isParentHandout({name})||!dateChecked)) throw new Error("Given to parent needs a child handout and date given. Signed forms still need their returned acknowledgment.");
   return{id,name,...(typeof row.tracksExpiration==="boolean"?{tracksExpiration:row.tracksExpiration}:{}),section:text(row.section,150),requirement:text(row.requirement,500),status,dateChecked,expirationDate,note};
  });
- // Do not silently delete prior evidence. Mark an item N/A with a note instead.
- if(existing.items.some(item=>!ids.has(item.id))) throw new Error("Keep existing checklist items; use N/A with a reason instead of removing them.");
+ // Do not silently delete prior evidence. Mark an item N/A instead.
+ if(existing.items.some(item=>!ids.has(item.id))) throw new Error("Keep existing checklist items; use N/A instead of removing them.");
  const reviewDate=text(raw.review_date,10);
  if(reviewDate&&!validFileDate(reviewDate)) throw new Error("Use a valid review date.");
  const reviewedBy=text(raw.reviewed_by,160);
@@ -45,14 +49,14 @@ export function locationFileSummary(file:Pick<LocationPersonFile,"items"|"templa
  const missing=applicable.filter(i=>["Missing","Correction needed"].includes(i.status)).length;
  const unchecked=applicable.filter(i=>["Not Checked","Awaiting review"].includes(i.status)).length;
  const expired=applicable.filter(i=>i.status==="On File"&&i.tracksExpiration!==false&&i.expirationDate&&i.expirationDate<today).length;
- const invalidNA=file.items.some(i=>i.status==="N/A"&&!i.note.trim());
- return{missing,unchecked,expired,complete:file.template_confirmed&&file.items.length>0&&!missing&&!unchecked&&!expired&&!invalidNA};
+
+ return{missing,unchecked,expired,complete:file.template_confirmed&&file.items.length>0&&!missing&&!unchecked&&!expired};
 }
 
 export type LocationFileFilter = "all" | "issues" | "missing" | "unchecked" | "expired";
 export function matchesLocationFileFilter(item:LocationFileItem,filter:LocationFileFilter,today:string){
  if(filter==="all")return true;
- const missing=["Missing","Correction needed"].includes(item.status)||(item.status==="N/A"&&!item.note.trim());
+ const missing=["Missing","Correction needed"].includes(item.status);
  const unchecked=["Not Checked","Awaiting review"].includes(item.status);
  const expired=item.status==="On File"&&item.tracksExpiration!==false&&Boolean(item.expirationDate&&item.expirationDate<today);
  return filter==="issues"?missing||unchecked||expired:filter==="missing"?missing:filter==="unchecked"?unchecked:expired;
