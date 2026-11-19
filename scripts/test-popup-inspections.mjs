@@ -57,3 +57,14 @@ test('home and school-age templates retain their distinct CDSS sources and scope
  }
  assert.equal(m.validInspectionDocument({...home,items:[{...home.items[0],sourceUrl:'javascript:alert(1)'}]}),false);
 });
+
+test('new observation checklists do not duplicate individual child or employee file audits',()=>{
+ for(const program of ['home','school_age']){
+  const d=m.newInspectionDocument(program);
+  assert.ok(d.templateVersion.includes('OBSERVATION'));
+  assert.ok(d.items.some(i=>i.label.includes('physically present')));
+  assert.ok(d.items.some(i=>i.category==='Personal rights & care'));
+  assert.ok(!d.items.some(i=>/records|files/i.test(i.category)));
+  assert.ok(!d.items.some(i=>/immunization|transcripts|admission agreements|acknowledgment|parent acknowledg|LIC 700|LIC 627|LIC 995A/.test(i.label)));
+ }
+});
