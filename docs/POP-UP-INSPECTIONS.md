@@ -27,3 +27,12 @@ No staff notifications or public task creation is performed, preserving unannoun
 
 scripts/test-popup-inspections.mjs exercises exact-identity permissions, scoring, template scope, URL validation, database version conflicts, save history, immutable completion and direct-client denials.
 scripts/test-route-access.mjs includes other-owner denial, nested path enforcement and Heather’s access independent of broad role permissions.
+
+## Released results and correction tasks (November 19)
+Completed private visits now offer Release results & assign corrections. Leadership selects an active licensee assigned to that location and a due date. Release is atomic and idempotent: it saves one immutable checklist snapshot and one task per correction / urgent item. The original score is never rewritten. Overall visit notes and private follow-up are excluded; item observations are shared deliberately at release.
+
+Licensees use Inspection Results & Corrections under Staff & planning. Results use saved location assignments, not temporary backup access to all sites. The server enforces location scope for reading, downloads and task submissions. Other staff and other owners cannot access these reports. Tasks also appear through Work Plans. Licensees submit correction notes; Danielle, Heather or Jen verify and close, or return with an explanation. Version checks prevent stale updates. Release, submissions and reviews have append-only history. Releasing does not email or message anyone externally.
+
+Download PDF / Print report produces a multipage PDF with facility/date, internal final grade, full checklist results, correction checkboxes, responsible person, deadline and current verification progress. The PDF uses an embedded Unicode font, wraps long entries, and repeats facility/date and page numbers. Private draft/history APIs remain restricted to the original three reviewers.
+
+Migration: 20261119190000_inspection_results.sql. The three release/correction/history tables have no anon/authenticated grants; service-only APIs enforce the account and location boundary.

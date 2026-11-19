@@ -39,10 +39,19 @@ export async function POST(request: Request) {
   const type=body.type as "Child"|"Staff";
   const person= type==="Child"? await db.from("children").select("id,first_name,last_name").eq("organization_id",org).eq("id",body.personId).maybeSingle():await db.from("staff_lane_profiles").select("id,full_name").eq("organization_id",org).eq("id",body.personId).maybeSingle();
   if(person.error)throw person.error;if(!person.data)return json({error:"Person not available to this account."},403);
+  // The roster can create a file after the picker was loaded. Open it rather than treating it as a duplicate error.
+  const identityColumn=type==="Child"?"child_id":"staff_lane_id";
+  const existing=await db.from("location_person_files").select("*").eq("organization_id",org).eq("location_id",site.data.id).eq(identityColumn,body.personId).maybeSingle();
+  if(existing.error)throw existing.error;
+  if(existing.data)return json({file:existing.data});
   const name="full_name" in person.data?person.data.full_name:`${person.data.first_name} ${person.data.last_name}`;
   const template=templateForChildLocation(`${site.data.name} ${site.data.full_name}`);
   const result=await db.from("location_person_files").insert({organization_id:org,location_id:site.data.id,child_id:type==="Child"?body.personId:null,staff_lane_id:type==="Staff"?body.personId:null,person_name:name,template,items:initialLocationItems(type,template)}).select("*").single();
-  if(result.error){if(result.error.code==="23505")return json({error:"This person already has a file here. Open the existing file, including archived files."},409);throw result.error;}
+  if(result.error){if(result.error.code==="23505"){
+   const concurrent=await db.from("location_person_files").select("*").eq("organization_id",org).eq("location_id",site.data.id).eq(identityColumn,body.personId).maybeSingle();
+   if(concurrent.error)throw concurrent.error;
+   if(concurrent.data)return json({file:concurrent.data});
+  }throw result.error;}
   return json({file:result.data},201);
  }catch(e){return staffErrorResponse(e);}
 }
