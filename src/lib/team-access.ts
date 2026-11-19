@@ -333,3 +333,8 @@ export function toggleEmployeePermission(permissions:string[],permission:string)
 export function canAssignTransportationAccount(account:{role:string;permissions?:readonly string[]|null;is_active:boolean}){
   return account.is_active&&(isOwnerAccessRole(account.role)||isLicenseeAccessRole(account.role)||Boolean(account.permissions?.includes("transportation")));
 }
+
+/** Private pilot: role alone never grants access to unannounced inspection records. */
+export function canUsePopUpInspections(profile:{user_id?:string;is_active?:boolean}|null){
+ return Boolean(profile?.is_active&&['3b54f183-564a-40fa-87f2-3c515d526623','50abd10b-2b24-47d4-ade2-8b0031530aac','71b134f9-cb66-43ed-8c45-f71d85de21df'].includes(profile.user_id||''));
+}
