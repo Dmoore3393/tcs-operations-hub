@@ -1,4 +1,5 @@
 "use client";
+import {locationPickerSites,locationStatusLabel} from "@/lib/location-config";
 import LocationRosterPanel from "./LocationRosterPanel";
 import LocationFileWorkflow from "./LocationFileWorkflow";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -46,7 +47,7 @@ function LocationFilesContent({childAudits,inspection,initialKind}: {childAudits
  },[token]);
  useEffect(()=>{const counter=loadGeneration;const timer=window.setTimeout(()=>void load(),0);return()=>{counter.current++;window.clearTimeout(timer);};},[load]);
  // The target is selected by staff, never derived from the child's primary location.
- const preferred=activeLocation === "All Locations" ? undefined : data?.locations.find(site=>normalizeLocation(site.name)===normalizeLocation(activeLocation));
+ const preferred=activeLocation === "All Locations" ? undefined : locationPickerSites(data?.locations||[]).find(site=>normalizeLocation(site.name)===normalizeLocation(activeLocation));
  const chosenSite=(siteSelection?.context===activeLocation?data?.locations.find(site=>site.id===siteSelection.id):undefined)||preferred;
  useEffect(()=>{
   if(!data||linkLoaded)return;
@@ -87,7 +88,7 @@ function LocationFilesContent({childAudits,inspection,initialKind}: {childAudits
   {notice&&<p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 font-bold text-emerald-950">{notice}</p>}
   {error&&!adding&&<p role="alert" className="rounded-xl bg-red-50 p-3 text-red-900">{error}</p>}
   <div className="flex flex-wrap items-end gap-3">
-   <label className="block font-bold">Location<select className={`${inputClass} mt-1 block min-h-11`} value={chosenSite?.id||""} onChange={e=>{setSiteSelection({id:e.target.value,context:activeLocation});setError("");}}><option value="" disabled>Choose a location</option>{data?.locations.map(site=><option key={site.id} value={site.id}>{site.name}{site.is_active?"":" (inactive — history)"}</option>)}</select></label>
+   <label className="block font-bold">Location<select className={`${inputClass} mt-1 block min-h-11`} value={chosenSite?.id||""} onChange={e=>{setSiteSelection({id:e.target.value,context:activeLocation});setError("");}}><option value="" disabled>Choose a location</option>{locationPickerSites(data?.locations||[]).map(site=><option key={site.id} value={site.id}>{site.name}{site.is_active?"":` (${locationStatusLabel(site)})`}</option>)}{chosenSite&&!locationPickerSites(data?.locations||[]).some(site=>site.id===chosenSite.id)&&<option value={chosenSite.id}>{chosenSite.name} (historical record)</option>}</select></label>
    {!childAudits&&<label className="block font-bold">File type<select className={`${inputClass} mt-1 block min-h-11`} value={kind} onChange={e=>{setKind(e.target.value as "Child"|"Staff");setPersonId("");}}><option>Child</option><option value="Staff">Employee</option></select></label>}
    <label className="block font-bold">Search<input className={`${inputClass} mt-1 block min-h-11`} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Name" /></label>
    <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={showArchived} onChange={e=>setShowArchived(e.target.checked)}/>Include archived files</label>
