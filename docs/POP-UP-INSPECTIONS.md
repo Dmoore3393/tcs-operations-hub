@@ -13,6 +13,8 @@ https://cdss.ca.gov/inforesources/cdss-programs/community-care-licensing/inspect
 
 The actual Family Child Care Homes Standard Tool and School-Age Standard Tool spreadsheets were downloaded and reviewed alongside LIC 126 / LIC 125 entrance checklists and LIC 311D / LIC 311A records lists. Each generated item stores its reference and source URL in the visit snapshot. A separate template applies to family child care homes and school-age centers; the location’s configured program suggests the starting template. Reviewers can change templates before finalization, with an explicit warning that item answers are replaced. Infant checks appear only in the home template and may be marked N/A. Elementary-school exceptions in child health / immunization records are called out.
 
+As of November 19, new checklists focus on observations during the visit. Detailed child/employee file reviews (contacts, signed receipts, health records, training documentation and enrollment roster reconciliation) remain in the separate Files audits. Operational attendance, supervision, visible postings, emergency readiness and infant sleep observations remain in the visit checklist. Existing saved inspection snapshots are unchanged.
+
 Checklist links live in src/lib/pop-up-inspections.ts. Future revisions affect new visits only. Additional local items may be added to a visit and are identified as Additional checks.
 
 ## Internal grade

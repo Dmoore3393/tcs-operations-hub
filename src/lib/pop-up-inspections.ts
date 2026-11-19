@@ -13,6 +13,7 @@ export const inspectionSources={
 };
 type Check=[category:string,label:string,reference:string,source:keyof typeof inspectionSources];
 const home:Check[]=[
+ ['Capacity & supervision','Match the children physically present to today’s attendance; identify who is supervising each child.','22 CCR 102417(a)','homeTool'],
  ['Capacity & supervision','Count children present, including resident children where required; verify the licensed capacity, age mix and assistant coverage.','22 CCR 102416.5','homeTool'],
  ['Capacity & supervision','Verify the licensee is present or a qualified substitute is supervising; children are supervised throughout the visit.','22 CCR 102417(a)','homeTool'],
  ['Safety & physical environment','Inspect rooms, floors, furniture and outdoor areas for unsafe conditions; check cleanliness, heating and ventilation.','22 CCR 102417(b), (g)','homeTool'],
@@ -29,28 +30,19 @@ const home:Check[]=[
  ['Personal rights & care','Observe respectful treatment and safe accommodations; check for prohibited punishment, humiliation or interference with eating, sleeping or toileting.','22 CCR 102423','homeTool'],
  ['Personal rights & care','Check how illness is identified, affected children are separated and parents are contacted while supervision continues.','22 CCR 102417(e)','homeTool'],
  ['Food & hygiene','Check that food brought from home is labeled with the child’s name and safely stored / refrigerated.','22 CCR 102417(f)','homeTool'],
- ['Staff & household records','Verify criminal-record clearance / exemption and required association for adults subject to background checks, including applicable household adults.','HSC 1596.871; LIC 311D','homeTool'],
- ['Staff & household records','Review current pediatric CPR / first aid and required preventive-health training records.','LIC 126 / LIC 311D','homeEntrance'],
- ['Staff & household records','Review TB clearance / risk assessment, staff immunization or permitted exemption / declination records.','LIC 126 / LIC 311D','homeEntrance'],
- ['Staff & household records','Check mandated reporter training and signed staff acknowledgments / employee rights records.','LIC 9108 / LIC 9052; LIC 311D','homeRecords'],
- ['Children’s files & roster','Reconcile enrolled children with this location’s current LIC 9040 roster.','LIC 126 / LIC 311D','homeRecords'],
- ['Children’s files & roster','Sample child files for current emergency contacts, authorized adults and emergency-treatment consent.','LIC 700 / LIC 627','homeRecords'],
- ['Children’s files & roster','Verify parent-rights and background-check notices and consumer-awareness information were provided.','LIC 995A / LIC 995E / LIC 9212','homeRecords'],
- ['Children’s files & roster','Check immunization documentation for children who require it; account for elementary-school enrollment applicability.','LIC 311D; 22 CCR 102418','homeRecords'],
- ['Children’s files & roster','Check liability-insurance acknowledgment if uninsured / unbonded and required additional-child / school-enrollment records when using expanded capacity.','LIC 282 / LIC 9150; 22 CCR 102421(c)','homeRecords'],
- ['Medication & special care','If medication or medical procedures are provided, verify permissions, care instructions and applicable records.','LIC 9221 / LIC 9166 / LIC 9222; LIC 126','homeRecords'],
+ ['Medication & special care','Observe safe medication storage and handling, and whether staff can identify current care instructions for children present.','LIC 9221 / LIC 9166 / LIC 9222; LIC 126','homeRecords'],
  ['Postings & administration','Verify the facility license, parent-rights poster and applicable waivers are displayed / available as required.','LIC 126; PUB 394','homeEntrance'],
- ['Postings & administration','Review required licensing-report postings, parent acknowledgments and previous corrections.','LIC 9213 / LIC 9224; LIC 311D','homeRecords'],
- ['Postings & administration','Check incident / injury reporting records and required facility / property documents.','LIC 624B / LIC 9149 / LIC 9151; LIC 311D','homeRecords'],
+ ['Postings & administration','Check required licensing notices are posted and observe whether earlier physical / operational corrections remain in place.','LIC 9213 / LIC 9224; LIC 311D','homeRecords'],
  ['Infant safe sleep—if applicable','Inspect individual compliant cribs / play yards, firm fitted mattresses, safe placement and clean individual bedding.','22 CCR 102425(a)','homeTool'],
  ['Infant safe sleep—if applicable','Check sleep spaces are clear of loose objects, bumpers and attached objects; review safe pacifier use.','22 CCR 102425(b)','homeTool'],
  ['Infant safe sleep—if applicable','Review infant positioning, monitoring and documented sleep checks against the safe-sleep requirements.','22 CCR 102425','homeTool'],
  ['Infant safe sleep—if applicable','Check an individual sleep plan for infants up to 12 months and sleep logs for infants up to 24 months.','LIC 9227; LIC 311D','homeRecords']
 ];
 const center:Check[]=[
+ ['Capacity & supervision','Match the children physically present to today’s attendance; identify who is supervising each group.','22 CCR 101229','centerTool'],
  ['Capacity & supervision','Count children by group and verify licensed capacity, age limits and school-age staffing / teacher-aide ratios, including mixed-age groups.','22 CCR 101516.5','centerTool'],
  ['Capacity & supervision','Observe supervision throughout indoor / outdoor activities and transitions; children are not left unsupervised.','22 CCR 101229','centerTool'],
- ['Capacity & supervision','Verify qualified director / substitute coverage, teacher and aide qualifications and supervision of aides.','22 CCR 101515; 101215.1; 101216.2','centerTool'],
+ ['Capacity & supervision','Identify the director / person in charge, verify coverage for children present, and observe supervision of aides.','22 CCR 101515; 101215.1; 101216.2','centerTool'],
  ['Safety & physical environment','Inspect the building, floors, furniture and equipment for cleanliness, damage, pests and hazards.','22 CCR 101238; 101239','centerTool'],
  ['Safety & physical environment','Check that exits, passageways and stairs are unobstructed and the approved fire clearance is available.','22 CCR 101238(c); 101171','centerTool'],
  ['Safety & physical environment','Check working smoke / carbon-monoxide alarms, fire extinguisher and telephone service.','LIC 125; HSC 1596.954; 22 CCR 101224','centerEntrance'],
@@ -68,25 +60,14 @@ const center:Check[]=[
  ['Food service','Review posted advance menus, dated menu records and required meals / snacks for the program served.','22 CCR 101227','centerTool'],
  ['Food service','Inspect safe food storage, contamination prevention, food temperatures, kitchen sanitation and separation of chemicals from food.','22 CCR 101227(a)','centerTool'],
  ['Food service','Verify staff follow documented allergies / special-diet instructions and safe food-service practices.','CARE Tool—Care and Supervision / Food Service','centerTool'],
- ['Staff records','Verify background clearances / exemptions and required association for staff subject to fingerprinting.','HSC 1596.871; 22 CCR 101170','centerTool'],
- ['Staff records','Review staff qualification documents, transcripts / permits and personnel records for people working today.','LIC 125 / LIC 311A; 22 CCR 101217','centerRecords'],
- ['Staff records','Verify current pediatric CPR / first aid coverage and required health / safety training.','22 CCR 101216(f); LIC 311A','centerTool'],
- ['Staff records','Check staff health screening / TB and immunization or permitted exemption / declination records.','LIC 503; LIC 125 / LIC 311A','centerRecords'],
- ['Staff records','Review mandated reporter training and signed abuse-reporting / employee-rights acknowledgments.','LIC 9108 / LIC 9052; LIC 311A','centerRecords'],
- ['Children’s files & roster','Reconcile children enrolled at this location with the current LIC 9040 roster.','LIC 311A—Administrative Records','centerRecords'],
- ['Children’s files & roster','Check complete sign-in / sign-out records and the required recent attendance records.','LIC 125 / LIC 311A','centerRecords'],
- ['Children’s files & roster','Sample child files for current emergency contacts, authorized adults and emergency-treatment consent.','LIC 700 / LIC 627; 22 CCR 101221','centerRecords'],
- ['Children’s files & roster','Check signed admission agreements, parent-rights / personal-rights receipts and applicable licensing-report acknowledgments.','LIC 995 / LIC 613A / LIC 9224; LIC 311A','centerRecords'],
- ['Children’s files & roster','Check health-history records and applicable physician / immunization records; do not require the latter where elementary-school enrollment provides the stated exception.','LIC 702 / LIC 701; LIC 311A','centerRecords'],
- ['Medication & special care','If medication is handled, inspect child-labeled storage, written permissions, instructions and medication records.','22 CCR 101226(e); LIC 311A','centerTool'],
+ ['Medication & special care','Inspect medication storage and child labeling, and observe whether staff follow current care instructions.','22 CCR 101226(e); LIC 311A','centerTool'],
  ['Postings & administration','Review posted license, parent / personal rights, menus, activity schedule, facility sketch and passenger-restraint information as applicable.','LIC 125 / LIC 311A','centerEntrance'],
- ['Postings & administration','Review required licensing-report postings, prior corrections, report availability and parent acknowledgments.','HSC 1596.8595; LIC 311A','centerRecords'],
- ['Postings & administration','Check unusual incident / injury reports and required reporting follow-up.','LIC 624; CARE Tool—Reporting Requirements','centerRecords'],
- ['Transportation—if provided','Verify drivers have the appropriate license and required transportation permissions / arrangements are documented.','22 CCR 101225; LIC 311A','centerTool']
+ ['Postings & administration','Check required licensing notices are posted and observe whether earlier physical / operational corrections remain in place.','HSC 1596.8595; LIC 311A','centerRecords'],
+ ['Transportation—if provided','Account for children currently being transported and confirm who is supervising them and the pickup / receiving handoff status.','22 CCR 101225; LIC 311A','centerTool']
 ];
 export function newInspectionDocument(program:InspectionProgram='home'):InspectionDocument{
  const checks=program==='home'?home:center;
- return {program,templateVersion:'CDSS-CARE-2026-11-18',items:checks.map(([category,label,reference,source],n)=>({id:program+'-'+n,category,label,reference,sourceUrl:inspectionSources[source],rating:'',notes:'',urgent:false})),notes:'',followUp:'',inspectedBy:''};
+ return {program,templateVersion:'CDSS-CARE-OBSERVATION-2026-11-19',items:checks.map(([category,label,reference,source],n)=>({id:program+'-'+n,category,label,reference,sourceUrl:inspectionSources[source],rating:'',notes:'',urgent:false})),notes:'',followUp:'',inspectedBy:''};
 }
 export function inspectionScore(items:InspectionItem[]){
  const scored=items.filter(i=>i.rating&&i.rating!=='na'),reviewed=items.filter(i=>i.rating).length;
