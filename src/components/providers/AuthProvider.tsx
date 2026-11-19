@@ -1,5 +1,6 @@
 "use client";
 
+import {readStaffActivity,writeStaffActivity,clearStaffActivity,staffIdleExpired} from '@/lib/staff-session-idle';
 import {canApproveChildSchedules} from "@/lib/child-schedule-authority";
 import { isSupabaseConfigured, supabase, supabaseAuthStorageKey } from "@/lib/supabase/client";
 import {
@@ -381,9 +382,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loading, pathname, profile, router, session]);
 
   const signedInAccessToken = session?.access_token;
+  const signedInUserId = session?.user.id;
   const signOut = useCallback(async () => {
     if (signingOutRef.current) return;
     signingOutRef.current = true;
+    if(signedInUserId)clearStaffActivity(window.localStorage,signedInUserId);
     try { clearImportDrafts(window.sessionStorage); } catch { /* Sign-out still clears credentials. */ }
     setLoading(true);
     try {
@@ -407,26 +410,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       setAccessError("The Hub could not clear this device's sign-in. Please close the app and retry.");
     }
-  }, [signedInAccessToken]);
+  }, [signedInAccessToken,signedInUserId]);
 
   useEffect(() => {
-    if (!session || !profile || pathname === "/login") return;
+    if (!session || !profile || session.user.id!==profile.user_id || pathname === "/login") return;
 
-    const idleLimitMs = 20 * 60 * 1000;
+    const userId=profile.user_id;
     timeoutTriggeredRef.current = false;
-    lastActivityRef.current = Date.now();
-
-    const markActivity = () => {
-      if (document.visibilityState === "visible") lastActivityRef.current = Date.now();
-    };
+    const now=Date.now(),saved=readStaffActivity(window.localStorage,userId,now);
+    lastActivityRef.current=saved??now;
+    if(saved===null)writeStaffActivity(window.localStorage,userId,now);
 
     const enforceTimeout = () => {
       if (timeoutTriggeredRef.current) return;
-      if (Date.now() - lastActivityRef.current < idleLimitMs) return;
+      const now=Date.now(),otherTab=readStaffActivity(window.localStorage,userId,now);
+      if(otherTab!==null&&otherTab>lastActivityRef.current)lastActivityRef.current=otherTab;
+      if (!staffIdleExpired(lastActivityRef.current,now)) return;
       timeoutTriggeredRef.current = true;
       window.sessionStorage.setItem("tcs-security-timeout", "1");
       void signOut();
     };
+    const markActivity = () => {
+      if(document.visibilityState!=="visible"||timeoutTriggeredRef.current)return;
+      // A click after suspension must not revive an already-idle session.
+      enforceTimeout();
+      if(timeoutTriggeredRef.current)return;
+      lastActivityRef.current=Date.now();
+      writeStaffActivity(window.localStorage,userId,lastActivityRef.current);
+    };
+    enforceTimeout();
 
     const visibility = () => {
       if (document.visibilityState === "visible") {
