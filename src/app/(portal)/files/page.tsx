@@ -8,8 +8,9 @@ import LegacyFilesPage from "@/components/files/LegacyFilesPage";
 
 export default function FilesPage() {
  const { isSystemOwner, isLocationLicensee } = useAuth();
+ const [initialKind,setInitialKind]=useState<"Child"|"Staff">("Child");
  const [legacyRequest, setLegacyRequest] = useState<boolean|null>(null);
- useEffect(()=>{const timer=window.setTimeout(()=>{const params=new URLSearchParams(window.location.search);setLegacyRequest(params.get("legacy")==="1"||params.get("type")==="Staff");},0);return()=>window.clearTimeout(timer);},[]);
+ useEffect(()=>{const timer=window.setTimeout(()=>{const params=new URLSearchParams(window.location.search);setLegacyRequest(params.get("legacy")==="1");setInitialKind(params.get("type")==="Staff"?"Staff":"Child");},0);return()=>window.clearTimeout(timer);},[]);
  if(legacyRequest===null)return <MainLayout><p role="status">Loading files…</p></MainLayout>;
  if(legacyRequest)return <LegacyFilesPage />;
  if (!isSystemOwner && !isLocationLicensee) return <LegacyFilesPage />;
@@ -21,7 +22,7 @@ export default function FilesPage() {
    <Link href="/files/legacy" className="mt-4 inline-flex min-h-11 items-center rounded-xl border border-slate-300 px-4 py-2 font-bold">Earlier file items & document vault</Link>
    <p className="mt-2 text-sm text-slate-600">Existing documents and previous tracking items are retained there. They have not been copied into every location or marked complete.</p>
   </header>
-  <LocationFilesPanel />
+  <LocationFilesPanel initialKind={initialKind} />
   <Link href="/files/legacy" className="inline-flex min-h-11 items-center rounded-xl border border-slate-300 bg-white px-4 py-2 font-bold">Earlier file items & document vault</Link>
  </div></MainLayout>;
 }

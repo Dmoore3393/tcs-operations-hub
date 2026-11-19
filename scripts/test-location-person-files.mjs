@@ -7,8 +7,8 @@ const folder=()=>({items:core.initialLocationItems('Child','In-Home'),template_c
 test('in-home and center child templates remain separate; LIC9150 and extended hours apply correctly',()=>{const home=core.initialLocationItems('Child','In-Home'),center=core.initialLocationItems('Child','School Age Center');assert.ok(home.some(x=>x.name.includes('LIC 995A')));assert.ok(home.some(x=>x.name.includes('LIC 9150')));assert.ok(!center.some(x=>x.name.includes('LIC 9150')));for(const rows of [home,center]){assert.ok(rows.some(x=>x.name.includes('Extended Hours')));assert.ok(rows.filter(x=>x.section==='Licensing Documents').every(x=>/^(LIC|PUB)/.test(x.name)));assert.ok(rows.every(x=>x.status==='Not Checked'));}});
 test('staff packets retain 27 home and 30 center rows and original first/last order',()=>{const home=core.initialLocationItems('Staff','In-Home'),center=core.initialLocationItems('Staff','School Age Center');assert.equal(home.length,27);assert.equal(center.length,30);assert.equal(templates.centerStaffFileOrder[0],'Resume');assert.ok(center.at(-1).name.includes('Handbook'));assert.equal(new Set(center.map(x=>x.section)).size,4);assert.ok(home[25].name.includes('verify form number'));});
 test('N/A with a note is reviewed and never expired or missing',()=>{const f={items:[{id:'1',name:'Test',status:'N/A',expirationDate:'2020-01-01',note:'Not applicable to this child'}],template_confirmed:true};assert.deepEqual(core.locationFileSummary(f,'2026-11-11'),{missing:0,unchecked:0,expired:0,complete:true});});
-test('unreviewed template, empty checklist and N/A without reason cannot show complete',()=>{for(const f of [{items:[],template_confirmed:true},{items:[{status:'N/A',note:''}],template_confirmed:true},{items:[{status:'On File',expirationDate:'',note:''}],template_confirmed:false}])assert.equal(core.locationFileSummary(f,'2026-11-11').complete,false);});
-test('edits reject duplicate/deleted IDs, invalid dates, N/A without reason and missing reviewer',()=>{const f=folder();assert.throws(()=>core.validateLocationFileEdit({...f,items:[]},f));assert.throws(()=>core.validateLocationFileEdit({...f,items:[f.items[0],f.items[0]]},f));assert.throws(()=>core.validateLocationFileEdit({...f,items:f.items.slice(1)},f));assert.throws(()=>core.validateLocationFileEdit({...f,items:f.items.map((i,n)=>n?i:{...i,status:'N/A'})},f));assert.throws(()=>core.validateLocationFileEdit({...f,review_date:'2026-02-30'},f));assert.throws(()=>core.validateLocationFileEdit({...f,template_confirmed:true,reviewed_by:''},f));});
+test('unreviewed template and empty checklist cannot show complete',()=>{for(const f of [{items:[],template_confirmed:true},{items:[{status:'On File',expirationDate:'',note:''}],template_confirmed:false}])assert.equal(core.locationFileSummary(f,'2026-11-11').complete,false);});
+test('edits reject duplicate/deleted IDs, invalid dates and missing reviewer',()=>{const f=folder();assert.throws(()=>core.validateLocationFileEdit({...f,items:[]},f));assert.throws(()=>core.validateLocationFileEdit({...f,items:[f.items[0],f.items[0]]},f));assert.throws(()=>core.validateLocationFileEdit({...f,items:f.items.slice(1)},f));assert.equal(core.validateLocationFileEdit({...f,items:f.items.map((i,n)=>n?i:{...i,status:'N/A',note:''})},f).items[0].status,'N/A');assert.throws(()=>core.validateLocationFileEdit({...f,review_date:'2026-02-30'},f));assert.throws(()=>core.validateLocationFileEdit({...f,template_confirmed:true,reviewed_by:''},f));});
 test('updates whitelist checklist fields, not location/person identity',()=>{const f=folder(),r=core.validateLocationFileEdit({...f,location_id:'other',child_id:'other',notes:' Site A '},f);assert.equal(r.notes,'Site A');assert.equal(r.location_id,undefined);assert.equal(r.child_id,undefined);});
 test('separately initialized files never share item state',()=>{const a=folder(),b=folder();a.items[0].status='On File';assert.equal(b.items[0].status,'Not Checked');});
 
@@ -38,6 +38,17 @@ test('audit issue filters keep missing, review and expiration actions separate w
  assert.equal(core.matchesLocationFileFilter({...item,status:'On File',expirationDate:'2026-11-01'},'expired','2026-11-17'),true);
  assert.equal(core.matchesLocationFileFilter({...item,status:'On File',tracksExpiration:false,expirationDate:'2026-11-01'},'issues','2026-11-17'),false);
  assert.equal(core.matchesLocationFileFilter({...item,status:'N/A',note:'Not applicable'},'issues','2026-11-17'),false);
- assert.equal(core.matchesLocationFileFilter({...item,status:'N/A',note:''},'missing','2026-11-17'),true);
+ assert.equal(core.matchesLocationFileFilter({...item,status:'N/A',note:''},'missing','2026-11-17'),false);
  const f=folder();assert.equal(core.validateLocationFileEdit({...f,notes:'',follow_up:'',items:f.items.map(i=>({...i,status:'Missing',note:''}))},f).notes,'');
+});
+
+test('N/A requires no note; delivered handouts complete independently of signed returns',()=>{
+ const item={id:'handout',name:'PUB 515 – Lead Exposure Brochure',section:'Forms',requirement:'Give to parent',status:'Given to parent',dateChecked:'2026-11-19',expirationDate:'',note:''};
+ const f={child_id:'child',items:[item],template_confirmed:true,reviewed_by:'Danielle',review_date:'2026-11-19'};
+ assert.equal(core.validateLocationFileEdit(f,f).items[0].status,'Given to parent');
+ assert.equal(core.locationFileSummary(f,'2026-11-19').complete,true);
+ const signed={...f,items:[{...item,name:'LIC 995A – Notification of Parents Rights'}]};
+ assert.throws(()=>core.validateLocationFileEdit(signed,signed),/child handout/);
+ const staff={...f,child_id:null};assert.throws(()=>core.validateLocationFileEdit(staff,staff),/child handout/);
+ const na={...f,items:[{...item,status:'N/A',note:''}]};assert.equal(core.locationFileSummary(na,'2026-11-19').complete,true);
 });
