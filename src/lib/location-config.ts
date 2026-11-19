@@ -127,3 +127,18 @@ export function summarizeHours(record: LocationHoursRecord) {
   if (sameWeekday && !weekdays[0].closed) return `Mon–Fri ${formatClock(weekdays[0].open)}–${formatClock(weekdays[0].close)}`;
   return dayNames.map((day) => `${day.slice(0, 3)} ${record.days[day].closed ? "Closed" : `${formatClock(record.days[day].open)}–${formatClock(record.days[day].close)}`}`).join(" • ");
 }
+
+/** One everyday choice per physical site; keep original rows for historical record links. */
+export function locationPickerSites<T extends {id:string;name:string;is_active:boolean}>(sites:T[]):T[]{
+ const preferred=new Map<string,T>();
+ for(const site of sites){
+  const normalized=normalizeLocation(site.name),key=normalized==='All Locations'?site.id:normalized;
+  const prior=preferred.get(key);
+  if(!prior||(!prior.is_active&&site.is_active)||(prior.is_active===site.is_active&&site.name===normalized&&prior.name!==normalized))preferred.set(key,site);
+ }
+ return sites.filter(site=>[...preferred.values()].some(choice=>choice.id===site.id));
+}
+export function locationStatusLabel(site:{name:string;is_active:boolean;program_type?:string}){
+ if(normalizeLocation(site.name)==='Newgrove')return 'Not open yet';
+ return site.is_active?'Open':'Archived';
+}

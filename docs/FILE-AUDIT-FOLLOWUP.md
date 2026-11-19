@@ -11,3 +11,5 @@ Given to parent is available for delivery-only child packet handouts identified 
 The /files?type=Staff entry now opens employee location files. Earlier tracking items and uploaded documents remain accessible through Earlier file items & document vault; they are not guessed or bulk migrated.
 
 Validation: location person-file status tests, PostgreSQL integration tests covering child/staff isolation, employee review/assignment/deduplication, N/A resolution without notes, same-person copy restrictions, and rejected false delivery completion of signature forms.
+
+November 19: configured missing responsible-person settings for the active licensees’ locations, including Nathaly at 33rd Street. Settings changes retain unverified facility/license fields and are captured in location record history. Location file/audit and visit dropdowns show one canonical option per physical location. Inactive duplicate aliases remain stored for historical links; 21st stays archived and Newgrove remains not open / maintenance only.

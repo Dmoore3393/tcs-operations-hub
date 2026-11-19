@@ -25,7 +25,7 @@ const starter: LocationRecord[] = (Object.keys(locationThemes) as LocationKey[])
   facilityNumber: key === "42nd Street" ? "Facility #197701124" : "Add facility number",
   address: key === "Halcom" ? "Lancaster, CA" : key === "42nd Street" ? "44027 42nd St W, Lancaster, CA 93536" : key === "Tehachapi" ? "Tehachapi, CA" : "Add site address",
   phone: "(760) 382-5742",
-  status: key === "21st Street" ? "Closed" : "Active",
+  status: key === "21st Street" ? "Closed" : key === "Newgrove" ? "Planning" : "Active",
 }));
 
 export default function LocationsPage() {
