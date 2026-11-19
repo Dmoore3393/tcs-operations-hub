@@ -79,7 +79,7 @@ function LocationFilesContent({childAudits,inspection,initialKind}: {childAudits
   inFlight.current=true;setBusy(true);setError("");
   try{const value=await checkedResponse(await withRequestTimeout(signal=>fetch("/api/location-files",{method:"POST",signal,headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({locationId:chosenSite.id,personId,type:kind,confirmLocation:confirmed})})));
    if(!value.file)throw new Error("The created file could not be verified.");const file=value.file as LocationPersonFile;
-   setData(current=>current?{...current,files:[...current.files,file]}:current);setAdding(false);setEditing(file);
+   setData(current=>current?{...current,files:[...current.files.filter(existing=>existing.id!==file.id),file]}:current);setAdding(false);setEditing(file);
   }catch(e){setError(e instanceof Error?e.message:"Could not create file.");}finally{inFlight.current=false;setBusy(false);}
  };
  return <section id="location-files" className="space-y-4 rounded-3xl border border-emerald-200 bg-emerald-50/40 p-4 sm:p-6">

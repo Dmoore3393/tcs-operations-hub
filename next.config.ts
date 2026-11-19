@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  outputFileTracingIncludes: {"/api/lic9040": ["./public/forms/LIC9040-background.pdf", "./public/forms/RosterSans.ttf"]},
+  outputFileTracingIncludes: {"/api/inspection-results": ["./public/forms/RosterSans.ttf"],"/api/lic9040": ["./public/forms/LIC9040-background.pdf", "./public/forms/RosterSans.ttf"]},
   async rewrites() {
     return {
       beforeFiles: [

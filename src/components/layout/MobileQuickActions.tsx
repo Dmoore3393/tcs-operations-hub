@@ -78,6 +78,7 @@ const toolGroups: Array<{ title: string; items: ToolItem[] }> = [
       { href: "/scheduling", label: "Staffing", icon: CalendarDays },
       { href: "/ratios", label: "Ratios", icon: ShieldCheck },
       { href: "/pop-up-inspections", label: "Pop-up Inspections", icon: ClipboardCheck },
+      { href: "/inspection-results", label: "Inspection Results & Corrections", icon: ClipboardCheck },
       { href: "/maintenance", label: "Maintenance Department", icon: Hammer },
       { href: "/work-plans", label: "Work Plans", icon: ClipboardCheck },
       { href: "/shift-reports", label: "Opening / Closing", icon: FileText },

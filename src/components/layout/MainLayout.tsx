@@ -116,6 +116,7 @@ const navItems = [
   { label: "Work Plans", href: "/work-plans", icon: ClipboardCheck },
   { label: "Compliance Center", href: "/compliance", icon: ShieldCheck },
   { label: "Pop-up Inspections", href: "/pop-up-inspections", icon: ClipboardCheck },
+      { href: "/inspection-results", label: "Inspection Results & Corrections", icon: ClipboardCheck },
   { label: "Licensing Inspection Mode", href: "/inspection-mode", icon: ClipboardCheck },
   { label: "Maintenance Department", href: "/maintenance", icon: Hammer },
   { label: "Files", href: "/files", icon: FolderOpen },

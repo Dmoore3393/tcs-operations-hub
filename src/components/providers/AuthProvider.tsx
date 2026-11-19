@@ -128,6 +128,7 @@ export function isApprovedPilotRole(role = "") {
 export function canAccessRoute(profile: StaffAccessProfile | null, routePathname: string) {
   const pathname = normalizeHubPathname(routePathname);
   if (!profile) return false;
+  if (pathname === "/inspection-results" || pathname.startsWith("/inspection-results/")) return canUsePopUpInspections(profile) || (profile.is_active && isLicenseeRole(profile.role));
   if (pathname === "/pop-up-inspections" || pathname.startsWith("/pop-up-inspections/")) return canUsePopUpInspections(profile);
   if (pathname === "/timesheets" && isAssignedTimesheetStaff(profile)) return true;
   if (isOwnerRole(profile.role)) return true;

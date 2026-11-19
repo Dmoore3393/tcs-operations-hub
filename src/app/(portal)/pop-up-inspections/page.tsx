@@ -1,5 +1,6 @@
 'use client';
 import {useCallback,useEffect,useState} from 'react';
+import InspectionResults from '@/components/inspections/InspectionResults';
 import MainLayout from '@/components/layout/MainLayout';
 import {useAuth} from '@/components/providers/AuthProvider';
 import {hubRequest} from '@/lib/hub-request';
@@ -53,6 +54,7 @@ function Inspections(){
  {!grouped.size&&<p className="rounded-xl bg-white p-4">No items in this filter.</p>}
  {!locked&&<details className="rounded-xl border bg-white p-4"><summary className="cursor-pointer font-bold">Add an item for this visit</summary><div className="mt-3 flex flex-wrap gap-3"><input className={input+' flex-1'} aria-label="Additional inspection item" value={custom} maxLength={500} onChange={e=>setCustom(e.target.value)} placeholder="Additional check"/><button className={button} disabled={busy||!custom.trim()||current.document.items.length>=100} onClick={()=>{setCurrent({...current,document:{...current.document,items:[...current.document.items,{id:crypto.randomUUID(),category:'Additional checks',label:custom.trim(),rating:'',notes:'',urgent:false}]}});setCustom('');setFilter('all');}}>Add checklist item</button></div></details>}
  <fieldset disabled={busy||locked} className="space-y-4 rounded-2xl border bg-white p-4"><label className="block font-bold">Overall visit notes (optional)<textarea className={input} rows={3} maxLength={10000} value={current.document.notes} onChange={e=>setCurrent({...current,document:{...current.document,notes:e.target.value}})}/></label><label className="block font-bold">Private follow-up plan (optional)<textarea className={input} rows={3} maxLength={10000} value={current.document.followUp} onChange={e=>setCurrent({...current,document:{...current.document,followUp:e.target.value}})} placeholder="Correction, responsible person and target date. This stays private and does not send tasks or notifications."/></label></fieldset>
+ {locked&&<InspectionResults inspectionId={current.id} locationId={current.location_id}/>}
  {history.length>0&&<details className="rounded-xl border bg-white p-4"><summary className="cursor-pointer font-bold">Saved review history ({history.length})</summary><ul className="mt-3 space-y-2">{history.map(h=><li key={h.id}>{new Date(h.created_at).toLocaleString('en-US',{timeZone:'America/Los_Angeles'})} · {reviewer(h.actor_id)} · version {h.after_data.version} · {h.after_data.status}</li>)}</ul></details>}
  {!locked&&<footer className="sticky bottom-0 flex flex-wrap items-center gap-3 rounded-2xl border border-emerald-200 bg-white p-4 shadow-lg"><button className={primary} disabled={busy} onClick={()=>void save('draft')}>{busy?'Saving…':'Save draft'}</button><button className={button} disabled={busy||Boolean(score!.remaining)} onClick={()=>void save('completed')}>Complete inspection</button><span>{score!.remaining?score!.remaining+' items still to review':'All items reviewed. Notes are optional.'}</span></footer>}
  </>}
