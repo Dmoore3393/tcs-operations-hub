@@ -17,7 +17,7 @@ const policy = ast.statements.filter((node) =>
 ).map((node) => node.getText(ast)).join("\n");
 const { canAccessRoute } = await import(moduleUrl(`
   import { normalizeHubPathname } from ${JSON.stringify(routes)};
-  import { isOwnerAccessRole, isLicenseeAccessRole, isEmployeeAccessRole, employeeCanAccessRoute } from ${JSON.stringify(team)};
+  import { canUsePopUpInspections, isOwnerAccessRole, isLicenseeAccessRole, isEmployeeAccessRole, employeeCanAccessRoute } from ${JSON.stringify(team)};
   ${policy}
 `));
 const { normalizeHubPathname } = await import(routes);
@@ -68,4 +68,13 @@ test('transportation driver choices include active licensees with inherited acce
  assert.equal(canAssignTransportationAccount({role:'Employee',permissions:['meals'],is_active:true}),false);
  assert.equal(canAssignTransportationAccount({role:'Location Licensee',permissions:[],is_active:false}),false);
  assert.equal(canAssignTransportationAccount({role:'Employee',permissions:['transportation'],is_active:false}),false);
+});
+
+test('private pop-up inspections deny other owners, staff and nested route access',()=>{
+ for(const route of ['/pop-up-inspections','/pop-up-inspections/','/pop-up-inspections/private-record']){
+  assert.equal(canAccessRoute({user_id:'other',role:'Owner',is_active:true},route),false);
+  assert.equal(canAccessRoute({user_id:'other',role:'Location Licensee',is_active:true},route),false);
+  assert.equal(canAccessRoute({user_id:'71b134f9-cb66-43ed-8c45-f71d85de21df',role:'Employee',permissions:[],is_active:true},route),true);
+  assert.equal(canAccessRoute({user_id:'71b134f9-cb66-43ed-8c45-f71d85de21df',role:'Employee',permissions:[],is_active:false},route),false);
+ }
 });
