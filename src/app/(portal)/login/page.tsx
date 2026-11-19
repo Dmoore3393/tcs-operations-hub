@@ -1,5 +1,6 @@
 "use client";
 
+import {writeStaffActivity} from "@/lib/staff-session-idle";
 import { stationFromQuery, stationPath } from "@/lib/staff-clock-stations";
 import LegalFooter from "@/components/LegalFooter";
 
@@ -23,10 +24,10 @@ export default function LoginPage() {
   const [securityMessage, setSecurityMessage] = useState("");
 
   useEffect(() => {
-    if (window.sessionStorage.getItem("tcs-security-timeout") === "1") {
-      setSecurityMessage("For privacy, The Hub signed you out after 20 minutes without activity. Sign in again to continue.");
+    const timer=window.setTimeout(()=>{if (window.sessionStorage.getItem("tcs-security-timeout") === "1") {
+      setSecurityMessage("For privacy, The Hub signed you out after two days without activity. Sign in again to continue.");
       window.sessionStorage.removeItem("tcs-security-timeout");
-    }
+    }},0);return()=>window.clearTimeout(timer);
   }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -45,7 +46,7 @@ export default function LoginPage() {
     setIsSigningIn(true);
     setError("");
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { data:signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
@@ -56,6 +57,7 @@ export default function LoginPage() {
       return;
     }
 
+    if(signInData.user)writeStaffActivity(window.localStorage,signInData.user.id,Date.now());
     const station = stationFromQuery(window.location.search);
     router.replace(station ? stationPath(station) : "/");
     router.refresh();
