@@ -34,15 +34,15 @@ export async function scanTimesheetAlerts(admin:SupabaseClient,organizationId?:s
   for(const org of organizations){
     const recipients=people.filter(person=>person.organization_id===org);
     if(recipients.filter(person=>person.full_name==='Danielle Moore').length!==1||recipients.filter(person=>person.full_name==='Jennifer Thomason').length!==1) continue;
-    const [formsResult,childrenResult,sitesResult]=await Promise.all([admin.from('timesheets').select('child_id,location_id,service_period,funding_source,record_data').eq('organization_id',org),admin.from('children').select('id,location_id,enrollment_status,record_data').eq('organization_id',org),admin.from('locations').select('id,slug,name,full_name').eq('organization_id',org)]);
-    if(formsResult.error||childrenResult.error||sitesResult.error)throw new Error('Could not check timesheet deadlines.');
+    const [confirmations,formsResult,childrenResult,sitesResult]=await Promise.all([admin.from("timesheet_period_confirmations").select("service_period").eq("organization_id",org).eq("submitted_on_time",true),admin.from('timesheets').select('child_id,location_id,service_period,funding_source,record_data').eq('organization_id',org),admin.from('children').select('id,location_id,enrollment_status,record_data').eq('organization_id',org),admin.from('locations').select('id,slug,name,full_name').eq('organization_id',org)]);
+    if(confirmations.error||formsResult.error||childrenResult.error||sitesResult.error)throw new Error('Could not check timesheet deadlines.');
     const sites=(sitesResult.data||[]) as Row[];
     const forms=(formsResult.data||[]).map(row=>({...row,locationSlug:sites.find(site=>site.id===row.location_id)?.slug}));
     const children=(childrenResult.data||[]).map(row=>{const data=object(row.record_data);const site=text(data.fundingLocationId) ? sites.find(site=>site.id===data.fundingLocationId) : text(data.fundingLocation) ? sites.find(site=>[site.slug,site.name,site.full_name].includes(data.fundingLocation)) : sites.find(site=>site.id===row.location_id);return {...row,locationSlug:site?.slug};});
     const previous=previousTimesheetMonth(now);const periods=new Set(forms.map(row=>text(row.service_period)));
     for(let cursor=new Date('2026-10-15T12:00:00Z'),count=0;cursor.toISOString().slice(0,7)<=previous.value&&count<120;cursor.setUTCMonth(cursor.getUTCMonth()+1),count++) periods.add(new Intl.DateTimeFormat('en-US',{month:'long',year:'numeric',timeZone:'UTC'}).format(cursor));
     const today=pacificToday(now);
-    for(const period of periods){if(!timesheetPolicyApplies(period))continue;
+    for(const period of periods){if(!timesheetPolicyApplies(period)||confirmations.data?.some(c=>c.service_period===period))continue;
       for(const alert of timesheetAlertsForRows(forms,children,today,period)){
         flagged+=alert.count;
         const title=alert.status==='Jen review'?'Timesheets ready for Jen’s review':alert.status==='Overdue'?'RED FLAG: overdue timesheets':alert.status==='Correction required'?'RED FLAG: timesheet correction needed':'RED FLAG: timesheets due today';
