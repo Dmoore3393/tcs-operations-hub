@@ -64,7 +64,7 @@ export async function savePushSubscriptions(
   if (error) throw new Error(error.message);
 }
 
-async function deliverPushChannels(args: {
+async function deliverPushChannelsRaw(args: {
   admin: SupabaseClient;
   user: User;
   payload: { title: string; body: string; href: string; tag: string };
@@ -119,10 +119,53 @@ async function deliverPushChannels(args: {
   }
 
   return {
+    sent,
     retry: sent === 0 && retryable,
     webRegistered: webSubscriptions.length,
     nativeRegistered: nativeDevices.length,
   };
+}
+
+async function deliverPushChannels(args: Parameters<typeof deliverPushChannelsRaw>[0]) {
+ const claim=await args.admin.rpc('claim_hub_push',{p_user:args.user.id,p_key:args.payload.tag,p_notification:{...args.payload,id:args.payload.tag,eventKey:args.payload.tag,category:'system',severity:'attention',createdAt:new Date().toISOString(),readAt:''}});
+ if(claim.error)throw new Error('Phone push could not be queued.');
+ if(!claim.data)return {retry:false,webRegistered:0,nativeRegistered:0,sent:0};
+ try{
+  const result=await deliverPushChannelsRaw(args);
+  const status=result.sent>0?'accepted':result.webRegistered+result.nativeRegistered===0?'no_device':'pending';
+  const saved=await args.admin.from('notification_push_queue').update({status,accepted_devices:result.sent,lease_until:null,next_attempt_at:new Date(Date.now()+(status==='no_device'?6*3600000:60000)).toISOString(),last_error:status==='pending'?'Push provider did not accept delivery':status==='no_device'?'No registered phone / browser push device':null,updated_at:new Date().toISOString()}).eq('user_id',args.user.id).eq('event_key',args.payload.tag).eq('lease_id',claim.data);
+  if(saved.error)throw new Error('Phone push delivery status could not be saved.');
+  return result;
+ }catch(error){
+  await args.admin.from('notification_push_queue').update({status:'pending',lease_until:null,next_attempt_at:new Date(Date.now()+60000).toISOString(),last_error:'Push delivery will retry',updated_at:new Date().toISOString()}).eq('user_id',args.user.id).eq('event_key',args.payload.tag).eq('lease_id',claim.data);
+  throw error;
+ }
+}
+
+/** Retry database-created alerts even while recipients have the app closed. */
+export async function flushInboxPhonePushes(admin:SupabaseClient){
+ const rows=await admin.from('notification_push_queue').select('id,user_id,event_key,notification').or('status.in.(pending,no_device),and(status.eq.sending,lease_until.lt.'+new Date().toISOString()+')').lte('next_attempt_at',new Date().toISOString()).order('id').limit(10);
+ if(rows.error)throw new Error('Phone push queue unavailable');
+ let processed=0;
+ await Promise.all((rows.data||[]).map(async row=>{
+  try{
+   const state=await loadNotificationState(admin,row.user_id),n=row.notification as HubNotification;
+   const profile=await admin.from('staff_access').select('role,permissions,locations,is_active,organization_id').eq('user_id',row.user_id).maybeSingle();
+   if(profile.error)throw profile.error;
+   // Family notifications are delivered through their existing dedicated family push path.
+   if(!profile.data)return;
+   const leader=await isTransportAlertLeader(admin,profile.data,row.user_id);
+   const current=state.inbox.find(i=>(i.eventKey||i.id)===row.event_key);
+   if(!canReceiveHubNotification({...profile.data,transportAlertLeader:leader},n)||!state.preferences.enabled||current?.readAt||current?.archivedAt){
+    await admin.from('notification_push_queue').update({status:'suppressed',last_error:'Read, disabled or no longer authorized'}).eq('id',row.id).neq('status','accepted');return;
+   }
+   if(quietHoursActive(state.preferences)&&n.severity!=='urgent'&&!isRequiredTransportConfirmation(n)){
+    await admin.from('notification_push_queue').update({next_attempt_at:new Date(Date.now()+15*60000).toISOString()}).eq('id',row.id);return;
+   }
+   await deliverPushChannels({admin,user:state.user,staffTransport:isRequiredTransportConfirmation(n),payload:{title:n.title,body:n.body,href:n.href,tag:row.event_key}});processed++;
+  }catch{ /* The durable row remains available for a retry. */ }
+ }));
+ return {processed};
 }
 
 function acceptsCategory(preferences: HubNotificationPreferences, eventType: HubNotificationEventType) {

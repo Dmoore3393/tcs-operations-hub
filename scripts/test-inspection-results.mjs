@@ -22,11 +22,18 @@ test('release is atomic and idempotent; submissions need leadership verification
  for(const [user,role] of [[leader,'Owner'],[licensee,'Location Licensee'],[other,'Location Licensee']])await db.query('insert into staff_access values($1,$2,true,$3,$4)',[user,org,role,'Test Person']);
  await db.exec(await readFile('supabase/migrations/202611190001_private_popup_inspections.sql','utf8'));
  await db.exec(await readFile('supabase/migrations/20261119190000_inspection_results.sql','utf8'));
+ await db.exec(`create schema tcs_files_private;revoke all on schema tcs_files_private from public;
+ create table location_file_notice_keys(organization_id uuid,recipient_id uuid,event_key text,unique(organization_id,recipient_id,event_key));
+ create table user_notification_state(user_id uuid primary key,inbox jsonb not null default '[]',updated_at timestamptz default now());`);
+ await db.exec(await readFile('supabase/migrations/20261120170000_inspection_release_notifications.sql','utf8'));
  const doc={...inspection.newInspectionDocument(),notes:'PRIVATE',followUp:'SECRET'};doc.items=doc.items.slice(0,3).map((i,n)=>({...i,rating:n===0?'meets':n===1?'partial':'needs_attention',urgent:n===2}));
  await db.query('select save_pop_up_inspection($1,$2,$3,0,$4,$5,$6,$7)',[org,leader,id,site,'2026-11-19','draft',JSON.stringify(doc)]);
  const release=actor=>db.query('select release_inspection($1,$2,$3,$4,$5)',[org,actor,id,licensee,'2026-11-23']);
  await assert.rejects(release(leader),/Complete/);await db.query("update pop_up_inspections set status='completed' where id=$1",[id]);
  await assert.rejects(release(other),/Private/);await release(leader);await release(leader);
+ const inbox=(await db.query('select inbox from user_notification_state where user_id=$1',[licensee])).rows[0].inbox;
+ assert.equal(inbox.length,1);assert.equal(inbox[0].href,'/inspection-results');assert.ok(inbox[0].body.includes('2 correction'));assert.ok(!JSON.stringify(inbox).includes('PRIVATE'));assert.ok(!JSON.stringify(inbox).includes('SECRET'));
+ await assert.rejects(db.query('select tcs_files_private.notify_inspection_release($1,$2)',[id,other]),/not assigned/);
  const report=(await db.query('select * from inspection_releases')).rows[0];assert.equal(report.document.notes,'');assert.equal(report.document.followUp,'');
  const tasks=(await db.query('select * from inspection_corrections')).rows;assert.equal(tasks.length,2);assert.equal(tasks[0].status,'Open');
  assert.equal((await db.query('select document from pop_up_inspections')).rows[0].document.notes,'PRIVATE');
