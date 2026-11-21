@@ -138,7 +138,8 @@ export default function LoginPage() {
             {isSigningIn ? "Signing In…" : isSupabaseConfigured ? "Sign In" : "Setup Required"}
           </button>
 
-          <p className="text-center text-xs leading-5 text-slate-600">Invited TCS staff only. Use the email and password you created from your invitation. Contact a TCS Owner/Admin if you need a new setup link or access change.</p>
+          <Link href="/password-recovery" className="flex min-h-12 w-full items-center justify-center rounded-xl border-2 border-emerald-700 px-4 py-3 text-center text-base font-bold text-emerald-900 hover:bg-emerald-50 focus:outline-none focus:ring-4 focus:ring-emerald-200">Forgot password? / Send new reset link</Link>
+          <p className="text-center text-xs leading-5 text-slate-600">Invited TCS staff only. Use your existing staff email to reset your password. Contact a TCS Owner/Admin for invitation or access changes.</p>
           <Link href="/parent-login" className="block rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-xs font-black text-emerald-900">Parent or guardian? Open the Family Portal →</Link>
         </form>
         <LegalFooter />
