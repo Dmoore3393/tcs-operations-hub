@@ -170,7 +170,7 @@ test("Assign Coverage lists linked and unlinked staff, then saves the selected c
   assert.ok(options.some(option => option.props.value === "colleague"));
   assert.ok(options.some(option => option.props.value === "lane:unlinked"));
   employeeSelect().props.onChange({ target: { value: "colleague" } });
-  const dayButtons = () => ui.nodes().filter(node => node.type === "button" && typeof node.props['aria-pressed'] === 'boolean');
+  const dayButtons = () => ui.nodes().filter(node => node.type === "button" && node.props['data-schedule-day'] === true);
   assert.equal(dayButtons().length, 7);
   const extraDays = dayButtons().filter(node => !node.props['aria-pressed']).slice(0, 2);
   for (const day of extraDays) day.props.onClick();
@@ -189,4 +189,15 @@ test("the form shows roster loading failures and does not pretend only the sched
   const ui = await schedulerScreen({ failRoster: true });
   assert.ok(ui.nodes().some(node => [node.props?.children].flat().includes("Roster unavailable")));
   assert.equal(ui.nodes().filter(node => node.type === "option" && node.props.value === "scheduler").length, 0);
+});
+
+test('administrator can open All Locations and save Off for several staff from the form',async()=>{
+ const ui=await schedulerScreen();
+ const all=ui.nodes().find(node=>node.type==='button'&&node.props.children==='All Locations');assert.ok(all);all.props.onClick();
+ assert.ok(ui.nodes().some(node=>typeof node.props?.children==='string'&&node.props.children.startsWith('All locations ·')));
+ const add=ui.nodes().find(node=>node.type==='button'&&[node.props.children].flat().includes(' Add Shift'));assert.ok(add);add.props.onClick();
+ const type=ui.nodes().find(node=>node.type==='select'&&node.props.children?.some?.(child=>child?.props?.children==='Off'));assert.ok(type);type.props.onChange({target:{value:'Off'}});
+ const checks=ui.nodes().filter(node=>node.type==='input'&&node.props.type==='checkbox').slice(0,2);assert.equal(checks.length,2);for(const check of checks)check.props.onChange();
+ await ui.nodes().find(node=>node.type==='form').props.onSubmit({preventDefault(){}});
+ assert.equal(ui.saves.length,1);assert.equal(ui.saves[0].payload.length,2);assert.ok(ui.saves[0].payload.every(row=>row.position_label==='Off'&&row.start_time==='00:00'&&row.end_time==='00:00'));
 });

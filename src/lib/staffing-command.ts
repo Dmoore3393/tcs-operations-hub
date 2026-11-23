@@ -158,7 +158,7 @@ export function buildCoverageWindows(args: {
   );
 
   const locationShifts = shifts
-    .filter((shift) => shift.location_id === location.id && shift.shift_date === date && shift.status !== "Cancelled")
+    .filter((shift) => shift.location_id === location.id && shift.shift_date === date && shift.status !== "Cancelled" && shift.position_label !== "Off")
     .map((shift) => ({
       shift,
       start: timeToMinutes(shift.start_time.slice(0, 5)),
