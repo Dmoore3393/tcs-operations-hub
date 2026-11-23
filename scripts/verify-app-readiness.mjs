@@ -65,7 +65,7 @@ assert(existsSync(new URL("../public/branding/tcs-hub-launch.webp", import.meta.
 assert(existsSync(new URL("../public/branding/tcs-hub-loading.webp", import.meta.url)), "Official Hub loading artwork is missing");
 
 assert(serviceWorker.includes('self.addEventListener("push"'), "Service worker push handler is missing");
-assert(serviceWorker.includes("event.respondWith(fetch(event.request))"), "Private app pages must remain network-backed");
+assert(!serviceWorker.includes('self.addEventListener("fetch"'), "Network requests must pass directly to the browser");
 assert(!serviceWorker.includes("caches.open("), "Service worker must not cache private Hub records");
 assert(layout.includes('manifest: "/manifest.webmanifest"'), "Root metadata must reference the web app manifest");
 assert(layout.includes("appleWebApp"), "Apple web-app metadata is missing");

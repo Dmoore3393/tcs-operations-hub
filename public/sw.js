@@ -8,10 +8,8 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
-self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-  event.respondWith(fetch(event.request));
-});
+// Let the browser handle network requests directly. Wrapping every request in
+// respondWith adds a failure layer on installed Safari apps without any caching benefit.
 
 
 // Store only hashes of recently displayed event IDs, never message text or child details.
