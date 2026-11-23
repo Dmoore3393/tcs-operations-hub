@@ -1,3 +1,4 @@
+import { correctedClockRows } from "@/lib/clock-corrections";
 import { normalizeLocation } from "@/lib/location-config";
 import { activeClockLocation, stationAccessAllowed } from "@/lib/staff-clock-stations";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
@@ -240,9 +241,9 @@ export async function GET(request: Request) {
     const laneByUserId = new Map(laneRows.filter((row) => text(row.staff_user_id)).map((row) => [text(row.staff_user_id), row]));
     const laneByName = new Map(laneRows.map((row) => [text(row.full_name).toLowerCase(), row]));
     const myLane = laneByUserId.get(user.id) ?? laneByName.get(profile.full_name.toLowerCase());
-    const allowedLocationKeys = new Set((profile.locations ?? []).map((item) => normalizeLocation(item)));
+    const allowedLocationKeys = new Set((isLicensee ? [profile.primary_location || ""] : profile.locations ?? []).map((item) => normalizeLocation(item)));
 
-    const events = ((eventsResult.data ?? []) as unknown as DbRow[])
+    const events = correctedClockRows((eventsResult.data ?? []) as unknown as DbRow[])
       .map((row) => {
         const metadata = object(row.metadata);
         const performedByUserId = text(row.actor_user_id);
@@ -269,6 +270,7 @@ export async function GET(request: Request) {
           event: eventFromMetadata(metadata),
           source: sourceFromMetadata(metadata),
           occurredAt: text(row.occurred_at),
+          correction: metadata.correction ?? null,
         };
       })
       .filter((event) => event.event)
@@ -447,7 +449,7 @@ export async function POST(request: Request) {
       .limit(500);
     if (recentResult.error) throw recentResult.error;
 
-    const targetRecent = ((recentResult.data ?? []) as unknown as DbRow[])
+    const targetRecent = correctedClockRows((recentResult.data ?? []) as unknown as DbRow[]).reverse()
       .filter((row) => effectiveStaffUserId(row) === targetUserId);
     const targetToday = targetRecent
       .filter((row) => pacificDate(text(row.occurred_at)) === today);

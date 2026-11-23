@@ -8,7 +8,7 @@ import {PGlite} from '@electric-sql/pglite';
 
 const require=createRequire(import.meta.url);
 function load(path,deps={},globals={}) {
-  const context={exports:{},require:name=>Object.hasOwn(deps,name)?deps[name]:require(name),Response,Request,URL,Intl,Buffer,...globals};
+  const context={exports:{},require:name=>name==='@/lib/clock-corrections'?load('src/lib/clock-corrections.ts'):Object.hasOwn(deps,name)?deps[name]:require(name),Response,Request,URL,Intl,Buffer,...globals};
   vm.runInNewContext(ts.transpileModule(readFileSync(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,context);
   return context.exports;
 }
@@ -155,4 +155,10 @@ test('migration defaults existing organizations to no flexible users and preserv
     await db.exec('reset role');assert.deepEqual((await db.query('select flexible_clock_user_ids from staff_attendance_settings')).rows[0].flexible_clock_user_ids,[]);
     assert.deepEqual((await db.query("select cmd from pg_policies where tablename='staff_attendance_settings'")).rows.map(row=>row.cmd),['SELECT']);
   } finally {await db.close();}
+});
+
+test('staff may clock in four minutes early or late during their shift, but not five minutes early',async()=>{
+ for(const [time,status] of [['17:55',409],['17:56',200],['18:00',200],['18:30',200],['18:59',200]]){
+ const f=fixture({employee:true,shift:['10:00','11:00']});f.setNow(`2026-11-10T${time}:00.000Z`);assert.equal((await f.post({source:'Location QR'})).status,status,time);
+ }
 });

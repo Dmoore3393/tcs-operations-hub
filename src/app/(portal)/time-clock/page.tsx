@@ -1,6 +1,7 @@
 "use client";
 
 import MainLayout from "@/components/layout/MainLayout";
+import ClockCorrectionsPanel from "@/components/time-clock/ClockCorrectionsPanel";
 import FlexibleClockPanel from "@/components/time-clock/FlexibleClockPanel";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
@@ -35,6 +36,7 @@ type ClockEvent = {
   event: ClockEventType;
   source: ClockSource;
   occurredAt: string;
+  correction?: {correctedBy?:string;reason?:string}|null;
 };
 
 type AdminClockStaff = {
@@ -475,7 +477,7 @@ function TimeClockScreen() {
                   Clock in no more than {payload.clockPolicy.early_clock_in_window_minutes} minutes early.
                 </h2>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-700">
-                  The normal clock-out window ends {payload.clockPolicy.late_clock_out_window_minutes} minutes after the published shift. Actual worked time is preserved; exceptions and overages can still be sent to leadership review.
+                  Late arrivals can still clock in during their shift. Clock-out records the actual time, including when staff finish late; overages can be sent to leadership review.
                 </p>
               </div>
               <div className="rounded-2xl border border-white bg-white/80 p-4 text-right">
@@ -729,6 +731,7 @@ function TimeClockScreen() {
           </section>
         )}
 
+        {(isSystemOwner || isLocationLicensee) && session?.access_token && <ClockCorrectionsPanel events={payload?.events || []} token={session.access_token} onSaved={load} />}
         <div className="grid gap-6 lg:grid-cols-[.9fr_1.1fr]">
           <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-3">
