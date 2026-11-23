@@ -84,14 +84,14 @@ privacy answers together before submission.
 
 The current target is the separate **Public** app, **The Hub: TCS Childcare**,
 App Store ID **6838407438**, bundle ID
-`com.thomasonchildcaresolutions.thehub.public`, version **1.0.0**, build **1**,
+`com.thomasonchildcaresolutions.thehub.public`, version **1.0.0**, build **2**,
 team **6Y2923TFK5**. Keep the approved Unlisted app (6817598608,
 `com.thomasonchildcaresolutions.thehub`) available. Both identities use the
 same existing accounts and server authorization; APNs registrations retain their
 own exact bundle ID.
 
 On November 23, 2026, the latest packaged screens passed the three iPhone
-Simulator UI tests. The public Release archive was built and uploaded to Apple.
+Simulator UI tests. The first public Release archive was uploaded to Apple. Build 2 corrects the parent-login phone layout found during screenshot inspection.
 App Store review and release are separate steps: see
 `docs/PUBLIC-APP-STORE-SUBMISSION.md` for current status. No real families were
 notified during these checks.
