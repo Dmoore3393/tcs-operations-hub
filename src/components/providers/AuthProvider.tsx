@@ -196,12 +196,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [accessError, setAccessError] = useState("");
   const [isPasswordRecovery,setIsPasswordRecovery]=useState(false);
   const signingOutRef = useRef(false);
+  const verifiedStaffUserRef = useRef<string | null>(null);
   const lastActivityRef = useRef(0);
   const timeoutTriggeredRef = useRef(false);
 
   const loadProfile = useCallback(async (activeSession: Session | null) => {
     if (signingOutRef.current) return;
     if (!activeSession) {
+      verifiedStaffUserRef.current = null;
       setProfile(null);
       return;
     }
@@ -210,11 +212,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (signingOutRef.current) return;
     if (!isApprovedPilotRole(payload.profile.role)) {
+      verifiedStaffUserRef.current = null;
       setAccessError("This account has an unsupported role. Ask a TCS Owner/Admin to update the role in Team Access.");
       setProfile(null);
       return;
     }
 
+    verifiedStaffUserRef.current = payload.profile.user_id;
     setAccessError("");
     setProfile({
       ...payload.profile,
@@ -266,17 +270,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(nextSession);
 
       if (!nextSession) {
+        verifiedStaffUserRef.current = null;
         try { clearImportDrafts(window.sessionStorage); } catch { /* Storage may be unavailable. */ }
         setProfile(null);
         setLoading(false);
         return;
       }
 
-      setLoading(true);
+      // Returning to the app and renewing a token must not unmount the workspace.
+      // A new account or recovery flow still waits for fresh authorization.
+      if (verifiedStaffUserRef.current !== nextSession.user.id || _event === "PASSWORD_RECOVERY") setLoading(true);
       window.setTimeout(() => {
         void loadProfile(nextSession)
           .catch((error) => {
             if (signingOutRef.current) return;
+            verifiedStaffUserRef.current = null;
             setProfile(null);
             setAccessError(error instanceof Error ? error.message : "The Hub could not finish checking your staff access. Please retry or sign in again.");
           })
