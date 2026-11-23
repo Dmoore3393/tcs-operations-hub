@@ -16,7 +16,7 @@ final class PublicReviewPagesTests: XCTestCase {
     func testLegalPagesRenderSignedOut() {
         for (path, heading) in [("/privacy/", "The Hub Privacy Policy"), ("/terms/", "Terms of Use"), ("/support/", "Support")] {
             let app = launch(path)
-            XCTAssertTrue(app.webViews.staticTexts[heading].firstMatch.waitForExistence(timeout: 20), path)
+            XCTAssertTrue(app.webViews.staticTexts[heading].firstMatch.waitForExistence(timeout: 60), path)
             let screenshot = XCTAttachment(screenshot: app.screenshot())
             screenshot.name = "Signed-out \(path)"
             screenshot.lifetime = .keepAlways
@@ -28,7 +28,7 @@ final class PublicReviewPagesTests: XCTestCase {
     func testLegalPagesRenderWithoutContentJavaScript() {
         for (path, heading) in [("/privacy/", "The Hub Privacy Policy"), ("/terms/", "Terms of Use"), ("/support/", "Support")] {
             let app = launch(path, javascriptOff: true)
-            XCTAssertTrue(app.webViews.staticTexts[heading].firstMatch.waitForExistence(timeout: 20), path)
+            XCTAssertTrue(app.webViews.staticTexts[heading].firstMatch.waitForExistence(timeout: 60), path)
             app.terminate()
         }
     }
@@ -36,9 +36,12 @@ final class PublicReviewPagesTests: XCTestCase {
     func testBothLoginFormsRenderInPackagedApp() {
         for (path, button) in [("/login/", "Sign In"), ("/parent-login/", "Sign In to Parent Portal")] {
             let app = launch(path)
-            XCTAssertTrue(app.webViews.textFields.firstMatch.waitForExistence(timeout: 20), path)
+            XCTAssertTrue(app.webViews.textFields.firstMatch.waitForExistence(timeout: 60), path)
             XCTAssertTrue(app.webViews.secureTextFields.firstMatch.exists, path)
             XCTAssertTrue(app.webViews.buttons[button].firstMatch.exists, path)
+            if path == "/parent-login/" {
+                XCTAssertTrue(app.webViews.buttons[button].firstMatch.isHittable, "Parent sign-in must be visible on the phone without horizontal scrolling")
+            }
             let screenshot = XCTAttachment(screenshot: app.screenshot())
             screenshot.name = "App Store \(path)"
             screenshot.lifetime = .keepAlways

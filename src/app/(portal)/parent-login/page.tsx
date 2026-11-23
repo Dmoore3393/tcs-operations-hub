@@ -130,9 +130,9 @@ export default function ParentLoginPage() {
   }
 
   return <main className="relative isolate min-h-screen overflow-hidden bg-gradient-to-br from-[#fff7dc] via-white to-[#e4f7eb] p-4 sm:p-8"><FunDoodles soft />
-    <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-5xl items-center justify-center">
-      <section className="grid w-full overflow-hidden rounded-[34px] border border-slate-200 bg-white shadow-2xl lg:grid-cols-[.9fr_1.1fr]">
-        <div className="relative isolate overflow-hidden bg-gradient-to-br from-[#173d29] via-[#245a39] to-[#10291e] p-7 text-white sm:p-10"><FunDoodles className="opacity-60" />
+    <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col items-center justify-center gap-6">
+      <section className="grid w-full min-w-0 grid-cols-1 overflow-hidden rounded-[34px] border border-slate-200 bg-white shadow-2xl lg:grid-cols-[.9fr_1.1fr]">
+        <div className="relative isolate order-2 min-w-0 overflow-hidden bg-gradient-to-br from-[#173d29] via-[#245a39] to-[#10291e] p-7 text-white sm:p-10 lg:order-1"><FunDoodles className="opacity-60" />
           <div className="relative isolate z-10">
             <GatorGuide size="md" message={<>Welcome back! Your family is a <span className="text-emerald-700">big part</span> of the TCS team. 💚</>} />
             <TcsKidsScene variant="family" compact className="-mb-3 -mt-2" />
@@ -146,7 +146,7 @@ export default function ParentLoginPage() {
           </div>
         </div>
 
-        <div className="relative isolate p-7 sm:p-10">
+        <div className="relative isolate order-1 min-w-0 p-7 sm:p-10 lg:order-2">
           <p className="text-xs font-black uppercase tracking-[.18em] text-emerald-700">Parent sign in</p>
           <h2 className="mt-2 text-3xl font-black text-slate-950">Your family space is ready ✨</h2>
           <p className="mt-3 text-sm leading-6 text-slate-600">Sign in to stay connected to care, schedules, forms, messages, and the moments that matter in your child’s TCS experience.</p>
