@@ -1,3 +1,4 @@
+import { staticRootLayout, staticPlannerPage } from './static-root-layout.mjs';
 import { cp, mkdir, readFile, rm, writeFile, symlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
@@ -22,6 +23,15 @@ if(!existsSync(join(repoRoot,'node_modules/next')))throw Error('Run npm ci in th
 await rm(work,{recursive:true,force:true});await mkdir(work,{recursive:true});
 await cp(join(repoRoot,'src'),join(work,'src'),{recursive:true,filter:(path)=>path!==join(repoRoot,'src/app/api')&&path!==join(repoRoot,'src/proxy.ts')});
 await cp(join(repoRoot,'public'),join(work,'public'),{recursive:true});
+// A packaged app has no server request cookie. Account language is restored by StaffLanguageSync.
+const rootLayoutPath=join(work,'src/app/layout.tsx');
+await writeFile(rootLayoutPath,staticRootLayout(await readFile(rootLayoutPath,'utf8')));
+for(const [route,component] of [['child-schedules','WeeklyCarePlanner'],['ratios','DailyRatioPlan']]){
+ const path=join(work,`src/app/(portal)/${route}/page.tsx`);
+ const source=await readFile(path,'utf8');
+ if(!source.includes('plannerPageSelection(await searchParams)'))throw Error(`Review ${route} before packaging iOS.`);
+ await writeFile(path,staticPlannerPage(component));
+}
 for(const name of ['package.json','tsconfig.json','postcss.config.mjs'])await cp(join(repoRoot,name),join(work,name));
 await symlink(join(repoRoot,'node_modules'),join(work,'node_modules'),'dir');
 // API handlers stay in Vercel. Only the client screens are statically exported.

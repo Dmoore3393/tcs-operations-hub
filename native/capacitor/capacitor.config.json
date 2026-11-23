@@ -1,5 +1,5 @@
 {
-  "appId": "com.thomasonchildcaresolutions.thehub",
+  "appId": "com.thomasonchildcaresolutions.thehub.public",
   "appName": "The Hub",
   "webDir": "www-native",
   "server": {

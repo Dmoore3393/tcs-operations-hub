@@ -82,20 +82,27 @@ privacy answers together before submission.
 
 ## Identity, simulator, and archive
 
-Next package: **1.0/build 5**, with the latest website screens and import review. Build 5 still needs its own Xcode, signing and device verification; the following build 4 information is the prior submission record.
+The current target is the separate **Public** app, **The Hub: TCS Childcare**,
+App Store ID **6838407438**, bundle ID
+`com.thomasonchildcaresolutions.thehub.public`, version **1.0.0**, build **1**,
+team **6Y2923TFK5**. Keep the approved Unlisted app (6817598608,
+`com.thomasonchildcaresolutions.thehub`) available. Both identities use the
+same existing accounts and server authorization; APNs registrations retain their
+own exact bundle ID.
 
-Display name **The Hub**; bundle ID
-`com.thomasonchildcaresolutions.thehub`; version **1.0**, build **4**; existing
-team **6Y2923TFK5**. The existing approved TCS icon is used, with a green launch
-screen. Build 4 was uploaded, processed and submitted to App Review on October 25
-at 11:39 AM Pacific. App Store Connect confirms **Waiting for Review**. The
-existing manual-release choice and Unlisted App intent are preserved.
+On November 23, 2026, the latest packaged screens passed the three iPhone
+Simulator UI tests. The public Release archive was built and uploaded to Apple.
+App Store review and release are separate steps: see
+`docs/PUBLIC-APP-STORE-SUBMISSION.md` for current status. No real families were
+notified during these checks.
 
 After the matching Vercel API release is live and the simulator/device checks
 pass, run `bash scripts/build-ios.sh archive`. The script checks native API CORS
-before archiving and creates `artifacts/TheHub-1.0-build5.xcarchive`. It does not
-upload to Apple. Xcode Organizer can validate and distribute it; the supplied
-`ExportOptions.plist` can export an App Store Connect package after signing.
+before archiving and names the archive using the configured version and build.
+It does not upload to Apple. Xcode Organizer can validate and distribute it;
+`ExportOptions.plist` exports an App Store Connect package after signing.
+
+The following October 25 details describe the previous Unlisted app only.
 
 **Verified on October 25, 2026:** Xcode 27 compiled and ran the packaged app on
 the iPhone 18 Pro Simulator. Both login forms render, and Privacy, Terms, and

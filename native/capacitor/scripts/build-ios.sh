@@ -28,7 +28,7 @@ case "$hub_build_mode" in
     xcrun simctl bootstatus "$hub_simulator_id" -b
     xcodebuild -project ios/App/App.xcodeproj -scheme TheHub -configuration Debug -destination "id=$hub_simulator_id" -derivedDataPath build/simulator CODE_SIGNING_ALLOWED=NO build
     xcrun simctl install "$hub_simulator_id" "build/simulator/Build/Products/Debug-iphonesimulator/The Hub.app"
-    xcrun simctl launch --terminate-running-process "$hub_simulator_id" com.thomasonchildcaresolutions.thehub
+    xcrun simctl launch --terminate-running-process "$hub_simulator_id" com.thomasonchildcaresolutions.thehub.public
     echo "Simulator launched. Complete the login, Parent Portal, public-page, and disposable-account deletion checks before archiving."
     ;;
   archive)
@@ -40,8 +40,10 @@ case "$hub_build_mode" in
     fi
     hub_build_number="$(xcodebuild -project ios/App/App.xcodeproj -scheme TheHub -configuration Release -showBuildSettings | sed -n 's/^[[:space:]]*CURRENT_PROJECT_VERSION = //p' | head -n 1)"
     [[ "$hub_build_number" =~ ^[0-9]+$ ]] || { echo "Could not determine the app build number."; exit 2; }
+    hub_marketing_version="$(xcodebuild -project ios/App/App.xcodeproj -scheme TheHub -configuration Release -showBuildSettings | sed -n 's/^[[:space:]]*MARKETING_VERSION = //p' | head -n 1)"
+    [[ "$hub_marketing_version" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]] || { echo "Could not determine the app version."; exit 2; }
     mkdir -p artifacts
-    xcodebuild -project ios/App/App.xcodeproj -scheme TheHub -configuration Release -destination 'generic/platform=iOS' -archivePath "artifacts/TheHub-1.0-build${hub_build_number}.xcarchive" -allowProvisioningUpdates archive
+    xcodebuild -project ios/App/App.xcodeproj -scheme TheHub -configuration Release -destination 'generic/platform=iOS' -archivePath "artifacts/TheHub-Public-${hub_marketing_version}-build${hub_build_number}.xcarchive" -allowProvisioningUpdates archive
     echo "Archive prepared. Review its privacy report and signing in Xcode Organizer before uploading."
     ;;
   *) echo "Usage: bash scripts/build-ios.sh simulator|archive"; exit 2 ;;
