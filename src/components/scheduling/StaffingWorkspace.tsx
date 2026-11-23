@@ -232,6 +232,7 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [shiftDays, setShiftDays] = useState<string[]>([]);
   const [shiftDraft, setShiftDraft] = useState<ShiftDraft | null>(null);
   const [activityDraft, setActivityDraft] = useState<ActivityDraft | null>(null);
   const [ruleDraft, setRuleDraft] = useState<RuleDraft | null>(null);
@@ -373,6 +374,8 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
 
   function openNewShift(location = selectedLocation, date = selectedDate, start = "08:00", end = "17:00") {
     if (!location) return;
+    setError("");
+    setShiftDays([date]);
     setShiftDraft({
       location_id: location.id,
       user_id: "",
@@ -403,7 +406,16 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
 
   async function saveShift(event: FormEvent) {
     event.preventDefault();
-    if (!supabase || !shiftDraft || !shiftDraft.staff_name.trim()) return;
+    if (!supabase || !shiftDraft || !shiftDraft.staff_name.trim() || saving) return;
+    const selectedDays = shiftDraft.id ? [shiftDraft.shift_date] : [...new Set(shiftDays)].sort();
+    if (!selectedDays.length) { setError("Select at least one workday."); return; }
+    if (!shiftDraft.id && selectedDays.some(day => !dates.includes(day))) { setError("Choose days within the displayed week."); return; }
+    if (shiftDraft.end_time <= shiftDraft.start_time) { setError("End time must be after start time."); return; }
+    if (!shiftDraft.id) {
+      const samePerson = (row: { user_id: string | null; staff_name: string }) => shiftDraft.user_id ? row.user_id === shiftDraft.user_id : row.staff_name.trim().toLowerCase() === shiftDraft.staff_name.trim().toLowerCase();
+      const conflicts = selectedDays.filter(day => shifts.some(row => row.status !== "Cancelled" && row.shift_date === day && samePerson(row) && overlapsTime(row.start_time,row.end_time,shiftDraft.start_time,shiftDraft.end_time)) || activities.some(row => row.activity_date === day && samePerson(row) && overlapsTime(row.start_time,row.end_time,shiftDraft.start_time,shiftDraft.end_time)));
+      if (conflicts.length) { setError(`This staff member already has a shift or activity during this time on ${conflicts.map(shortDate).join(", ")}. Deselect those days or edit the existing shift.`); return; }
+    }
     setSaving(true);
     setError("");
     const payload = {
@@ -419,7 +431,7 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
     };
     const result = shiftDraft.id
       ? await supabase.from("staff_shifts").update(payload).eq("id", shiftDraft.id)
-      : await supabase.from("staff_shifts").insert(payload);
+      : await supabase.from("staff_shifts").insert(selectedDays.map(shift_date => ({ ...payload, shift_date })));
     if (result.error) setError(result.error.message);
     else {
       const location = locations.find((item) => item.id === shiftDraft.location_id);
@@ -430,7 +442,7 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
         eventKey: `staffing:${shiftDraft.id ?? "new"}:${Date.now()}`,
       });
       setShiftDraft(null);
-      showMessage("Staff shift saved to the live schedule.");
+      showMessage(selectedDays.length === 1 ? "Staff shift saved to the live schedule." : `${selectedDays.length} staff shifts saved for this week.`);
       await load();
     }
     setSaving(false);
@@ -652,14 +664,14 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
 
         const shiftConflict = shifts.some((existing) =>
           existing.status !== "Cancelled" &&
-          existing.shift_date === shiftDraft.shift_date &&
+          (shiftDays.length ? shiftDays : [shiftDraft.shift_date]).includes(existing.shift_date) &&
           existing.user_id === person.user_id &&
           overlapsTime(existing.start_time, existing.end_time, shiftDraft.start_time, shiftDraft.end_time),
         );
         if (shiftConflict) return false;
 
         const activityConflict = activities.some((activity) =>
-          activity.activity_date === shiftDraft.shift_date &&
+          (shiftDays.length ? shiftDays : [shiftDraft.shift_date]).includes(activity.activity_date) &&
           (activity.user_id === person.user_id || activity.staff_name.trim().toLowerCase() === person.full_name.trim().toLowerCase()) &&
           overlapsTime(activity.start_time, activity.end_time, shiftDraft.start_time, shiftDraft.end_time),
         );
@@ -795,8 +807,9 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
       </div>}
     </>}
 
-    {shiftDraft && <Modal title={shiftDraft.id ? "Edit Live Shift" : "Assign Coverage"} description="Saving updates the shared staffing schedule immediately." onClose={() => setShiftDraft(null)} footer={<>{shiftDraft.id && <button disabled={saving} onClick={() => void deleteShift()} className="mr-auto rounded-xl px-4 py-2 text-sm font-black text-red-700 hover:bg-red-50">Delete</button>}<SecondaryButton onClick={() => setShiftDraft(null)}>Cancel</SecondaryButton><PrimaryButton onClick={() => document.getElementById("live-shift-save")?.click()}>{saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Save Shift</PrimaryButton></>}>
+    {shiftDraft && <Modal title={shiftDraft.id ? "Edit Live Shift" : "Assign Coverage"} description="Saving updates the shared staffing schedule immediately." onClose={() => setShiftDraft(null)} footer={<>{shiftDraft.id && <button disabled={saving} onClick={() => void deleteShift()} className="mr-auto rounded-xl px-4 py-2 text-sm font-black text-red-700 hover:bg-red-50">Delete</button>}<SecondaryButton onClick={() => setShiftDraft(null)}>Cancel</SecondaryButton><PrimaryButton disabled={saving || (!shiftDraft.id && !shiftDays.length)} onClick={() => document.getElementById("live-shift-save")?.click()}>{saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} {shiftDraft.id || shiftDays.length < 2 ? "Save Shift" : `Save ${shiftDays.length} Shifts`}</PrimaryButton></>}>
       <form onSubmit={saveShift} className="grid gap-4 sm:grid-cols-2">
+        {error && <p role="alert" className="sm:col-span-2 rounded-xl bg-red-50 p-3 font-semibold text-red-900">{error}</p>}
         {!shiftDraft.id && <div className="sm:col-span-2 rounded-2xl border border-blue-200 bg-blue-50 p-4">
           <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black text-blue-950">Schedule-available staff</p><p className="mt-1 text-xs font-semibold leading-5 text-blue-800">These employees have no entered shift or off-floor conflict during this time and have access to the selected location. Confirm qualifications and assignment approval before saving.</p></div><Users className="h-5 w-5 flex-none text-blue-700" /></div>
           <div className="mt-3 flex flex-wrap gap-2">{scheduleAvailableStaff.length ? scheduleAvailableStaff.slice(0, 8).map((person) => <button key={person.user_id} type="button" onClick={() => setShiftDraft({ ...shiftDraft, user_id: person.user_id, staff_name: person.full_name })} className={`rounded-full border px-3 py-2 text-xs font-black transition ${shiftDraft.user_id === person.user_id ? "border-blue-700 bg-blue-700 text-white" : "border-blue-200 bg-white text-blue-900 hover:border-blue-400"}`}><span translate="no" className="contents">{person.full_name}</span></button>) : <span className="text-xs font-black text-blue-900">No conflict-free linked staff found for this interval.</span>}</div>
@@ -804,7 +817,7 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
         {!shiftDraft.id && <Field label="Filter staff by department"><select className={inputClass} value={departmentFilter} onChange={event=>{setDepartmentFilter(event.target.value);setShiftDraft({...shiftDraft,user_id:"",staff_name:""});}}><option>All departments</option>{departmentOptions.map(value=><option key={value}>{value}</option>)}</select></Field>}
         <Field label="Employee"><select className={inputClass} value={shiftDraft.user_id || (unlinkedStaff.find(lane=>lane.full_name===shiftDraft.staff_name) ? `lane:${unlinkedStaff.find(lane=>lane.full_name===shiftDraft.staff_name)?.id}` : "")} onChange={(event) => { const lane=unlinkedStaff.find(item=>`lane:${item.id}`===event.target.value);const option = staff.find((item) => item.user_id === event.target.value); setShiftDraft({ ...shiftDraft, user_id: lane ? "" : event.target.value, staff_name: lane?.full_name || option?.full_name || "" }); }}><option value="">Choose employee…</option>{staff.filter(item=>departmentMatches(item.full_name,item.user_id)).map((item) => <option key={item.user_id} value={item.user_id}>{item.full_name} • {staffScheduleDepartment(item.full_name,item.user_id,staffDirectory)} • {item.role}</option>)}{unlinkedStaff.length>0 && <optgroup label="Active staff — Hub login not linked">{unlinkedStaff.filter(lane=>departmentMatches(lane.full_name,null)).map(lane=><option key={lane.id} value={`lane:${lane.id}`}>{lane.full_name} • {lane.department || "Unassigned"} • {lane.job_title}</option>)}</optgroup>}</select><input className={`${inputClass} mt-2`} placeholder="Or type staff name" value={shiftDraft.staff_name} onChange={(event) => setShiftDraft({ ...shiftDraft, staff_name: event.target.value, user_id: "" })} /></Field>
         <Field label="Location"><select className={inputClass} value={shiftDraft.location_id} onChange={(event) => setShiftDraft({ ...shiftDraft, location_id: event.target.value })}>{locations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
-        <Field label="Date"><input type="date" className={inputClass} value={shiftDraft.shift_date} onChange={(event) => setShiftDraft({ ...shiftDraft, shift_date: event.target.value })} /></Field>
+        {shiftDraft.id ? <Field label="Date"><input required type="date" className={inputClass} value={shiftDraft.shift_date} onChange={(event) => setShiftDraft({ ...shiftDraft, shift_date: event.target.value })} /></Field> : <fieldset className="sm:col-span-2 space-y-3"><legend className="text-base font-black text-slate-900">Workdays this week</legend><p className="text-sm text-slate-600">Click every day this staff member works the same shift. The times, location, assignment, and notes below apply to each selected day.</p><div className="flex flex-wrap gap-2">{dates.map(day => <button key={day} type="button" disabled={saving} aria-pressed={shiftDays.includes(day)} onClick={() => setShiftDays(current => current.includes(day) ? current.filter(value => value !== day) : [...current, day].sort())} className={`min-h-12 rounded-xl border-2 px-4 py-3 text-base font-bold ${shiftDays.includes(day) ? "border-emerald-800 bg-emerald-800 text-white" : "border-slate-300 bg-white text-slate-800"}`}>{shortDate(day)}</button>)}</div><p className="text-sm font-semibold">{shiftDays.length} {shiftDays.length === 1 ? "day" : "days"} selected. Existing shifts stay unchanged. Add another shift for days with different hours.</p></fieldset>}
         <Field label="Status"><select className={inputClass} value={shiftDraft.status} onChange={(event) => setShiftDraft({ ...shiftDraft, status: event.target.value as ShiftDraft["status"] })}><option>Draft</option><option>Published</option><option>Cancelled</option></select></Field>
         <Field label="Start"><input type="time" required className={inputClass} value={shiftDraft.start_time} onChange={(event) => setShiftDraft({ ...shiftDraft, start_time: event.target.value })} /></Field>
         <Field label="End"><input type="time" required className={inputClass} value={shiftDraft.end_time} onChange={(event) => setShiftDraft({ ...shiftDraft, end_time: event.target.value })} /></Field>

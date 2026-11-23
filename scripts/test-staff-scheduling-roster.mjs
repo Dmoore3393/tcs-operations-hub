@@ -170,12 +170,19 @@ test("Assign Coverage lists linked and unlinked staff, then saves the selected c
   assert.ok(options.some(option => option.props.value === "colleague"));
   assert.ok(options.some(option => option.props.value === "lane:unlinked"));
   employeeSelect().props.onChange({ target: { value: "colleague" } });
+  const dayButtons = () => ui.nodes().filter(node => node.type === "button" && typeof node.props['aria-pressed'] === 'boolean');
+  assert.equal(dayButtons().length, 7);
+  const extraDays = dayButtons().filter(node => !node.props['aria-pressed']).slice(0, 2);
+  for (const day of extraDays) day.props.onClick();
+  assert.equal(dayButtons().filter(node => node.props['aria-pressed']).length, 3);
   await ui.nodes().find(node => node.type === "form").props.onSubmit({ preventDefault() {} });
   assert.equal(ui.saves.length, 1);
   assert.equal(ui.saves[0].table, "staff_shifts");
-  assert.equal(ui.saves[0].payload.user_id, "colleague");
-  assert.equal(ui.saves[0].payload.staff_name, "Synthetic Colleague");
-  assert.equal(ui.saves[0].payload.location_id, "tehachapi");
+  assert.equal(ui.saves[0].payload.length, 3);
+  assert.equal(new Set(ui.saves[0].payload.map(row => row.shift_date)).size, 3);
+  assert.equal(ui.saves[0].payload[0].user_id, "colleague");
+  assert.equal(ui.saves[0].payload[0].staff_name, "Synthetic Colleague");
+  assert.equal(ui.saves[0].payload[0].location_id, "tehachapi");
 });
 
 test("the form shows roster loading failures and does not pretend only the scheduler is available", async () => {
