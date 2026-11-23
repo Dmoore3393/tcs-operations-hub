@@ -1,10 +1,10 @@
 import {translateText} from './i18n/translate';
 /** Shared, plain-language menu sections. Callers filter permissions before grouping. */
 const sections=[
- {title:'Everyday',paths:['/','/time-clock','/my-schedule','/communications','/notifications','/transportation','/transportation-v2']},
+ {title:'Everyday',paths:['/','/time-clock','/my-schedule','/staff-schedules','/communications','/notifications','/transportation','/transportation-v2']},
  {title:'Children & care',paths:['/children','/attendance','/daily-care','/meals','/kidkare','/child-schedules','/family-care-calendar','/health-safety','/emergency-cards','/school-age-support','/student-store','/child-photos','/weekly-checkins']},
  {title:'My team',paths:['/employee-lounge','/employee-bulletin','/time-off','/training-center','/team-store','/organization']},
- {title:'Staff & planning',paths:['/employees','/staff-onboarding','/staff-schedules','/scheduling','/staff-performance','/employee-checkins','/pop-up-inspections','/inspection-results','/ratios','/work-plans','/shift-reports','/maintenance']},
+ {title:'Staff & planning',paths:['/employees','/staff-onboarding','/scheduling','/staff-performance','/employee-checkins','/pop-up-inspections','/inspection-results','/ratios','/work-plans','/shift-reports','/maintenance']},
  {title:'Families',paths:['/families','/family-access','/family-communications','/family-matters','/newsletters']},
  {title:'Office & setup',paths:[]},
 ];

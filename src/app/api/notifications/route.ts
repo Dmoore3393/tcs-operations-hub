@@ -131,6 +131,9 @@ export async function POST(request: Request) {
     if (eventType === "transportation_update" && typeof body.eventKey === "string" && body.eventKey.startsWith("transport-arrived:")) {
       return Response.json({ delivered: 0 });
     }
+    // Publication now stores one durable alert per affected staff member in the database.
+    // Ignore the old app's follow-up so it cannot send a second location-wide alert.
+    if (eventType === "schedule_published") return Response.json({ delivered: 0, queuedByPublication: true });
     const result = await dispatchHubNotification({
       admin,
       senderUserId: user.id,

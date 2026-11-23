@@ -3,7 +3,7 @@ import {normalizeLocation} from "@/lib/location-config";
 import {isRequiredTransportConfirmation, type HubNotification} from "@/lib/notifications";
 type Profile={role:string;permissions?:string[];locations?:string[];is_active?:boolean;organization_id?:string;transportAlertLeader?:boolean};
 export function isSetupFileReminder(item:Pick<HubNotification,'eventKey'>){return (item.eventKey||'').startsWith('child-file-audit:none:');}
-const ownerOnly=new Set(['/staff-schedules','/settings','/team-access','/locations','/audit-log','/app-readiness','/marketing','/executive-dashboard','/payroll-ops','/account-deletion-requests']);
+const ownerOnly=new Set(['/settings','/team-access','/locations','/audit-log','/app-readiness','/marketing','/executive-dashboard','/payroll-ops','/account-deletion-requests']);
 function locationKey(value:string){const normalized=normalizeLocation(value);return normalized==='All Locations'?value.trim().toLowerCase():normalized;}
 /** Apply current trusted access before exposing an inbox item or sending a push. */
 export function canReceiveHubNotification(profile:Profile,item:Pick<HubNotification,'category'|'href'|'location'|'eventKey'|'title'|'transportOrganizationId'|'requiredTransportConfirmation'>){

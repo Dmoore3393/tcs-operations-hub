@@ -133,10 +133,10 @@ export default function MobileQuickActions() {
 
   const bottomItems = [
     { href: "/", label: "Home", icon: Home },
-    { href: "/my-schedule", label: "Schedule", icon: CalendarDays },
+    { href: "/my-schedule", label: "My Schedule", icon: CalendarDays },
     { href: "/time-clock", label: "Clock", icon: CalendarClock, featured: true },
     { href: "/notifications", label: "Alerts", icon: Bell },
-  ].filter((item) => canAccessRoute(profile, item.href));
+  ].map(item => item.href === "/my-schedule" && profile?.role.toLowerCase().includes("licensee") ? {...item, href: "/staff-schedules", label: "Team Schedule"} : item).filter((item) => canAccessRoute(profile, item.href));
 
   function active(href: string) {
     if (href === "/") return pathname === "/";

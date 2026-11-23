@@ -158,6 +158,11 @@ export default function Home() {
   return (
     <MainLayout>
       <div className="mx-auto max-w-[1600px] space-y-6">
+        <section aria-label="Schedule shortcuts" className="flex flex-wrap items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+          <Link href="/my-schedule" className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-emerald-800 px-5 py-3 text-base font-black text-white"><CalendarDays className="h-5 w-5"/>My Schedule</Link>
+          {canAccessRoute(profile,"/staff-schedules") && <Link href="/staff-schedules" className="inline-flex min-h-12 items-center rounded-xl border border-emerald-800 px-5 py-3 text-base font-black text-emerald-950">{profile?.role.toLowerCase().includes("licensee") ? "My Team’s Schedule" : "Staff Schedules"}</Link>}
+          <p className="text-base text-emerald-950">View published shifts and acknowledge your schedule.</p>
+        </section>
         <section className="space-y-3 lg:hidden">
           <div className="relative isolate overflow-hidden rounded-[30px] p-5 text-white shadow-xl" style={{ background: "linear-gradient(145deg, var(--theme-700), var(--theme-950))" }}><FunDoodles className="opacity-35" />
             <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-white/10 blur-sm" />
