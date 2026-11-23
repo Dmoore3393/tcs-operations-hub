@@ -111,3 +111,8 @@ test('licensees can open their team schedule directly from My Schedule',async()=
  const nodes=await (await personalScreen({licensee:true})).settle();
  assert.ok(nodes.some(node=>node.type==='a'&&node.props.href==='/staff-schedules'&&node.props.children==='View team schedule'));
 });
+
+test('schedule notification links accept valid Monday weeks and reject malformed or non-Monday dates',()=>{
+ assert.equal(dates.scheduleWeekFromSearch('?week=2026-12-21'),'2026-12-21');
+ for(const query of ['', '?week=2026-12-22','?week=2026-02-30','?week=invalid'])assert.equal(dates.scheduleWeekFromSearch(query),null);
+});

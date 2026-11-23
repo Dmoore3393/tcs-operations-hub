@@ -5,7 +5,7 @@ import Link from "next/link";
 import MainLayout from "@/components/layout/MainLayout";
 import { PrimaryButton, SecondaryButton, SectionCard, StatCard } from "@/components/hub/HubUI";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { pacificScheduleDate, nextPublishedScheduleWeek, scheduleDatePlus as datePlus, scheduleMonday as mondayFor } from "@/lib/team-schedule";
+import { scheduleWeekFromSearch, pacificScheduleDate, nextPublishedScheduleWeek, scheduleDatePlus as datePlus, scheduleMonday as mondayFor } from "@/lib/team-schedule";
 import { locationKeyForDbLocation, type StaffingLocation } from "@/lib/staffing-command";
 import { supabase } from "@/lib/supabase/client";
 import { CalendarCheck2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, LoaderCircle, MapPin, ShieldCheck } from "lucide-react";
@@ -89,6 +89,14 @@ export default function MySchedulePage() {
   const weekStart = useMemo(() => mondayFor(anchorDate), [anchorDate]);
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, index) => datePlus(weekStart, index)), [weekStart]);
   const weekEnd = weekDates[6];
+
+  useEffect(() => {
+    const linkedWeek = scheduleWeekFromSearch(window.location?.search || "");
+    if (!linkedWeek) return;
+    chooseInitialWeek.current = false;
+    const timer = window.setTimeout(() => { ++loadNumber.current; setAnchorDate(linkedWeek); }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const load = useCallback(async () => {
     if (!supabase || !userId) return;

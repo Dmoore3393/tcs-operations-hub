@@ -601,18 +601,9 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
     const published = Array.isArray(result.data) ? result.data[0] : result.data;
     const nextRevision = Number(published?.revision ?? 1);
     const unlinked = Number(published?.unlinked_shift_count ?? 0);
-    const locationKey = locationKeyForDbLocation(selectedLocation) ?? "All Locations";
-
-    void sendHubNotificationEvent({
-      accessToken: accessToken,
-      eventType: "schedule_published",
-      location: locationKey,
-      eventKey: `staffing-publish:${selectedLocation.id}:${weekStart}:r${nextRevision}`,
-    });
-
     showMessage(unlinked
       ? `Week published as revision ${nextRevision}. ${unlinked} unlinked shift${unlinked === 1 ? " will" : "s will"} publish normally but cannot appear in an employee's My Schedule until linked to a staff account.`
-      : `Week published as revision ${nextRevision}. Staff can now view and acknowledge it in My Schedule.`);
+      : `Week published as revision ${nextRevision}. Staff inbox alerts and phone notifications are queued. Staff can view and acknowledge it in My Schedule.`);
 
     await load();
     setSaving(false);

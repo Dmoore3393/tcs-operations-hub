@@ -101,7 +101,7 @@ async function deliverPushChannelsRaw(args: {
 
   for (const device of nativeDevices) {
     try {
-      const result = await sendApplePush(device, args.staffTransport ? args.payload : { ...args.payload, title: "The Hub", body: "A TCS update is ready. Open The Hub to view it." });
+      const result = await sendApplePush(device, (args.staffTransport || (args.payload.tag.startsWith("staff-schedule:") && /^\/(my-schedule|staff-schedules)\?week=/.test(args.payload.href))) ? args.payload : { ...args.payload, title: "The Hub", body: "A TCS update is ready. Open The Hub to view it." });
       if (result.ok) sent++;
       else if (!result.stale) retryable = true;
       if (!result.stale) activeNative.push(device);
@@ -144,7 +144,7 @@ async function deliverPushChannels(args: Parameters<typeof deliverPushChannelsRa
 
 /** Retry database-created alerts even while recipients have the app closed. */
 export async function flushInboxPhonePushes(admin:SupabaseClient){
- const rows=await admin.from('notification_push_queue').select('id,user_id,event_key,notification').or('status.in.(pending,no_device),and(status.eq.sending,lease_until.lt.'+new Date().toISOString()+')').lte('next_attempt_at',new Date().toISOString()).order('id').limit(10);
+ const rows=await admin.from('notification_push_queue').select('id,user_id,event_key,notification').or('status.in.(pending,no_device),and(status.eq.sending,lease_until.lt.'+new Date().toISOString()+')').lte('next_attempt_at',new Date().toISOString()).order('status',{ascending:false}).order('id').limit(10);
  if(rows.error)throw new Error('Phone push queue unavailable');
  let processed=0;
  await Promise.all((rows.data||[]).map(async row=>{
@@ -156,7 +156,7 @@ export async function flushInboxPhonePushes(admin:SupabaseClient){
    if(!profile.data)return;
    const leader=await isTransportAlertLeader(admin,profile.data,row.user_id);
    const current=state.inbox.find(i=>(i.eventKey||i.id)===row.event_key);
-   if(!canReceiveHubNotification({...profile.data,transportAlertLeader:leader},n)||!state.preferences.enabled||current?.readAt||current?.archivedAt){
+   if(!canReceiveHubNotification({...profile.data,transportAlertLeader:leader},n)||!state.preferences.enabled||(n.category==='schedule'&&!state.preferences.schedule)||current?.readAt||current?.archivedAt){
     await admin.from('notification_push_queue').update({status:'suppressed',last_error:'Read, disabled or no longer authorized'}).eq('id',row.id).neq('status','accepted');return;
    }
    if(quietHoursActive(state.preferences)&&n.severity!=='urgent'&&!isRequiredTransportConfirmation(n)){

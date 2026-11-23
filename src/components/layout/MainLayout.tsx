@@ -238,7 +238,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const { location, setLocation, availableLocations, locationLocked, mainLocation, theme } = useHubLocation();
   const { profile, user, session, signOut } = useAuth();
   const meta = useMemo(() => pageMeta[pathname] ?? pageMeta["/"], [pathname]);
-  const visibleNavItems = useMemo(() => navItems.filter((item) => canAccessRoute(profile, item.href)), [profile]);
+  const visibleNavItems = useMemo(() => navItems.filter((item) => canAccessRoute(profile, item.href)).map(item => item.href === "/staff-schedules" && profile?.role.toLowerCase().includes("licensee") ? { ...item, label: "My Team’s Schedule" } : item), [profile]);
   useEffect(() => {
     function handleSync(event: Event) {
       const custom = event as CustomEvent<HubSyncDetail>;

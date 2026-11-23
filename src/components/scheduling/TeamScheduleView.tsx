@@ -6,7 +6,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import StaffWeekPlanner from "@/components/scheduling/StaffWeekPlanner";
 import { hubRequest } from "@/lib/hub-request";
 import { supabase } from "@/lib/supabase/client";
-import { initialTeamScheduleWeek, scheduleDatePlus, type TeamScheduleData } from "@/lib/team-schedule";
+import { scheduleWeekFromSearch, initialTeamScheduleWeek, scheduleDatePlus, type TeamScheduleData } from "@/lib/team-schedule";
 
 const dateLabel = (date: string) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
 
@@ -19,6 +19,13 @@ export default function TeamScheduleView() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
+
+  useEffect(() => {
+    const linkedWeek = scheduleWeekFromSearch(window.location?.search || "");
+    if (!linkedWeek) return;
+    const timer = window.setTimeout(() => setWeek(linkedWeek), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!token || !userId) return;

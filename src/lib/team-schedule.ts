@@ -38,3 +38,10 @@ export function initialTeamScheduleWeek(now = new Date()) {
   return ["Saturday", "Sunday"].includes(part("weekday")) || (part("weekday") === "Friday" && Number(part("hour")) >= 18)
     ? scheduleDatePlus(monday, 7) : monday;
 }
+
+/** Notification links select the actual published week, including weeks further ahead. */
+export function scheduleWeekFromSearch(search: string) {
+  const value = new URL(`https://hub.invalid/${search.startsWith("?") ? search : ""}`).searchParams.get("week") || "";
+  const parsed = new Date(`${value}T12:00:00Z`);
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0,10) === value && parsed.getUTCDay() === 1 ? value : null;
+}

@@ -70,3 +70,9 @@ test('required movement alerts cross sites only for active leaders in the same o
  assert.equal(allowed(profile,{...notice,eventKey:'manual:forged'}),false);assert.equal(allowed(profile,{...notice,href:'/settings'}),false);
  assert.equal(allowed(profile,{...notice,href:'https://outside.example/transportation'}),false);
 });
+
+test('publication alerts open personal schedules for staff and team schedules only for licensees',()=>{
+ const notice=item({category:'schedule',eventKey:'staff-schedule:synthetic:r2',location:'All Locations',href:'/staff-schedules?week=2026-11-23'});
+ assert.equal(allowed(licensee,notice),true);assert.equal(allowed(employee,notice),false);
+ assert.equal(allowed({...employee,permissions:[]},{...notice,href:'/my-schedule?week=2026-11-23'}),true);
+});
