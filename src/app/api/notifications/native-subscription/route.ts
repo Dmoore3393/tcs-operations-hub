@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       throw new Response("Invalid native push token.", { status: 400 });
     }
 
-    if (bundleId !== "com.thomasonchildcaresolutions.thehub") {
+    if (!["com.thomasonchildcaresolutions.thehub", "com.thomasonchildcaresolutions.thehub.public"].includes(bundleId)) {
       throw new Response("This notification device is not registered for The Hub.", { status: 400 });
     }
 

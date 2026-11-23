@@ -53,7 +53,7 @@ export async function notifyAuthorizedFamily(args: {
     }
     let userDelivered = false;
     for (const device of devices) {
-      if (device.bundleId !== "com.thomasonchildcaresolutions.thehub") continue;
+      if (!["com.thomasonchildcaresolutions.thehub", "com.thomasonchildcaresolutions.thehub.public"].includes(device.bundleId)) continue;
       const response = await sendApplePush(device, { title, body, href: event === "incident" ? "/support" : "/parent/care", tag: eventKey });
       if (response.ok) userDelivered = true;
     }

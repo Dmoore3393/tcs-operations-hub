@@ -370,16 +370,16 @@
 				APS_ENVIRONMENT = development;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
-				PRODUCT_BUNDLE_IDENTIFIER = com.thomasonchildcaresolutions.thehub;
+				PRODUCT_BUNDLE_IDENTIFIER = com.thomasonchildcaresolutions.thehub.public;
 				PRODUCT_NAME = "The Hub";
 				PRODUCT_MODULE_NAME = TheHub;
 				DEVELOPMENT_TEAM = 6Y2923TFK5;
@@ -396,15 +396,15 @@
 				APS_ENVIRONMENT = production;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.thomasonchildcaresolutions.thehub;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.thomasonchildcaresolutions.thehub.public;
 				PRODUCT_NAME = "The Hub";
 				PRODUCT_MODULE_NAME = TheHub;
 				DEVELOPMENT_TEAM = 6Y2923TFK5;
@@ -426,7 +426,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
 				PRODUCT_NAME = "TheHubUITests";
 				SKIP_INSTALL = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.thomasonchildcaresolutions.thehub.uitests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.thomasonchildcaresolutions.thehub.public.uitests";
 				GENERATE_INFOPLIST_FILE = YES;
 				ENABLE_TESTING_SEARCH_PATHS = YES;
 				TEST_TARGET_NAME = App;
@@ -436,7 +436,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 6Y2923TFK5;
 				CURRENT_PROJECT_VERSION = 1;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 			};
 		};
 		2D5BEB7768FE4B3FAFE6F89B /* Release */ = {
@@ -446,7 +446,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
 				PRODUCT_NAME = "TheHubUITests";
 				SKIP_INSTALL = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.thomasonchildcaresolutions.thehub.uitests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.thomasonchildcaresolutions.thehub.public.uitests";
 				GENERATE_INFOPLIST_FILE = YES;
 				ENABLE_TESTING_SEARCH_PATHS = YES;
 				TEST_TARGET_NAME = App;
@@ -456,7 +456,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 6Y2923TFK5;
 				CURRENT_PROJECT_VERSION = 1;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 			};
 		};
 /* End XCBuildConfiguration section */
