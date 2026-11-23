@@ -16,6 +16,7 @@ import {
 } from "@/lib/team-access";
 import { clearImportDrafts } from "@/lib/brightwheel-import-draft";
 import { readAccessCheck } from "@/lib/access-check";
+import { requestStaffProfile } from "@/lib/staff-profile-request";
 import { unregisterCurrentNativeDevice } from "@/lib/push-client";
 import { signOutWithLocalRecovery } from "@/lib/supabase/sign-out";
 import type { Session, User } from "@supabase/supabase-js";
@@ -205,27 +206,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const response = await withTimeout(
-      fetch("/api/auth/profile", {
-        method: "POST",
-        cache: "no-store",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${activeSession.access_token}`,
-          "Cache-Control": "no-cache",
-        },
-      }),
-      "Staff access check",
-    );
-
-    const payload = await readAccessCheck<{ profile: StaffAccessProfile }>(
-      response,
-      "Staff access check",
-      (data) => Boolean(
-        data.profile && typeof data.profile === "object" &&
-        "user_id" in data.profile && typeof data.profile.user_id === "string"
-      ),
-    );
+    const payload = await requestStaffProfile<StaffAccessProfile>(activeSession.access_token);
 
     if (signingOutRef.current) return;
     if (!isApprovedPilotRole(payload.profile.role)) {

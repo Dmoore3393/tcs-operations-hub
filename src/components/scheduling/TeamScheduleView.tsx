@@ -33,6 +33,7 @@ export default function TeamScheduleView() {
     let requestNumber = 0;
     const load = async () => {
       const current = ++requestNumber;
+      setError("");
       setLoading(true);
       try {
         const result = await hubRequest<TeamScheduleData>(`/api/staff-scheduling/team?week=${encodeURIComponent(week)}`, token);
@@ -65,7 +66,7 @@ export default function TeamScheduleView() {
       </div>
     </section>
     {error && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-900">{error}<button className="ml-4 min-h-11 rounded-xl border px-4 font-bold" onClick={() => setRefresh(value => value + 1)}>Try again</button></div>}
-    {loading || (!current && !error) ? <p role="status" className="p-6 text-lg">Loading your team’s published schedule…</p> : current && <>
+    {!error && (loading || !current) ? <p role="status" className="p-6 text-lg">Loading your team’s published schedule…</p> : current && <>
       <div className="rounded-2xl border border-emerald-200 bg-white p-4 text-base">
         <strong>{current.location.full_name || current.location.name}</strong>
         <p className="mt-2">{current.publication ? `Published revision ${current.publication.revision} · ${current.shifts.length} shifts` : "No schedule has been published for this week yet."}</p>
