@@ -49,7 +49,7 @@ export async function GET(request: Request) {
       try { await flushTransportCustodyPushes(admin, profile.organization_id); }
       catch { console.error("Pending transportation pushes will retry."); }
     });
-    try{await flushTransportAssignmentNotices(c);}catch(error){console.error('Assignment notices remain queued',error instanceof Error?error.message:'dispatch failed');}
+    after(async () => { try{await flushTransportAssignmentNotices(c);}catch{console.error('Assignment notices remain queued');} });
     const [state, transportAlertLeader] = await Promise.all([loadNotificationState(admin, user.id), isTransportAlertLeader(admin, profile, user.id)]);
     const notifications = visibleHubNotifications({ ...profile, transportAlertLeader }, state.inbox);
     return Response.json({

@@ -96,7 +96,7 @@ test("a failed roster source fails explicitly instead of returning a partial or 
   }
 });
 
-async function schedulerScreen({ failRoster = false } = {}) {
+async function schedulerScreen({ failRoster = false, stallRoster = false } = {}) {
   const state = [], effects = [], saves = [], requests = [];
   let cursor = 0;
   const react = {
@@ -113,6 +113,7 @@ async function schedulerScreen({ failRoster = false } = {}) {
   ];
   const profile = { user_id: "scheduler", full_name: "Synthetic Scheduler", role: "Owner / Admin", locations: ["All Locations"] };
   const dependencies = {
+    "@/lib/request-timeout": {withRequestTimeout:operation=>operation(new AbortController().signal)},
     react, "next/link": { default: childrenOnly }, "lucide-react": new Proxy({}, { get: () => empty }),
     "@/components/forms/ChoiceSelect": { default: empty }, "@/lib/form-options": { positionChoices: [] },
     "@/components/scheduling/StaffWeekPlanner": { default: empty }, "@/components/layout/MainLayout": { default: childrenOnly },
@@ -131,7 +132,7 @@ async function schedulerScreen({ failRoster = false } = {}) {
       locationKeyForDbLocation: location => locationConfig.normalizeLocation(location.name) },
     "@/lib/hub-request": { hubRequest: async (path, token) => {
       requests.push(path); assert.equal(token, "fixture");
-      if (path === "/api/staff-scheduling/roster") { if (failRoster) throw new Error("Roster unavailable"); return { staff }; }
+      if (path === "/api/staff-scheduling/roster") { if (stallRoster) return new Promise(()=>{}); if (failRoster) throw new Error("Roster unavailable"); return { staff }; }
       assert.equal(path, "/api/staff-lanes"); return { lanes };
     } },
     "@/lib/supabase/client": { supabase: {
@@ -189,6 +190,7 @@ test("the form shows roster loading failures and does not pretend only the sched
   const ui = await schedulerScreen({ failRoster: true });
   assert.ok(ui.nodes().some(node => [node.props?.children].flat().includes("Roster unavailable")));
   assert.equal(ui.nodes().filter(node => node.type === "option" && node.props.value === "scheduler").length, 0);
+  assert.ok(ui.nodes().some(node=>node.type === "option" && node.props.value === "tehachapi"), "location schedule stays available when roster fails");
 });
 
 test('administrator can open All Locations and save Off for several staff from the form',async()=>{
@@ -200,4 +202,9 @@ test('administrator can open All Locations and save Off for several staff from t
  const checks=ui.nodes().filter(node=>node.type==='input'&&node.props.type==='checkbox').slice(0,2);assert.equal(checks.length,2);for(const check of checks)check.props.onChange();
  await ui.nodes().find(node=>node.type==='form').props.onSubmit({preventDefault(){}});
  assert.equal(ui.saves.length,1);assert.equal(ui.saves[0].payload.length,2);assert.ok(ui.saves[0].payload.every(row=>row.position_label==='Off'&&row.start_time==='00:00'&&row.end_time==='00:00'));
+});
+
+test('saved schedule locations render without waiting for a stalled staff directory',async()=>{
+ const ui=await schedulerScreen({stallRoster:true});
+ assert.ok(ui.nodes().some(node=>node.type==='option'&&node.props.value==='tehachapi'));
 });

@@ -1,4 +1,5 @@
 "use client";
+import {withRequestTimeout} from "@/lib/request-timeout";
 import ChoiceSelect from "@/components/forms/ChoiceSelect";
 import {positionChoices} from "@/lib/form-options";
 
@@ -18,7 +19,6 @@ import { effectiveScheduleRecords } from "@/lib/weekly-care-planner";
 import { compactTime, starterChildSchedules, type ChildScheduleRecord } from "@/lib/child-schedules";
 import { localIsoDate } from "@/lib/date-utils";
 import { MAINTENANCE_SITE_TYPE, WORK_LOCATION_FILTER, normalizeLocation } from "@/lib/location-config";
-import { sendHubNotificationEvent } from "@/lib/notification-client";
 import {
   buildCoverageWindows,
   checkedInAtLocation,
@@ -242,25 +242,29 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
   const dates = useMemo(() => weekDates(selectedDate), [selectedDate]);
   const weekStart = dates[0];
   const weekEnd = dates[6];
-  const dated = useDatedCarePlan(weekStart,weekEnd);
+  const dated = useDatedCarePlan(weekStart,weekEnd,!staffOnly);
   const schedulesByDate = useMemo(() => new Map(dates.map(d => [d,effectiveScheduleRecords(dated.data,schedules,d)])),[dates,dated.data,schedules]);
   const selectedSchedules = schedulesByDate.get(selectedDate)!;
 
   const load = useCallback(async () => {
     if (!supabase || !accessToken || (staffOnly && !isSystemOwner)) return;
+    const client = supabase;
     setLoading(true);
-    const [locationResult, shiftResult, activityResult, ruleResult, staffResult, publicationResult, timeOffResult, rosterResult] = await Promise.all([
-      supabase.from("locations").select("id,slug,name,full_name,capacity,program_type").or(WORK_LOCATION_FILTER).order("name"),
-      supabase.from("staff_shifts").select("id,location_id,user_id,staff_name,shift_date,start_time,end_time,status,position_label,notes").gte("shift_date", weekStart).lte("shift_date", weekEnd).order("shift_date").order("start_time"),
-      supabase.from("staff_activity_intervals").select("id,location_id,shift_id,user_id,staff_name,activity_date,start_time,end_time,activity_type,counts_toward_floor,reason,source_key").gte("activity_date", weekStart).lte("activity_date", weekEnd).order("activity_date").order("start_time"),
-      supabase.from("staffing_rules").select("id,location_id,rule_name,age_group,children_per_staff,minimum_staff,maximum_group_size,effective_from,effective_to,source_type,source_note,is_active").eq("is_active", true).order("effective_from", { ascending: false }),
+    try {
+    const directoryRequest = Promise.all([
       hubRequest<{staff:StaffOption[]}>("/api/staff-scheduling/roster",accessToken).then(data=>({data:data.staff,error:null})).catch(error=>({data:[] as StaffOption[],error:{message:error instanceof Error?error.message:"Could not load the scheduling staff list."}})),
-      supabase.from("schedule_publications").select("id,location_id,week_of,status,revision,published_at,published_by,notes,needs_republish").eq("week_of", weekStart).order("updated_at", { ascending: false }),
-      supabase.from("time_off_requests").select("id,staff_user_id,location_id,request_scope,start_date,end_date,all_day,start_time,end_time,status").eq("status", "Approved").lte("start_date", weekEnd).gte("end_date", weekStart),
       hubRequest<{lanes:StaffLaneProfile[]}>("/api/staff-lanes",accessToken).then(data=>({data:data.lanes,error:null})).catch(error=>({data:[] as StaffLaneProfile[],error:{message:error instanceof Error?error.message:"Could not load staff directory."}})),
     ]);
+    const [locationResult, shiftResult, activityResult, ruleResult, publicationResult, timeOffResult] = await withRequestTimeout(() => Promise.all([
+      client.from("locations").select("id,slug,name,full_name,capacity,program_type").or(WORK_LOCATION_FILTER).order("name"),
+      client.from("staff_shifts").select("id,location_id,user_id,staff_name,shift_date,start_time,end_time,status,position_label,notes").gte("shift_date", weekStart).lte("shift_date", weekEnd).order("shift_date").order("start_time"),
+      client.from("staff_activity_intervals").select("id,location_id,shift_id,user_id,staff_name,activity_date,start_time,end_time,activity_type,counts_toward_floor,reason,source_key").gte("activity_date", weekStart).lte("activity_date", weekEnd).order("activity_date").order("start_time"),
+      client.from("staffing_rules").select("id,location_id,rule_name,age_group,children_per_staff,minimum_staff,maximum_group_size,effective_from,effective_to,source_type,source_note,is_active").eq("is_active", true).order("effective_from", { ascending: false }),
+      client.from("schedule_publications").select("id,location_id,week_of,status,revision,published_at,published_by,notes,needs_republish").eq("week_of", weekStart).order("updated_at", { ascending: false }),
+      client.from("time_off_requests").select("id,staff_user_id,location_id,request_scope,start_date,end_date,all_day,start_time,end_time,status").eq("status", "Approved").lte("start_date", weekEnd).gte("end_date", weekStart),
+    ]),20_000);
 
-    const requiredError = locationResult.error || shiftResult.error || activityResult.error || ruleResult.error || publicationResult.error || timeOffResult.error || staffResult.error || rosterResult.error;
+    const requiredError = locationResult.error || shiftResult.error || activityResult.error || ruleResult.error || publicationResult.error || timeOffResult.error;
     if (requiredError) {
       setError(requiredError.message);
     } else {
@@ -269,18 +273,18 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
       let nextSnapshots: PublishedShiftSnapshot[] = [];
       const publicationIds = nextPublications.map((item) => item.id);
       if (publicationIds.length) {
-        const [acknowledgementResult, snapshotResult] = await Promise.all([
-          supabase
+        const [acknowledgementResult, snapshotResult] = await withRequestTimeout(() => Promise.all([
+          client
             .from("staff_schedule_acknowledgements")
             .select("id,publication_id,location_id,user_id,revision,acknowledged_at,notes")
             .in("publication_id", publicationIds),
-          supabase
+          client
             .from("staff_schedule_publication_shifts")
             .select("id,publication_id,location_id,source_shift_id,user_id,staff_name,shift_date,start_time,end_time,position_label,notes,revision")
             .in("publication_id", publicationIds)
             .gte("shift_date", weekStart)
             .lte("shift_date", weekEnd),
-        ]);
+        ]),20_000);
         if (acknowledgementResult.error || snapshotResult.error) {
           setError(acknowledgementResult.error?.message || snapshotResult.error?.message || "Could not load published schedule details.");
           setLoading(false);
@@ -300,11 +304,16 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
       setAcknowledgements(nextAcknowledgements);
     }
 
-    const staffRows = staffResult.error ? [] : (staffResult.data ?? []) as StaffOption[];
-    setStaffDirectory(rosterResult.data);
-    setUnlinkedStaff(rosterResult.data.filter(lane=>!lane.staff_user_id && !staffRows.some(person=>person.full_name.trim().toLowerCase()===lane.full_name.trim().toLowerCase())));
-    setStaff(staffRows);
     setLoading(false);
+    const [staffResult,rosterResult] = await directoryRequest;
+    if (staffResult.error || rosterResult.error) setError(staffResult.error?.message || rosterResult.error?.message || "Staff choices could not load. Retry to refresh them.");
+    const staffRows = staffResult.error ? [] : (staffResult.data ?? []) as StaffOption[];
+    if (!rosterResult.error) setStaffDirectory(rosterResult.data);
+    if (!rosterResult.error) setUnlinkedStaff(rosterResult.data.filter(lane=>!lane.staff_user_id && !staffRows.some(person=>person.full_name.trim().toLowerCase()===lane.full_name.trim().toLowerCase())));
+    if (!staffResult.error) setStaff(staffRows);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "The schedule could not be loaded. Please retry.");
+    } finally { setLoading(false); }
   }, [profile, accessToken, weekEnd, weekStart,staffOnly,isSystemOwner]);
 
   useEffect(() => { const timer=window.setTimeout(()=>void load(),0);return()=>window.clearTimeout(timer); }, [load]);
@@ -441,13 +450,6 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
       : await supabase.from("staff_shifts").insert(people.flatMap(person => selectedDays.map(shift_date => ({ ...payload, ...person, user_id:person.user_id || null, shift_date }))));
     if (result.error) setError(result.error.message);
     else {
-      const location = locations.find((item) => item.id === shiftDraft.location_id);
-      void sendHubNotificationEvent({
-        accessToken: accessToken,
-        eventType: "schedule_update",
-        location: location ? (locationKeyForDbLocation(location) ?? "All Locations") : "All Locations",
-        eventKey: `staffing:${shiftDraft.id ?? "new"}:${Date.now()}`,
-      });
       setShiftDraft(null);
       showMessage(isOff ? `Off saved for ${people.length} staff on ${selectedDays.length} days. Publish the week to notify staff.` : selectedDays.length === 1 ? "Staff shift saved to the live schedule." : `${selectedDays.length} staff shifts saved for this week.`);
       await load();
