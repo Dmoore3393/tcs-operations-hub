@@ -112,6 +112,21 @@ test('PIN, authentication, configured access, tenant boundaries, and transitions
   const f=fixture();await f.post();assert.equal((await f.post()).status,400);assert.equal(f.writes.length,1);
 });
 
+test('rejected PIN, session, early clock-in and duplicate punches return readable JSON errors',async()=>{
+  for(const [options,body,wording] of [
+    [{},{pin:'0000'},/PIN did not match/],
+    [{unauthenticated:true},{},/Missing session/],
+    [{noPin:true},{},/Set your personal staff clock PIN/],
+    [{employee:true,shift:['10:05','11:00']},{source:'Location QR'},/up to 4 minutes early/],
+    [{},{event:'clock_out'},/current time-clock state/],
+  ]) {
+    const response=await fixture(options).post(body);
+    assert.equal(response.ok,false);assert.match(response.headers.get('content-type'),/application\/json/);
+    assert.match((await response.json()).error,wording);
+  }
+  const get=await fixture({unauthenticated:true}).get();assert.equal(get.status,401);assert.match((await get.json()).error,/Missing session/);
+});
+
 test('regular QR clocking still enforces schedules and site access; valid clock records and late-out review are saved',async()=>{
   for(const options of [{employee:true},{employee:true,shift:['14:00','16:00']},{employee:true,shift:['06:00','08:00']}]){
     const f=fixture(options);assert.equal((await f.post({source:'Location QR'})).status,409);assert.equal(f.writes.length,0);

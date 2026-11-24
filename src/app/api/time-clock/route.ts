@@ -179,6 +179,16 @@ async function createPendingPerformanceEvent(args: {
   if (result.error) throw result.error;
 }
 
+/** Keep rejected clock actions readable by web and packaged clients. */
+async function clockErrorResponse(error: unknown) {
+  const response = staffErrorResponse(error);
+  if (response.headers.get("Content-Type")?.includes("application/json")) return response;
+  return Response.json({error: (await response.text()) || "Time clock request failed."}, {
+    status: response.status,
+    headers: {"Cache-Control": "no-store"},
+  });
+}
+
 export async function GET(request: Request) {
   try {
     const { admin, user, profile, isOwner, isLicensee } = await requireStaff(request);
@@ -326,7 +336,7 @@ export async function GET(request: Request) {
       myApprovedExceptions: exceptionResult.data ?? [],
     }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" } });
   } catch (error) {
-    return staffErrorResponse(error);
+    return clockErrorResponse(error);
   }
 }
 
@@ -701,6 +711,6 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    return staffErrorResponse(error);
+    return clockErrorResponse(error);
   }
 }
