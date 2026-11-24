@@ -34,14 +34,23 @@ Danielle requested a searchable public App Store app as soon as possible. The ex
 - Local exported IPA SHA-256: `7ca83e65fc12145c38533ada4e95fb6683ac34ad990fb6adba4dccb9bca0b869`.
 - Signed-in native workflows and physical-device camera/Face ID/APNs were not newly verified. No real notifications were sent for tests.
 
-## Actual remaining blocker
+## Submission completed — November 23, 2026
 
-App Store Connect’s Add for Review validation reports **User name — This field is required** and **Password — This field is required**, alongside a generic unexpected-submission-error banner. The new draft’s synthetic reviewer login needs secure entry. Existing review credentials in the approved app are redacted; they were not extracted, reset or changed. Do not substitute a real staff/family account or broaden access. The existing isolated synthetic review organization/family remains in place.
+**The public app is submitted to Apple and Waiting for Review.** App Store Connect confirms “Your submission has been submitted to App Review,” with iOS 1.0.0/build 2 and zero draft submissions. Submission time shown by Apple: November 23, 2026 at 4:14 PM Pacific.
 
-After secure entry, save and retry Add for Review, then complete and verify the final submission. If Apple shows another requirement, resolve that actual requirement. The app currently remains **Prepare for Submission**: it has **not** entered review and is **not** publicly released. Apple approval is still required before public search availability.
+- Submission ID: `f7ebd3ce-f12c-4a07-9b55-afe242bd8961`.
+- Review page: https://appstoreconnect.apple.com/apps/6838407438/distribution/reviewsubmissions/details/f7ebd3ce-f12c-4a07-9b55-afe242bd8961
+- Public/free/United States distribution and automatic release after approval remain configured. It is not yet approved or publicly available.
+- Existing approved Unlisted app remains available. No real staff/family account, role, location or family linkage was changed.
 
-## API continuation
+## Secure API continuation completed
 
-Danielle approved requesting App Store Connect API access and a temporary App Manager key to complete the public submission, with revocation afterward. No API key has been created. Apple’s Request Access dialog now requires agreement to internal-team-only use, use in accordance with its documentation, no third-party services, and no sharing credentials outside the team. The separate legal-term approval is pending in chat; do not check the agreement or submit the access request until that answer arrives.
+Danielle explicitly approved App Store Connect API access, a temporary App Manager key, and Apple’s separate internal-team-use agreement. Apple approved API access. A temporary app-management key was generated and used only for this release operation.
 
-The release-only `scripts/copy-apple-review-access.mjs` is prepared and syntax checked. It uses a private key from a restricted local path, issues short-lived request-scoped tokens, never prints/saves reviewer passwords, verifies the exact designated synthetic reviewer and organization, updates only the new listing’s reviewer credentials, and logs out its own verification session. It has not been run against Apple. Existing app credentials and Hub permissions remain unchanged.
+`scripts/copy-apple-review-access.mjs` reused the reviewer details already held by Apple without displaying or saving the password. Before updating the new listing, it successfully authenticated and verified the exact designated synthetic reviewer (`f38bea87-fffb-4c92-b226-ed819fe4e6a9`) and isolated synthetic organization (`7024880e-865a-4148-ad75-723099f83ff0`). It changed no passwords and logged out its own verification session. The original app’s review details were not modified.
+
+The temporary key was **revoked after use**, verified in App Store Connect as **Active (0)** and **Revoked (1)**. API access remains enabled as authorized, but no active team key remains. The downloaded private key was never printed, committed or included in the app. No reset email, real-family alert or third-party message was sent.
+
+The helper was syntax checked and successfully exercised against the actual Apple read/update endpoints and Hub demo authorization. It issues two-minute tokens, with exact request scopes for GET requests; Apple’s documented scopes support GET, while the single authorized PATCH relies on the temporary App Manager role. The initial read scope omitted the query filter and Apple rejected it; including the full query fixed that request without altering key permissions.
+
+Apple review/approval is the remaining external stage. Do not describe Waiting for Review as approval or public availability.

@@ -18,7 +18,7 @@ async function apple(path, method = 'GET', body) {
   const url = new URL(path, apiOrigin);
   if (url.origin !== apiOrigin || !url.pathname.startsWith('/v1/')) throw new Error('Unexpected Apple API destination.');
   const now = Math.floor(Date.now() / 1000);
-  const unsigned = `${encode({alg: 'ES256', kid: keyId, typ: 'JWT'})}.${encode({iss: issuerId, iat: now, exp: now + 600, aud: 'appstoreconnect-v1', scope: [`${method} ${url.pathname}`]})}`;
+  const unsigned = `${encode({alg: 'ES256', kid: keyId, typ: 'JWT'})}.${encode({iss: issuerId, iat: now, exp: now + 120, aud: 'appstoreconnect-v1', ...(method === 'GET' ? {scope: [`GET ${url.pathname}${url.search}`]} : {})})}`;
   const token = `${unsigned}.${sign('sha256', Buffer.from(unsigned), {key: privateKey, dsaEncoding: 'ieee-p1363'}).toString('base64url')}`;
   const response = await fetch(url, {method, headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(30000)});
   const data = await response.json();
