@@ -2,6 +2,8 @@
 
 import MainLayout from "@/components/layout/MainLayout";
 import ClockCorrectionsPanel from "@/components/time-clock/ClockCorrectionsPanel";
+import {ConfirmClockPunch, SavedClockPunch} from "@/components/time-clock/ClockPunchDialogs";
+import {saveClockPunch, type ClockPunchReceipt} from "@/lib/clock-punch";
 import FlexibleClockPanel from "@/components/time-clock/FlexibleClockPanel";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHubLocation } from "@/components/providers/LocationProvider";
@@ -20,7 +22,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type ClockEventType = "clock_in" | "clock_out" | "break_start" | "break_end";
 type ClockSource = "Location QR" | "Maintenance Manual" | "Flexible Manual" | "Admin Override" | "Active Shift" | "Legacy";
@@ -167,6 +169,10 @@ function TimeClockScreen() {
   const [savingPin, setSavingPin] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [receipt, setReceipt] = useState<ClockPunchReceipt | null>(null);
+  const [refreshError, setRefreshError] = useState("");
+  const savingRef = useRef(false);
+  const loadGeneration = useRef(0);
 
   const fromPoster = query.has("station");
   const hasScan = fromPoster || query.get("qr") === "1";
@@ -186,28 +192,43 @@ function TimeClockScreen() {
   const [adminSaving, setAdminSaving] = useState(false);
   const [resettingPin, setResettingPin] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (quiet = false) => {
     if (!session?.access_token) return;
-    setLoading(true);
+    const generation = ++loadGeneration.current;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    if (!quiet) setLoading(true);
     try {
       const response = await fetch("/api/time-clock?days=14", {
         headers: { Authorization: `Bearer ${session.access_token}` },
         cache: "no-store",
+        signal: controller.signal,
       });
       const result = await response.json() as Payload & { error?: string };
       if (!response.ok) throw new Error(result.error || "Could not load time clock.");
+      if (generation !== loadGeneration.current) return;
+      if (!Array.isArray(result.events) || result.currentUserId !== session.user.id) throw new Error("Could not verify the current clock status.");
       setPayload(result);
       setAdminTargetUserId((current) => current || result.adminClockStaff[0]?.userId || "");
-      setError("");
+      setRefreshError("");
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Could not load time clock.");
+      if (generation !== loadGeneration.current) return;
+      setRefreshError(loadError instanceof Error ? loadError.message : "Could not load time clock.");
     } finally {
-      setLoading(false);
+      clearTimeout(timeout);
+      if (generation === loadGeneration.current) setLoading(false);
     }
-  }, [session?.access_token]);
+  }, [session?.access_token, session?.user.id]);
 
+  const scanContext = query.toString();
+  useEffect(() => { void load(); }, [load, scanContext]);
   useEffect(() => {
-    void load();
+    const refresh = () => {if (document.visibilityState === "visible" && !savingRef.current) void load(true);};
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    const timer = window.setInterval(refresh, 30000);
+    return () => {window.removeEventListener("focus", refresh); window.removeEventListener("online", refresh); document.removeEventListener("visibilitychange", refresh); window.clearInterval(timer);};
   }, [load]);
 
   const mine = useMemo(
@@ -256,53 +277,33 @@ function TimeClockScreen() {
       targetUserId?: string;
     } = {},
   ) {
-    if (!session?.access_token) return;
+    if (!session?.access_token || savingRef.current) return;
+    savingRef.current = true;
+    ++loadGeneration.current;
     setSaving(true);
     setError("");
     setNotice("");
-
     try {
-      const response = await fetch("/api/time-clock", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          event,
-          location: options.location ?? workLocation,
-          clientTimestamp: new Date().toISOString(),
-          source,
-          pin: options.pin ?? "",
-          targetUserId: options.targetUserId,
-        }),
-      });
-
-      const result = await response.json() as {
-        error?: string;
-        needsLeadershipReview?: boolean;
-        targetStaffName?: string;
+      const result = await saveClockPunch(session.access_token, {
+        event, location: options.location ?? workLocation, source, pin: options.pin ?? "", targetUserId: options.targetUserId,
+      }, options.targetUserId ?? user!.id);
+      const saved: ClockEvent = {
+        id: result.id, actorUserId: result.targetStaffUserId, performedByUserId: result.performedByUserId,
+        performedByName: profile?.full_name ?? "TCS Staff", staffName: result.targetStaffName, role: "",
+        event: result.event, occurredAt: result.occurredAt, location: result.location, source: result.source as ClockSource,
       };
-
-      if (!response.ok) throw new Error(result.error || "Time clock update failed.");
-
-      await load();
+      setPayload(current => current ? {...current, events: [...current.events.filter(row => row.id !== saved.id), saved].sort((a,b) => a.occurredAt.localeCompare(b.occurredAt))} : current);
+      setReceipt(result);
       setClockPin("");
-
-      if (source === "Location QR") {
-        router.replace("/time-clock");
-      }
-
-      const baseNotice = source === "Admin Override" && result.targetStaffName
-        ? `${result.targetStaffName}: ${labels[event]} • Admin action`
-        : `${labels[event]} • ${source}`;
-
-      setNotice(result.needsLeadershipReview ? `${baseNotice} • sent to leadership review` : baseNotice);
-      window.setTimeout(() => setNotice(""), 3000);
+      if (source === "Location QR") router.replace("/time-clock");
+      setNotice(`${result.targetStaffName}: ${labels[event]} — saved at ${timeLabel(result.occurredAt)} • Receipt #${result.id}`);
+      void load(true);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Time clock update failed.");
+      setError(saveError instanceof Error ? saveError.message : "Time clock update failed. Check your saved status.");
     } finally {
+      savingRef.current = false;
       setSaving(false);
+      setLoading(false);
     }
   }
 
@@ -451,8 +452,10 @@ function TimeClockScreen() {
           </div>
         </section>
 
-        {notice && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-900">{notice}</div>}
-        {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-900">{error}</div>}
+        {receipt && <SavedClockPunch receipt={receipt} onDone={() => setReceipt(null)} />}
+        {refreshError && <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 font-bold text-amber-900">{refreshError} <button onClick={() => void load()} className="underline">Check saved status</button></div>}
+        {notice && <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-900">{notice}</div>}
+        {error && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-900">{error}</div>}
 
         {payload?.myClockAccess.flexibleAllowed && (
           <FlexibleClockPanel
@@ -560,43 +563,14 @@ function TimeClockScreen() {
           </div>
 
           {hasScan && profile && !qrReady && <p role="alert" className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">{scannedSite ? "That location is outside this staff account’s assignment." : "That scanned TCS location could not be recognized."}</p>}
-          {qrReady && qrAction && (
-            <div className="mt-4 rounded-2xl border border-emerald-300 bg-white p-4">
-              <div className="grid gap-4 lg:grid-cols-[1fr_220px_auto] lg:items-end">
-                <div>
-                  <p className="text-base font-black uppercase tracking-wider text-emerald-700">QR location confirmed</p>
-                  <p className="mt-1 text-xl font-black text-slate-950">{workLocation}</p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500">No payroll event has been recorded yet.</p>
-                </div>
-
-                <label>
-                  <span className="mb-1 block text-base font-black uppercase tracking-wider text-slate-500">Your Staff PIN</span>
-                  <input
-                    inputMode="numeric"
-                    autoComplete="off"
-                    maxLength={6}
-                    value={clockPin}
-                    onChange={(event) => setClockPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                    placeholder="4–6 digits"
-                    className="w-full rounded-xl border border-slate-200 px-3 py-3 text-center text-base font-black tracking-[.22em]"
-                  />
-                </label>
-
-                <div className="flex gap-2">
-                  <button onClick={() => { setClockPin(""); router.replace("/time-clock"); }} className="rounded-xl border border-slate-200 px-4 py-3 text-xs font-black text-slate-700">
-                    Cancel
-                  </button>
-                  <button
-                    disabled={saving || loading || !payload?.myClockAccess.pinConfigured || !/^\d{4,6}$/.test(clockPin) || (qrAction === "clock_in" ? state !== "Off Clock" : state !== "Working")}
-                    onClick={() => void act(qrAction, "Location QR", { pin: clockPin, location: workLocation })}
-                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white disabled:bg-slate-300"
-                  >
-                    {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                    Confirm {qrAction === "clock_out" ? "Clock Out" : "Clock In"}
-                  </button>
-                </div>
-              </div>
-            </div>
+          {qrReady && !loading && payload && !payload.myClockAccess.pinConfigured && <p role="alert" className="mt-4 rounded-xl bg-amber-50 p-3 font-bold text-amber-900">Set your Staff PIN above, then confirm your clock action. Scanning alone does not save your time.</p>}
+          {qrReady && requestedAction === "clock_out" && !loading && payload && state === "Off Clock" && !receipt && <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-3 font-bold text-emerald-900">You are currently off clock. Check your latest saved entry below to verify your clock-out time.</p>}
+          {qrReady && qrAction && !receipt && !loading && payload?.myClockAccess.pinConfigured && (qrAction === "clock_in" ? state === "Off Clock" : state === "Working") && (
+            <ConfirmClockPunch action={qrAction} location={workLocation} pin={clockPin} onPin={setClockPin}
+              busy={saving} ready={!loading && Boolean(payload?.myClockAccess.pinConfigured) && /^\d{4,6}$/.test(clockPin) && (qrAction === "clock_in" ? state === "Off Clock" : state === "Working")}
+              error={error || refreshError} onConfirm={() => void act(qrAction, "Location QR", {pin: clockPin, location: workLocation})}
+              onCheckStatus={() => {setClockPin(""); setError(""); router.replace("/time-clock"); void load();}}
+              onCancel={() => {setClockPin(""); router.replace("/time-clock");}} />
           )}
         </section>
 

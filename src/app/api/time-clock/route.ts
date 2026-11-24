@@ -589,7 +589,7 @@ export async function POST(request: Request) {
 
     // The manual audit RPC accepts REVIEW/EXPORT only. Record a validated clock
     // action here, with tenant, actor and actual time supplied by this server.
-    const { error: auditError } = await admin.from("audit_log").insert({
+    const { data: savedPunch, error: auditError } = await admin.from("audit_log").insert({
       organization_id: profile.organization_id,
       actor_user_id: user.id,
       action: "CREATE",
@@ -598,86 +598,95 @@ export async function POST(request: Request) {
       location_id: location ? text(location.id) : null,
       metadata,
       occurred_at: occurredAt.toISOString(),
-    });
-    if (auditError) throw new Error("Could not save the clock action. Refresh your time clock and try again.");
+    }).select("id").single();
+    if (auditError || !savedPunch?.id) throw new Error("Could not save the clock action. Refresh your time clock and try again.");
 
     let needsLeadershipReview = false;
     const shouldRunPerformanceChecks = clockSource === "Location QR" && targetUserId === user.id && !flexibleAllowed;
 
-    if (shouldRunPerformanceChecks && (event === "clock_in" || event === "clock_out") && relevantShift && location) {
-      const shiftStart = minutesFromTime(text(relevantShift.start_time));
-      const shiftEnd = minutesFromTime(text(relevantShift.end_time));
-      const lateGrace = Number(settings.late_grace_minutes ?? 0);
-      const earlyGrace = Number(settings.early_departure_grace_minutes ?? 0);
+    let reviewWarning = "";
+    try {
+      if (shouldRunPerformanceChecks && (event === "clock_in" || event === "clock_out") && relevantShift && location) {
+        const shiftStart = minutesFromTime(text(relevantShift.start_time));
+        const shiftEnd = minutesFromTime(text(relevantShift.end_time));
+        const lateGrace = Number(settings.late_grace_minutes ?? 0);
+        const earlyGrace = Number(settings.early_departure_grace_minutes ?? 0);
 
-      const shouldFlagLate = Boolean(
-        event === "clock_in"
-        && settings.late_tracking_enabled
-        && settings.late_grace_minutes !== null
-        && nowMinutes > shiftStart + lateGrace
-      );
-      const shouldFlagEarly = Boolean(
-        event === "clock_out"
-        && settings.early_departure_tracking_enabled
-        && settings.early_departure_grace_minutes !== null
-        && nowMinutes < shiftEnd - earlyGrace
-      );
+        const shouldFlagLate = Boolean(
+          event === "clock_in"
+          && settings.late_tracking_enabled
+          && settings.late_grace_minutes !== null
+          && nowMinutes > shiftStart + lateGrace
+        );
+        const shouldFlagEarly = Boolean(
+          event === "clock_out"
+          && settings.early_departure_tracking_enabled
+          && settings.early_departure_grace_minutes !== null
+          && nowMinutes < shiftEnd - earlyGrace
+        );
 
-      if (shouldFlagLate || shouldFlagEarly) {
-        const typeCode = shouldFlagLate ? "late_arrival" : "early_departure";
-        const difference = shouldFlagLate ? nowMinutes - shiftStart : shiftEnd - nowMinutes;
-        await createPendingPerformanceEvent({
-          admin,
-          organizationId: profile.organization_id,
-          staffUserId: targetUserId,
-          locationId: text(location.id),
-          eventDate: today,
-          typeCode,
-          sourceReference: `${typeCode}:${relevantShiftId}:${today}`,
-          summary: shouldFlagLate
-            ? `Possible late arrival: clocked in ${difference} minute${difference === 1 ? "" : "s"} after the scheduled start.`
-            : `Possible early departure: clocked out ${difference} minute${difference === 1 ? "" : "s"} before the scheduled end.`,
-          notes: "Created automatically from the Hub Time Clock and published staff schedule. Leadership review is required before confirmation.",
-          createdBy: user.id,
-        });
-        needsLeadershipReview = true;
-      }
-
-      if (event === "clock_out" && settings.flag_scheduled_hours_overage !== false) {
-        const currentLocationId = text(location.id);
-        const actualWorked = workedMinutes(targetToday, currentLocationId, occurredAt);
-        const scheduledWorked = shifts.reduce((sum, shift) => {
-          const start = minutesFromTime(text(shift.start_time));
-          const end = minutesFromTime(text(shift.end_time));
-          return sum + Math.max(0, end - start);
-        }, 0);
-        const allowedClockWindowMinutes = earlyWindow + lateWindow;
-        const overageBeyondWindow = actualWorked - (scheduledWorked + allowedClockWindowMinutes);
-        const beyondClockWindow = nowMinutes > shiftEnd + lateWindow;
-
-        if ((overageBeyondWindow > 0 || beyondClockWindow) && !approvedEnd && !approvedAny) {
-          const amount = Math.max(overageBeyondWindow, Math.max(0, nowMinutes - (shiftEnd + lateWindow)));
+        if (shouldFlagLate || shouldFlagEarly) {
+          const typeCode = shouldFlagLate ? "late_arrival" : "early_departure";
+          const difference = shouldFlagLate ? nowMinutes - shiftStart : shiftEnd - nowMinutes;
           await createPendingPerformanceEvent({
             admin,
             organizationId: profile.organization_id,
             staffUserId: targetUserId,
-            locationId: currentLocationId,
+            locationId: text(location.id),
             eventDate: today,
-            typeCode: "unapproved_shift_overage",
-            sourceReference: `unapproved_shift_overage:${today}:${currentLocationId}`,
-            summary: `Possible unapproved shift overage: ${amount} minute${amount === 1 ? "" : "s"} beyond the permitted clock window.`,
-            notes: beyondClockWindow
-              ? `Clock-out occurred more than ${lateWindow} minutes after the published shift end. Actual clock time was preserved. Leadership must verify whether the additional work was approved.`
-              : `Total worked time exceeded the published scheduled duration plus the normal ${earlyWindow}-minute early and ${lateWindow}-minute late clock windows. Leadership must verify whether the additional work was approved.`,
+            typeCode,
+            sourceReference: `${typeCode}:${relevantShiftId}:${today}`,
+            summary: shouldFlagLate
+              ? `Possible late arrival: clocked in ${difference} minute${difference === 1 ? "" : "s"} after the scheduled start.`
+              : `Possible early departure: clocked out ${difference} minute${difference === 1 ? "" : "s"} before the scheduled end.`,
+            notes: "Created automatically from the Hub Time Clock and published staff schedule. Leadership review is required before confirmation.",
             createdBy: user.id,
           });
           needsLeadershipReview = true;
         }
-      }
-    }
 
+        if (event === "clock_out" && settings.flag_scheduled_hours_overage !== false) {
+          const currentLocationId = text(location.id);
+          const actualWorked = workedMinutes(targetToday, currentLocationId, occurredAt);
+          const scheduledWorked = shifts.reduce((sum, shift) => {
+            const start = minutesFromTime(text(shift.start_time));
+            const end = minutesFromTime(text(shift.end_time));
+            return sum + Math.max(0, end - start);
+          }, 0);
+          const allowedClockWindowMinutes = earlyWindow + lateWindow;
+          const overageBeyondWindow = actualWorked - (scheduledWorked + allowedClockWindowMinutes);
+          const beyondClockWindow = nowMinutes > shiftEnd + lateWindow;
+
+          if ((overageBeyondWindow > 0 || beyondClockWindow) && !approvedEnd && !approvedAny) {
+            const amount = Math.max(overageBeyondWindow, Math.max(0, nowMinutes - (shiftEnd + lateWindow)));
+            await createPendingPerformanceEvent({
+              admin,
+              organizationId: profile.organization_id,
+              staffUserId: targetUserId,
+              locationId: currentLocationId,
+              eventDate: today,
+              typeCode: "unapproved_shift_overage",
+              sourceReference: `unapproved_shift_overage:${today}:${currentLocationId}`,
+              summary: `Possible unapproved shift overage: ${amount} minute${amount === 1 ? "" : "s"} beyond the permitted clock window.`,
+              notes: beyondClockWindow
+                ? `Clock-out occurred more than ${lateWindow} minutes after the published shift end. Actual clock time was preserved. Leadership must verify whether the additional work was approved.`
+                : `Total worked time exceeded the published scheduled duration plus the normal ${earlyWindow}-minute early and ${lateWindow}-minute late clock windows. Leadership must verify whether the additional work was approved.`,
+              createdBy: user.id,
+            });
+            needsLeadershipReview = true;
+          }
+        }
+      }
+
+    } catch {
+      needsLeadershipReview = true;
+      reviewWarning = "Your time was saved, but the schedule-review flag could not be created. Please notify an administrator; do not repeat this clock action.";
+      console.error("Time clock schedule-review flag failed after saving receipt", String(savedPunch.id));
+    }
     return Response.json({
       ok: true,
+      id: String(savedPunch.id),
+      reviewWarning,
       event,
       occurredAt: occurredAt.toISOString(),
       location: locationLabel,
