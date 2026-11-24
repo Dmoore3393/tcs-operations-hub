@@ -10,7 +10,7 @@ import {
   ArrowLeft,
   Camera,
   CameraOff,
-  CheckCircle2,
+  KeyRound,
   LoaderCircle,
   QrCode,
   RefreshCw,
@@ -277,9 +277,9 @@ export default function StaffQrTimeClockScannerPage() {
             {state === "found" && (
               <div className="absolute inset-0 grid place-items-center bg-emerald-950/90 p-6 text-center">
                 <div>
-                  <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-300" />
-                  <p className="mt-3 text-lg font-black">Location found</p>
-                  <p className="mt-1 text-xs font-semibold text-emerald-100/75">Returning to the Time Clock…</p>
+                  <KeyRound className="mx-auto h-12 w-12 text-amber-300" />
+                  <p className="mt-3 text-lg font-black">One more step: confirm with your PIN</p>
+                  <p className="mt-1 text-xs font-semibold text-emerald-100/75">Your time has not been saved yet. Opening confirmation…</p>
                 </div>
               </div>
             )}

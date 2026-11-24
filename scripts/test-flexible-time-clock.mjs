@@ -43,10 +43,12 @@ function fixture(options={}) {
       order(k,{ascending=true}={}){rows.sort((a,b)=>String(a[k]).localeCompare(String(b[k]))*(ascending?1:-1));return q;},
       limit(n){rows=rows.slice(0,n);return q;},
       maybeSingle(){return q.then(result=>({...result,data:result.data?.[0]??null}));},
-      async insert(value){
-        if(table===options.failWrite)return{error:{message:'Synthetic write failure'}};
-        const saved={id:`record-${writes.length}`,...JSON.parse(JSON.stringify(value))};
-        tables[table].push(saved);writes.push({table,row:saved});return{data:null,error:null};
+      insert(value){
+        const error=table===options.failWrite?{message:'Synthetic write failure'}:null;
+        const saved=error?null:{id:`record-${writes.length}`,...JSON.parse(JSON.stringify(value))};
+        if(saved){tables[table].push(saved);writes.push({table,row:saved});}
+        const result={data:saved,error};
+        return {select(){return this;},single(){return Promise.resolve(result);},then(resolve,reject){return Promise.resolve(result).then(resolve,reject);}};
       },
       then(resolve,reject){reads.push(table);return Promise.resolve({data:columns?rows.map(row=>Object.fromEntries(columns.map(k=>[k,row[k]]))):rows,error:table===options.failRead?Error('Synthetic read failure'):null}).then(resolve,reject);},
     };return q;
@@ -129,6 +131,21 @@ test('maintenance manual and owner staff override retain their distinct PIN-prot
   const a=fixture();assert.equal((await a.post({targetUserId:'colleague',source:'Admin Override',pin:'0000'})).status,403);
   assert.equal((await a.post({targetUserId:'colleague',source:'Admin Override'})).status,200);
   const row=a.tables.audit_log[0];assert.equal(row.actor_user_id,'danielle');assert.equal(row.metadata.targetStaffUserId,'colleague');assert.equal(row.metadata.clockSource,'Admin Override');assert.equal(row.metadata.flexibleClocking,false);
+});
+
+test('clock-out acknowledges the exact persisted receipt even if secondary review storage fails',async()=>{
+  for(const failWrite of [undefined,'staff_performance_events']) {
+    const f=fixture({employee:true,shift:['10:00','11:00'],failWrite});
+    assert.equal((await f.post({source:'Location QR'})).status,200);
+    f.setNow('2026-11-10T20:00:00.000Z');
+    const out=await f.post({event:'clock_out',source:'Location QR'});
+    assert.equal(out.status,200);
+    const result=await out.json(),saved=f.tables.audit_log.at(-1);
+    assert.equal(result.id,saved.id);assert.equal(result.occurredAt,saved.occurred_at);
+    assert.equal(result.event,'clock_out');assert.equal(result.targetStaffUserId,'danielle');
+    assert.equal(f.tables.audit_log.length,2);assert.equal((await (await f.get()).json()).events.at(-1).event,'clock_out');
+    assert.equal(Boolean(result.reviewWarning),Boolean(failWrite));
+  }
 });
 
 test('a failed audit insert does not report a successful clock action',async()=>{
