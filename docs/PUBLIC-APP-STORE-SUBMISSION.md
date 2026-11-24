@@ -39,3 +39,9 @@ Danielle requested a searchable public App Store app as soon as possible. The ex
 App Store Connect’s Add for Review validation reports **User name — This field is required** and **Password — This field is required**, alongside a generic unexpected-submission-error banner. The new draft’s synthetic reviewer login needs secure entry. Existing review credentials in the approved app are redacted; they were not extracted, reset or changed. Do not substitute a real staff/family account or broaden access. The existing isolated synthetic review organization/family remains in place.
 
 After secure entry, save and retry Add for Review, then complete and verify the final submission. If Apple shows another requirement, resolve that actual requirement. The app currently remains **Prepare for Submission**: it has **not** entered review and is **not** publicly released. Apple approval is still required before public search availability.
+
+## API continuation
+
+Danielle approved requesting App Store Connect API access and a temporary App Manager key to complete the public submission, with revocation afterward. No API key has been created. Apple’s Request Access dialog now requires agreement to internal-team-only use, use in accordance with its documentation, no third-party services, and no sharing credentials outside the team. The separate legal-term approval is pending in chat; do not check the agreement or submit the access request until that answer arrives.
+
+The release-only `scripts/copy-apple-review-access.mjs` is prepared and syntax checked. It uses a private key from a restricted local path, issues short-lived request-scoped tokens, never prints/saves reviewer passwords, verifies the exact designated synthetic reviewer and organization, updates only the new listing’s reviewer credentials, and logs out its own verification session. It has not been run against Apple. Existing app credentials and Hub permissions remain unchanged.
