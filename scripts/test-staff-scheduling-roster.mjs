@@ -116,6 +116,7 @@ async function schedulerScreen({ failRoster = false, stallRoster = false } = {})
     "@/lib/request-timeout": {withRequestTimeout:operation=>operation(new AbortController().signal)},
     react, "next/link": { default: childrenOnly }, "lucide-react": new Proxy({}, { get: () => empty }),
     "@/components/forms/ChoiceSelect": { default: empty }, "@/lib/form-options": { positionChoices: [] },
+    "@/components/scheduling/ScheduleChangesPanel": { default: empty },
     "@/components/scheduling/StaffWeekPlanner": { default: empty }, "@/components/layout/MainLayout": { default: childrenOnly },
     "@/components/hub/HubUI": { Modal: childrenOnly, SectionCard: childrenOnly, StatCard: empty, inputClass: "input",
       PrimaryButton: props => jsx("button", props), SecondaryButton: props => jsx("button", props) },

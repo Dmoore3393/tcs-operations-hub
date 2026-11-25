@@ -168,7 +168,7 @@ export async function GET(request: Request) {
       "Scheduled-hours policy",
       clockReady ? "pass" : "warning",
       clockReady
-        ? "Published-shift enforcement is on: 4 minutes early, 4 minutes after, with unapproved overage review."
+        ? "Schedule review is on: more than 4 minutes early or 4 minutes after is flagged; actual clock time is saved."
         : "The current Time Clock settings do not match the approved TCS 4-minute policy.",
       clockReady ? undefined : "Restore the approved 4-minute clock-in/clock-out policy before launch.",
     ));

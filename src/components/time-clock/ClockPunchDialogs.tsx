@@ -45,6 +45,7 @@ export function SavedClockPunch({receipt, onDone}: {receipt: ClockPunchReceipt; 
       <p role="status" className="mt-3 text-lg font-bold text-slate-950">{receipt.targetStaffName} • {time} Pacific</p>
       <p className="mt-2 font-semibold text-slate-700">{receipt.location}</p>
       <p className="mt-3 text-sm text-slate-600">Receipt #{receipt.id}. Your actual time has been recorded.</p>
+      {receipt.scheduleReview?.map(reason => <p key={reason} className="mt-2 text-sm font-bold text-amber-800">For leadership review: {reason}</p>)}
       {receipt.reviewWarning ? <p role="alert" className="mt-3 rounded-xl bg-amber-50 p-3 font-bold text-amber-900">{receipt.reviewWarning}</p>
         : receipt.needsLeadershipReview && <p className="mt-3 text-sm font-bold text-amber-800">Your time is saved. Additional hours or schedule differences have been sent for leadership review.</p>}
       <button ref={done} onClick={onDone} className="mt-5 min-h-12 w-full rounded-xl bg-emerald-700 p-3 font-black text-white">Done</button>

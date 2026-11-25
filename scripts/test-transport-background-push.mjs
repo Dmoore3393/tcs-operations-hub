@@ -8,6 +8,7 @@ const source=path=>readFile(path,'utf8');
 const url=source=>'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText).toString('base64');
 const dayUrl=url((await source('src/lib/transportation-day.ts')));
 const routeSource=(await source('src/app/api/transportation-day/route.ts'))
+ .replace(/import \{transportLedgerActive\} from [^;]+;/,'const transportLedgerActive=async()=>false;')
  .replace('"@/lib/transportation-day"',JSON.stringify(dayUrl))
  .replace(/import \{flushTransportAssignmentNotices\}[^;]+;/,'const flushTransportAssignmentNotices=(...args)=>globalThis.pushFixture.flush(...args);')
  .replace(/import \{requireStaff,staffErrorResponse\}[^;]+;/,'const requireStaff=async()=>globalThis.pushFixture.auth;const staffErrorResponse=e=>e instanceof Response?e:Response.json({error:String(e)},{status:500});');
@@ -47,7 +48,7 @@ const serverSource=await source('src/lib/server/notifications.ts');
 const ast=ts.createSourceFile('notifications.ts',serverSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
 const notificationUrl=url(await source('src/lib/notifications.ts')),teamUrl=url(await source('src/lib/team-access.ts')),locationUrl=url(await source('src/lib/location-config.ts'));
 const accessUrl=url((await source('src/lib/notification-access.ts')).replace('"@/lib/team-access"',JSON.stringify(teamUrl)).replace('"@/lib/location-config"',JSON.stringify(locationUrl)).replace('"@/lib/notifications"',JSON.stringify(notificationUrl)));
-const names=new Set(['isTransportAlertLeader','parsePushSubscriptions','savePushSubscriptions','deliverPushChannels','deliverStoredTransportAlert']);
+const names=new Set(['isTransportAlertLeader','parsePushSubscriptions','savePushSubscriptions','deliverPushChannels','deliverPushChannelsRaw','deliverStoredTransportAlert']);
 const declarations=ast.statements.filter(node=>ts.isFunctionDeclaration(node)&&names.has(node.name?.text)).map(node=>node.getText(ast)).join('\n');
 const server=await import(url(`
  const MAX_PUSH_SUBSCRIPTIONS=8,PUSH_KEY='tcs_push_subscriptions';
@@ -61,19 +62,27 @@ const server=await import(url(`
  const parseNativePushRegistrations=user=>user.app_metadata.native||[];const sendApplePush=async(device,payload)=>{globalThis.deliveryFixture.native.push(payload);return {ok:true,stale:false}};const saveNativePushRegistrations=async()=>{};
  ${declarations}
 `));
+// Model the durable push claim and status write while exercising the real channel delivery.
+function queueAdmin(admin){
+ const from=admin.from,rpc=admin.rpc;
+ return {...admin,from(table){
+  if(table!=='notification_push_queue')return from(table);
+  const q={update(){return q;},eq(){return q;},then(resolve){return Promise.resolve({error:null}).then(resolve);}};return q;
+ },rpc:async(name,args)=>name==='claim_hub_push'?{data:'fixture-lease',error:null}:rpc(name,args)};
+}
 test('stored route and cancellation notices use background Web Push for registered devices',async()=>{
  const user={id:'driver',app_metadata:{tcs_push_subscriptions:[{endpoint:'https://push.example.test/synthetic',keys:{p256dh:'synthetic',auth:'synthetic'}}]}};
  const f={state:{user,preferences:{enabled:true,transportation:true,quietHoursEnabled:false}},sent:[]};globalThis.deliveryFixture=f;
- const admin={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{role:"Employee",permissions:["transportation"],locations:["All Locations"],is_active:true},error:null})})})}),auth:{admin:{getUserById:async()=>({data:{user}})}}};
+ const admin=queueAdmin({from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{role:"Employee",permissions:["transportation"],locations:["All Locations"],is_active:true},error:null})})})}),auth:{admin:{getUserById:async()=>({data:{user}})}}});
  for(const title of ['Your route assignment','Transportation cancelled','Transportation restored'])await server.deliverStoredTransportAlert(admin,user.id,{title,category:'transportation',body:'Synthetic change',href:'/transportation',eventKey:title});
  assert.equal(f.sent.length,3);assert.equal(f.sent[1].payload.title,'Transportation cancelled');
- f.state.preferences.transportation=false;await server.deliverStoredTransportAlert(admin,user.id,{title:'Disabled'});assert.equal(f.sent.length,3);
+ f.state.preferences.transportation=false;await server.deliverStoredTransportAlert(admin,user.id,{title:'Disabled',category:'transportation',href:'/transportation',eventKey:'disabled'});assert.equal(f.sent.length,3);
 });
 
 test('confirmed custody reaches registered Web and native phones with the same child, driver, place and actual time',async()=>{
  const user={id:'driver',app_metadata:{native:[{deviceToken:'mock'}],tcs_push_subscriptions:[{endpoint:'https://push.example.test/mock',keys:{p256dh:'mock',auth:'mock'}}]}};
  const f={state:{user,preferences:{enabled:true,transportation:true}},sent:[],native:[]};globalThis.deliveryFixture=f;
- const admin={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{role:'Employee',permissions:['transportation'],locations:['All Locations'],is_active:true,organization_id:'org'},error:null})})})}),auth:{admin:{getUserById:async()=>({data:{user}})}}};
+ const admin=queueAdmin({from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{role:'Employee',permissions:['transportation'],locations:['All Locations'],is_active:true,organization_id:'org'},error:null})})})}),auth:{admin:{getUserById:async()=>({data:{user}})}}});
  const note={category:'transportation',title:'Synthetic Rider picked up',body:'Jan 7, 1:15 PM · Assigned Driver · Gray van. Picked up at School Two. Heading to South.',href:'/transportation?view=all#transportation-status',eventKey:'transport-custody:test'};
  await server.deliverStoredTransportAlert(admin,user.id,note,'another-org');assert.equal(f.native.length,0);assert.equal(f.sent.length,0);
  await server.deliverStoredTransportAlert(admin,user.id,note,'org');
@@ -81,6 +90,7 @@ test('confirmed custody reaches registered Web and native phones with the same c
 });
 
 const recordApiSource=(await source('src/app/api/transportation-records/route.ts'))
+ .replace(/import \{transportLedgerActive\} from [^;]+;/,'const transportLedgerActive=async()=>false;')
  .replace(/import \{ after \}[^;]+;/,'const after=work=>globalThis.custodySaveFixture.after.push(work);')
  .replace(/import \{ requireStaff, staffErrorResponse \}[^;]+;/,'const requireStaff=async()=>globalThis.custodySaveFixture.auth;const staffErrorResponse=e=>Response.json({error:String(e)},{status:500});')
  .replace(/import \{ flushTransportAssignmentNotices \}[^;]+;/,'const flushTransportAssignmentNotices=async()=>{};')
@@ -102,7 +112,7 @@ test('leadership pickup and drop-off push with the Hub closed even if optional H
  const user={id:'leader',app_metadata:{native:[{deviceToken:'mock'}],tcs_push_subscriptions:[{endpoint:'https://push.example.test/mock',keys:{p256dh:'mock',auth:'mock'}}]}};
  const f={state:{user,preferences:{enabled:false,transportation:false,quietHoursEnabled:true}},sent:[],native:[]};globalThis.deliveryFixture=f;
  let role='Location Licensee',lane=false,active=true,org='org';
- const admin={rpc:async(_name,args)=>({data:lane&&args.p_org===org&&args.p_user===user.id,error:null}),from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{role,organization_id:org,is_active:active,locations:['Other'],permissions:[]},error:null})})})}),auth:{admin:{getUserById:async()=>({data:{user}})}}};
+ const admin=queueAdmin({rpc:async(_name,args)=>({data:lane&&args.p_org===org&&args.p_user===user.id,error:null}),from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{role,organization_id:org,is_active:active,locations:['Other'],permissions:[]},error:null})})})}),auth:{admin:{getUserById:async()=>({data:{user}})}}});
  const note={title:'Sample rider',category:'transportation',body:'Confirmed at 2:35 PM',href:'/notifications',location:'North',requiredTransportConfirmation:true,transportOrganizationId:org};
  const deliver=kind=>server.deliverStoredTransportAlert(admin,user.id,{...note,eventKey:'transport-custody:route:'+kind+':1900000000.00'},'org');
  for(const kind of ['pickup','handoff'])await deliver(kind);
