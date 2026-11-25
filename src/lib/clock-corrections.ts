@@ -9,7 +9,7 @@ export function correctedClockRows(rows: Row[]): Row[] {
   return rows.filter(row => (row.metadata as Row | null)?.kind !== "staff_time_clock_correction").map(row => {
     const correction = corrections.get(String(row.id));
     return correction ? {...row, occurred_at: correction.correctedAt, metadata: {...(row.metadata as Row), correction}} : row;
-  }).sort((a,b) => String(a.occurred_at).localeCompare(String(b.occurred_at)));
+  }).sort((a,b) => String(a.occurred_at).localeCompare(String(b.occurred_at)) || (Number((a.metadata as Row)?.event === "clock_in") - Number((b.metadata as Row)?.event === "clock_in")));
 }
 
 export function pacificCorrectionTime(original: string, time: string): string {
