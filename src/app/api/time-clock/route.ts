@@ -6,7 +6,7 @@ import { staffClockPinConfigured, verifyStaffClockPin } from "@/lib/server/staff
 
 type DbRow = Record<string, unknown>;
 type ClockEventType = "clock_in" | "clock_out" | "break_start" | "break_end";
-type ClockSource = "Location QR" | "Maintenance Manual" | "Flexible Manual" | "Admin Override" | "Active Shift" | "Legacy";
+type ClockSource = "Location QR" | "Maintenance Manual" | "Flexible Manual" | "Admin Override" | "Manual Entry" | "Active Shift" | "Legacy";
 type AttendanceSettingsRow = {
   late_tracking_enabled: boolean;
   late_grace_minutes: number | null;
@@ -40,7 +40,7 @@ function eventFromMetadata(metadata: unknown): ClockEventType | "" {
 }
 function sourceFromMetadata(metadata: unknown): ClockSource {
   const value = text(object(metadata).clockSource);
-  if (["Location QR", "Maintenance Manual", "Flexible Manual", "Admin Override", "Active Shift"].includes(value)) return value as ClockSource;
+  if (["Location QR", "Maintenance Manual", "Flexible Manual", "Admin Override", "Manual Entry", "Active Shift"].includes(value)) return value as ClockSource;
   return "Legacy";
 }
 function effectiveStaffUserId(row: DbRow) {
@@ -273,7 +273,7 @@ export async function GET(request: Request) {
           id: String(row.id ?? ""),
           actorUserId: staffUserId,
           performedByUserId,
-          performedByName: text(performedBy?.full_name) || text(performedBy?.email) || "TCS Staff",
+          performedByName: text(performedBy?.full_name) || text(performedBy?.email) || text(metadata.performedByName) || "TCS Staff",
           staffName: text(staff?.full_name) || text(staff?.email) || text(metadata.targetStaffName) || "TCS Staff",
           role: text(staff?.role),
           location: locationLabel,
@@ -281,6 +281,7 @@ export async function GET(request: Request) {
           source: sourceFromMetadata(metadata),
           occurredAt: text(row.occurred_at),
           correction: metadata.correction ?? null,
+          manualEntry: metadata.manualEntry ? {enteredAt:text(metadata.enteredAt),reason:text(metadata.reason)} : null,
         };
       })
       .filter((event) => event.event)

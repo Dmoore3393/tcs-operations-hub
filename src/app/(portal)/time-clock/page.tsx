@@ -1,6 +1,7 @@
 "use client";
 
 import MainLayout from "@/components/layout/MainLayout";
+import ManualWorkedHoursPanel from "@/components/time-clock/ManualWorkedHoursPanel";
 import ClockCorrectionsPanel from "@/components/time-clock/ClockCorrectionsPanel";
 import {ConfirmClockPunch, SavedClockPunch} from "@/components/time-clock/ClockPunchDialogs";
 import {saveClockPunch, type ClockPunchReceipt} from "@/lib/clock-punch";
@@ -25,7 +26,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type ClockEventType = "clock_in" | "clock_out" | "break_start" | "break_end";
-type ClockSource = "Location QR" | "Maintenance Manual" | "Flexible Manual" | "Admin Override" | "Active Shift" | "Legacy";
+type ClockSource = "Location QR" | "Maintenance Manual" | "Flexible Manual" | "Admin Override" | "Manual Entry" | "Active Shift" | "Legacy";
 
 type ClockEvent = {
   id: string;
@@ -38,6 +39,7 @@ type ClockEvent = {
   event: ClockEventType;
   source: ClockSource;
   occurredAt: string;
+  manualEntry?: {enteredAt:string;reason:string}|null;
   correction?: {correctedBy?:string;reason?:string}|null;
 };
 
@@ -365,6 +367,7 @@ function TimeClockScreen() {
           last: latest.event,
           source: latest.source,
           performedByName: latest.performedByName,
+          manualEntry: latest.manualEntry,
           minutes: durationMinutes(sorted),
           state: stateFromEvents(sorted),
         };
@@ -705,6 +708,8 @@ function TimeClockScreen() {
           </section>
         )}
 
+        {isSystemOwner && session?.access_token && <ManualWorkedHoursPanel token={session.access_token} onSaved={load} />}
+
         {(isSystemOwner || isLocationLicensee) && session?.access_token && <ClockCorrectionsPanel events={payload?.events || []} token={session.access_token} onSaved={load} />}
         <div className="grid gap-6 lg:grid-cols-[.9fr_1.1fr]">
           <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -728,7 +733,8 @@ function TimeClockScreen() {
                       <div>
                         <strong className="text-xs text-slate-900">{labels[event.event]}</strong>
                         <p className="mt-1 text-base text-slate-500">{event.location} • {dateLabel(event.occurredAt)} • {event.source}</p>
-                        {event.source === "Admin Override" && event.performedByUserId !== event.actorUserId && (
+                        {event.manualEntry && <p className="mt-1 text-sm text-slate-600">Entered by {event.performedByName} on {dateLabel(event.manualEntry.enteredAt)}: {event.manualEntry.reason}</p>}
+                        {(event.source === "Admin Override" || event.source === "Manual Entry") && event.performedByUserId !== event.actorUserId && (
                           <p className="mt-1 text-base font-bold text-blue-700">Admin action by {event.performedByName}</p>
                         )}
                       </div>
@@ -759,7 +765,8 @@ function TimeClockScreen() {
                       <div>
                         <strong className="text-sm text-slate-900">{item.name}</strong>
                         <p className="mt-1 text-base text-slate-500">{item.location} • {item.role} • {item.source}</p>
-                        {item.source === "Admin Override" && <p className="mt-1 text-base font-bold text-blue-700">Admin action by {item.performedByName}</p>}
+                        {item.manualEntry && <p className="mt-1 text-sm text-slate-600">Entered by {item.performedByName} on {dateLabel(item.manualEntry.enteredAt)}: {item.manualEntry.reason}</p>}
+                        {(item.source === "Admin Override" || item.source === "Manual Entry") && <p className="mt-1 text-base font-bold text-blue-700">Admin action by {item.performedByName}</p>}
                       </div>
                       <div className="text-right">
                         <span className={`rounded-full px-2 py-1 text-base font-black ${item.state === "Working" ? "bg-emerald-100 text-emerald-800" : item.state === "On Break" ? "bg-amber-100 text-amber-900" : "bg-slate-100 text-slate-600"}`}>{item.state}</span>

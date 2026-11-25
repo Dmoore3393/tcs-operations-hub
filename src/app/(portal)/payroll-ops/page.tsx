@@ -1,4 +1,5 @@
 "use client";
+import {weeklyWorkedMinutes} from "@/lib/weekly-worked-minutes";
 
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -44,28 +45,6 @@ function weekStart(value: string) {
   return date.toISOString().slice(0, 10);
 }
 
-function eventMinutes(events: ClockEvent[]) {
-  const sorted = [...events].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
-  let workingFrom: number | null = null;
-  let breakFrom: number | null = null;
-  let worked = 0;
-  let breaks = 0;
-  for (const event of sorted) {
-    const stamp = new Date(event.occurredAt).getTime();
-    if (!Number.isFinite(stamp)) continue;
-    if (event.event === "clock_in") workingFrom = stamp;
-    else if (event.event === "break_start" && workingFrom !== null) breakFrom = stamp;
-    else if (event.event === "break_end" && breakFrom !== null) {
-      breaks += Math.max(0, stamp - breakFrom);
-      breakFrom = null;
-    } else if (event.event === "clock_out" && workingFrom !== null) {
-      worked += Math.max(0, stamp - workingFrom);
-      workingFrom = null;
-      breakFrom = null;
-    }
-  }
-  return Math.max(0, Math.round((worked - breaks) / 60000));
-}
 
 function hours(minutes: number) {
   return (minutes / 60).toFixed(2);
@@ -154,7 +133,7 @@ export default function PayrollOpsPage() {
     return [...groups.entries()].map(([key, group]) => {
       const [userId, week] = key.split("|");
       const staffName = group[0]?.staffName || "TCS Staff";
-      const actualMinutes = eventMinutes(group);
+      const actualMinutes = weeklyWorkedMinutes(events.filter(event => event.actorUserId === userId), week);
       const weekEnd = (() => {
         const date = new Date(`${week}T12:00:00Z`);
         date.setUTCDate(date.getUTCDate() + 6);
