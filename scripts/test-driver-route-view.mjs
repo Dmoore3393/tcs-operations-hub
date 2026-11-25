@@ -61,7 +61,7 @@ async function screen(initial=rows){
  const Groups=await compile('src/components/transportation/SchoolStopGroups.tsx',{'@/lib/school-pickup-stops':stops});
  const Callouts=await compile('src/components/transportation/TransportCallouts.tsx',{'@/lib/transport-trips':trips,'@/lib/transportation-day':daily});
  const team=await compile('src/components/transportation/TransportTeamStatus.tsx',{'@/lib/transport-driver-view':driver,'@/lib/transport-trips':trips,'@/lib/transportation-day':daily});
- const deps={'@/components/transportation/SelectedDropoffs':{default:()=>null},'@/lib/transportation-day':{...daily,transportServiceDate:()=>day},'@/lib/transport-child-schools':{transportChildKey:child=>child.legacyId||String(child.id)},react,'next/navigation':{useSearchParams:()=>new URLSearchParams()},'@/components/transportation/TransportTeamStatus':{default:team},'next/link':{default:({children,...props})=>React.createElement('a',props,children)},
+ const deps={'@/components/transportation/TransportationWorkflowGate':{default:({legacy})=>legacy},'@/components/transportation/SelectedDropoffs':{default:()=>null},'@/lib/transportation-day':{...daily,transportServiceDate:()=>day},'@/lib/transport-child-schools':{transportChildKey:child=>child.legacyId||String(child.id)},react,'next/navigation':{useSearchParams:()=>new URLSearchParams()},'@/components/transportation/TransportTeamStatus':{default:team},'next/link':{default:({children,...props})=>React.createElement('a',props,children)},
   '@/components/layout/MainLayout':{default:({children})=>React.createElement('main',null,children)},
   '@/components/providers/AuthProvider':{useAuth:()=>({profile:{lane_profile_id:'mine',full_name:'Synthetic Driver',permissions:['transportation']},session:{access_token:'synthetic'},canManageSystem:false,isLocationLicensee:true})},
   '@/components/providers/LocationProvider':{useHubLocation(){throw Error('The driver route must not depend on the global location filter')}},
@@ -82,7 +82,7 @@ async function screen(initial=rows){
  const tree=()=>{cursor=0;return Page()};
  const expand=node=>Array.isArray(node)?node.flatMap(expand):node&&typeof node==='object'?typeof node.type==='function'?expand(node.type(node.props)):[node,...expand(node.props?.children)]:[];
  const text=node=>Array.isArray(node)?node.map(text).join(' '):node&&typeof node==='object'?typeof node.type==='function'?text(node.type(node.props)):text(node.props?.children):typeof node==='string'||typeof node==='number'?String(node):'';
- const render=()=>{const value=tree();return {nodes:expand(value),text:text(value),value}};
+ const render=()=>{const value=tree();const nodes=expand(value);cursor=0;return {nodes,text:text(value),value}};
  const click=label=>{const button=render().nodes.find(node=>node.type==='button'&&text(node.props.children)===label);assert.ok(button,`button ${label}`);button.props.onClick();};
  return {render,click,patches,changes,get rows(){return routeRows}};
 }
@@ -138,7 +138,7 @@ test('an empty personal route never falls back to another driver’s children',a
  page.click('Browse all routes');assert.match(page.render().text,/Other Driver Child/);
 });
 
-const apiSource=(await readFile('src/app/api/transportation-day/route.ts','utf8')).replace('"@/lib/transportation-day"',JSON.stringify(url(await readFile('src/lib/transportation-day.ts','utf8')))).replace(/import \{flushTransportAssignmentNotices\}[^;]+;/,'const flushTransportAssignmentNotices=async()=>{};').replace(/import \{requireStaff,staffErrorResponse\}[^;]+;/,'const requireStaff=async()=>globalThis.driverViewAuth;const staffErrorResponse=e=>Response.json({error:String(e)},{status:500});');
+const apiSource=(await readFile('src/app/api/transportation-day/route.ts','utf8')).replace(/import \{transportLedgerActive\} from [^;]+;/,'const transportLedgerActive=async()=>false;').replace('"@/lib/transportation-day"',JSON.stringify(url(await readFile('src/lib/transportation-day.ts','utf8')))).replace(/import \{flushTransportAssignmentNotices\}[^;]+;/,'const flushTransportAssignmentNotices=async()=>{};').replace(/import \{requireStaff,staffErrorResponse\}[^;]+;/,'const requireStaff=async()=>globalThis.driverViewAuth;const staffErrorResponse=e=>Response.json({error:String(e)},{status:500});');
 const api=await import(url(apiSource));
 test('daily route data stays organization scoped and returns only public driver identifiers',async()=>{
  const calls=[];
