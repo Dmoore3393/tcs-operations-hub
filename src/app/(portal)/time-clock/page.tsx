@@ -1,4 +1,5 @@
 "use client";
+import ClockScheduleReviews from "@/components/time-clock/ClockScheduleReviews";
 
 import MainLayout from "@/components/layout/MainLayout";
 import ManualWorkedHoursPanel from "@/components/time-clock/ManualWorkedHoursPanel";
@@ -39,6 +40,7 @@ type ClockEvent = {
   event: ClockEventType;
   source: ClockSource;
   occurredAt: string;
+  scheduleReview?: string[];
   manualEntry?: {enteredAt:string;reason:string}|null;
   correction?: {correctedBy?:string;reason?:string}|null;
 };
@@ -292,7 +294,7 @@ function TimeClockScreen() {
       const saved: ClockEvent = {
         id: result.id, actorUserId: result.targetStaffUserId, performedByUserId: result.performedByUserId,
         performedByName: profile?.full_name ?? "TCS Staff", staffName: result.targetStaffName, role: "",
-        event: result.event, occurredAt: result.occurredAt, location: result.location, source: result.source as ClockSource,
+        event: result.event, occurredAt: result.occurredAt, location: result.location, source: result.source as ClockSource, scheduleReview: result.scheduleReview,
       };
       setPayload(current => current ? {...current, events: [...current.events.filter(row => row.id !== saved.id), saved].sort((a,b) => a.occurredAt.localeCompare(b.occurredAt))} : current);
       setReceipt(result);
@@ -480,10 +482,10 @@ function TimeClockScreen() {
               <div>
                 <p className="text-xs font-black uppercase tracking-[.14em] text-emerald-800">TCS scheduled-hours rule</p>
                 <h2 className="mt-1 text-xl font-black text-slate-950">
-                  Clock in no more than {payload.clockPolicy.early_clock_in_window_minutes} minutes early.
+                  Your actual clock time is always recorded.
                 </h2>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-700">
-                  Late arrivals can still clock in during their shift. Clock-out records the actual time, including when staff finish late; overages can be sent to leadership review.
+                  Clock-ins more than {payload.clockPolicy.early_clock_in_window_minutes} minutes early and clock-outs more than {payload.clockPolicy.late_clock_out_window_minutes} minutes late are saved and flagged for leadership review. Missing or ended shifts are also flagged. A flag does not approve extra hours.
                 </p>
               </div>
               <div className="rounded-2xl border border-white bg-white/80 p-4 text-right">
@@ -710,6 +712,7 @@ function TimeClockScreen() {
 
         {isSystemOwner && session?.access_token && <ManualWorkedHoursPanel token={session.access_token} onSaved={load} />}
 
+        {(isSystemOwner || isLocationLicensee) && session?.access_token && <ClockScheduleReviews token={session.access_token} refreshKey={payload?.events.at(-1)?.id || ""} />}
         {(isSystemOwner || isLocationLicensee) && session?.access_token && <ClockCorrectionsPanel events={payload?.events || []} token={session.access_token} onSaved={load} />}
         <div className="grid gap-6 lg:grid-cols-[.9fr_1.1fr]">
           <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -733,6 +736,7 @@ function TimeClockScreen() {
                       <div>
                         <strong className="text-xs text-slate-900">{labels[event.event]}</strong>
                         <p className="mt-1 text-base text-slate-500">{event.location} • {dateLabel(event.occurredAt)} • {event.source}</p>
+                        {event.scheduleReview?.map(reason => <p key={reason} className="mt-1 text-sm font-bold text-amber-800">Schedule review: {reason}</p>)}
                         {event.manualEntry && <p className="mt-1 text-sm text-slate-600">Entered by {event.performedByName} on {dateLabel(event.manualEntry.enteredAt)}: {event.manualEntry.reason}</p>}
                         {(event.source === "Admin Override" || event.source === "Manual Entry") && event.performedByUserId !== event.actorUserId && (
                           <p className="mt-1 text-base font-bold text-blue-700">Admin action by {event.performedByName}</p>

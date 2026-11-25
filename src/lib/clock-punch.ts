@@ -10,6 +10,7 @@ export type ClockPunchReceipt = {
   targetStaffName: string;
   performedByUserId: string;
   needsLeadershipReview?: boolean;
+  scheduleReview?: string[];
   reviewWarning?: string;
 };
 

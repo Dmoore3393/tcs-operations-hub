@@ -112,12 +112,11 @@ test('PIN, authentication, configured access, tenant boundaries, and transitions
   const f=fixture();await f.post();assert.equal((await f.post()).status,400);assert.equal(f.writes.length,1);
 });
 
-test('rejected PIN, session, early clock-in and duplicate punches return readable JSON errors',async()=>{
+test('rejected PIN, session and duplicate punches return readable JSON errors',async()=>{
   for(const [options,body,wording] of [
     [{},{pin:'0000'},/PIN did not match/],
     [{unauthenticated:true},{},/Missing session/],
     [{noPin:true},{},/Set your personal staff clock PIN/],
-    [{employee:true,shift:['10:05','11:00']},{source:'Location QR'},/up to 4 minutes early/],
     [{},{event:'clock_out'},/current time-clock state/],
   ]) {
     const response=await fixture(options).post(body);
@@ -127,9 +126,13 @@ test('rejected PIN, session, early clock-in and duplicate punches return readabl
   const get=await fixture({unauthenticated:true}).get();assert.equal(get.status,401);assert.match((await get.json()).error,/Missing session/);
 });
 
-test('regular QR clocking still enforces schedules and site access; valid clock records and late-out review are saved',async()=>{
+test('regular QR schedule differences save actual time, flag review and preserve site access',async()=>{
   for(const options of [{employee:true},{employee:true,shift:['14:00','16:00']},{employee:true,shift:['06:00','08:00']}]){
-    const f=fixture(options);assert.equal((await f.post({source:'Location QR'})).status,409);assert.equal(f.writes.length,0);
+    const f=fixture(options);const response=await f.post({source:'Location QR'});assert.equal(response.status,200);
+    const result=await response.json();assert.equal(result.needsLeadershipReview,true);assert.equal(result.scheduleReview.length,1);
+    assert.equal(f.tables.audit_log.length,1);assert.equal(f.tables.audit_log[0].occurred_at,initialNow);
+    assert.deepEqual(f.tables.audit_log[0].metadata.scheduleReview,result.scheduleReview);
+    assert.deepEqual((await (await f.get()).json()).events[0].scheduleReview,result.scheduleReview);
   }
   const f=fixture({employee:true,shift:['10:00','11:00']});
   assert.equal((await f.post({source:'Location QR',location:'Division'})).status,403);
@@ -137,7 +140,6 @@ test('regular QR clocking still enforces schedules and site access; valid clock 
   f.setNow('2026-11-10T20:00:00.000Z');const out=await f.post({event:'clock_out',source:'Location QR'});
   assert.equal(out.status,200);assert.equal((await out.json()).needsLeadershipReview,true);
   assert.equal(f.tables.audit_log.length,2);assert.equal(f.tables.staff_performance_events.length,1);
-  assert.equal(f.tables.audit_log[0].metadata.flexibleClocking,false);
 });
 
 test('maintenance manual and owner staff override retain their distinct PIN-protected audit identities',async()=>{
@@ -189,8 +191,23 @@ test('migration defaults existing organizations to no flexible users and preserv
   } finally {await db.close();}
 });
 
-test('staff may clock in four minutes early or late during their shift, but not five minutes early',async()=>{
- for(const [time,status] of [['17:55',409],['17:56',200],['18:00',200],['18:30',200],['18:59',200]]){
- const f=fixture({employee:true,shift:['10:00','11:00']});f.setNow(`2026-11-10T${time}:00.000Z`);assert.equal((await f.post({source:'Location QR'})).status,status,time);
+test('four-minute boundary saves all punches and flags five minutes early or late',async()=>{
+ for(const [time,flag] of [['17:55',true],['17:56',false],['18:00',false],['18:04',false]]){
+  const f=fixture({employee:true,shift:['10:00','11:00']});f.setNow(`2026-11-10T${time}:00.000Z`);
+  const response=await f.post({source:'Location QR'});assert.equal(response.status,200,time);
+  const result=await response.json();assert.equal(result.scheduleReview.length>0,flag,time);
+ }
+ for(const [time,flag] of [['19:04',false],['19:05',true]]){
+  const f=fixture({employee:true,shift:['10:00','11:00']});await f.post({source:'Location QR'});f.setNow(`2026-11-10T${time}:00.000Z`);
+  const response=await f.post({source:'Location QR',event:'clock_out'});assert.equal(response.status,200,time);
+  assert.equal((await response.json()).scheduleReview.length>0,flag,time);
+ }
+});
+test('approved early or late exception suppresses the schedule flag without changing recorded time',async()=>{
+ for(const [event,now,start,end] of [['clock_in','17:55','09:50','11:05'],['clock_out','19:05','09:50','11:05']]){
+  const f=fixture({employee:true,shift:['10:00','11:00']});
+  if(event==='clock_out')await f.post({source:'Location QR'});
+  f.tables.staff_clock_exceptions.push({organization_id:'org',staff_user_id:'danielle',location_id:'halcom',work_date:'2026-11-10',shift_id:'shift',status:'Approved',approved_start_time:start,approved_end_time:end});
+  f.setNow(`2026-11-10T${now}:00.000Z`);const response=await f.post({source:'Location QR',event});assert.equal(response.status,200);assert.equal((await response.json()).scheduleReview.length,0);
  }
 });

@@ -281,6 +281,7 @@ export async function GET(request: Request) {
           source: sourceFromMetadata(metadata),
           occurredAt: text(row.occurred_at),
           correction: metadata.correction ?? null,
+          scheduleReview: Array.isArray(metadata.scheduleReview) ? metadata.scheduleReview.filter((reason): reason is string => typeof reason === "string") : [],
           manualEntry: metadata.manualEntry ? {enteredAt:text(metadata.enteredAt),reason:text(metadata.reason)} : null,
         };
       })
@@ -562,24 +563,25 @@ export async function POST(request: Request) {
     const approvedAny = exceptions.some((row) => exceptionCovers(row, nowMinutes, relevantShiftId, "any"));
     const bypassSchedule = flexibleAllowed || clockSource === "Maintenance Manual" || clockSource === "Admin Override";
 
-    if (event === "clock_in" && enforceSchedule && !bypassSchedule && !isOwner) {
-      if (!relevantShift) {
-        if (!approvedAny) {
-          throw new Response("You do not have a published shift at this location today. A shift exception must be approved before you can clock in.", { status: 409 });
-        }
-      } else {
+    // Schedule differences are review flags, never a reason to lose actual work time.
+    // Persist the reasons with the punch before any secondary performance writes.
+    const scheduleReview: string[] = [];
+    if (!bypassSchedule && !isOwner && (event === "clock_in" || event === "clock_out")) {
+      if (!relevantShift && enforceSchedule && !approvedAny) {
+        scheduleReview.push("No published shift at this location today.");
+      } else if (relevantShift && enforceSchedule && event === "clock_in") {
         const startMinutes = minutesFromTime(text(relevantShift.start_time));
         const endMinutes = minutesFromTime(text(relevantShift.end_time));
-        const earliestAllowed = startMinutes - earlyWindow;
-        if (nowMinutes < earliestAllowed && !approvedStart) {
-          throw new Response(
-            `Your shift starts at ${clockLabel(startMinutes)}. You may clock in up to ${earlyWindow} minutes early, beginning at ${clockLabel(earliestAllowed)}. Earlier work requires an approved shift exception.`,
-            { status: 409 },
-          );
+        if (nowMinutes < startMinutes - earlyWindow && !approvedStart && !approvedAny) {
+          scheduleReview.push(`Clocked in more than ${earlyWindow} minutes before the ${clockLabel(startMinutes)} shift start.`);
         }
         if (nowMinutes > endMinutes + lateWindow && !approvedAny) {
-          throw new Response("This shift has already ended. An approved shift exception is required before starting additional work.", { status: 409 });
+          scheduleReview.push("Clocked in after the published shift ended.");
         }
+      }
+      if (relevantShift && event === "clock_out" && settings.flag_scheduled_hours_overage !== false
+        && nowMinutes > minutesFromTime(text(relevantShift.end_time)) + lateWindow && !approvedEnd && !approvedAny) {
+        scheduleReview.push(`Clocked out more than ${lateWindow} minutes after the published shift end.`);
       }
     }
 
@@ -589,6 +591,7 @@ export async function POST(request: Request) {
       location: locationLabel,
       clientTimestamp: text(body.clientTimestamp).slice(0, 40),
       scheduleExceptionApproved: approvedAny,
+      scheduleReview,
       clockSource,
       targetStaffUserId: targetUserId,
       targetStaffName: text(targetProfile.full_name),
@@ -612,7 +615,7 @@ export async function POST(request: Request) {
     }).select("id").single();
     if (auditError || !savedPunch?.id) throw new Error("Could not save the clock action. Refresh your time clock and try again.");
 
-    let needsLeadershipReview = false;
+    let needsLeadershipReview = scheduleReview.length > 0;
     const shouldRunPerformanceChecks = clockSource === "Location QR" && targetUserId === user.id && !flexibleAllowed;
 
     let reviewWarning = "";
@@ -698,6 +701,7 @@ export async function POST(request: Request) {
       ok: true,
       id: String(savedPunch.id),
       reviewWarning,
+      scheduleReview,
       event,
       occurredAt: occurredAt.toISOString(),
       location: locationLabel,
