@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import MainLayout from "@/components/layout/MainLayout";
 import { useAuth } from "@/components/providers/AuthProvider";
+import ScheduleChangesPanel from "@/components/scheduling/ScheduleChangesPanel";
 import StaffWeekPlanner from "@/components/scheduling/StaffWeekPlanner";
 import { hubRequest } from "@/lib/hub-request";
 import { supabase } from "@/lib/supabase/client";
@@ -65,6 +66,7 @@ export default function TeamScheduleView() {
         <button className="min-h-11 rounded-xl bg-white/10 px-4 py-3 font-bold" onClick={() => window.print()}>Print</button>
       </div>
     </section>
+    {token && <ScheduleChangesPanel token={token} />}
     {error && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-900">{error}<button className="ml-4 min-h-11 rounded-xl border px-4 font-bold" onClick={() => setRefresh(value => value + 1)}>Try again</button></div>}
     {!error && (loading || !current) ? <p role="status" className="p-6 text-lg">Loading your team’s published schedule…</p> : current && <>
       <div className="rounded-2xl border border-emerald-200 bg-white p-4 text-base">

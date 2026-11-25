@@ -5,6 +5,7 @@ import {positionChoices} from "@/lib/form-options";
 
 import {staffScheduleDepartment} from "@/lib/staff-schedule-departments";
 import Link from "next/link";
+import ScheduleChangesPanel from "@/components/scheduling/ScheduleChangesPanel";
 import StaffWeekPlanner from "@/components/scheduling/StaffWeekPlanner";
 import {hubRequest} from "@/lib/hub-request";
 import type {StaffLaneProfile} from "@/lib/staff-lanes";
@@ -682,6 +683,7 @@ export default function StaffingWorkspace({mode="coverage"}:{mode?:"coverage"|"s
   if(staffOnly && !isSystemOwner)return <MainLayout><p className="p-6 text-lg">Owner/Admin access is required to manage staff schedules.</p></MainLayout>;
 
   return <MainLayout><div className={`mx-auto max-w-[1700px] space-y-6 pb-12 ${staffOnly ? "[&_input]:text-base [&_select]:text-base [&_textarea]:text-base [&_button]:min-h-11 [&_p]:text-base" : ""}`}>
+    {staffOnly && accessToken && <ScheduleChangesPanel token={accessToken} />}
     <section className="overflow-hidden rounded-[32px] bg-gradient-to-br from-[#0b2f23] via-[#155b3b] to-[#0b3153] p-6 text-white shadow-xl sm:p-8">
       <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
         <div className="max-w-4xl">
