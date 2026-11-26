@@ -16,21 +16,23 @@ import {
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, Suspense, useRef, useState } from "react";
 
 type ScannerState = "starting" | "scanning" | "blocked" | "unsupported" | "found";
 type ClockAction = "clock_in" | "clock_out";
 
-function actionFromUrl(): ClockAction {
-  if (typeof window === "undefined") return "clock_in";
-  return new URLSearchParams(window.location.search).get("action") === "clock_out" ? "clock_out" : "clock_in";
+export default function StaffQrTimeClockScannerPage() {
+  return <Suspense><StaffQrTimeClockScanner /></Suspense>;
 }
 
-export default function StaffQrTimeClockScannerPage() {
+function StaffQrTimeClockScanner() {
   const router = useRouter();
   const { profile, isSystemOwner } = useAuth();
-  const action = useMemo(actionFromUrl, []);
+  // Router parameters are current during navigation; window.location may still
+  // contain the previous clock-in URL until the browser history is committed.
+  const query = useSearchParams();
+  const action: ClockAction = query.get("action") === "clock_out" ? "clock_out" : "clock_in";
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
