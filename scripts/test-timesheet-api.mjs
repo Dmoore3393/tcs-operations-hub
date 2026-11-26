@@ -17,12 +17,12 @@ source=source.replace('"@/lib/timesheet-workflow"',JSON.stringify(helper)).repla
 const api=await import(url(source));
 let changes=[];
 const location={id:'loc',slug:'halcom',name:'Halcom',full_name:'Halcom'};
-function setup(name,record={collectorSigned:true,dynastyStatus:'Accounted For'},children=[],sites=[location]){
+function setup(name,record={collectorSigned:true,dynastyStatus:'Accounted For'},children=[],sites=[location],forms=[]){
  changes=[];
- const admin={async rpc(name,args){changes.push({table:'timesheets',patch:{record_data:args.p_record}});return {error:null}},from(table){let patch;const q={select(){return q},eq(){return q},order(){return q},update(value){patch=value;return q},upsert(value){changes.push({table,value});return Promise.resolve({error:null})},insert(value){changes.push({table,value});return Promise.resolve({error:null})},maybeSingle(){return Promise.resolve({data:{id:'row',legacy_id:'ts',location_id:'loc',record_data:record},error:null})},then(resolve,reject){if(patch)changes.push({table,patch});return Promise.resolve({data:table==='locations'?sites:table==='children'?children:[],error:null}).then(resolve,reject)}};return q}};
+ const admin={async rpc(name,args){changes.push({table:'timesheets',patch:{record_data:args.p_record}});return {error:null}},from(table){let patch;const q={select(){return q},eq(){return q},order(){return q},update(value){patch=value;return q},upsert(value){changes.push({table,value});return Promise.resolve({error:null})},insert(value){changes.push({table,value});return Promise.resolve({error:null})},maybeSingle(){return Promise.resolve({data:{id:'row',legacy_id:'ts',location_id:'loc',record_data:record},error:null})},then(resolve,reject){if(patch)changes.push({table,patch});return Promise.resolve({data:table==='locations'?sites:table==='children'?children:table==='timesheets'?forms:[],error:null}).then(resolve,reject)}};return q}};
  globalThis.__timesheetAuth={admin,profile:{full_name:name,organization_id:'org',locations:['Halcom','Lara Family Childcare']},user:{id:'actor'},isOwner:/Danielle|Jennifer/.test(name),isLicensee:/Dynasty/.test(name)};
 }
-const post=body=>api.POST(new Request('https://hub.test/api/timesheets',{method:'POST',body:JSON.stringify({servicePeriod:'October 2026',locationSlug:'halcom',timesheetType:'CCRC Stage 1',...body})}));
+const post=body=>api.POST(new Request('https://hub.test/api/timesheets',{method:'POST',body:JSON.stringify({servicePeriod:'November 2026',locationSlug:'halcom',timesheetType:'CCRC Stage 1',...body})}));
 test('direct receipt is Danielle-only, audited and allows reviewed forms to progress',async()=>{
  setup('Jennifer Thomason',{});
  assert.equal((await post({action:'directIntake',id:'ts',received:true,reason:'Already collected.'})).status,403);
@@ -83,4 +83,15 @@ test('Jennifer can receive and fill Tehachapi forms, while Danielle and other lo
  setup('Jennifer Thomason',{},[],[site]);assert.equal((await post({action:'directIntake',id:'ts',received:true,signaturesChecked:true,datesChecked:true,reason:'Physical Tehachapi form.'})).status,200);
  const checked=changes[0].patch.record_data;assert.equal(checked.directReceivedBy,'Jennifer Thomason');assert.equal(checked.collectorSignedBy,'Jennifer Thomason');
  setup('Jennifer Thomason',checked,[],[site]);assert.equal((await post({action:'fillOut',id:'ts',certificateVerified:true,tuitionPolicyAcknowledged:true})).status,200);assert.equal(changes[0].patch.record_data.completedBy,'Jennifer Thomason');
+});
+
+test('pre-November batches are not created or marked submitted',async()=>{
+ setup('Danielle Moore');const response=await post({action:'createBatch',servicePeriod:'October 2026'});assert.equal(response.status,400);assert.match((await response.json()).error,/November 2026/);assert.equal(changes.length,0);
+});
+
+test('active API checklist omits pre-November records without rewriting stored forms',async()=>{
+ const forms=['October 2026','November 2026'].map((period,index)=>({id:`row-${index}`,legacy_id:`form-${index}`,location_id:'loc',service_period:period,record_data:{},funding_source:'CCCC'}));
+ setup('Danielle Moore',{},[],[location],forms);
+ const response=await api.GET(new Request('https://hub.test/api/timesheets'));assert.equal(response.status,200);
+ const payload=await response.json();assert.deepEqual(payload.records.map(row=>row.servicePeriod),['November 2026']);assert.equal(forms.length,2);assert.equal(changes.length,0);
 });

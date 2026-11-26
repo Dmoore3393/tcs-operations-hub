@@ -22,5 +22,7 @@ export function timesheetChecklist(record: ChecklistRecord) {
 export function previousTimesheetMonth(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", {timeZone:"America/Los_Angeles",year:"numeric",month:"2-digit"}).formatToParts(now);
   const date = new Date(Date.UTC(Number(parts.find(p=>p.type==='year')?.value),Number(parts.find(p=>p.type==='month')?.value)-2,15,12));
+  // There is no backlog requirement before the authorized November start.
+  if (date < new Date('2026-11-15T12:00:00Z')) date.setTime(Date.parse('2026-11-15T12:00:00Z'));
   return {value:date.toISOString().slice(0,7),label:new Intl.DateTimeFormat('en-US',{month:'long',year:'numeric',timeZone:'UTC'}).format(date)};
 }

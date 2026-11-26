@@ -1,5 +1,14 @@
 /** TCS policy effective with October 2026 forms, starting November 1, 2026. */
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+/** Active Hub checklists and reminders begin with November 2026 service. */
+export const TIMESHEET_TRACKING_START_MONTH = "2026-11";
+export function timesheetTrackingApplies(period: string) {
+  const match = /^([A-Za-z]+) (\d{4})$/.exec(period.trim());
+  if (!match) return false;
+  const index = MONTHS.indexOf(match[1]);
+  return index >= 0 && Number(match[2])*12+index >= 2026*12+10;
+}
+
 export function timesheetPolicyApplies(period: string) {
   const [month, year] = period.trim().split(/\s+/);
   const index = MONTHS.indexOf(month);

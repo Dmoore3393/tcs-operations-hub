@@ -15,7 +15,7 @@ const direct=load('src/lib/timesheet-direct-intake.ts');
 const Component=load('src/components/timesheets/ChildTimesheetChecklist.tsx',{'@/lib/timesheet-checklist':helper,'@/lib/timesheet-workflow':workflow,'@/lib/timesheet-policy':load('src/lib/timesheet-policy.ts')}).default;
 const list=node=>Array.isArray(node)?node.flatMap(list):node&&typeof node==='object'?[node,...list(node.props?.children)]:[];
 test('main checklist records receipt, signatures and dates without inventing a Dynasty handoff',async()=>{
- const record={id:'synthetic-form',childName:'Synthetic Child',servicePeriod:'October 2026',location:'Synthetic Site',locationSlug:'halcom',timesheetType:'CCCC',collectorSigned:false,stage:'Location Sign-Off',submissionIssue:null};
+ const record={id:'synthetic-form',childName:'Synthetic Child',servicePeriod:'November 2026',location:'Synthetic Site',locationSlug:'halcom',timesheetType:'CCCC',collectorSigned:false,stage:'Location Sign-Off',submissionIssue:null};
  const actions=[];let opened;
  const props={rows:[record],canDirectIntake:true,saving:false,routes:{},onAction:async body=>{actions.push(body);Object.assign(record,direct.directIntakePatch(record,body,{name:'Danielle Synthetic',isOwner:true,isDanielle:true},'2026-11-01T20:00:00Z'))},onOpen:id=>opened=id,onBatch(){}};
  const checkbox=label=>list(Component(props)).find(n=>n.type==='input'&&n.props['aria-label']===`${label}: Synthetic Child`);
@@ -33,15 +33,15 @@ test('a sign-off does not infer dates, and scans and submissions require recorde
  Object.assign(record,{directReceivedAt:'time',directDatesAt:'time',completedAt:'time',scanDocumentId:'scan',sentToJenniferAt:'time',emailEvidenceDocumentId:'sent-email'});
  assert.ok(helper.timesheetChecklist(record).every(Boolean));
 });
-test('default service month follows the previous calendar month in TCS local time',()=>{
- assert.equal(helper.previousTimesheetMonth(new Date('2026-11-01T21:00:00Z')).label,'October 2026');
+test('default month follows Pacific previous month and never predates November 2026',()=>{
+ assert.equal(helper.previousTimesheetMonth(new Date('2026-11-01T21:00:00Z')).label,'November 2026');
  assert.equal(helper.previousTimesheetMonth(new Date('2027-01-01T20:00:00Z')).value,'2026-12');
- assert.equal(helper.previousTimesheetMonth(new Date('2026-11-01T06:00:00Z')).label,'September 2026');
+ assert.equal(helper.previousTimesheetMonth(new Date('2026-11-01T06:00:00Z')).label,'November 2026');
 });
 test('assignment editor offers separate care, funding, and current-versus-future scope choices',async()=>{
  let state=[],cursor=0;const fakeReact={useState(initial){const slot=cursor++;if(!(slot in state))state[slot]=initial;return[state[slot],value=>state[slot]=value]}};
  const Editor=load('src/components/timesheets/TimesheetAssignmentEditor.tsx',{react:fakeReact}).default;
- const calls=[];const record={id:'synthetic-form',childName:'Synthetic Child',servicePeriod:'October 2026',timesheetType:'CCRC Stage 1',fundingLocationId:'funding',careLocationId:'care',updatedAt:'form-version',childAssignment:{updatedAt:'child-version',careLocationId:'future-care',fundingLocationId:'future-funding',funding:'Cash Pay'}};
+ const calls=[];const record={id:'synthetic-form',childName:'Synthetic Child',servicePeriod:'November 2026',timesheetType:'CCRC Stage 1',fundingLocationId:'funding',careLocationId:'care',updatedAt:'form-version',childAssignment:{updatedAt:'child-version',careLocationId:'future-care',fundingLocationId:'future-funding',funding:'Cash Pay'}};
  const props={record,locations:[{id:'care',name:'Synthetic Care'},{id:'funding',name:'Synthetic Funding'}],saving:false,onAction:async body=>{calls.push(body);return true}};
  const render=()=>{cursor=0;return list(Editor(props))};
  const selects=()=>render().filter(n=>n.type==='select');
@@ -62,7 +62,7 @@ test('external scan and email confirmations finish checklist steps without prete
 test('current scan button saves an external confirmation without selecting a file',async()=>{
  let cursor=0;const states=[],actions=[];const react={useState(initial){const slot=cursor++;if(!(slot in states))states[slot]=initial;return[states[slot],value=>states[slot]=value]}};
  const Controls=load('src/components/timesheets/SubmissionBatchControls.tsx',{react,'@/components/providers/AuthProvider':{useAuth:()=>({session:null})},'@/lib/timesheet-policy':load('src/lib/timesheet-policy.ts'),'@/lib/timesheet-workflow':workflow}).default;
- const props={rows:[{id:'synthetic',rowId:'synthetic',updatedAt:'v1',childName:'Synthetic Child',location:'Synthetic',locationSlug:'halcom',servicePeriod:'October 2026',timesheetType:'CCCC',submissionControlVersion:3,stage:'Scan & Send to Jennifer',completedAt:'time',submissionDueDate:'2026-11-01',scanDocumentId:'',emailEvidenceDocumentId:'',collector:'Synthetic',submissionIssue:null}],actor:{managedLocations:['halcom'],canScan:true,canEmail:true},routes:{},saving:false,onAction:async body=>actions.push(body)};
+ const props={rows:[{id:'synthetic',rowId:'synthetic',updatedAt:'v1',childName:'Synthetic Child',location:'Synthetic',locationSlug:'halcom',servicePeriod:'November 2026',timesheetType:'CCCC',submissionControlVersion:3,stage:'Scan & Send to Jennifer',completedAt:'time',submissionDueDate:'2026-11-01',scanDocumentId:'',emailEvidenceDocumentId:'',collector:'Synthetic',submissionIssue:null}],actor:{managedLocations:['halcom'],canScan:true,canEmail:true},routes:{},saving:false,onAction:async body=>actions.push(body)};
  const render=()=>{cursor=0;return list(Controls(props));};let nodes=render();assert.equal(nodes.find(n=>n.type==='button'&&n.props.children==='Mark Scanned').props.disabled,true);
  nodes.find(n=>typeof n.type==='function'&&n.props.children==='I scanned these forms outside The Hub and checked that every page is readable and complete.').props.onChange(true);
  nodes=render();const button=nodes.find(n=>n.type==='button'&&n.props.children==='Mark Scanned');assert.equal(button.props.disabled,false);await button.props.onClick();assert.equal(actions[0].recordedExternally,true);assert.equal(actions[0].documentId,'');assert.equal(actions[0].action,'scanBatch');

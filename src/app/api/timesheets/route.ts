@@ -3,7 +3,7 @@ import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 import { tcsLocationSlug } from "@/lib/server/location-slug";
 import { BATCH_ACTIONS, controlledTimesheetBatch } from "@/lib/server/timesheet-batch-controls";
 import { scanTimesheetAlerts } from "@/lib/server/timesheet-alerts";
-import { applyTimesheetPolicy, timesheetPolicyApplies, canProcessTimesheet, timesheetProcessor } from "@/lib/timesheet-policy";
+import { applyTimesheetPolicy, timesheetPolicyApplies, canProcessTimesheet, timesheetProcessor, timesheetTrackingApplies } from "@/lib/timesheet-policy";
 import { directIntakePatch } from "@/lib/timesheet-direct-intake";
 
 export const runtime = "nodejs";
@@ -121,6 +121,7 @@ export async function GET(request: Request) {
     const children = new Map(((childResult.data ?? []) as DbRow[]).map(child => [asText(child.id), child]));
     const records: DbRow[] = [];
     for (const row of (timesheetResult.data ?? []) as unknown as DbRow[]) {
+      if (!timesheetTrackingApplies(asText(row.service_period))) continue;
       const location = locationById.get(asText(row.location_id));
       if (!location) continue;
       const slug = asText(location.slug);
@@ -270,7 +271,7 @@ export async function POST(request: Request) {
     if (action === "createBatch") {
       if (!actor.isOwner || (!actor.isDanielle && !actor.isJennifer)) return Response.json({ error: "Timesheet processor access is required." }, { status: 403 });
       const servicePeriod = asText(body.servicePeriod).trim();
-      if (!servicePeriod) return Response.json({ error: "Choose a service period before creating the batch." }, { status: 400 });
+      if (!timesheetTrackingApplies(servicePeriod)) return Response.json({ error: "Hub timesheet tracking starts with November 2026. Choose November 2026 or a later service month." }, { status: 400 });
 
       const existingResult = await admin
         .from("timesheets")

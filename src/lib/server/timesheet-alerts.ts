@@ -1,7 +1,7 @@
 import "server-only";
 import {randomUUID} from "node:crypto";
 import type {SupabaseClient} from "@supabase/supabase-js";
-import {timesheetDeadline,timesheetDeadlineFlag,timesheetPolicyApplies} from "@/lib/timesheet-policy";
+import {timesheetDeadline,timesheetDeadlineFlag,timesheetPolicyApplies,timesheetTrackingApplies} from "@/lib/timesheet-policy";
 import {hasTimesheetSubmission,pacificToday,timesheetType,timesheetChildEligible} from "@/lib/timesheet-workflow";
 import {previousTimesheetMonth} from "@/lib/timesheet-checklist";
 import {isOwnerAccessRole} from "@/lib/team-access";
@@ -11,6 +11,7 @@ type Row=Record<string,unknown>;
 const text=(v:unknown)=>typeof v==='string'?v:'';
 const object=(v:unknown):Row=>v&&typeof v==='object'&&!Array.isArray(v)?v as Row:{};
 export function timesheetAlertsForRows(forms:Row[],children:Row[],today:string,period:string) {
+  if (!timesheetTrackingApplies(period)) return [];
   const alerts=new Map<string,{type:string;status:string;count:number;owner?:string}>();
   const add=(type:string,status:string,tehachapi=false)=>{const key=`${period}:${type}:${status}:${tehachapi}`;const current=alerts.get(key);alerts.set(key,{type,status,count:(current?.count||0)+1,...(tehachapi?{owner:'Jennifer'}:{})});};
   const rows=forms.filter(row=>row.service_period===period);
@@ -40,9 +41,9 @@ export async function scanTimesheetAlerts(admin:SupabaseClient,organizationId?:s
     const forms=(formsResult.data||[]).map(row=>({...row,locationSlug:sites.find(site=>site.id===row.location_id)?.slug}));
     const children=(childrenResult.data||[]).map(row=>{const data=object(row.record_data);const site=text(data.fundingLocationId) ? sites.find(site=>site.id===data.fundingLocationId) : text(data.fundingLocation) ? sites.find(site=>[site.slug,site.name,site.full_name].includes(data.fundingLocation)) : sites.find(site=>site.id===row.location_id);return {...row,locationSlug:site?.slug};});
     const previous=previousTimesheetMonth(now);const periods=new Set(forms.map(row=>text(row.service_period)));
-    for(let cursor=new Date('2026-10-15T12:00:00Z'),count=0;cursor.toISOString().slice(0,7)<=previous.value&&count<120;cursor.setUTCMonth(cursor.getUTCMonth()+1),count++) periods.add(new Intl.DateTimeFormat('en-US',{month:'long',year:'numeric',timeZone:'UTC'}).format(cursor));
+    for(let cursor=new Date('2026-11-15T12:00:00Z'),count=0;cursor.toISOString().slice(0,7)<=previous.value&&count<120;cursor.setUTCMonth(cursor.getUTCMonth()+1),count++) periods.add(new Intl.DateTimeFormat('en-US',{month:'long',year:'numeric',timeZone:'UTC'}).format(cursor));
     const today=pacificToday(now);
-    for(const period of periods){if(!timesheetPolicyApplies(period)||confirmations.data?.some(c=>c.service_period===period))continue;
+    for(const period of periods){if(!timesheetTrackingApplies(period)||!timesheetPolicyApplies(period)||confirmations.data?.some(c=>c.service_period===period))continue;
       for(const alert of timesheetAlertsForRows(forms,children,today,period)){
         flagged+=alert.count;
         const title=alert.status==='Jen review'?'Timesheets ready for Jen’s review':alert.status==='Overdue'?'RED FLAG: overdue timesheets':alert.status==='Correction required'?'RED FLAG: timesheet correction needed':'RED FLAG: timesheets due today';
