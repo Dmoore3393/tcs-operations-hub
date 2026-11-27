@@ -1,4 +1,5 @@
 import "server-only";
+import {serverApiKeyFetch} from "@/lib/supabase/server-fetch";
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -11,6 +12,7 @@ export function createSupabaseAdminClient() {
   }
 
   return createClient(url, secret, {
+    global: {fetch: serverApiKeyFetch()},
     auth: {
       autoRefreshToken: false,
       persistSession: false,
