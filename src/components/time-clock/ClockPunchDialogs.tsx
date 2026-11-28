@@ -10,10 +10,13 @@ export function ConfirmClockPunch({action, location, pin, onPin, busy, ready, er
   busy: boolean; ready: boolean; error: string; onConfirm: () => void; onCancel: () => void; onCheckStatus: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
-  useEffect(() => { input.current?.focus(); }, [action]);
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    panel.current?.scrollIntoView({block: "start"});
+    input.current?.focus({preventScroll: true});
+  }, [action]);
   const label = action === "clock_out" ? "Clock Out" : "Clock In";
-  return <div className={shell}>
-    <section role="dialog" aria-modal="true" aria-labelledby="confirm-clock-heading" className={card}>
+  return <section ref={panel} aria-labelledby="confirm-clock-heading" className="scroll-mt-4 rounded-3xl border-2 border-emerald-500 bg-white p-5 shadow-sm">
       <h2 id="confirm-clock-heading" className="text-2xl font-black text-slate-950">Finish {action === "clock_out" ? "clocking out" : "clocking in"}</h2>
       <p className="mt-2 font-bold text-slate-700">{location}</p>
       <p className="mt-3 rounded-xl bg-amber-50 p-3 font-bold text-amber-900">{action === "clock_out" ? "You are not clocked out yet." : "You are not clocked in yet."} Enter your PIN and tap Confirm {label}. Wait for the saved confirmation.</p>
@@ -30,8 +33,7 @@ export function ConfirmClockPunch({action, location, pin, onPin, busy, ready, er
           <button type="submit" disabled={!ready || busy} className="min-h-12 flex-1 rounded-xl bg-emerald-700 px-4 font-black text-white disabled:bg-slate-400">{busy ? "Saving — please wait…" : `Confirm ${label}`}</button>
         </div>
       </form>
-    </section>
-  </div>;
+    </section>;
 }
 
 export function SavedClockPunch({receipt, onDone}: {receipt: ClockPunchReceipt; onDone: () => void}) {
