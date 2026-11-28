@@ -40,6 +40,11 @@ function fixture(options={}) {
     let rows=[...tables[table]],columns;
     const q={select(value){columns=value.split(',');return q;},
       eq(k,v){rows=rows.filter(row=>row[k]===v);return q;},gte(k,v){rows=rows.filter(row=>row[k]>=v);return q;},
+      or(filter){
+        const id=filter.split(',')[0].split('.').at(-1);
+        rows=rows.filter(row=>row.actor_user_id===id||row.metadata?.targetStaffUserId===id);
+        return q;
+      },
       order(k,{ascending=true}={}){rows.sort((a,b)=>String(a[k]).localeCompare(String(b[k]))*(ascending?1:-1));return q;},
       limit(n){rows=rows.slice(0,n);return q;},
       maybeSingle(){return q.then(result=>({...result,data:result.data?.[0]??null}));},
@@ -50,7 +55,7 @@ function fixture(options={}) {
         const result={data:saved,error};
         return {select(){return this;},single(){return Promise.resolve(result);},then(resolve,reject){return Promise.resolve(result).then(resolve,reject);}};
       },
-      then(resolve,reject){reads.push(table);return Promise.resolve({data:columns?rows.map(row=>Object.fromEntries(columns.map(k=>[k,row[k]]))):rows,error:table===options.failRead?Error('Synthetic read failure'):null}).then(resolve,reject);},
+      then(resolve,reject){reads.push(table);return Promise.resolve({data:columns?rows.slice(0,1000).map(row=>Object.fromEntries(columns.map(k=>[k,row[k]]))):rows,error:table===options.failRead?Error('Synthetic read failure'):null}).then(resolve,reject);},
     };return q;
   }
   const auth={admin:{from},userClient:{rpc(){assert.fail('Clock actions must not use the REVIEW/EXPORT-only manual audit RPC');}},user,profile,isOwner:!options.employee,isLicensee:false};
@@ -210,4 +215,19 @@ test('approved early or late exception suppresses the schedule flag without chan
   f.tables.staff_clock_exceptions.push({organization_id:'org',staff_user_id:'danielle',location_id:'halcom',work_date:'2026-11-10',shift_id:'shift',status:'Approved',approved_start_time:start,approved_end_time:end});
   f.setNow(`2026-11-10T${now}:00.000Z`);const response=await f.post({source:'Location QR',event});assert.equal(response.status,200);assert.equal((await response.json()).scheduleReview.length,0);
  }
+});
+
+test('a QR clock-out closes a previous-day punch even when the organization history is full',async()=>{
+ const f=fixture({employee:true});
+ f.setNow('2026-11-11T07:55:00.000Z');
+ assert.equal((await f.post({source:'Location QR'})).status,200);
+ const active=f.tables.audit_log[0];
+ for(let i=0;i<1550;i++)f.tables.audit_log.push({...active,id:`other-${i}`,actor_user_id:'colleague',occurred_at:i<1000?'2026-11-11T07:54:00.000Z':'2026-11-11T07:56:00.000Z',metadata:{...active.metadata,targetStaffUserId:'colleague'}});
+ f.setNow('2026-11-11T08:05:00.000Z');
+ const data=await(await f.get()).json();
+ assert.equal(data.events.at(-1).id,active.id);
+ assert.ok(data.events.at(-1).occurredAt>=data.clockStateSince);
+ const punch=await f.post({source:'Location QR',event:'clock_out'});
+ assert.equal(punch.status,200);
+ assert.equal((await f.post({source:'Location QR',event:'clock_out'})).status,400);
 });

@@ -57,6 +57,7 @@ type Payload = {
   events: ClockEvent[];
   currentUserId: string;
   today: string;
+  clockStateSince: string;
   myClockAccess: {
     pinConfigured: boolean;
     pinUpdatedAt: string;
@@ -252,13 +253,15 @@ function TimeClockScreen() {
     [mine, payload?.today],
   );
 
-  const state = stateFromEvents(todayMine);
+  const recentClockCutoff = payload?.clockStateSince ?? "";
+  const recentMine = mine.filter((event) => event.occurredAt >= recentClockCutoff);
+  const state = stateFromEvents(recentMine);
   const qrAction = stationClockAction(state, requestedAction, qrReady && Boolean(payload));
   const pinKey = [user?.id, slug, qrAction].join("/");
   const clockPin = enteredPin.key === pinKey ? enteredPin.value : "";
   const setClockPin = (value: string) => setEnteredPin({ key: pinKey, value });
   const todayMinutes = durationMinutes(todayMine);
-  const latestMine = todayMine.at(-1);
+  const latestMine = recentMine.at(-1);
 
   useEffect(() => {
     if (qrReady || !latestMine || latestMine.event === "clock_out") return;

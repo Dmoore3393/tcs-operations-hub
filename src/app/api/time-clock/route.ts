@@ -1,6 +1,6 @@
 import { correctedClockRows } from "@/lib/clock-corrections";
 import { normalizeLocation } from "@/lib/location-config";
-import { activeClockLocation, stationAccessAllowed } from "@/lib/staff-clock-stations";
+import { CLOCK_STATE_LOOKBACK_MS, activeClockLocation, stationAccessAllowed } from "@/lib/staff-clock-stations";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 import { staffClockPinConfigured, verifyStaffClockPin } from "@/lib/server/staff-clock-pin";
 
@@ -197,8 +197,9 @@ export async function GET(request: Request) {
     const days = Math.max(1, Math.min(isOwner || isLicensee ? requestedDays : 14, 60));
     const since = new Date(Date.now() - days * 86400000).toISOString();
     const today = pacificDate();
+    const clockStateSince = new Date(Date.now() - CLOCK_STATE_LOOKBACK_MS).toISOString();
 
-    const [eventsResult, staffResult, laneResult, locationResult, settingsResult, shiftResult, exceptionResult] = await Promise.all([
+    const [eventsResult, personalEventsResult, staffResult, laneResult, locationResult, settingsResult, shiftResult, exceptionResult] = await Promise.all([
       admin
         .from("audit_log")
         .select("id,organization_id,location_id,actor_user_id,metadata,occurred_at")
@@ -206,6 +207,15 @@ export async function GET(request: Request) {
         .eq("table_name", "time_clock")
         .gte("occurred_at", since)
         .order("occurred_at", { ascending: true }),
+      admin
+        .from("audit_log")
+        .select("id,organization_id,location_id,actor_user_id,metadata,occurred_at")
+        .eq("organization_id", profile.organization_id)
+        .eq("table_name", "time_clock")
+        .or(`actor_user_id.eq.${user.id},metadata->>targetStaffUserId.eq.${user.id}`)
+        .gte("occurred_at", clockStateSince)
+        .order("occurred_at", { ascending: false })
+        .limit(500),
       admin.from("staff_access")
         .select("user_id,full_name,email,role,locations")
         .eq("organization_id", profile.organization_id)
@@ -237,6 +247,7 @@ export async function GET(request: Request) {
         .order("approved_at", { ascending: false }),
     ]);
     if (eventsResult.error) throw eventsResult.error;
+    if (personalEventsResult.error) throw personalEventsResult.error;
     if (staffResult.error) throw staffResult.error;
     if (laneResult.error) throw laneResult.error;
     if (locationResult.error) throw locationResult.error;
@@ -253,7 +264,10 @@ export async function GET(request: Request) {
     const myLane = laneByUserId.get(user.id) ?? laneByName.get(profile.full_name.toLowerCase());
     const allowedLocationKeys = new Set((isLicensee ? [profile.primary_location || ""] : profile.locations ?? []).map((item) => normalizeLocation(item)));
 
-    const events = correctedClockRows((eventsResult.data ?? []) as unknown as DbRow[])
+    const eventRows = new Map(
+      [...(eventsResult.data ?? []), ...(personalEventsResult.data ?? [])].map((row) => [row.id, row]),
+    );
+    const events = correctedClockRows([...eventRows.values()] as unknown as DbRow[])
       .map((row) => {
         const metadata = object(row.metadata);
         const performedByUserId = text(row.actor_user_id);
@@ -288,7 +302,8 @@ export async function GET(request: Request) {
       .filter((event) => event.event)
       .filter((event) => {
         if (isOwner) return true;
-        if (!isLicensee) return event.actorUserId === user.id;
+        if (event.actorUserId === user.id) return true;
+        if (!isLicensee) return false;
         const normalized = normalizeLocation(event.location);
         return normalized !== "All Locations" && allowedLocationKeys.has(normalized);
       });
@@ -297,6 +312,7 @@ export async function GET(request: Request) {
       events,
       currentUserId: user.id,
       today,
+      clockStateSince,
       myClockAccess: {
         pinConfigured: staffClockPinConfigured(user),
         pinUpdatedAt: typeof user.app_metadata?.tcs_clock_pin_updated_at === "string"
@@ -449,13 +465,14 @@ export async function POST(request: Request) {
     const occurredAt = new Date();
     const today = pacificDate(occurredAt);
     const nowMinutes = pacificClockMinutes(occurredAt);
-    const recentSince = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
+    const recentSince = new Date(occurredAt.getTime() - CLOCK_STATE_LOOKBACK_MS).toISOString();
 
     const recentResult = await admin
       .from("audit_log")
       .select("id,location_id,actor_user_id,metadata,occurred_at")
       .eq("organization_id", profile.organization_id)
       .eq("table_name", "time_clock")
+      .or(`actor_user_id.eq.${targetUserId},metadata->>targetStaffUserId.eq.${targetUserId}`)
       .gte("occurred_at", recentSince)
       .order("occurred_at", { ascending: false })
       .limit(500);
@@ -465,7 +482,7 @@ export async function POST(request: Request) {
       .filter((row) => effectiveStaffUserId(row) === targetUserId);
     const targetToday = targetRecent
       .filter((row) => pacificDate(text(row.occurred_at)) === today);
-    const lastRow = targetToday[0];
+    const lastRow = targetRecent.find((row) => text(row.occurred_at) >= recentSince);
     const last = lastRow ? eventFromMetadata(lastRow.metadata) : "";
 
     if (!transitionAllowed(last, event)) {
@@ -476,7 +493,7 @@ export async function POST(request: Request) {
         break_end: "end a break",
       };
       throw new Response(
-        `You cannot ${labels[event]} after the current time-clock state. Refresh the page and review today's last action.`,
+        `You cannot ${labels[event]} after the current time-clock state. Refresh the page and review the last recorded action.`,
         { status: 400 },
       );
     }
