@@ -232,29 +232,33 @@ export default function TimesheetCommandCenterPage() {
   }, [records]);
 
   const periodRecords = useMemo(() => records.filter((record) => periodFilter === "All Periods" || record.servicePeriod === periodFilter), [records, periodFilter]);
-  const filtered = useMemo(() => periodRecords.filter((record) => {
+  const scopedRecords = useMemo(() => periodRecords.filter((record) => {
     const locationMatch = locationFilter === "All Locations" || record.locationSlug === locationFilter;
     const typeMatch = typeFilter === "All Types" || record.timesheetType === typeFilter;
+    return locationMatch && typeMatch;
+  }), [periodRecords, locationFilter, typeFilter]);
+
+  const filtered = useMemo(() => scopedRecords.filter((record) => {
     const q = search.trim().toLowerCase();
     const searchMatch = !q || `${record.childName} ${record.familyName} ${record.location} ${record.timesheetType} ${record.stage}`.toLowerCase().includes(q);
-    return locationMatch && typeMatch && searchMatch;
-  }), [periodRecords, locationFilter, typeFilter, search]);
+    return searchMatch;
+  }), [scopedRecords, search]);
 
   const stats = useMemo(() => ({
-    total: periodRecords.length,
-    missing: periodRecords.filter((record) => !record.collectorSigned).length,
-    review: periodRecords.filter((record) => record.stage === "Dynasty Review").length,
-    handoff: periodRecords.filter((record) => record.stage === "Personal Handoff").length,
-    fill: periodRecords.filter((record) => record.stage === "Danielle Fill Out").length,
-    scan: periodRecords.filter((record) => record.stage === "Scan & Send to Jennifer").length,
-    email: periodRecords.filter((record) => record.stage === "Jennifer Email").length,
-    licensee: periodRecords.filter(record => ["Licensee Approval", "Licensee Verification"].includes(record.stage)).length,
-    receipt: periodRecords.filter(record => record.stage === "Agency Receipt").length,
+    total: scopedRecords.length,
+    missing: scopedRecords.filter((record) => !record.collectorSigned).length,
+    review: scopedRecords.filter((record) => record.stage === "Dynasty Review").length,
+    handoff: scopedRecords.filter((record) => record.stage === "Personal Handoff").length,
+    fill: scopedRecords.filter((record) => record.stage === "Danielle Fill Out").length,
+    scan: scopedRecords.filter((record) => record.stage === "Scan & Send to Jennifer").length,
+    email: scopedRecords.filter((record) => record.stage === "Jennifer Email").length,
+    licensee: scopedRecords.filter(record => ["Licensee Approval", "Licensee Verification"].includes(record.stage)).length,
+    receipt: scopedRecords.filter(record => record.stage === "Agency Receipt").length,
     issues: records.filter(record => record.stage === "Correction Required").length,
-    complete: periodRecords.filter((record) => record.stage === "Complete").length,
-  }), [periodRecords, records]);
+    complete: scopedRecords.filter((record) => record.stage === "Complete").length,
+  }), [scopedRecords, records]);
 
-  const workflowCounts = useMemo(() => new Map(STAGES.map((stage) => [stage.key, periodRecords.filter((record) => record.stage === stage.key).length])), [periodRecords]);
+  const workflowCounts = useMemo(() => new Map(STAGES.map((stage) => [stage.key, scopedRecords.filter((record) => record.stage === stage.key).length])), [scopedRecords]);
   const collectorCards = data?.collectors ?? [];
   const batches = useMemo(() => {
     const groups = new Map<string, RecordItem[]>();
@@ -289,7 +293,7 @@ export default function TimesheetCommandCenterPage() {
             </div>
           </header>
 
-          <div className="tscc-simple-workflow" aria-label="Timesheet workflow">{CHECKLIST_STEPS.map((label,index)=><div key={label}><strong>{index+1}. {label}</strong><span>{periodRecords.filter(record=>timesheetChecklist(record)[index]).length} / {periodRecords.length} recorded</span></div>)}</div>
+          <div className="tscc-simple-workflow" aria-label="Timesheet workflow">{CHECKLIST_STEPS.map((label,index)=><div key={label}><strong>{index+1}. {label}</strong><span>{scopedRecords.filter(record=>timesheetChecklist(record)[index]).length} / {scopedRecords.length} recorded</span></div>)}</div>
 
           <div className="tscc-body">
             {(message || error) && <div className="tscc-alert"><span>{error ? `⚠ ${error}` : `✓ ${message}`}</span><button onClick={() => { setMessage(""); setError(""); }}><X size={14}/></button></div>}
@@ -379,13 +383,13 @@ export default function TimesheetCommandCenterPage() {
             </section>
 
             <div className="tscc-grid">
-              <QueuePanel title="Dynasty Review & Personal Handoff" helper="Dynasty verifies every form, then personally hands the batch to Danielle — no third-party drop-off." icon={<Truck size={16}/>} rows={periodRecords.filter((record) => record.stage === "Dynasty Review" || record.stage === "Personal Handoff")} onOpen={setSelected} />
-              <QueuePanel title="Danielle Completion" helper="Fill out every timesheet from the child certificate. Tuition is charged regardless of attendance." icon={<PenLine size={16}/>} rows={periodRecords.filter((record) => record.stage === "Danielle Fill Out")} onOpen={setSelected} />
+              <QueuePanel title="Dynasty Review & Personal Handoff" helper="Dynasty verifies every form, then personally hands the batch to Danielle — no third-party drop-off." icon={<Truck size={16}/>} rows={scopedRecords.filter((record) => record.stage === "Dynasty Review" || record.stage === "Personal Handoff")} onOpen={setSelected} />
+              <QueuePanel title="Danielle Completion" helper="Fill out every timesheet from the child certificate. Tuition is charged regardless of attendance." icon={<PenLine size={16}/>} rows={scopedRecords.filter((record) => record.stage === "Danielle Fill Out")} onOpen={setSelected} />
             </div>
 
             <div className="tscc-grid">
-              <QueuePanel title="Scan Queue" helper="Danielle scans completed paperwork elsewhere and marks it scanned here." icon={<ScanLine size={16}/>} rows={periodRecords.filter((record) => record.stage === "Scan & Send to Jennifer")} onOpen={setSelected} />
-              <QueuePanel title="Jennifer Department Email Queue" helper="Jennifer is the final sender to the configured department for CCRC Stage 1, CCRC Stage 2, CCCC, DCFS, and Respite." icon={<Mail size={16}/>} rows={periodRecords.filter((record) => record.stage === "Jennifer Email")} onOpen={setSelected} />
+              <QueuePanel title="Scan Queue" helper="Danielle scans completed paperwork elsewhere and marks it scanned here." icon={<ScanLine size={16}/>} rows={scopedRecords.filter((record) => record.stage === "Scan & Send to Jennifer")} onOpen={setSelected} />
+              <QueuePanel title="Jennifer Department Email Queue" helper="Jennifer is the final sender to the configured department for CCRC Stage 1, CCRC Stage 2, CCCC, DCFS, and Respite." icon={<Mail size={16}/>} rows={scopedRecords.filter((record) => record.stage === "Jennifer Email")} onOpen={setSelected} />
             </div>
 
             <section className="tscc-panel tscc-records">
