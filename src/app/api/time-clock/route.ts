@@ -1,6 +1,6 @@
 import { correctedClockRows } from "@/lib/clock-corrections";
 import { normalizeLocation } from "@/lib/location-config";
-import { activeClockLocation, stationAccessAllowed } from "@/lib/staff-clock-stations";
+import { CLOCK_STATE_LOOKBACK_MS, activeClockLocation, stationAccessAllowed } from "@/lib/staff-clock-stations";
 import { requireStaff, staffErrorResponse } from "@/lib/server/require-staff";
 import { staffClockPinConfigured, verifyStaffClockPin } from "@/lib/server/staff-clock-pin";
 
@@ -297,6 +297,7 @@ export async function GET(request: Request) {
       events,
       currentUserId: user.id,
       today,
+      clockStateSince: new Date(Date.now() - CLOCK_STATE_LOOKBACK_MS).toISOString(),
       myClockAccess: {
         pinConfigured: staffClockPinConfigured(user),
         pinUpdatedAt: typeof user.app_metadata?.tcs_clock_pin_updated_at === "string"
@@ -449,7 +450,7 @@ export async function POST(request: Request) {
     const occurredAt = new Date();
     const today = pacificDate(occurredAt);
     const nowMinutes = pacificClockMinutes(occurredAt);
-    const recentSince = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
+    const recentSince = new Date(occurredAt.getTime() - CLOCK_STATE_LOOKBACK_MS).toISOString();
 
     const recentResult = await admin
       .from("audit_log")
@@ -465,7 +466,7 @@ export async function POST(request: Request) {
       .filter((row) => effectiveStaffUserId(row) === targetUserId);
     const targetToday = targetRecent
       .filter((row) => pacificDate(text(row.occurred_at)) === today);
-    const lastRow = targetToday[0];
+    const lastRow = targetRecent.find((row) => text(row.occurred_at) >= recentSince);
     const last = lastRow ? eventFromMetadata(lastRow.metadata) : "";
 
     if (!transitionAllowed(last, event)) {
@@ -476,7 +477,7 @@ export async function POST(request: Request) {
         break_end: "end a break",
       };
       throw new Response(
-        `You cannot ${labels[event]} after the current time-clock state. Refresh the page and review today's last action.`,
+        `You cannot ${labels[event]} after the current time-clock state. Refresh the page and review the last recorded action.`,
         { status: 400 },
       );
     }
