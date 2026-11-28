@@ -72,7 +72,10 @@ export default function Home() {
     accessibleLocations: visibleCareLocations,
     enabled: canUseScheduling || canUseRatios || canUseAIDirector,
   });
-  const operationalShifts: Shift[] = liveStaffing.shiftViews.map((shift, index) => ({
+  const workingShifts = liveStaffing.shiftViews.filter((shift) =>
+    shift.assignment !== "Off" && shift.status !== "Cancelled",
+  );
+  const operationalShifts: Shift[] = workingShifts.map((shift, index) => ({
     id: index + 1,
     employee: shift.staffName,
     role: "",
@@ -95,7 +98,7 @@ export default function Home() {
     status: window.status,
     offFloorNames: window.offFloorNames,
   }));
-  const liveStaffShifts = liveStaffing.shiftViews.map((shift) => ({
+  const liveStaffShifts = workingShifts.map((shift) => ({
     id: shift.id,
     staffName: shift.staffName,
     location: shift.location,
