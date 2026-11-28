@@ -50,3 +50,5 @@ export function stationClockAction(state: string, requested: StaffClockAction | 
 export function activeClockLocation<T extends { slug?: unknown; is_active?: unknown }>(rows: T[], location: Exclude<LocationKey, "All Locations">) {
   return rows.find(row => row.is_active === true && row.slug === locationSlug(location));
 }
+
+export const CLOCK_STATE_LOOKBACK_MS = 36 * 60 * 60 * 1000;
