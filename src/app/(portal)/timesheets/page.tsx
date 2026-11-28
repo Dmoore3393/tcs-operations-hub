@@ -46,6 +46,13 @@ type CommandStage =
   | "Correction Required"
   | "Complete";
 
+const WORK_LOCATION_ORDER = [
+  { slug: "42nd-street", label: "Dynasty" },
+  { slug: "33rd-street", label: "Cornejo" },
+  { slug: "halcom", label: "Moore" },
+  { slug: "division", label: "The School Age Center" },
+];
+
 const STAGES: Array<{ key: CommandStage; title: string; helper: string }> = [
   { key: "Location Sign-Off", title: "Location Sign-Off", helper: "Assigned collector checks off each signed child form" },
   { key: "Dynasty Review", title: "Dynasty Review", helper: "Every timesheet accounted for and signed" },
@@ -260,6 +267,16 @@ export default function TimesheetCommandCenterPage() {
 
   const workflowCounts = useMemo(() => new Map(STAGES.map((stage) => [stage.key, scopedRecords.filter((record) => record.stage === stage.key).length])), [scopedRecords]);
   const collectorCards = data?.collectors ?? [];
+  const availableLocationSlugs = new Set([
+    ...collectorCards.map((collector) => collector.slug),
+    ...records.map((record) => record.locationSlug),
+  ]);
+  const workLocations = [
+    ...WORK_LOCATION_ORDER.filter(({ slug }) => availableLocationSlugs.has(slug)),
+    ...collectorCards.filter(({ slug }) => !WORK_LOCATION_ORDER.some((location) => location.slug === slug))
+      .map(({ slug, location }) => ({ slug, label: location })),
+    { slug: "All Locations", label: "All Locations" },
+  ];
   const batches = useMemo(() => {
     const groups = new Map<string, RecordItem[]>();
     for (const record of periodRecords) {
@@ -293,6 +310,27 @@ export default function TimesheetCommandCenterPage() {
             </div>
           </header>
 
+          <section aria-labelledby="timesheet-funding-location" className="border-b border-white/15 bg-[#202729] px-4 py-4 text-white">
+            <h2 id="timesheet-funding-location" className="mb-2 text-base font-bold">Funding location</h2>
+            <div role="group" aria-labelledby="timesheet-funding-location" className="flex flex-wrap gap-2">
+              {workLocations.map(({ slug, label }) => (
+                <button
+                  key={slug}
+                  type="button"
+                  className={locationFilter === slug ? "tscc-btn green" : "tscc-btn"}
+                  aria-pressed={locationFilter === slug}
+                  onClick={() => {
+                    setLocationFilter(slug);
+                    setSearch("");
+                    setFocusedBatch(null);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </section>
+
           <div className="tscc-simple-workflow" aria-label="Timesheet workflow">{CHECKLIST_STEPS.map((label,index)=><div key={label}><strong>{index+1}. {label}</strong><span>{scopedRecords.filter(record=>timesheetChecklist(record)[index]).length} / {scopedRecords.length} recorded</span></div>)}</div>
 
           <div className="tscc-body">
@@ -303,7 +341,6 @@ export default function TimesheetCommandCenterPage() {
             <section className="tscc-panel"><div className="tscc-panel-head"><div><h2>Choose the forms you are processing</h2><p>Keep each service month, funding location and program separate.</p></div></div><div className="tscc-panel-body tscc-toolbar">
               <label>Search child<input className="tscc-input" value={search} onChange={event=>setSearch(event.target.value)} placeholder="Child name" /></label>
               <label>Service month<select className="tscc-select" aria-label="Checklist service month" value={periodFilter} onChange={event=>setPeriodFilter(event.target.value)}><option>All Periods</option>{periods.map(period=><option key={period}>{period}</option>)}</select></label>
-              <label>Funding location<select className="tscc-select" value={locationFilter} onChange={event=>setLocationFilter(event.target.value)}><option>All Locations</option>{collectorCards.map(collector=><option key={collector.slug} value={collector.slug}>{collector.location}</option>)}</select></label>
               <label>Program<select className="tscc-select" value={typeFilter} onChange={event=>setTypeFilter(event.target.value)}><option>All Types</option><option value="CCRC">CCRC — Needs Stage</option>{COMMAND_TYPES.map(type=><option key={type}>{type}</option>)}</select></label>
             </div></section>
             <div className="tscc-deadline-policy" role="status"><strong>Deadline rules</strong><p>CCRC Stage 1, CCCC and DCFS: the 1st of the following month. CCRC Stage 2: the 5th. Red flags remain until the actual agency submission is recorded; Jen’s review is tracked separately.</p><button className="tscc-btn light" disabled={saving} onClick={()=>void runAction({action:"checkAlerts"},"Timesheet deadline alerts checked.")}>Check Red Flags</button></div>
