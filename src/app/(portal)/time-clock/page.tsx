@@ -302,7 +302,6 @@ function TimeClockScreen() {
       setPayload(current => current ? {...current, events: [...current.events.filter(row => row.id !== saved.id), saved].sort((a,b) => a.occurredAt.localeCompare(b.occurredAt))} : current);
       setReceipt(result);
       setClockPin("");
-      if (source === "Location QR") router.replace("/time-clock");
       setNotice(`${result.targetStaffName}: ${labels[event]} — saved at ${timeLabel(result.occurredAt)} • Receipt #${result.id}`);
       void load(true);
     } catch (saveError) {
@@ -460,7 +459,19 @@ function TimeClockScreen() {
           </div>
         </section>
 
-        {receipt && <SavedClockPunch receipt={receipt} onDone={() => setReceipt(null)} />}
+        {qrReady && loading && !receipt && <p role="status" className="rounded-xl bg-amber-50 p-3 font-bold text-amber-900">QR scanned. Checking your clock status before you confirm.</p>}
+        {qrReady && requestedAction === "clock_out" && !loading && payload && state === "Off Clock" && !receipt && <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-3 font-bold text-emerald-900">{latestMine?.event === "clock_out" ? `Your latest clock-out was saved at ${timeLabel(latestMine.occurredAt)}. Receipt #${latestMine.id}.` : "No open shift was found, so this scan did not save a clock-out. Refresh your status or ask your site lead to check your last punch."}</p>}
+        {qrReady && qrAction && !receipt && !loading && payload?.myClockAccess.pinConfigured && (qrAction === "clock_in" ? state === "Off Clock" : state === "Working") && (
+          <ConfirmClockPunch action={qrAction} location={workLocation} pin={clockPin} onPin={setClockPin}
+            busy={saving} ready={!loading && Boolean(payload?.myClockAccess.pinConfigured) && /^\d{4,6}$/.test(clockPin) && (qrAction === "clock_in" ? state === "Off Clock" : state === "Working")}
+            error={error || refreshError} onConfirm={() => void act(qrAction, "Location QR", {pin: clockPin, location: workLocation})}
+            onCheckStatus={() => {setClockPin(""); setError(""); void load(true);}}
+            onCancel={() => {setClockPin(""); router.replace("/time-clock");}} />
+        )}
+        {receipt && <SavedClockPunch receipt={receipt} onDone={() => {
+          if (receipt.source === "Location QR") router.replace("/time-clock");
+          setReceipt(null);
+        }} />}
         {refreshError && <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 font-bold text-amber-900">{refreshError} <button onClick={() => void load()} className="underline">Check saved status</button></div>}
         {notice && <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-900">{notice}</div>}
         {error && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-900">{error}</div>}
@@ -572,14 +583,6 @@ function TimeClockScreen() {
 
           {hasScan && profile && !qrReady && <p role="alert" className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">{scannedSite ? "That location is outside this staff account’s assignment." : "That scanned TCS location could not be recognized."}</p>}
           {qrReady && !loading && payload && !payload.myClockAccess.pinConfigured && <p role="alert" className="mt-4 rounded-xl bg-amber-50 p-3 font-bold text-amber-900">Set your Staff PIN above, then confirm your clock action. Scanning alone does not save your time.</p>}
-          {qrReady && requestedAction === "clock_out" && !loading && payload && state === "Off Clock" && !receipt && <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-3 font-bold text-emerald-900">You are currently off clock. Check your latest saved entry below to verify your clock-out time.</p>}
-          {qrReady && qrAction && !receipt && !loading && payload?.myClockAccess.pinConfigured && (qrAction === "clock_in" ? state === "Off Clock" : state === "Working") && (
-            <ConfirmClockPunch action={qrAction} location={workLocation} pin={clockPin} onPin={setClockPin}
-              busy={saving} ready={!loading && Boolean(payload?.myClockAccess.pinConfigured) && /^\d{4,6}$/.test(clockPin) && (qrAction === "clock_in" ? state === "Off Clock" : state === "Working")}
-              error={error || refreshError} onConfirm={() => void act(qrAction, "Location QR", {pin: clockPin, location: workLocation})}
-              onCheckStatus={() => {setClockPin(""); setError(""); router.replace("/time-clock"); void load();}}
-              onCancel={() => {setClockPin(""); router.replace("/time-clock");}} />
-          )}
         </section>
 
         {payload?.myClockAccess.manualAllowed && !payload.myClockAccess.flexibleAllowed && (
